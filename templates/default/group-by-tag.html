@@ -1,0 +1,87 @@
+﻿<html>
+<head>
+<title>Group by tag| Sort by {{sort_by_title}}</title>
+{%  include "head-data.html" %}
+</head>
+<body>
+<div id="global_tools">
+    <div id="link_on_root" class="global_tools_button">
+        <a href="/">main</a>
+    </div>
+    <div id="sotr_by" class="global_tools_button">
+        <a href="{{sort_by_link}}">group by tag</a>
+    </div>
+    <div id="group_by" class="global_tools_button">
+        <a href="{{group_by_link}}">group by category</a>
+    </div>
+    <!--div id="cloud_items_count" class="global_tools_button"></div-->
+    <div id="only_unread" class="global_tools_button"><input id="only_unread_checkbox" name="only_unread_checkbox"" type="checkbox" {% if only_unread %} checked {% endif %} /><label for="only_unread_checkbox">only unread</label></div>
+</div>
+{% if letters %}
+<div class="letters">
+    {% for l in letters %}
+        <a href="{{l['local_url']}}" class="letter">{{l['letter']}}</a>
+        {% if (l['letter'] == '9') or (l['letter'] == 'z') %}
+            <br />
+        {% endif %}
+    {% endfor %}
+</div>
+{% endif %}
+<div class="search_tools">
+    <div id="loading"><img src="/static/img/g_load.gif" /></div>
+    <input class="search_field" type="text" placeholder="Search" />
+    <div class="search_result">
+    </div>
+</div>
+<div class="page">
+    <ol class="cloud">
+        {% if tags %}
+            {% for h in tags %}
+                <li class="cloud_item"><a href="/tag/{{h['url']}}" class="cloud_item_title">{{h['tag']}}</a> ({{h['count']}})<br />({{h['words']|join(', ')}})</li>
+            {% endfor %}
+        {% else %}
+            <p>No unread tags</p>
+        {% endif %}
+    </ol>
+</div>
+<div id="global_tools_bottom">
+    <div id="paginator">
+        {% if pages_map['start'] %}
+            {% for number in pages_map['start'] %}
+                {% if number['p'] == current_page %}
+                    <span class="current_page">{{number['p']}}</span>
+                {% else %}
+                    <a href="{{number['url']}}">{{number['p']}}</a>
+                {% endif %}
+            {% endfor %}
+            {% if pages_map['middle'] %}
+                <span>....</span>
+            {% endif %}
+        {% endif %}
+        {% if pages_map['middle'] %}
+            {% for number in pages_map['middle'] %}
+                {% if number['p'] == current_page %}
+                    <span class="current_page">{{number['p']}}</span>
+                {% else %}
+                    <a href="{{number['url']}}">{{number['p']}}</a>
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+        {% if pages_map['end'] %}
+            <span>....</span>
+            {% for number in pages_map['end'] %}
+                {% if number['p'] == current_page %}
+                    <span class="current_page">{{number['p']}}</span>
+                {% else %}
+                    <a href="{{number['url']}}">{{number['p']}}</a>
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+    </div>
+</div>
+<!--script language="javascript" type="application/javascript">
+    var count = document.getElementById('cloud_items_count');
+    count.innerHTML = document.getElementsByTagName('li').length;
+</script-->
+</body>
+</html>

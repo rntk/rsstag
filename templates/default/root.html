@@ -1,0 +1,43 @@
+﻿<html>
+<head>
+<title>RssCloud</title>
+{% include "head-data.html" %}
+</head>
+<body>
+<noscript>
+    <h1>Please enable javascript in your browser</h1>
+</noscript>
+<div id="global_tools">
+    <div id="provider" class="global_tools_button">Provider: {{provider}}</div>
+    <div id="status" class="global_tools_button">Status: <span></span></div>
+    <div id="only_unread" class="global_tools_button"><input id="only_unread_checkbox" name="only_unread_checkbox" type="checkbox" {% if only_unread %} checked {% endif %} /><label for="only_unread_checkbox">only unread</label></div>
+</div>
+<div class="page">
+    {% for e in err %}
+        <p id="error">{{e}}</p>
+    {% endfor %}
+    <div class="post">
+        <div class="root_item">support -  admin@rsstag.tk</div>
+        <div class="root_item"><a href="/group/category">Posts grouped by category</a></div>
+        <div class="root_item"><a href="/group/tag/1">Posts grouped by tag</a></div>
+        <div class="root_item"><a href="/provider">Select provider</a></div>
+        <div class="root_item"><a href="/refresh">Refresh posts</a></div>
+    </div>
+</div>
+<div class="page center">
+    <div class="about">
+        <h3>About</h3>
+        This is alpha version of yet another rss-reader. Reader can generate tags from the post title words and show posts grouped by tag.
+    </div>
+    <div class="how_to_use">
+        <h3>How to use</h3>
+        <ol>
+            <li>Click on "Select provider" and permit or enter what need</li>
+            <li>Wait until "Status" is green. (if you wait a very long time, please contact support - <b>admin@rsstag.tk</b>)</li>
+            <li>Now you can click on "Posts grouped by tag" or "Posts grouped by category" and start reading</li>
+        </ol>
+    </div>
+    <p>Sorry for broken english :)</p>
+</div>
+</body>
+</html>
