@@ -44,7 +44,7 @@ class RSSCloudApplication(object):
     firsts_lock = None
     seconds_lock = None
     no_category_name = 'NotCategorized'
-    
+
     def __init__(self, config_path=None):
         if self.setConfig(config_path):
             self.config_path = config_path
@@ -53,7 +53,7 @@ class RSSCloudApplication(object):
             self.seconds_queue = Queue()
             self.firsts_lock = Lock()
             self.seconds_lock = Lock()
-            self.providers = self.config['settings']['providers'].split(',')            
+            self.providers = self.config['settings']['providers'].split(',')
             self.user_ttl = int(self.config['settings']['user_ttl'])
             cl = MongoClient(self.config['settings']['db_host'], int(self.config['settings']['db_port']))
             self.db = cl.rss
@@ -109,7 +109,7 @@ class RSSCloudApplication(object):
                     self.workers_pool[-1].start()
         else:
             return None
-    
+
     def close(self):
         if self.workers_pool:
             for p in self.workers_pool:
@@ -131,7 +131,7 @@ class RSSCloudApplication(object):
         else:
             self.need_cookie_update = False
             return(False)
-            
+
     def createNewSession(self):
         self.need_cookie_update = True
         if self.user and 'sid' in self.user:
@@ -139,7 +139,7 @@ class RSSCloudApplication(object):
             if user:
                 try:
                     self.db.users.update(
-                        {'sid': self.user['sid']}, 
+                        {'sid': self.user['sid']},
                         {'$set': {'ready_flag': False, 'provider': self.user['provider'], 'token': self.user['token'], 'message': 'Click on "Refresh posts" to start downloading data', 'in_queue': False, 'createdAt': datetime.utcnow()}})
                 except Exception as e:
                     self.user = None
@@ -161,7 +161,7 @@ class RSSCloudApplication(object):
                 self.user = None
                 print(e, 'Can`t create new session')
         self.user = self.db.users.find_one({'sid': self.user['sid']})
-    
+
     def getPageCount(self, items_count, items_on_page_count):
         page_count = divmod(items_count, items_on_page_count)
         if page_count[1] == 0:
@@ -169,7 +169,7 @@ class RSSCloudApplication(object):
         elif (page_count[1] > 0) or (page_count[0] == 0):
             page_count = page_count[0] + 1
         return(page_count)
-    
+
     def getFaviconUrl(self, url):
         parsed_url = urlparse(url)
         host = parsed_url.netloc
@@ -233,7 +233,7 @@ class RSSCloudApplication(object):
             favicon_url = 'http://{0}{1}'.format(host, url)
         c.close()
         return(favicon_url)
-    
+
     def setResponse(self, http_env, start_resp):
         self.request = Request(http_env)
         st = time.time()
@@ -257,7 +257,7 @@ class RSSCloudApplication(object):
         self.request.close()
         print(time.time() - st)
         return(self.response(http_env, start_resp))
-    
+
     def setConfig(self, config_name):
         if config_name and os.path.exists(config_name):
             c = ConfigParser()
@@ -266,7 +266,7 @@ class RSSCloudApplication(object):
             return(True)
         else:
             return(False)
-    
+
     def getUrlByEndpoint(self, endpoint=None, params=None, full_url=False):
         url = None
         if endpoint:
@@ -278,7 +278,7 @@ class RSSCloudApplication(object):
             else:
                 url = next(self.routes.iter_rules(endpoint=endpoint))
         return(url)
-    
+
     def on_code_get(self):
         err = []
         if self.user:
@@ -316,7 +316,7 @@ class RSSCloudApplication(object):
     def on_select_provider_get(self):
         page = self.template_env.get_template('provider.html')
         self.response = Response(page.render(select_provider_url=self.getUrlByEndpoint(endpoint='on_select_provider_post')), mimetype='text/html')
-            
+
     def on_select_provider_post(self):
         provider = self.request.form.get('provider')
         if provider:
@@ -337,7 +337,7 @@ class RSSCloudApplication(object):
             elif provider == 'yandex':
                 self.response = redirect(
                     'https://oauth.yandex.ru/authorize?response_type=code&client_id={0}&client_secret={1}&redirect_uri={2}'.format(
-                        self.config['yandex']['id'], 
+                        self.config['yandex']['id'],
                         self.config['yandex']['secret'],
                         self.getUrlByEndpoint(endpoint='on_code_get', full_url=True)
                     )
@@ -345,7 +345,7 @@ class RSSCloudApplication(object):
         else:
             page = self.template_env.get_template('error.html')
             self.response = Response(page.render(err=['Unknown provider']), mimetype='text/html')
-            
+
     def on_login_post(self):
         login = self.request.form.get('login')
         password = self.request.form.get('password')
@@ -382,7 +382,7 @@ class RSSCloudApplication(object):
             self.response = redirect(self.getUrlByEndpoint(endpoint='on_refresh_get_post'))
         else:
             self.on_login_get(err)
-            
+
     def on_refresh_get_post(self):
         if self.user:
             if not self.user['in_queue']:
@@ -399,7 +399,7 @@ class RSSCloudApplication(object):
             self.response = redirect(self.getUrlByEndpoint(endpoint='on_root_get'))
             #page = self.template_env.get_template('error.html')
             #self.response = Response(page.render(err=['No sid']), mimetype='text/html')
-    
+
     def on_ready_get(self):
         result = {}
         if self.user:
@@ -411,7 +411,7 @@ class RSSCloudApplication(object):
         else:
             result = {'status': 'not logged', 'reason': 'Not logged', 'message': 'Click on "Select provider" to start work'}
         self.response = Response(json.dumps(result), mimetype='text/html')
-    
+
     def on_only_unread_post(self):
         status = bool(int(self.request.form.get('status')))
         result = {}
@@ -427,7 +427,7 @@ class RSSCloudApplication(object):
         page = self.template_env.get_template('error.html')
         self.response = Response(page.render(title='ERROR', body='Error: {0}, {1}'.format(e.code, e.description)), mimetype='text/html')
         self.response.status_code = e.code
-    
+
     def on_root_get(self, err=None):
         if not err:
             err = []
@@ -439,7 +439,7 @@ class RSSCloudApplication(object):
             provider = 'Not selected'
         page = self.template_env.get_template('root.html')
         self.response = Response(page.render(err=err, only_unread=only_unread, provider=provider), mimetype='text/html')
-        
+
     def on_group_by_category_get(self):
         page_number = self.user['page']
         if not page_number:
@@ -472,7 +472,7 @@ class RSSCloudApplication(object):
             data = {}
         page = self.template_env.get_template('group-by-category.html')
         self.response = Response(page.render(data=data, only_unread=self.user['only_unread'], group_by_link=self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number})), mimetype='text/html')
-    
+
     def on_category_get(self, quoted_category=None):
         page = self.template_env.get_template('posts.html')
         if quoted_category:
@@ -490,9 +490,9 @@ class RSSCloudApplication(object):
                 by_feed[f['feed_id']] = f
             if self.user['only_unread']:
                 if cat == all_feeds:
-                    cursor = self.db.posts.find({'owner': self.user['sid'], 'read': False}).sort('unix_date', DESCENDING)
+                    cursor = self.db.posts.find({'owner': self.user['sid'], 'read': False}).sort([('feed_id', DESCENDING), ('unix_date', DESCENDING)])
                 else:
-                    cursor = self.db.posts.find({'owner': self.user['sid'], 'read': False, 'category_id': f['category_id']}).sort('unix_date', DESCENDING)
+                    cursor = self.db.posts.find({'owner': self.user['sid'], 'read': False, 'category_id': f['category_id']}).sort([('feed_id', DESCENDING), ('unix_date', DESCENDING)])
             else:
                 if cat == all_feeds:
                     cursor = self.db.posts.find({'owner': self.user['sid']}).sort('unix_date', DESCENDING)
@@ -504,13 +504,13 @@ class RSSCloudApplication(object):
             self.response = Response(
                 page.render(
                     only_unread=self.user['only_unread'],
-                    posts=posts, 
-                    tag=cat, 
+                    posts=posts,
+                    tag=cat,
                     back_link=self.getUrlByEndpoint(endpoint='on_group_by_category_get'),
-                    group='category', 
+                    group='category',
                     words=''),
-                    #next_tag=self.getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': next_cat}), 
-                    #prev_tag=self.getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': prev_cat})), 
+                    #next_tag=self.getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': next_cat}),
+                    #prev_tag=self.getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': prev_cat})),
                 mimetype='text/html')
         else:
             self.on_error(NotFound())
@@ -531,9 +531,9 @@ class RSSCloudApplication(object):
         if current_tag:
             posts = []
             if self.user['only_unread']:
-                cursor = self.db.posts.find({'owner': self.user['sid'], 'read': False, 'tags': {'$all': [tag]}}).sort('unix_date', DESCENDING)
+                cursor = self.db.posts.find({'owner': self.user['sid'], 'read': False, 'tags': {'$all': [tag]}}).sort([('feed_id', DESCENDING), ('unix_date', DESCENDING)])
             else:
-                cursor = self.db.posts.find({'owner': self.user['sid'], 'tags': {'$all': [tag]}}).sort('unix_date', DESCENDING)
+                cursor = self.db.posts.find({'owner': self.user['sid'], 'tags': {'$all': [tag]}}).sort([('feed_id', DESCENDING), ('unix_date', DESCENDING)])
             by_feed = {}
             for post in cursor:
                 if post['feed_id'] not in by_feed:
@@ -543,17 +543,17 @@ class RSSCloudApplication(object):
             self.response = Response(
                 page.render(
                     only_unread=self.user['only_unread'],
-                    posts=posts, 
-                    tag=tag, 
-                    back_link=back_link, 
-                    group='tag', 
+                    posts=posts,
+                    tag=tag,
+                    back_link=back_link,
+                    group='tag',
                     words=', '.join(current_tag['words'])),
-                    #next_tag=self.getUrlByEndpoint(endpoint='on_tag_get', params={'quoted_tag': next_tag}) if next_tag else '/', 
-                    #prev_tag=self.getUrlByEndpoint(endpoint='on_tag_get', params={'quoted_tag': prev_tag}) if prev_tag else '/'), 
+                    #next_tag=self.getUrlByEndpoint(endpoint='on_tag_get', params={'quoted_tag': next_tag}) if next_tag else '/',
+                    #prev_tag=self.getUrlByEndpoint(endpoint='on_tag_get', params={'quoted_tag': prev_tag}) if prev_tag else '/'),
                 mimetype='text/html')
         else:
             self.on_error(NotFound())
-    
+
     def on_feed_get(self, quoted_feed=None):
         page = self.template_env.get_template('posts.html')
         feed = unquote_plus(quoted_feed)
@@ -569,17 +569,17 @@ class RSSCloudApplication(object):
             self.response = Response(
                 page.render(
                     only_unread=self.user['only_unread'],
-                    posts=posts, 
-                    tag=current_feed['title'], 
+                    posts=posts,
+                    tag=current_feed['title'],
                     back_link=self.getUrlByEndpoint(endpoint='on_group_by_category_get'),
-                    group='feed', 
+                    group='feed',
                     words=''),
-                    #next_tag=self.getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': next_cat}), 
-                    #prev_tag=self.getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': prev_cat})), 
+                    #next_tag=self.getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': next_cat}),
+                    #prev_tag=self.getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': prev_cat})),
                 mimetype='text/html')
         else:
             self.on_error(NotFound())
-    
+
     def on_favicon_get(self):
         mimetype = 'image/x-icon'
         f_path = 'favicon.ico'
@@ -591,7 +591,7 @@ class RSSCloudApplication(object):
             f = open(f_path, 'rb')
             self.response = Response(wrap_file(self.request.environ, f), mimetype=mimetype, direct_passthrough=True)
             self.response.headers['Last-Modified'] = l_modify
-    
+
     def on_static_get(self, directory=None, filename=None):
         mimetype = 'text/plain'
         if not directory:
@@ -614,7 +614,7 @@ class RSSCloudApplication(object):
                 self.response.headers['Last-Modified'] = l_modify
         else:
             self.response = Response('', mimetype=mimetype)
-    
+
     def on_read_posts_post(self):
         err = []
         many = False
@@ -689,7 +689,7 @@ class RSSCloudApplication(object):
             self.db.letters.update({'owner': self.user['sid']}, {'$set': {'letters': first_letters}})
             print(time.time() - st)
         self.response = Response('{{"result": "{0}"}}'.format(''.join(err)), mimetype='application/json')
-        
+
     def on_group_by_tags_get(self, page_number):
         self.response = None
         page = self.template_env.get_template('group-by-tag.html')
@@ -755,20 +755,20 @@ class RSSCloudApplication(object):
             self.response = Response(
                 page.render(
                     only_unread=self.user['only_unread'],
-                    tags=sorted_tags, 
+                    tags=sorted_tags,
                     sort_by_title = 'tags',
-                    sort_by_link=self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': new_cookie_page_value}), 
+                    sort_by_link=self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': new_cookie_page_value}),
                     group_by_link=self.getUrlByEndpoint(endpoint='on_group_by_category_get'),
                     pages_map=pages_map,
                     current_page=new_cookie_page_value,
-                    letters=letters), 
+                    letters=letters),
                 mimetype='text/html'
                 )
             self.db.users.update({'sid': self.user['sid']}, {'$set': {'page': new_cookie_page_value, 'letter': ''}})
         else:
             if not self.response:
                 self.on_error(NotFound())
-    
+
     def on_group_by_tags_startwith_get(self, letter=None):
         self.response = None
         page_number = self.user['page']
@@ -802,19 +802,19 @@ class RSSCloudApplication(object):
             self.response = Response(
                 page.render(
                     only_unread=self.user['only_unread'],
-                    tags=tags, 
+                    tags=tags,
                     sort_by_title=let,
-                    sort_by_link=self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number}), 
+                    sort_by_link=self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number}),
                     group_by_link=self.getUrlByEndpoint(endpoint='on_group_by_category_get'),
                     pages_map={},
                     current_page=1,
-                    letters=letters), 
+                    letters=letters),
                 mimetype='text/html'
             )
             self.db.users.update({'sid': self.user['sid']}, {'$set': {'letter': let}})
         else:
             self.response = redirect(self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number}))
-    
+
     def on_posts_content_post(self):
         err = []
         try:
@@ -864,7 +864,7 @@ class RSSCloudApplication(object):
         else:
             self.response = Response('{{"result": "error", "data":"{0}"}}'.format(''.join(err)), mimetype='application/json')
             self.response.status_code = 404
-            
+
     def on_post_content_post(self):
         err = []
         try:
@@ -882,7 +882,7 @@ class RSSCloudApplication(object):
         else:
             self.response = Response('{{"result": "error", "data":"{0}"}}'.format(''.join(err)), mimetype='application/json')
             self.response.status_code = 404
-    
+
     def on_post_links(self):
         err = []
         result = None
@@ -907,7 +907,7 @@ class RSSCloudApplication(object):
         else:
             self.response = Response('{{"result": "error", "data":"{0}"}}'.format(''.join(err)), mimetype='application/json')
             self.response.status_code = 404
-    
+
     def on_get_all_tags(self):
         err = []
         result = []
@@ -921,7 +921,7 @@ class RSSCloudApplication(object):
             self.response = Response(json.dumps(result), mimetype='application/json')
         else:
             self.response = Response('{{"result": "error", "data":"{0}"}}'.format(''.join(err)), mimetype='application/json')
-            self.response.status_code = 404        
+            self.response.status_code = 404
 
 def getSortedDictByAlphabet(dct, type=None):
     if not type or type == 'k':
@@ -933,7 +933,7 @@ def getSortedDictByAlphabet(dct, type=None):
     for key in sorted_keys:
         sorted_dct[key] = temp_dct[key]
     return(sorted_dct)
-    
+
 def downloader_bazqux(data):
     try:
         print('Start downloading, ', data['category'])
@@ -972,7 +972,7 @@ def downloader_bazqux(data):
     except Exception as e:
         print('Downloaded, category with strange symbols')
     return(result, data['category'])
-    
+
 def downloader_yandex(data):
     try:
         print('Start downloading, ', data['title'])
@@ -1005,7 +1005,7 @@ def downloader_yandex(data):
             if counter_for_downloads >= 10:
                 posts = {'navigation': {'next' : None}}
                 counter_for_downloads = 0
-            else:    
+            else:
                 counter_for_downloads += 1
             print(e, data['title'], posts['navigation'].get('next'), counter_for_downloads)
             time.sleep(2)
@@ -1036,7 +1036,7 @@ def downloader_yandex(data):
     except Exception as e:
         print('Downloaded, category with strange symbols')
     return(result, data['title'])
-    
+
 def worker(firsts, seconds, firsts_lock, seconds_lock, config):
     name = str(randint(0, 10000))
     no_category_name = 'NotCategorized'
@@ -1057,7 +1057,7 @@ def worker(firsts, seconds, firsts_lock, seconds_lock, config):
     #all_posts_content = []
     cl = MongoClient(config['settings']['db_host'], int(config['settings']['db_port']))
     db = cl.rss
-    
+
     def treatPosts(category=None, p_range=None):
         try:
             print('treating', category)
@@ -1117,7 +1117,7 @@ def worker(firsts, seconds, firsts_lock, seconds_lock, config):
         except Exception as e:
             print('treated category with strange symbols')
         return(p_range)
-        
+
     def saveAllData():
         if all_posts:
             st = time.time()
@@ -1142,7 +1142,7 @@ def worker(firsts, seconds, firsts_lock, seconds_lock, config):
         else:
             db.users.update({'sid': user['sid']}, {'$set': {'ready_flag': True, 'in_queue': False, 'message': 'You can start reading'}})
             print('Nothing to save')
-    
+
     def getUrlByEndpoint(endpoint=None, params=None, full_url=False):
         url = None
         if endpoint:
@@ -1151,7 +1151,7 @@ def worker(firsts, seconds, firsts_lock, seconds_lock, config):
                 all_urls = routes.bind(host, '/')
                 url = all_urls.build(endpoint, params, force_external=full_url)
         return(url)
-    
+
     while True:
         data = None
         #st = time.time()
@@ -1292,7 +1292,7 @@ def worker(firsts, seconds, firsts_lock, seconds_lock, config):
                                 by_feed[post['origin']['streamId']]['title'] = post['origin']['title']
                                 by_feed[post['origin']['streamId']]['owner'] = user['sid']
                                 by_feed[post['origin']['streamId']]['category_id'] = category
-                                #by_feed[post['origin']['streamId']]['timestamp'] = 
+                                #by_feed[post['origin']['streamId']]['timestamp'] =
                                 by_feed[post['origin']['streamId']]['feed_id'] = post['origin']['streamId']
                                 by_feed[post['origin']['streamId']]['origin_feed_id'] = origin_feed_id
                                 by_feed[post['origin']['streamId']]['category_title'] = category
@@ -1307,7 +1307,7 @@ def worker(firsts, seconds, firsts_lock, seconds_lock, config):
                                 pu_date = -1
                             all_posts.append({
                                 #'category_id': category,
-                                'content': {'title': post['title'], 'content': gzip.compress(post['summary']['content'].encode('utf-8', 'replace'))}, 
+                                'content': {'title': post['title'], 'content': gzip.compress(post['summary']['content'].encode('utf-8', 'replace'))},
                                 'feed_id': post['origin']['streamId'],
                                 'id': post['id'],
                                 'url': post['canonical'][0]['href'] if post['canonical'] else 'http://ya.ru',
@@ -1508,7 +1508,7 @@ def getFaviconUrl(data):
     else:
         print('Not found', url)'''
     return(favicon_url, data[1])
-    
+
 if __name__ == '__main__':
     app = RSSCloudApplication('rsscloud.conf')
     run_simple(app.config['settings']['host'], int(app.config['settings']['port']), app.setResponse)
@@ -1520,5 +1520,5 @@ if __name__ == '__main__':
         mark as read page, feed, category
         reader.aol.com
         feedly
-        digg.com        
+        digg.com
     '''
