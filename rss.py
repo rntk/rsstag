@@ -957,7 +957,7 @@ def downloader_bazqux(data):
                 result['items'].extend(tmp_result['items'])
                 url = data['url'] + '&c={0}'.format(tmp_result['continuation'])
         except Exception as e:
-            print(e, data['category'], counter_for_downloads)
+            print(e, data['category'], counter_for_downloads, url)
             if counter_for_downloads == 5:
                 again = False
             else:
@@ -1270,7 +1270,7 @@ def worker(firsts, seconds, firsts_lock, seconds_lock, config):
                         category_name = feed['categories'][0]['label']
                     else:
                         category_name = no_category_name
-                        works.append({'headers': headers, 'host': config[user['provider']]['api_host'], 'url': '/reader/api/0/stream/contents?s={0}&xt=user/-/state/com.google/read&n=5000&output=json'.format(feed['id']), 'category': category_name})
+                        works.append({'headers': headers, 'host': config[user['provider']]['api_host'], 'url': '/reader/api/0/stream/contents?s={0}&xt=user/-/state/com.google/read&n=5000&output=json'.format(quote_plus(feed['id'])), 'category': category_name})
                     if category_name not in by_category:
                         by_category[category_name] = True
                         if category_name != no_category_name:
