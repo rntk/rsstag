@@ -319,7 +319,7 @@ setOnlyUnread : function() {
     });
 },
 showHelp: function() {
-    var $help = $('#help');
+    var $help = $('#help_window');
     if ($help) {
         if ($help.css('display') === 'none') {
             $help.show();
@@ -661,7 +661,7 @@ $(document).ready(function() {
                     }
                 }
                 case 27: {
-                    $('#help').hide();
+                    $('#help_window').hide();
                     app.$post_links.hide();
                 }
             }
