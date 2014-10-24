@@ -242,7 +242,9 @@ h3 {
 }
 #help_window {
     position: fixed;
-    width: 50%;
+    left: 20%;
+    right: 20%;
+    /*width: 50%;*/
     height: 80%;
     margin: 0 auto;
     display: none;
