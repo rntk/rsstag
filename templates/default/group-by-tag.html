@@ -27,12 +27,14 @@
     {% endfor %}
 </div>
 {% endif %}
-<div class="search_tools">
-    <div id="loading"><img src="/static/img/g_load.gif" /></div>
-    <input class="search_field" type="text" placeholder="Search" />
-    <div class="search_result">
+{% if tags %}
+    <div class="search_tools">
+        <div id="loading"><img src="/static/img/g_load.gif" /></div>
+        <input class="search_field" type="text" placeholder="Search" />
+        <div class="search_result">
+        </div>
     </div>
-</div>
+{% endif %}
 <div class="page">
     <ol class="cloud">
         {% if tags %}
