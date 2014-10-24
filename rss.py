@@ -519,7 +519,11 @@ class RSSCloudApplication(object):
         page = self.template_env.get_template('posts.html')
         page_number = self.user['page']
         letter = self.user['letter']
-        self.first_letters = getSortedDictByAlphabet(self.db.letters.find_one({'owner': self.user['sid']})['letters'])
+        tmp_letters = self.db.letters.find_one({'owner': self.user['sid']})
+        if tmp_letters:
+            self.first_letters = getSortedDictByAlphabet(tmp_letters['letters'])
+        else:
+            self.first_letters = {}
         if not page_number:
             page_number = 1
         if letter and letter in self.first_letters:
@@ -636,7 +640,11 @@ class RSSCloudApplication(object):
         if not err:
             err.append('ok')
             st = time.time()
-            first_letters = self.db.letters.find_one({'owner': self.user['sid']})['letters']
+            tmp_letters = self.db.letters.find_one({'owner': self.user['sid']})
+            if tmp_letters:
+                first_letters = tmp_letters['letters']
+            else:
+                first_letters = {}
             if many:
                 tags = {}
                 if self.user['provider'] == 'yandex':
@@ -744,7 +752,11 @@ class RSSCloudApplication(object):
                 for t in cursor[start_tags_range:end_tags_range]:
                     sorted_tags.append({'tag': t['tag'], 'url': t['local_url'], 'words': t['words'], 'count': t['posts_count']})
             letters = []
-            self.first_letters = getSortedDictByAlphabet(self.db.letters.find_one({'owner': self.user['sid']})['letters'])
+            tmp_letters = self.db.letters.find_one({'owner': self.user['sid']})
+            if tmp_letters:
+                self.first_letters = getSortedDictByAlphabet(tmp_letters['letters'])
+            else:
+                self.first_letters = {}
             if self.user['only_unread']:
                 for s_let in self.first_letters:
                     if self.first_letters[s_let]['unread_count'] > 0:
@@ -775,7 +787,11 @@ class RSSCloudApplication(object):
         if not page_number:
             page_number = 1
         let = unquote_plus(letter)
-        self.first_letters = getSortedDictByAlphabet(self.db.letters.find_one({'owner': self.user['sid']})['letters'])
+        tmp_letters = self.db.letters.find_one({'owner': self.user['sid']})
+        if tmp_letters:
+            self.first_letters = getSortedDictByAlphabet(tmp_letters['letters'])
+        else:
+            self.first_letters = {}
         if let and let in self.first_letters:
             letters = []
             if self.user['only_unread']:
