@@ -23,6 +23,8 @@ tags_index: null,
 current_search_result: [],
 $search_field: null,
 $search_result_window: null,
+scroll_position: 0,
+$toolbar: undefined,
 urls: {
     'mark_read_posts_url': '/read/posts',
     'update_prev_next_link_url': '/tag/prev-next',
@@ -291,6 +293,24 @@ scrollTop: function(el) {
     window.scrollTo(0, $(el).offset().top - ($('#global_tools').height() * 2));
 },
 
+scrollUp: function(position) {
+    this.scroll_position = (position)? position: 0;
+    this.showToolbar();
+},
+
+scrollDown: function(position) {
+    this.scroll_position = (position)? position: 0;
+    this.hideToolbar();
+},
+
+showToolbar: function() {
+    this.$toolbar.show();
+},
+
+hideToolbar: function() {
+    this.$toolbar.hide();
+},
+
 setOnlyUnread : function() {
     if (app.$only_unread_checkbox.prop('checked')) {
         status = 1;
@@ -479,6 +499,7 @@ $(document).ready(function() {
     $(document).ajaxStart(function() { $('#loading').show(); });
     $(document).ajaxStop(function() { $('#loading').hide(); });
     path = window.location.pathname;
+    app.$toolbar = $('#global_tools');
     if (path == '/') {
         app.$status_element = $('#status').children('span');
         app.status_interval_handler = setInterval(app.checkStatus, 5000);
@@ -513,14 +534,25 @@ $(document).ready(function() {
         })
     }
     else if (/^\/feed*/.test(path) || /^\/category*/.test(path) || /^\/tag/.test(path)) {
-        app.$current_post = $('.post').eq(0);
-        app.$current_post.addClass('current_post');
         app.$post_links = $('#post_links');
         $div_posts = $('div.post');
+        app.$current_post = $div_posts.eq(0);//$('.post').eq(0);
+        app.$current_post.addClass('current_post');
         app.posts_count = $div_posts.length;
         $('#posts_count').text(app.posts_count);
         $div_posts.click(function() {
             app.setCurrentPost(this);
+        });
+        var $window= $(window);
+        app.scroll_position = $window.scrollTop();
+        $window.on('scroll', function() {
+            var sc_t = $window.scrollTop();
+            if (app.scroll_position >= sc_t) {
+                app.scrollUp(sc_t);
+            }
+            else {
+                app.scrollDown(sc_t);
+            }
         });
         $div_posts.on('touchstart', function(e){
             touch = e.originalEvent.changedTouches[0];
