@@ -676,27 +676,31 @@ $(document).ready(function() {
         $('#read_all').click(function(){
             app.readAll(this);
         });
-        $('a.post_show_content').click(function() {
+        $('a.post_show_content').on('click', function() {
             var $prnt = $(this).parent();
             app.setCurrentPost($prnt.parent());
             app.showContent($prnt);
             return(false);
         });
-        $('.post_title_link').click(function() {
-            var self = $(this).parent().parent().find('.read_button');
-            if (self.hasClass('unread')) {
-                setTimeout(function() {self.click()}, 50);
+        $('.post_title_link').on('mouseup', function(e) {
+            var key = e.which;
+            var self;
+            if ((key == 1) || (key == 2)) {
+                self = $(this).parent().parent().find('.read_button');
+                if (self.hasClass('unread')) {
+                    setTimeout(function() {self.click()}, 50);
+                }
             }
         });
-        $('#show_all').click(function(){
+        $('#show_all').on('click', function(){
             app.showAll(this);
         });
         app.cloud_items_count = $('li.cloud_item').length;
         if (app.cloud_items_count != 0) {
             $('#cloud_items_count').text(app.cloud_items_count);
         }
-        $(document).keydown(function(e) {
-            key = e.keyCode || e.charCode;
+        $(document).on('keydown', function(e) {
+            var key = e.which; //e.keyCode || e.charCode;
             switch (key) {
                 case 65: {
                     if (e.shiftKey) {//shift-a
