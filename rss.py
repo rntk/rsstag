@@ -4,7 +4,7 @@ import os, json, re
 from urllib.parse import unquote_plus, quote_plus, urlencode, urlparse
 from http import client
 import time
-import pickle
+#import pickle
 import gzip
 from collections import OrderedDict
 from datetime import date, datetime
@@ -21,8 +21,8 @@ from werkzeug.wsgi import wrap_file
 from jinja2 import Environment, PackageLoader
 import pymorphy2
 from nltk.stem import PorterStemmer
-from pymongo import MongoClient, DESCENDING, ASCENDING
-from bson.regex import Regex
+from pymongo import MongoClient, DESCENDING #, ASCENDING
+#from bson.regex import Regex
 
 class RSSCloudApplication(object):
 
@@ -1418,7 +1418,7 @@ def worker(firsts, seconds, firsts_lock, seconds_lock, config):
                                             time.sleep(randint(2, 7))
                                         else:
                                             counter = 6
-                                            print('marked', name)
+                                            #print('marked', name)
                                             post_meta.unlink()
                                             result_dom.unlink()
                 connection.close()
@@ -1446,7 +1446,7 @@ def worker(firsts, seconds, firsts_lock, seconds_lock, config):
                         print('Can`t make request', e, counter)
                     if not err:
                         if resp_data.decode('utf-8').lower() == 'ok':
-                            print('marked')
+                            #print('marked')
                             counter = 6
                         else:
                             time.sleep(randint(2, 7))
