@@ -181,13 +181,15 @@ showContent: function(el, show_status) {
             var promise = app.loadPostContent(pos);
             promise.done(function(){
                 //$content.attr('class', 'show');
-                $content.html(app.all_posts_content[pos]);
+                $content.html(app.all_posts_content[pos])
+                        .find('img').removeAttr('height');
                 all_ready.resolve();
             });
         }
         else {
             //$content.attr('class', 'show');
-            $content.html(app.all_posts_content[pos]);
+            $content.html(app.all_posts_content[pos])
+                    .find('img').removeAttr('height');
             all_ready.resolve();
         }
     }
