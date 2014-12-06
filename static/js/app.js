@@ -25,6 +25,7 @@ $search_field: null,
 $search_result_window: null,
 scroll_position: 0,
 $toolbar: undefined,
+selected_tags: [],
 urls: {
     'mark_read_posts_url': '/read/posts',
     'update_prev_next_link_url': '/tag/prev-next',
@@ -34,6 +35,7 @@ urls: {
     'ready_check_url': '/ready',
     'only_unread_url': '/only-unread',
     'all_tags_url': '/all-tags',
+    'posts_with_tags': '/posts/with/tags'
 },
 all_showed: false,
 cloud_items_count: 0,
@@ -545,6 +547,58 @@ showPostLinks: function(el_this) {
     }
     return(false);
 },
+processSelectedTags: function($el) {
+    if ($el.hasClass('selected_tag')) {
+        //$el.removeClass('selected_tag');
+        //delete(this.selected_tags[0]);
+        this.selected_tags = [];
+        result = false;
+    }
+    else {
+        //$el.addClass('selected_tag');
+        this.selected_tags.push($el);
+        result = true;
+    }
+    $el.toggleClass('selected_tag');
+    return(result);
+},
+processTagSelection: function(el) {
+    var $el = $(el);
+    var tags = [];
+    var $first_tag, $second_tag;
+    var second_tag = '';
+    var result = false;
+    var e_tags = '';
+    if (this.processSelectedTags($el)) {
+        if (this.selected_tags.length == 2) {
+            if (this.selected_tags[0].nextAll('.selected_tag').length > 0) {
+                $first_tag = this.selected_tags[0];
+                $second_tag = this.selected_tags[1];
+            }
+            else {
+                $first_tag = this.selected_tags[1];
+                $second_tag = this.selected_tags[0];
+            }
+            tags.push($first_tag.find('.cloud_item_title').text());
+            second_tag = $second_tag.find('.cloud_item_title').text();
+            $first_tag.nextAll().each(function() {
+                var tag = $(this).find('.cloud_item_title').text();
+                var go_on = true;
+                tags.push(tag);
+                if (tag === second_tag) {
+                    go_on = false;
+                }
+                return(go_on);
+            });
+            $first_tag.removeClass('selected_tag');
+            $second_tag.removeClass('selected_tag');
+            this.selected_tags = [];
+            e_tags = encodeURIComponent(tags.join(','));
+            window.location = this.urls['posts_with_tags'] + '/' + e_tags;
+        }
+    }
+    return(result);
+}
 }
 
 $(document).ready(function() {
@@ -568,6 +622,12 @@ $(document).ready(function() {
     }
     else if (/\/group\/tag\/.*/.test(path)) {
         var t_out = -1;
+        var $cloud = $('.cloud');
+
+        $cloud.on('click', '.cloud_item', function() {
+            app.processTagSelection(this);
+        });
+
         app.$search_field = $('.search_field');
         app.$search_result_window = $('.search_result');
         app.$search_field.on('focus', function() {
@@ -590,6 +650,7 @@ $(document).ready(function() {
                 });
             }
         })
+
     }
     else if (/^\/feed*/.test(path) || /^\/category*/.test(path) || /^\/tag/.test(path)) {
         app.$post_links = $('#post_links');
