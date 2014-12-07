@@ -162,7 +162,7 @@ syncReadAllButton: function() {
 },
 
 showContent: function(el, show_status) {
-    var $content = $(el).parent().children(".post_content");
+    var $content = $(el).parent().children('.post_content');
     var pos = $content.parent().data('pos');
     var app = this;
     var all_ready = $.Deferred();
@@ -714,9 +714,14 @@ $(document).ready(function() {
                 app.group_id = $('.post').data('feed');
                 break;
             }
-            case 'category':
-            case 'tag': {
+            case 'category': {
                 app.group_id = $('.page').data('tag');
+                break;
+            }
+            case 'tag': {
+                $('.page').each(function() {
+                    app.group_id += $(this).data('tag') + ',';
+                });
                 break;
             }
         }
