@@ -652,7 +652,7 @@ $(document).ready(function() {
         })
 
     }
-    else if (/^\/feed*/.test(path) || /^\/category*/.test(path) || /^\/tag/.test(path)) {
+    else if (/^\/feed*/.test(path) || /^\/category*/.test(path) || /^\/tag/.test(path) || /^\/posts\/with\/tags\/.*/.test(path)) {
         app.$post_links = $('#post_links');
         $div_posts = $('div.post');
         app.$current_post = $div_posts.eq(0);//$('.post').eq(0);
