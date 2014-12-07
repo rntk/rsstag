@@ -849,7 +849,11 @@ class RSSCloudApplication(object):
                     posts = self.db.posts.find({'owner': self.user['sid'], 'read': False, 'tags': {'$all': [group_id]}}).sort('unix_time', DESCENDING)
                 else:'''
                 #posts = self.db.posts.find({'owner': self.user['sid'], 'tags': {'$all': [group_id]}}).sort('unix_time', DESCENDING)
-                posts = self.db.posts.find({'owner': self.user['sid'], 'tags': {'$all': [group_id]}})
+                try:
+                    tags = group_id.split(',')
+                except Exception as e:
+                    tags = []
+                posts = self.db.posts.find({'owner': self.user['sid'], 'tags': {'$in': tags}})
             elif group == 'feed':
                 '''if self.user['only_unread']:
                     posts = self.db.posts.find({'owner': self.user['sid'], 'read': False, 'feed_id': group_id}).sort('unix_time', DESCENDING)
@@ -981,7 +985,7 @@ class RSSCloudApplication(object):
                 else:
                     back_link = self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number})
                 page = self.template_env.get_template('tags-posts.html')
-                self.response = Response(page.render(tags=result, selected_tags=','.join(tags), back_link=back_link), mimetype='text/html')
+                self.response = Response(page.render(tags=result, selected_tags=','.join(tags), back_link=back_link, group='tag'), mimetype='text/html')
         else:
             self.response = redirect(self.getUrlByEndpoint('on_root_get'))
 
