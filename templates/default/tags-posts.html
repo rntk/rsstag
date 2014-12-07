@@ -1,7 +1,7 @@
 ﻿<!DOCTYPE html/>
 <html>
 <head>
-<title>{{group}} | {{tag}}</title>
+<title>{{group}} | {{selected_tags}}</title>
 {% include "head-data.html" %}
 </head>
 <body>
@@ -46,35 +46,37 @@
     <span class="post_links_close">x</span>
     <span class="post_links_content"></span>
 </div>
-<div class="page" data-tag="{{tag}}" data-group="{{group}}">
-<div class="tag_title">
-    <h3>{{tag}}</h3>
-    {% if words %}
-        <span>({{words}})</span>
-    {% endif %}
-</div>
-{% if posts %}
-    {% for p in posts %}
-        <div class="post" data-feed="{{p['post']['feed_id']}}" id="p{{p['pos']}}" data-pos="{{p['pos']}}"><a name="p{{p['pos']}}"></a>
-            <h3 class="post_title"><a class="post_title_link" href="{{p['post']['url']}}" target="_blank">{{p['post']['content']['title']}}</a></h3>
-            <div class="post_meta">{{p['category_title']}} | {#<img src="{{p['favicon']}}" class="favicon" />#}<b class="post_feed_title">{{p['feed_title']}}</b> | {{p['post']['date']}}</div>
-            <div class="post_content hide">{# {{p['post']['content']['content']}} #}</div>
-            <div class="post_tools">
-                {#<a href="{{p['post']['url']}}" class="post_show_original" target="_blank">Show original...</a>#}
-                <a href="#p{{p['pos']}}" class="post_show_content">Show post</a>
-                <a href="#p{{p['pos']}}" class="post_show_links">Show links</a>
-                {% if p['post']['read'] %}
-                    <span class="read_button read" data-pos="{{p['pos']}}">read</span>
-                {% else %}
-                    <span class=" read_button unread" data-pos="{{p['pos']}}">unread</span>
-                {% endif %}
-            </div>
+{% if tags %}
+    {% for tag in tags %}
+        <div class="page" data-tag="{{tag}}" data-group="{{group}}">
+        <div class="tag_title">
+            <h3>{{tag}}</h3>
+            {% if tags[tag]['words'] %}
+                <span>({{tags[tag]['words']}})</span>
+            {% endif %}
+        </div>
+            {% for p in tags[tag]['posts'] %}
+                <div class="post" data-feed="{{p['feed_id']}}" id="p{{p['pid']}}" data-pos="{{p['pid']}}"><a name="p{{p['pid']}}"></a>
+                    <h3 class="post_title"><a class="post_title_link" href="{{p['url']}}" target="_blank">{{p['content']['title']}}</a></h3>
+                    <div class="post_meta">{{p['category_title']}} | {#<img src="{{p['favicon']}}" class="favicon" />#}<b class="post_feed_title">{{p['feed_title']}}</b> | {{p['date']}}</div>
+                    <div class="post_content hide">{# {{p['content']['content']}} #}</div>
+                    <div class="post_tools">
+                        {#<a href="{{p['url']}}" class="post_show_original" target="_blank">Show original...</a>#}
+                        <a href="#p{{p['pid']}}" class="post_show_content">Show post</a>
+                        <a href="#p{{p['pid']}}" class="post_show_links">Show links</a>
+                        {% if p['read'] %}
+                            <span class="read_button read" data-pos="{{p['pid']}}">read</span>
+                        {% else %}
+                            <span class=" read_button unread" data-pos="{{p['pid']}}">unread</span>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        <!--div id="show_tags"><a href="#tags">Show "level up"</a><a name="tags"></div-->
         </div>
     {% endfor %}
 {% else %}
     <p>No unread posts</p>
 {% endif %}
-<!--div id="show_tags"><a href="#tags">Show "level up"</a><a name="tags"></div-->
-</div>
 </body>
 </html>
