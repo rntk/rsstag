@@ -100,7 +100,8 @@ class RSSCloudApplication(object):
                 Rule('/post-links', endpoint='on_post_links', methods=['POST']),
                 Rule('/ready', endpoint='on_ready_get', methods=['GET', 'HEAD']),
                 Rule('/only-unread', endpoint='on_only_unread_post', methods=['POST']),
-                Rule('/all-tags', endpoint='on_get_all_tags', methods=['GET', 'HEAD'])
+                Rule('/all-tags', endpoint='on_get_all_tags', methods=['GET', 'HEAD']),
+                Rule('/posts/with/tags/<string:s_tags>', endpoint='on_get_posts_with_tags', methods=['GET', 'HEAD'])
             ])
             self.updateEndpoints()
             if not self.workers_pool:
@@ -438,7 +439,7 @@ class RSSCloudApplication(object):
         else:
             provider = 'Not selected'
         page = self.template_env.get_template('root.html')
-        self.response = Response(page.render(err=err, only_unread=only_unread, provider=provider), mimetype='text/html')
+        self.response = Response(page.render(err=err, only_unread=only_unread, provider=provider, support=self.config['settings']['support'], version=self.config['settings']['version']), mimetype='text/html')
 
     def on_group_by_category_get(self):
         page_number = self.user['page']
@@ -938,6 +939,50 @@ class RSSCloudApplication(object):
         else:
             self.response = Response('{{"result": "error", "data":"{0}"}}'.format(''.join(err)), mimetype='application/json')
             self.response.status_code = 404
+
+    def on_get_posts_with_tags(self, s_tags):
+        if s_tags:
+            tags = s_tags.split(',')
+            if tags:
+                result = {}
+                query = {'owner': self.user['sid'], 'tag': {'$in': tags}}
+                tags_cursor = self.db.tags.find(query, {'_id': 0, 'tag': 1, 'words': 1})
+                for tag in tags_cursor:
+                    result[tag['tag']] = {'words': ','.join(tag['words']), 'posts': []}
+
+                query = {'owner': self.user['sid'], 'tags': {'$in': tags}}
+                if self.user['only_unread']:
+                    query['read'] = False
+                posts_cursor = self.db.posts.find(query, {'content.content': 0})
+                feeds = {}
+                posts = {}
+                for post in posts_cursor:
+                    posts[post['id']] = post
+                    if post['feed_id'] not in feeds:
+                        feeds[post['feed_id']] = {}
+                feeds_cursor = self.db.feeds.find({'owner': self.user['sid'], 'feed_id': {'$in': list(feeds.keys())}})
+                for feed in feeds_cursor:
+                    feeds[feed['feed_id']] = feed
+                for tag in tags:
+                    posts_for_delete = []
+                    for id in posts:
+                        if tag in posts[id]['tags']:
+                            posts[id]['feed_title'] = feeds[posts[id]['feed_id']]['title']
+                            posts[id]['category_title'] = feeds[posts[id]['feed_id']]['category_title']
+                            result[tag]['posts'].append(posts[id])
+                            posts_for_delete.append(id)
+                    for id in posts_for_delete:
+                        del(posts[id])
+                letter = self.user['letter']
+                page_number = self.user['page']
+                if letter:
+                    back_link = self.getUrlByEndpoint(endpoint='on_group_by_tags_startwith_get', params={'letter': letter})
+                else:
+                    back_link = self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number})
+                page = self.template_env.get_template('tags-posts.html')
+                self.response = Response(page.render(tags=result, selected_tags=','.join(tags), back_link=back_link), mimetype='text/html')
+        else:
+            self.response = redirect(self.getUrlByEndpoint('on_root_get'))
 
 def getSortedDictByAlphabet(dct, type=None):
     if not type or type == 'k':
