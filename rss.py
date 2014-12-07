@@ -973,6 +973,7 @@ class RSSCloudApplication(object):
                             posts_for_delete.append(id)
                     for id in posts_for_delete:
                         del(posts[id])
+                    result[tag]['posts'] = sorted(result[tag]['posts'], key=lambda p: p['feed_id'])
                 letter = self.user['letter']
                 page_number = self.user['page']
                 if letter:
