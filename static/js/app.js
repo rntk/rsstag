@@ -645,7 +645,6 @@ $(document).ready(function() {
         $cloud.on('click', '.cloud_item', function() {
             app.processTagSelection(this);
         });
-
         app.$search_field = $('.search_field');
         app.$search_result_window = $('.search_result');
         app.$search_field.on('focus', function() {
@@ -667,8 +666,39 @@ $(document).ready(function() {
                     }, 500);
                 });
             }
-        })
-
+        });
+        var regs = [];
+        var reg_num = 0;
+        var $letters = $('.letters').find('.letter');
+        var prev_letter = $letters.eq(0).text();
+        var $letters_array = [];
+        var nums_reg = /[0-9]/;
+        var e_alpha_reg = /[a-zA-Z]/;
+        var c_alpha_reg = /[а-яА-ЯёЁ]/;
+        $letters.each(function() {
+            var $this = $(this);
+            var letter = $this.text();
+            $letters_array.push({'$el': $this, 'l': letter});
+            if (nums_reg.test(letter)) {
+                regs.push(nums_reg);
+                nums_reg = /^$/;
+            }
+            else if (e_alpha_reg.test(letter)) {
+                regs.push(e_alpha_reg);
+                e_alpha_reg = /^$/;
+            }
+            else if (c_alpha_reg.test(letter)) {
+                regs.push(c_alpha_reg);
+                c_alpha_reg = /^$/;
+            }
+        });
+        for (var i = 0; i < $letters_array.length; i++) {
+            if (regs[reg_num].test(prev_letter) && !regs[reg_num].test($letters_array[i]['l'])) {
+                $letters_array[i]['$el'].before(document.createElement('br'));
+                prev_letter = $letters_array[i]['l'];
+                reg_num++;
+            }
+        }
     }
     else if (/^\/feed*/.test(path) || /^\/category*/.test(path) || /^\/tag/.test(path) || /^\/posts\/with\/tags\/.*/.test(path)) {
         app.$post_links = $('#post_links');
