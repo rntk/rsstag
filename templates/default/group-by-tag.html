@@ -21,9 +21,6 @@
 <div class="letters">
     {% for l in letters %}
         <a href="{{l['local_url']}}" class="letter">{{l['letter']}}</a>
-        {% if (l['letter'] == '9') or (l['letter'] == 'z') %}
-            <br />
-        {% endif %}
     {% endfor %}
 </div>
 {% endif %}
