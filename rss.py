@@ -699,6 +699,33 @@ class RSSCloudApplication(object):
             print(time.time() - st)
         self.response = Response('{{"result": "{0}"}}'.format(''.join(err)), mimetype='application/json')
 
+    def fillFirstLetters(self):
+        tmp_letters = self.db.letters.find_one({'owner': self.user['sid']})
+        if tmp_letters:
+            self.first_letters = getSortedDictByAlphabet(tmp_letters['letters'])
+        else:
+            self.first_letters = {}
+
+    def getLetters(self):
+        letters = []
+        if self.user['only_unread']:
+            for s_let in self.first_letters:
+                if self.first_letters[s_let]['unread_count'] > 0:
+                    letters.append({'letter': self.first_letters[s_let]['letter'], 'local_url': self.first_letters[s_let]['local_url']})
+        else:
+            for s_let in self.first_letters:
+                letters.append({'letter': self.first_letters[s_let]['letter'], 'local_url': self.first_letters[s_let]['local_url']})
+
+            if self.user['only_unread']:
+                for s_let in self.first_letters:
+                    if self.first_letters[s_let]['unread_count'] > 0:
+                        letters.append({'letter': self.first_letters[s_let]['letter'], 'local_url': self.first_letters[s_let]['local_url']})
+            else:
+                for s_let in self.first_letters:
+                    letters.append({'letter': self.first_letters[s_let]['letter'], 'local_url': self.first_letters[s_let]['local_url']})
+        return(letters)
+
+
     def on_group_by_tags_get(self, page_number):
         self.response = None
         page = self.template_env.get_template('group-by-tag.html')
@@ -752,19 +779,8 @@ class RSSCloudApplication(object):
             else:
                 for t in cursor[start_tags_range:end_tags_range]:
                     sorted_tags.append({'tag': t['tag'], 'url': t['local_url'], 'words': t['words'], 'count': t['posts_count']})
-            letters = []
-            tmp_letters = self.db.letters.find_one({'owner': self.user['sid']})
-            if tmp_letters:
-                self.first_letters = getSortedDictByAlphabet(tmp_letters['letters'])
-            else:
-                self.first_letters = {}
-            if self.user['only_unread']:
-                for s_let in self.first_letters:
-                    if self.first_letters[s_let]['unread_count'] > 0:
-                        letters.append({'letter': self.first_letters[s_let]['letter'], 'local_url': self.first_letters[s_let]['local_url']})
-            else:
-                for s_let in self.first_letters:
-                    letters.append({'letter': self.first_letters[s_let]['letter'], 'local_url': self.first_letters[s_let]['local_url']})
+            self.fillFirstLetters()
+            letters = self.getLetters()
             self.response = Response(
                 page.render(
                     only_unread=self.user['only_unread'],
@@ -788,20 +804,9 @@ class RSSCloudApplication(object):
         if not page_number:
             page_number = 1
         let = unquote_plus(letter)
-        tmp_letters = self.db.letters.find_one({'owner': self.user['sid']})
-        if tmp_letters:
-            self.first_letters = getSortedDictByAlphabet(tmp_letters['letters'])
-        else:
-            self.first_letters = {}
-        if let and let in self.first_letters:
-            letters = []
-            if self.user['only_unread']:
-                for s_let in self.first_letters:
-                    if self.first_letters[s_let]['unread_count'] > 0:
-                        letters.append({'letter': self.first_letters[s_let]['letter'], 'local_url': self.first_letters[s_let]['local_url']})
-            else:
-                for s_let in self.first_letters:
-                    letters.append({'letter': self.first_letters[s_let]['letter'], 'local_url': self.first_letters[s_let]['local_url']})
+        self.fillFirstLetters()
+        if let and (let in self.first_letters):
+            letters = self.getLetters()
             page = self.template_env.get_template('group-by-tag.html')
             tags = []
             if self.user['only_unread']:
