@@ -25,6 +25,7 @@ $search_field: null,
 $search_result_window: null,
 scroll_position: 0,
 $toolbar: undefined,
+$toolbar_bottom: undefined,
 selected_tags: [],
 urls: {
     'mark_read_posts_url': '/read/posts',
@@ -357,10 +358,12 @@ scrollDown: function(position) {
 
 showToolbar: function() {
     this.$toolbar.show();
+    this.$toolbar_bottom.show();
 },
 
 hideToolbar: function() {
     this.$toolbar.hide();
+    this.$toolbar_bottom.hide();
 },
 
 setOnlyUnread: function(el_this) {
@@ -598,6 +601,19 @@ processTagSelection: function(el) {
         }
     }
     return(result);
+},
+processScroll: function() {
+    var app = this;
+    this.scroll_position = this.$window.scrollTop();
+    this.$window.on('scroll', function() {
+        var sc_t = app.$window.scrollTop();
+        if (app.scroll_position >= sc_t) {
+            app.scrollUp(sc_t);
+        }
+        else {
+            app.scrollDown(sc_t);
+        }
+    });
 }
 }
 
@@ -612,6 +628,7 @@ $(document).ready(function() {
     $(document).ajaxStop(function() { $('#loading').hide(); });
     path = window.location.pathname;
     app.$toolbar = $('#global_tools');
+    app.$toolbar_bottom = $('#global_tools_bottom');
     if (path == '/') {
         app.$status_element = $('#status').children('span');
         app.status_interval_handler = setInterval(app.checkStatus, 5000);
@@ -623,7 +640,8 @@ $(document).ready(function() {
     else if (/\/group\/tag\/.*/.test(path)) {
         var t_out = -1;
         var $cloud = $('.cloud');
-
+        app.$window = $(window);
+        app.processScroll();
         $cloud.on('click', '.cloud_item', function() {
             app.processTagSelection(this);
         });
@@ -662,17 +680,8 @@ $(document).ready(function() {
         $div_posts.click(function() {
             app.setCurrentPost(this);
         });
-        var $window= $(window);
-        app.scroll_position = $window.scrollTop();
-        $window.on('scroll', function() {
-            var sc_t = $window.scrollTop();
-            if (app.scroll_position >= sc_t) {
-                app.scrollUp(sc_t);
-            }
-            else {
-                app.scrollDown(sc_t);
-            }
-        });
+        app.$window = $(window);
+        app.processScroll();
         $div_posts.on('touchstart', function(e){
             touch = e.originalEvent.changedTouches[0];
             app.startX = touch.pageX;
