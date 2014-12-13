@@ -256,6 +256,7 @@ class RSSCloudApplication(object):
             self.response.set_cookie('sid', self.user['sid'], max_age=self.user_ttl)
             #self.response.set_cookie('sid', self.user['sid'])
         self.request.close()
+        self.response.headers['X-Frame-Options'] = 'SAMEORIGIN'
         print(time.time() - st)
         return(self.response(http_env, start_resp))
 
