@@ -991,7 +991,7 @@ class RSSCloudApplication(object):
                 else:
                     back_link = self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number})
                 page = self.template_env.get_template('tags-posts.html')
-                self.response = Response(page.render(tags=result, selected_tags=','.join(tags), back_link=back_link, group='tag'), mimetype='text/html')
+                self.response = Response(page.render(tags=result, selected_tags=','.join(tags), back_link=back_link, group='tag', only_unread=self.user['only_unread']), mimetype='text/html')
         else:
             self.response = redirect(self.getUrlByEndpoint('on_root_get'))
 
