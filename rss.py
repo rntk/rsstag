@@ -716,14 +716,6 @@ class RSSCloudApplication(object):
         else:
             for s_let in self.first_letters:
                 letters.append({'letter': self.first_letters[s_let]['letter'], 'local_url': self.first_letters[s_let]['local_url']})
-
-            if self.user['only_unread']:
-                for s_let in self.first_letters:
-                    if self.first_letters[s_let]['unread_count'] > 0:
-                        letters.append({'letter': self.first_letters[s_let]['letter'], 'local_url': self.first_letters[s_let]['local_url']})
-            else:
-                for s_let in self.first_letters:
-                    letters.append({'letter': self.first_letters[s_let]['letter'], 'local_url': self.first_letters[s_let]['local_url']})
         return(letters)
 
 
