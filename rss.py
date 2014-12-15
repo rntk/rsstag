@@ -39,6 +39,7 @@ class RSSCloudApplication(object):
     workers_pool = []
     providers = []
     user_ttl = 0
+    count_showed_nubmers = 4
     db = None
     allow_not_logged = ('on_root_get', 'on_login_get', 'on_login_post', 'on_code_get', 'on_select_provider_post', 'on_select_provider_get', 'on_static_get', 'on_ready_get', 'on_refresh_get_post', 'on_favicon_get')
     firsts_lock = None
@@ -718,6 +719,25 @@ class RSSCloudApplication(object):
                 letters.append({'letter': self.first_letters[s_let]['letter'], 'local_url': self.first_letters[s_let]['local_url']})
         return(letters)
 
+    def calcPagerData(self, p_number, page_count, items_per_page, endpoint):
+        pages_map = {}
+        numbers_start_range = p_number - self.count_showed_nubmers + 1
+        numbers_end_range = p_number + self.count_showed_nubmers + 1
+        if numbers_start_range <= 0:
+            numbers_start_range = 1
+        if numbers_end_range > page_count:
+            numbers_end_range = page_count + 1
+        if page_count > 11:
+            pages_map['middle'] = [{'p': i, 'url': self.getUrlByEndpoint(endpoint=endpoint, params={'page_number': i})} for i in range(numbers_start_range, numbers_end_range)]
+            if numbers_start_range > 1:
+                pages_map['start'] = [{'p': 'first', 'url': self.getUrlByEndpoint(endpoint=endpoint, params={'page_number': 1})}]
+            if numbers_end_range <= (page_count):
+                pages_map['end'] = [{'p': 'last', 'url': self.getUrlByEndpoint(endpoint=endpoint, params={'page_number': page_count})}]
+        else:
+            pages_map['start'] = [{'p': i, 'url': self.getUrlByEndpoint(endpoint=endpoint, params={'page_number': i})} for i in range(1, page_count + 1)]
+        start_tags_range = ((p_number - 1) * items_per_page) + items_per_page
+        end_tags_range = start_tags_range + items_per_page
+        return(pages_map, start_tags_range, end_tags_range)
 
     def on_group_by_tags_get(self, page_number):
         self.response = None
@@ -730,6 +750,7 @@ class RSSCloudApplication(object):
             cursor = self.db.tags.find({'owner': self.user['sid']}).sort([('posts_count', DESCENDING)])
         tags_count = cursor.count()
         page_count = self.getPageCount(tags_count, self.user['cloud_items_on_page'])
+
         if page_number <= 0:
             p_number = 1
             self.user['page'] = p_number
@@ -744,24 +765,7 @@ class RSSCloudApplication(object):
             p_number = 1
         new_cookie_page_value = p_number + 1
         if not self.response:
-            pages_map = {}
-            count_showed_nubmers = 4
-            numbers_start_range = p_number - count_showed_nubmers + 1
-            numbers_end_range = p_number + count_showed_nubmers + 1
-            if numbers_start_range <= 0:
-                numbers_start_range = 1
-            if numbers_end_range > page_count:
-                numbers_end_range = page_count + 1
-            if page_count > 11:
-                pages_map['middle'] = [{'p': i, 'url': self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': i})} for i in range(numbers_start_range, numbers_end_range)]
-                if numbers_start_range > 1:
-                    pages_map['start'] = [{'p': 'first', 'url': self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': 1})}]
-                if numbers_end_range <= (page_count):
-                    pages_map['end'] = [{'p': 'last', 'url': self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_count})}]
-            else:
-                pages_map['start'] = [{'p': i, 'url': self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': i})} for i in range(1, page_count + 1)]
-            start_tags_range = ((p_number - 1) * self.user['cloud_items_on_page']) + self.user['cloud_items_on_page']
-            end_tags_range = start_tags_range + self.user['cloud_items_on_page']
+            pages_map, start_tags_range, end_tags_range = self.calcPagerData(p_number, page_count, self.user['cloud_items_on_page'], 'on_group_by_tags_get')
             if end_tags_range > tags_count:
                 end_tags_range = tags_count
             sorted_tags = []
