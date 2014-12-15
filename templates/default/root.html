@@ -9,18 +9,21 @@
     <h1>Please enable javascript in your browser</h1>
 </noscript>
 <div id="global_tools">
-    <div id="provider" class="global_tools_button">Provider: {{provider}}</div>
-    <div id="status" class="global_tools_button">Status: <span></span></div>
-    <div id="only_unread" class="global_tools_button"><input id="only_unread_checkbox" name="only_unread_checkbox" type="checkbox" {% if only_unread %} checked {% endif %} /><label for="only_unread_checkbox">only unread</label></div>
+    {% include "logo.html" %}
+    <div class="panel right_half">
+        <span class="login_button global_tools_button">
+            <a href="/provider">Select provider</a>
+        </span>
+    </div>
 </div>
 <div class="page">
     {% for e in err %}
         <p id="error">{{e}}</p>
     {% endfor %}
-    <div class="description-text">
+    <div class="description-text left_half">
         Это алфаверсия RSS ридера
     </div>
-    <div class="description-media">
+    <div class="description-media right_half">
         <img src="/static/img/rsstag-screenshot.png" />
     </div>
 </div>
