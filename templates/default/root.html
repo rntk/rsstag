@@ -1,4 +1,5 @@
-﻿<html>
+﻿<!DOCTYPE html>
+<html>
 <head>
 <title>RssCloud</title>
 {% include "head-data.html" %}
@@ -16,25 +17,13 @@
     {% for e in err %}
         <p id="error">{{e}}</p>
     {% endfor %}
-    <div class="post">
-        <div class="root_item">support - {{support}}<br />v{{version}}</div>
-        <div class="root_item"><a href="/group/category">Posts grouped by category</a></div>
-        <div class="root_item"><a href="/group/tag/1">Posts grouped by tag</a></div>
-        <div class="root_item"><a href="/provider">Select provider</a></div>
-        <div class="root_item"><a href="/refresh">Refresh posts</a></div>
+    <div class="description-text">
+        Это алфаверсия RSS ридера
+    </div>
+    <div class="description-media">
+        <img src="/static/img/rsstag-screenshot.png" />
     </div>
 </div>
-<div class="page center">
-    <!--div class="about">
-        <h3>About</h3>
-        This is alpha version of yet another rss-reader.
-    </div-->
-    <!--div class="how_to_use">
-        <h3>How to use</h3>
-        <ol>
-            <li>Click on "Select provider"</li>
-        </ol>
-    </div-->
-</div>
+{% include "root-footer.html" %}
 </body>
 </html>
