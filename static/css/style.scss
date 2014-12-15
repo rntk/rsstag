@@ -102,7 +102,7 @@ h3 {
 .global_tools_button {
     background-color: #ffffff;
     cursor: pointer;
-    display: inline;
+    display: inline-block;
     margin: 0.5em 1em;
     font-size: 14pt;
 }
@@ -321,6 +321,20 @@ h3 {
 .selected_tag {
     background-color: $selected_color;
     /*border: 1px solid $selected_color;*/
+}
+.copyright {
+    text-align: left;
+}
+.contacts {
+    text-align: right;
+}
+.copyright, .contacts {
+    display: inline-block;
+    width: 45%;
+}
+.description-text, .description-media {
+    display: inline-block;
+    width: 45%;
 }
 @media all and (max-width: 800px) {
     .letters {
