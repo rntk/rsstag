@@ -438,10 +438,20 @@ class RSSCloudApplication(object):
         if self.user and 'provider' in self.user:
             provider = self.user['provider']
             only_unread = self.user['only_unread']
+            page = self.template_env.get_template('root-logged.html')
+            self.response = Response(page.render(
+                err=err,
+                only_unread=only_unread,
+                provider=provider,
+                support=self.config['settings']['support'],
+                version=self.config['settings']['version'],
+                posts_per_page=self.user['posts_on_page'],
+                tags_per_page=self.user['cloud_items_on_page']),
+            mimetype='text/html')
         else:
             provider = 'Not selected'
-        page = self.template_env.get_template('root.html')
-        self.response = Response(page.render(err=err, only_unread=only_unread, provider=provider, support=self.config['settings']['support'], version=self.config['settings']['version']), mimetype='text/html')
+            page = self.template_env.get_template('root.html')
+            self.response = Response(page.render(err=err, only_unread=only_unread, provider=provider, support=self.config['settings']['support'], version=self.config['settings']['version']), mimetype='text/html')
 
     def on_group_by_category_get(self):
         page_number = self.user['page']
@@ -602,7 +612,7 @@ class RSSCloudApplication(object):
     def on_static_get(self, directory=None, filename=None):
         mimetype = 'text/plain'
         if not directory:
-            directoyr = ''
+            directory = ''
         elif directory == 'js':
             mimetype = 'application/javascript'
         elif directory == 'img':
