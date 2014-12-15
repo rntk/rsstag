@@ -1,6 +1,7 @@
 $windows_background_color: #ffffff;
 $meta_color: #bcbcbc;
 $my_gray: #c6c6c6;
+$my_green: #7be15f;
 $selected_color: #dde5ff;
 
 body, html, img, p, a, span, div {
@@ -103,7 +104,7 @@ h3 {
     background-color: #ffffff;
     cursor: pointer;
     display: inline-block;
-    margin: 0.5em 1em;
+    margin: 0 0 0 1em;
     font-size: 14pt;
 }
 #global_tools_button a, #global_tools_button span {
@@ -141,7 +142,7 @@ h3 {
 }
 #show_all span {
     display: inline-block;    
-    border-bottom: 1px solid #7be15f;
+    border-bottom: 1px solid $my_green;
 }
 #loading {
     position: fixed;
@@ -203,7 +204,7 @@ h3 {
     display: inline-block;
 }
 .status_ready {
-    border-bottom: 2px solid #7be15f;
+    border-bottom: 2px solid $my_green;
 }
 .status_not_logged {
     border-bottom: 2px solid red;
@@ -320,21 +321,55 @@ h3 {
 }
 .selected_tag {
     background-color: $selected_color;
-    /*border: 1px solid $selected_color;*/
 }
-.copyright {
+.left_half {
     text-align: left;
 }
-.contacts {
+.right_half {
     text-align: right;
 }
-.copyright, .contacts {
+.left_half, .right_half {
     display: inline-block;
     width: 45%;
+    padding: 0;
+    margin: 0;
 }
-.description-text, .description-media {
+.logo_text {
     display: inline-block;
-    width: 45%;
+    padding: 0;
+    margin: 0;
+}
+.logo_img {
+    height: 50%;
+}
+.logo {
+    height: 99%;
+    padding: 0;
+}
+.login_button {
+    font-size: 18pt;
+    padding: 0.2em;
+    border: 1px solid $my_green;
+    border-radius: 0.4em;
+    box-shadow: 0px 0px 0.1em 0 $my_green;
+}
+.main_menu_button {
+    padding: 0.3em;
+    border: 1px solid black;
+    border-radius: 0.4em;
+}
+.main_menu_window {
+    position: fixed;
+    display: none;
+    background-color: white;
+    padding: 0.5em;
+    box-shadow: 0px 0px 0.3em 0 black;
+}
+.form_button {
+    cursor: pointer;
+    border: 1px solid black;
+    border-radius: 0.4em;
+    padding: 0.1em;
 }
 @media all and (max-width: 800px) {
     .letters {
