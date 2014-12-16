@@ -371,6 +371,11 @@ h3 {
     border-radius: 0.4em;
     padding: 0.1em;
 }
+
+.description-text {
+    text-align: justify;
+}
+
 @media all and (max-width: 800px) {
     .letters {
         margin-top: 2.5em;
