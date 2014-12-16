@@ -5,6 +5,7 @@
 {% include "head-data.html" %}
 </head>
 <body>
+{% import 'main-menu.html' as menu %}
 <noscript>
     <h1>Please enable javascript in your browser</h1>
 </noscript>
@@ -14,33 +15,15 @@
         <span class="login_button global_tools_button">
             <a href="/provider">{{provider}}</a>
         </span>
-        <span class="main_menu_button global_tools_button">
-            <img src="/static/img/menu.png" alt="Main menu"/>
-        </span>
+        {{ menu.menu_button('global_tools_button') }}
     </div>
 </div>
-<div class="main_menu_window">
-    <div id="only_unread">
-        <input id="only_unread_checkbox" name="only_unread_checkbox" type="checkbox" {% if only_unread %} checked {% endif %} />
-        <label for="only_unread_checkbox">only unread</label>
-    </div>
-    <div id="posts_per_page">
-        <label for="post_per_page_edit">posts per page</label><br />
-        <input id="post_per_page_edit" name="post_per_page_edit" type="text" value="{{posts_per_page}}" />
-        <span class="form_button">ok</span>
-    </div>
-    <div id="tags_per_page">
-        <label for="tags_per_page_edit">posts per page</label><br />
-        <input id="tags_per_page_edit" name="tags_per_page_edit" type="text" value="{{tags_per_page}}" />
-        <span class="form_button">ok</span>
-    </div>
-</div>
+{{ menu.menu_window() }}
 <div class="page">
     {% for e in err %}
         <p id="error">{{e}}</p>
     {% endfor %}
     <div class="post">
-        <div class="root_item">support - {{support}}<br />v{{version}}</div>
         <div class="root_item"><a href="/group/category">Posts grouped by category</a></div>
         <div class="root_item"><a href="/group/tag/1">Posts grouped by tag</a></div>
         <div class="root_item"><a href="/provider">Select provider</a></div>
