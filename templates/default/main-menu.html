@@ -1,0 +1,23 @@
+{% macro menu_button(class='') -%}
+<span class="main_menu_button {{class}}">
+    <img src="/static/img/menu.png" alt="Main menu"/>
+</span>
+{%- endmacro %}
+{% macro menu_window() -%}
+    <div class="main_menu_window">
+        <div id="posts_per_page">
+            <label for="post_per_page_edit">posts per page</label><br />
+            <input id="post_per_page_edit" name="post_per_page_edit" type="text" value="{{posts_per_page}}" />
+            <span class="form_button">ok</span>
+        </div>
+        <div id="tags_per_page">
+            <label for="tags_per_page_edit">posts per page</label><br />
+            <input id="tags_per_page_edit" name="tags_per_page_edit" type="text" value="{{tags_per_page}}" />
+            <span class="form_button">ok</span>
+        </div>
+        <div id="only_unread">
+            <input id="only_unread_checkbox" name="only_unread_checkbox" type="checkbox" {% if only_unread %} checked {% endif %} />
+            <label for="only_unread_checkbox">only unread</label>
+        </div>
+    </div>
+{%- endmacro %}
