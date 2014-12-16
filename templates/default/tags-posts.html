@@ -5,6 +5,7 @@
 {% include "head-data.html" %}
 </head>
 <body>
+{% import 'main-menu.html' as menu %}
 <div id="loading"><img src="/static/img/g_load.gif" /></div>
 <div id="global_tools">
     <div id="read_all" class="global_tools_button"><span>read all</span></div>
@@ -18,16 +19,10 @@
     <div id="help_button" class="global_tools_button">
         <a href="#">help</a>
     </div>
-    {# <div id="prev_tag" class="global_tools_button"><a href="{{prev_tag}}">previous</a></div> #}
-    {# <div id="next_tag" class="global_tools_button"><a href="{{next_tag}}">next</a></div> #}
-    <div id="posts_count" class="global_tools_button"></div>
-    <div id="only_unread" class="global_tools_button"><input id="only_unread_checkbox" name="only_unread_checkbox" type="checkbox" {% if only_unread %} checked {% endif %} /><label for="only_unread_checkbox">only unread</label></div>
-    <!--div id="posts_on_page" class="global_tools_button">
-        <label>Постов на странице</label>
-        <select>
-            <option></option>
-        </select>
-     </div-->
+    <div id="main_menu_button" class="global_tools_button">
+        {{ menu.menu_button('global_tools_button') }}
+    </div>
+
 </div>
 <div id="help_window">
 <ul>
@@ -42,6 +37,7 @@
     <li><b>H</b> - show\hide this window</li>
 </ul>
 </div>
+{{ menu.menu_window() }}
 <div id="post_links">
     <span class="post_links_close">x</span>
     <span class="post_links_content"></span>
