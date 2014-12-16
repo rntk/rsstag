@@ -4,6 +4,7 @@
 {%  include "head-data.html" %}
 </head>
 <body>
+{% import 'main-menu.html' as menu %}
 <div id="global_tools">
     <div id="link_on_root" class="global_tools_button">
         <a href="/">main</a>
@@ -11,8 +12,11 @@
     <div id="group_by" class="global_tools_button">
         <a href="{{group_by_link}}">group by tag</a>
     </div>
-    <div id="only_unread" class="global_tools_button"><input id="only_unread_checkbox" name="only_unread_checkbox"" type="checkbox" {% if only_unread %} checked {% endif %} /><label for="only_unread_checkbox">only unread</label></div>
+    <div id="main_menu_button" class="global_tools_button">
+        {{ menu.menu_button('global_tools_button') }}
+    </div>
 </div>
+{{ menu.menu_window() }}
 <div class="page">
     <div class="post">
     <ul>
