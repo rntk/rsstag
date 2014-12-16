@@ -614,6 +614,24 @@ processScroll: function() {
             app.scrollDown(sc_t);
         }
     });
+},
+processMainMenu: function() {
+    $('.main_menu_button').on('click', function() {
+        var offset;
+        $this = $(this);
+        $menu_window = $('.main_menu_window');
+        if ($menu_window.css('display') == 'none') {
+            offset = $this.offset();
+            $menu_window.css({
+                top: offset.top + $this.height(),
+                right: $(window).width() - offset.left
+            });
+            $menu_window.show();
+        }
+        else {
+            $menu_window.hide();
+        }
+    });
 }
 }
 
@@ -629,23 +647,8 @@ $(document).ready(function() {
     path = window.location.pathname;
     app.$toolbar = $('#global_tools');
     app.$toolbar_bottom = $('#global_tools_bottom');
+    app.processMainMenu();
     if (path == '/') {
-        $('.main_menu_button').on('click', function() {
-            var offset;
-            $this = $(this);
-            $menu_window = $('.main_menu_window');
-            if ($menu_window.css('display') == 'none') {
-                offset = $this.offset();
-                $menu_window.css({
-                    top: offset.top + $this.height(),
-                    right: $(window).width() - offset.left
-                });
-                $menu_window.show();
-            }
-            else {
-                $menu_window.hide();
-            }
-        });
         //app.$status_element = $('#status').children('span');
         //app.status_interval_handler = setInterval(app.checkStatus, 5000);
         //app.checkStatus();
