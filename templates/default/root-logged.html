@@ -23,13 +23,13 @@
     {% for e in err %}
         <p id="error">{{e}}</p>
     {% endfor %}
-    <div class="post">
-        <div class="root_item"><a href="/group/category">Posts grouped by category</a></div>
-        <div class="root_item"><a href="/group/tag/1">Posts grouped by tag</a></div>
-        <div class="root_item"><a href="/provider">Select provider</a></div>
-        <div class="root_item"><a href="/refresh">Refresh posts</a></div>
-    </div>
+    <div class="root_item"><a href="/group/category">Posts grouped by category</a></div>
+    <div class="root_item"><a href="/group/tag/1">Posts grouped by tag</a></div>
+    <div class="root_item"><a href="/provider">Select provider</a></div>
+    <div class="root_item"><a href="/refresh">Refresh posts</a></div>
 </div>
+<div id="loading"><img src="/static/img/g_load.gif" /></div>
+<div id="status" ><span></span></div>
 {% include "root-footer.html" %}
 </body>
 </html>
