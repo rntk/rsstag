@@ -1,6 +1,9 @@
 ﻿(function($){
 
-app = {
+function Application() {
+}
+
+Application.prototype = {
 all_posts_content: {'length': 0},
 current_page: 1,
 all_page_loaded: false,
@@ -12,11 +15,11 @@ endX: 0,
 endY: 0,
 posts_count: 0,
 is_gesture: false,
-$current_post: undefined,
-$status_element: undefined,
+$current_post: null,
+$status_element: null,
 status_interval_handler: 0,
-$only_unread_checkbox: undefined,
-$post_links: undefined,
+$only_unread_checkbox: null,
+$post_links: null,
 post_links_id: -1,
 all_tags: null,
 tags_index: null,
@@ -24,8 +27,9 @@ current_search_result: [],
 $search_field: null,
 $search_result_window: null,
 scroll_position: 0,
-$toolbar: undefined,
-$toolbar_bottom: undefined,
+$toolbar: null,
+$toolbar_bottom: null,
+$loading: null,
 selected_tags: [],
 urls: {
     'mark_read_posts_url': '/read/posts',
@@ -42,30 +46,51 @@ all_showed: false,
 cloud_items_count: 0,
 
 checkStatus: function() {
-    result = $.ajax({
-        'url': app.urls['ready_check_url'],
+    var defer = $.ajax({
+        'url': this.urls['ready_check_url'],
         'type': 'GET',
         'dataType': 'json',
-        'async': false,
-    }).responseJSON;
+        'async': true,
+    });
+    return(defer.promise());
+},
+
+processStatus: function(result) {
+    var $loading;
+    var appl = this;
     if (result) {
+        //result['status'] = 'not ready';
         switch (result['status']) {
             case 'ready': {
-                clearInterval(app.status_interval_handler);
-                app.$status_element.attr('class', 'status_ready');
+                this.$status_element.attr('class', 'status_ready');
+                if (this.$loading.is(':visible')) {
+                    this.$loading.hide();
+                    $('.root_item').show();
+                    $('#status').hide();
+                }
                 break;
             }
             case 'not ready': {
-                app.$status_element.attr('class', 'status_not_ready');
+                this.$status_element.attr('class', 'status_not_ready');
+                if (this.$loading.is(':hidden')) {
+                    this.$loading.show();
+                    $('.root_item').hide();
+                    $('#status').show();
+                }
+                this.status_interval_handler = setTimeout(function() {
+                    var promise = appl.checkStatus();
+                    promise.done(function(result) {
+                        appl.processStatus(result);
+                    });
+                }, 5000);
                 break;
             }
-            case 'not logged': {
-                clearInterval(app.status_interval_handler);
-                app.$status_element.attr('class', 'status_not_logged');
+            /*case 'not logged': {
+                //this.$status_element.attr('class', 'status_not_logged');
                 break;
-            }
+            }*/
         }
-        app.$status_element.text(result['reason'] + '. ' + result['message']);
+        this.$status_element.text(result['reason'] + '. ' + result['message']);
     }
 },
 
@@ -166,7 +191,7 @@ showContent: function(el, show_status) {
     var $content = $(el).parent().children('.post_content');
     var pos = $content.parent().data('pos');
     var app = this;
-    var all_ready = $.Deferred();
+    var all_ready = new $.Deferred();
     all_ready.done(function(){
         $content.toggleClass('show hide');
         app.scrollTop(app.$current_post);
@@ -180,7 +205,7 @@ showContent: function(el, show_status) {
         }
     }
     if (show_status) {
-        if (!app.all_posts_content[pos]) {
+        if (app.all_posts_content[pos] === undefined) {
             var promise = app.loadPostContent(pos);
             promise.done(function(){
                 //$content.attr('class', 'show');
@@ -279,26 +304,6 @@ loadPostContent: function(pos) {
 },
 
 loadPostsContent: function() {
-    /*content = $.ajax({
-        url: app.urls['posts_content_url'],
-        type: 'POST',
-        data: {'group': app.group, 'group_id': app.group_id, 'page': app.current_page},
-        dataType: 'json',
-        //success: function(data){alert(data['result']);},
-        //error: function(data){alert(data['result']);},
-        async: false,
-    }).responseJSON;
-    if ((content) && (content['result'] == 'ok')) {
-        for (i = 0; i < content['data'].length; i++) {
-            app.all_posts_content[content['data'][i]['pos']] = content['data'][i]['content'];
-        }
-        if (content['page_count'] == app.current_page) {
-            app.all_page_loaded = true;
-        }
-    }
-    else {
-        alert('error');
-    }*/
     var app = this;
     if (!app.all_page_loaded) {
         var promise = $.ajax({
@@ -335,10 +340,10 @@ loadPostsContent: function() {
 
 setCurrentPost: function(current_post) {
     $cp = $(current_post);
-    if ($cp.data('pos') != app.$current_post.data('pos')) {
-        app.$current_post.removeClass('current_post');
-        app.$current_post = $cp;
-        app.$current_post.addClass('current_post');
+    if ($cp.data('pos') != this.$current_post.data('pos')) {
+        this.$current_post.removeClass('current_post');
+        this.$current_post = $cp;
+        this.$current_post.addClass('current_post');
     }
 },
 
@@ -632,26 +637,37 @@ processMainMenu: function() {
             $menu_window.hide();
         }
     });
+},
+showProgressbar: function() {
+    this.$loading.show();
+},
+hideProgressbar: function() {
+    this.$loading.hide();
 }
+
 }
 
 $(document).ready(function() {
+    var app = new Application();
     if ($('#only_unread_checkbox').length > 0) {
         app.$only_unread_checkbox = $('#only_unread_checkbox');
         app.$only_unread_checkbox.click(function() {
             app.setOnlyUnread(this);
         });
     }
-    $(document).ajaxStart(function() { $('#loading').show(); });
-    $(document).ajaxStop(function() { $('#loading').hide(); });
+    app.$loading = $('#loading');
     path = window.location.pathname;
     app.$toolbar = $('#global_tools');
     app.$toolbar_bottom = $('#global_tools_bottom');
     app.processMainMenu();
+    var status_promise;
     if (path == '/') {
-        //app.$status_element = $('#status').children('span');
-        //app.status_interval_handler = setInterval(app.checkStatus, 5000);
-        //app.checkStatus();
+        app.$status_element = $('#status').children('span');
+        //app.status_interval_handler = setInterval(function() {app.checkStatus();}, 5000);
+        status_promise = app.checkStatus();
+        status_promise.done(function(result) {
+            app.processStatus(result);
+        });
     }
     else if (path == '\/group\/category') {
         app.groupByCategory();
@@ -720,6 +736,8 @@ $(document).ready(function() {
         }
     }
     else if (/^\/feed*/.test(path) || /^\/category*/.test(path) || /^\/tag/.test(path) || /^\/posts\/with\/tags\/.*/.test(path)) {
+        $(document).ajaxStart(function() { app.showProgressbar(); });
+        $(document).ajaxStop(function() { app.hideProgressbar(); });
         app.$post_links = $('#post_links');
         $div_posts = $('div.post');
         app.$current_post = $div_posts.eq(0);//$('.post').eq(0);
