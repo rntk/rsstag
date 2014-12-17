@@ -857,27 +857,31 @@ class RSSCloudApplication(object):
         if not err:
             group_id = self.request.form.get('group_id')
             if group == 'tag':
-                '''if self.user['only_unread']:
-                    posts = self.db.posts.find({'owner': self.user['sid'], 'read': False, 'tags': {'$all': [group_id]}}).sort('unix_time', DESCENDING)
-                else:'''
-                #posts = self.db.posts.find({'owner': self.user['sid'], 'tags': {'$all': [group_id]}}).sort('unix_time', DESCENDING)
                 try:
                     tags = group_id.split(',')
                 except Exception as e:
                     tags = []
-                posts = self.db.posts.find({'owner': self.user['sid'], 'tags': {'$in': tags}})
+                if self.user['only_unread']:
+                    #posts = self.db.posts.find({'owner': self.user['sid'], 'read': False, 'tags': {'$all': [group_id]}}).sort('unix_time', DESCENDING)
+                    posts = self.db.posts.find({'owner': self.user['sid'], 'read': False, 'tags': {'$in': tags}})
+                else:
+                    #posts = self.db.posts.find({'owner': self.user['sid'], 'tags': {'$all': [group_id]}}).sort('unix_time', DESCENDING)
+                    posts = self.db.posts.find({'owner': self.user['sid'], 'tags': {'$in': tags}})
+
             elif group == 'feed':
-                '''if self.user['only_unread']:
-                    posts = self.db.posts.find({'owner': self.user['sid'], 'read': False, 'feed_id': group_id}).sort('unix_time', DESCENDING)
-                else:'''
-                #posts = self.db.posts.find({'owner': self.user['sid'], 'feed_id': group_id}).sort('unix_time', DESCENDING)
-                posts = self.db.posts.find({'owner': self.user['sid'], 'feed_id': group_id})
+                if self.user['only_unread']:
+                    #posts = self.db.posts.find({'owner': self.user['sid'], 'read': False, 'feed_id': group_id}).sort('unix_time', DESCENDING)
+                    posts = self.db.posts.find({'owner': self.user['sid'], 'read': False, 'feed_id': group_id})
+                else:
+                    #posts = self.db.posts.find({'owner': self.user['sid'], 'feed_id': group_id}).sort('unix_time', DESCENDING)
+                    posts = self.db.posts.find({'owner': self.user['sid'], 'feed_id': group_id})
             elif group == 'category':
-                '''if self.user['only_unread']:
-                    posts = self.db.posts.find({'owner': self.user['sid'], 'read': False, 'category_id': group_id}).sort('unix_time', DESCENDING)
-                else:'''
-                #posts = self.db.posts.find({'owner': self.user['sid'], 'category_id': group_id}).sort('unix_time', DESCENDING)
-                posts = self.db.posts.find({'owner': self.user['sid'], 'category_id': group_id})
+                if self.user['only_unread']:
+                    #posts = self.db.posts.find({'owner': self.user['sid'], 'read': False, 'category_id': group_id}).sort('unix_time', DESCENDING)
+                    posts = self.db.posts.find({'owner': self.user['sid'], 'read': False, 'category_id': group_id})
+                else:
+                    #posts = self.db.posts.find({'owner': self.user['sid'], 'category_id': group_id}).sort('unix_time', DESCENDING)
+                    posts = self.db.posts.find({'owner': self.user['sid'], 'category_id': group_id})
             if not err:
                 posts_count = posts.count()
                 page_count = self.getPageCount(posts_count, self.user['posts_on_page'])
