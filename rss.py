@@ -436,6 +436,18 @@ class RSSCloudApplication(object):
             err = []
         only_unread = True
         if self.user and 'provider' in self.user:
+            match = {'owner': self.user['sid']}
+            cursor = self.db.posts.aggregate([
+                {'$match': match},
+                {'$group': {'_id': '$read', 'counter': {'$sum': 1}}}
+            ]);
+            posts = {'unread': 0, 'read': 0}
+            if cursor and cursor['result']:
+                for result in cursor['result']:
+                    if result['_id']:
+                        posts['read'] = result['counter']
+                    else:
+                        posts['unread'] = result['counter']
             provider = self.user['provider']
             only_unread = self.user['only_unread']
             page = self.template_env.get_template('root-logged.html')
@@ -446,7 +458,8 @@ class RSSCloudApplication(object):
                 support=self.config['settings']['support'],
                 version=self.config['settings']['version'],
                 posts_per_page=self.user['posts_on_page'],
-                tags_per_page=self.user['cloud_items_on_page']),
+                tags_per_page=self.user['cloud_items_on_page'],
+                posts=posts),
             mimetype='text/html')
         else:
             provider = 'Not selected'
