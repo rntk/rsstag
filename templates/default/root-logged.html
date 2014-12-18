@@ -13,7 +13,7 @@
     {% include "logo.html" %}
     <div class="panel right_half">
         <span class="login_button global_tools_button">
-            <a href="/provider">{{provider}}</a>
+            <a href="/provider">{{provider}} ({{posts['unread']}} / {{posts['read']}})</a>
         </span>
         {{ menu.menu_button('global_tools_button') }}
     </div>
