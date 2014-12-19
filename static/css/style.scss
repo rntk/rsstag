@@ -105,7 +105,7 @@ h3 {
     background-color: #ffffff;
     cursor: pointer;
     display: inline-block;
-    margin: 0 0 0 1em;
+    margin: 0 1em 0 0;
     font-size: 14pt;
 }
 #global_tools_button a, #global_tools_button span {
@@ -116,16 +116,27 @@ h3 {
     left: 0;
     bottom: 0;
     width: 100%;
+    font-size: 14pt;
     text-align: center;
     background-color: #ffffff;
     box-shadow: 0px 0px 5px 0px gray;
     border-top: 1px solid $my_gray;
     padding: 0.5em 0;
 }
-#global_tools_bottom * {
+#paginator {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+#paginator li {
+    display: inline;
+    font-size: 14pt;
+    margin-right: 0.4em;
+}
+/*#global_tools_bottom * {
     font-size: 14pt;
     padding: 0 0.2em
-}
+}*/
 .post_tools {
     width: 100%;
     /*border-top: 1px solid $my_gray;*/
@@ -205,7 +216,8 @@ h3 {
     position: fixed;
     display: none;
     top: 40%;
-    left: 35%;
+    left: 20%;
+    right: 20%;
     text-align: center;
     font-size: 24pt;
 }
@@ -339,7 +351,7 @@ h3 {
 }
 .left_half, .right_half {
     display: inline-block;
-    width: 45%;
+    width: 49%;
     padding: 0;
     margin: 0;
 }
@@ -350,22 +362,22 @@ h3 {
 }
 .logo_img {
     height: 50%;
+    vertical-align: bottom;
 }
 .logo {
     height: 99%;
     padding: 0;
 }
 .login_button {
-    font-size: 18pt;
-    padding: 0.2em;
-    border: 1px solid $my_green;
-    border-radius: 0.4em;
-    box-shadow: 0px 0px 0.1em 0 $my_green;
+    font-size: 16pt;
 }
 .main_menu_button {
     /*padding: 0.2em;
     border: 1px solid black;
     border-radius: 6px;*/
+}
+.main_menu_button img {
+    vertical-align: bottom;
 }
 .main_menu_window {
     position: fixed;
@@ -383,6 +395,14 @@ h3 {
 
 .description-text {
     text-align: justify;
+}
+
+.screen_middle {
+    position: relative;
+    top: 20%;
+    left: 0;
+    right: 0;
+    bottom: 20%;
 }
 
 @media all and (max-width: 800px) {
