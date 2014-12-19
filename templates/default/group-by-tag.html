@@ -4,19 +4,23 @@
 {%  include "head-data.html" %}
 </head>
 <body>
-{% import 'main-menu.html' as menu %}
+{% import 'main-menu.html' as menu with context %}
 <div id="global_tools">
-    <div id="link_on_root" class="global_tools_button">
-        <a href="/">main</a>
+    <div class="left_half">
+        <div id="link_on_root" class="global_tools_button">
+            <a href="/">main</a>
+        </div>
+        <div id="sotr_by" class="global_tools_button">
+            <a href="{{sort_by_link}}">group by tag</a>
+        </div>
+        <div id="group_by" class="global_tools_button">
+            <a href="{{group_by_link}}">group by category</a>
+        </div>
     </div>
-    <div id="sotr_by" class="global_tools_button">
-        <a href="{{sort_by_link}}">group by tag</a>
-    </div>
-    <div id="group_by" class="global_tools_button">
-        <a href="{{group_by_link}}">group by category</a>
-    </div>
-    <div id="main_menu_button" class="global_tools_button">
-        {{ menu.menu_button('global_tools_button') }}
+    <div class="right_half">
+        <div id="main_menu_button" class="global_tools_button">
+            {{ menu.menu_button('global_tools_button') }}
+        </div>
     </div>
 </div>
 {% if letters %}
@@ -47,39 +51,39 @@
     </ol>
 </div>
 <div id="global_tools_bottom">
-    <div id="paginator">
+    <ul id="paginator">
         {% if pages_map['start'] %}
             {% for number in pages_map['start'] %}
                 {% if number['p'] == current_page %}
-                    <span class="current_page">{{number['p']}}</span>
+                    <li class="current_page">{{number['p']}}</li>
                 {% else %}
-                    <a href="{{number['url']}}">{{number['p']}}</a>
+                    <li><a href="{{number['url']}}">{{number['p']}}</a></li>
                 {% endif %}
             {% endfor %}
             {% if pages_map['middle'] %}
-                <span>....</span>
+                <li>....</li>
             {% endif %}
         {% endif %}
         {% if pages_map['middle'] %}
             {% for number in pages_map['middle'] %}
                 {% if number['p'] == current_page %}
-                    <span class="current_page">{{number['p']}}</span>
+                    <li class="current_page">{{number['p']}}</li>
                 {% else %}
-                    <a href="{{number['url']}}">{{number['p']}}</a>
+                    <li><a href="{{number['url']}}">{{number['p']}}</a></li>
                 {% endif %}
             {% endfor %}
         {% endif %}
         {% if pages_map['end'] %}
-            <span>....</span>
+            <li>....</li>
             {% for number in pages_map['end'] %}
                 {% if number['p'] == current_page %}
-                    <span class="current_page">{{number['p']}}</span>
+                    <li class="current_page">{{number['p']}}</li>
                 {% else %}
-                    <a href="{{number['url']}}">{{number['p']}}</a>
+                    <li><a href="{{number['url']}}">{{number['p']}}</a></li>
                 {% endif %}
             {% endfor %}
         {% endif %}
-    </div>
+    </ul>
 </div>
 <!--script language="javascript" type="application/javascript">
     var count = document.getElementById('cloud_items_count');
