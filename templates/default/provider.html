@@ -9,15 +9,14 @@
         <a href="/">main</a>
     </div>
 </div>
-<div class="page">
-    <div class="post">
-        <form action="{{select_provider_url}}" method="POST">
-            <input type="radio" name="provider" value="yandex" id="yandex" /><label for="yandex">Яндекс.Подписки</label><br /><br />
-            <input type="radio" name="provider" value="bazqux" id="bazqux" /><label for="bazqux">BazQux</label><br /><br />
-            <input type="radio" name="provider" value="inoreader" id="inoreader" /><label for="inoreader">InoReader</label><br /><br />
-            <input type="submit" value="Select" />
-        </form>
-    </div>
+<div class="page screen_middle">
+    <form action="{{select_provider_url}}" method="POST">
+        <input type="radio" name="provider" value="yandex" id="yandex" /><label for="yandex">Яндекс.Подписки</label><br /><br />
+        <input type="radio" name="provider" value="bazqux" id="bazqux" /><label for="bazqux">BazQux</label><br /><br />
+        <input type="radio" name="provider" value="inoreader" id="inoreader" /><label for="inoreader">InoReader</label><br /><br />
+        <input type="submit" value="Select" />
+    </form>
 </div>
+{% include "root-footer.html" %}
 </body>
 </html>
