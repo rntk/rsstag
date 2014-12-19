@@ -64,9 +64,10 @@ processStatus: function(result) {
             case 'ready': {
                 this.$status_element.attr('class', 'status_ready');
                 if (this.$loading.is(':visible')) {
-                    this.$loading.hide();
+                    /*this.$loading.hide();
                     $('.root_item').show();
-                    $('#status').hide();
+                    $('#status').hide();*/
+                    window.location = '/';
                 }
                 break;
             }
