@@ -448,15 +448,13 @@ class RSSCloudApplication(object):
                         posts['read'] = result['counter']
                     else:
                         posts['unread'] = result['counter']
-            provider = self.user['provider']
-            only_unread = self.user['only_unread']
             page = self.template_env.get_template('root-logged.html')
             self.response = Response(page.render(
                 err=err,
-                only_unread=only_unread,
-                provider=provider,
                 support=self.config['settings']['support'],
                 version=self.config['settings']['version'],
+                only_unread=self.user['only_unread'],
+                provider=self.user['provider'],
                 posts_per_page=self.user['posts_on_page'],
                 tags_per_page=self.user['cloud_items_on_page'],
                 posts=posts),
@@ -497,7 +495,15 @@ class RSSCloudApplication(object):
         else:
             data = {}
         page = self.template_env.get_template('group-by-category.html')
-        self.response = Response(page.render(data=data, only_unread=self.user['only_unread'], group_by_link=self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number})), mimetype='text/html')
+        self.response = Response(page.render(
+            data=data,
+            group_by_link=self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number}),
+            only_unread=self.user['only_unread'],
+            provider=self.user['provider'],
+            posts_per_page=self.user['posts_on_page'],
+            tags_per_page=self.user['cloud_items_on_page']),
+        mimetype='text/html'
+        )
 
     def on_category_get(self, quoted_category=None):
         page = self.template_env.get_template('posts.html')
@@ -529,12 +535,15 @@ class RSSCloudApplication(object):
                 posts.append({'post': post, 'pos': post['pid'], 'category_title': by_feed[post['feed_id']]['category_title'], 'feed_title': by_feed[post['feed_id']]['title'], 'favicon': by_feed[post['feed_id']]['favicon']})
             self.response = Response(
                 page.render(
-                    only_unread=self.user['only_unread'],
                     posts=posts,
                     tag=cat,
                     back_link=self.getUrlByEndpoint(endpoint='on_group_by_category_get'),
                     group='category',
-                    words=''),
+                    words='',
+                    only_unread=self.user['only_unread'],
+                    provider=self.user['provider'],
+                    posts_per_page=self.user['posts_on_page'],
+                    tags_per_page=self.user['cloud_items_on_page']),
                     #next_tag=self.getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': next_cat}),
                     #prev_tag=self.getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': prev_cat})),
                 mimetype='text/html')
@@ -572,12 +581,15 @@ class RSSCloudApplication(object):
             #prev_tag, next_tag = self.getPrevNextTag(tag)
             self.response = Response(
                 page.render(
-                    only_unread=self.user['only_unread'],
                     posts=posts,
                     tag=tag,
                     back_link=back_link,
                     group='tag',
-                    words=', '.join(current_tag['words'])),
+                    words=', '.join(current_tag['words']),
+                    only_unread=self.user['only_unread'],
+                    provider=self.user['provider'],
+                    posts_per_page=self.user['posts_on_page'],
+                    tags_per_page=self.user['cloud_items_on_page']),
                     #next_tag=self.getUrlByEndpoint(endpoint='on_tag_get', params={'quoted_tag': next_tag}) if next_tag else '/',
                     #prev_tag=self.getUrlByEndpoint(endpoint='on_tag_get', params={'quoted_tag': prev_tag}) if prev_tag else '/'),
                 mimetype='text/html')
@@ -598,12 +610,15 @@ class RSSCloudApplication(object):
                 posts.append({'post': post, 'category_title': current_feed['category_title'], 'pos': post['pid'], 'feed_title': current_feed['title'], 'favicon': current_feed['favicon']})
             self.response = Response(
                 page.render(
-                    only_unread=self.user['only_unread'],
                     posts=posts,
                     tag=current_feed['title'],
                     back_link=self.getUrlByEndpoint(endpoint='on_group_by_category_get'),
                     group='feed',
-                    words=''),
+                    words='',
+                    only_unread=self.user['only_unread'],
+                    provider=self.user['provider'],
+                    posts_per_page=self.user['posts_on_page'],
+                    tags_per_page=self.user['cloud_items_on_page']),
                     #next_tag=self.getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': next_cat}),
                     #prev_tag=self.getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': prev_cat})),
                 mimetype='text/html')
@@ -803,14 +818,17 @@ class RSSCloudApplication(object):
             letters = self.getLetters()
             self.response = Response(
                 page.render(
-                    only_unread=self.user['only_unread'],
                     tags=sorted_tags,
                     sort_by_title = 'tags',
                     sort_by_link=self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': new_cookie_page_value}),
                     group_by_link=self.getUrlByEndpoint(endpoint='on_group_by_category_get'),
                     pages_map=pages_map,
                     current_page=new_cookie_page_value,
-                    letters=letters),
+                    letters=letters,
+                    only_unread=self.user['only_unread'],
+                    provider=self.user['provider'],
+                    posts_per_page=self.user['posts_on_page'],
+                    tags_per_page=self.user['cloud_items_on_page']),
                 mimetype='text/html'
                 )
             self.db.users.update({'sid': self.user['sid']}, {'$set': {'page': new_cookie_page_value, 'letter': ''}})
@@ -843,14 +861,17 @@ class RSSCloudApplication(object):
                 tags = sorted(tags, key=lambda tag: tag['count'], reverse=True)'''
             self.response = Response(
                 page.render(
-                    only_unread=self.user['only_unread'],
                     tags=tags,
                     sort_by_title=let,
                     sort_by_link=self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number}),
                     group_by_link=self.getUrlByEndpoint(endpoint='on_group_by_category_get'),
                     pages_map={},
                     current_page=1,
-                    letters=letters),
+                    letters=letters,
+                    only_unread=self.user['only_unread'],
+                    provider=self.user['provider'],
+                    posts_per_page=self.user['posts_on_page'],
+                    tags_per_page=self.user['cloud_items_on_page']),
                 mimetype='text/html'
             )
             self.db.users.update({'sid': self.user['sid']}, {'$set': {'letter': let}})
@@ -1014,7 +1035,15 @@ class RSSCloudApplication(object):
                 else:
                     back_link = self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number})
                 page = self.template_env.get_template('tags-posts.html')
-                self.response = Response(page.render(tags=result, selected_tags=','.join(tags), back_link=back_link, group='tag', only_unread=self.user['only_unread']), mimetype='text/html')
+                self.response = Response(page.render(
+                    tags=result,
+                    selected_tags=','.join(tags),
+                    back_link=back_link, group='tag',
+                    only_unread=self.user['only_unread'],
+                    provider=self.user['provider'],
+                    posts_per_page=self.user['posts_on_page'],
+                    tags_per_page=self.user['cloud_items_on_page']),
+                mimetype='text/html')
         else:
             self.response = redirect(self.getUrlByEndpoint('on_root_get'))
 
