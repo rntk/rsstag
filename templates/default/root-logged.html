@@ -1,11 +1,11 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>RssCloud</title>
+<title>RSSTag</title>
 {% include "head-data.html" %}
 </head>
 <body>
-{% import 'main-menu.html' as menu %}
+{% import 'main-menu.html' as menu with context %}
 <noscript>
     <h1>Please enable javascript in your browser</h1>
 </noscript>
@@ -19,7 +19,7 @@
     </div>
 </div>
 {{ menu.menu_window() }}
-<div class="page">
+<div class="page screen_middle">
     {% for e in err %}
         <p id="error">{{e}}</p>
     {% endfor %}
