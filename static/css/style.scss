@@ -394,8 +394,23 @@ h3 {
     padding: 0.1em;
 }
 
-.description-text {
+.description_text {
     text-align: justify;
+}
+.description_text p {
+    padding: 0.2em 0 0.2em 2em;
+}
+.description_example {
+    margin-left: 2em;
+}
+.start_reading {
+    font-size: 24pt;
+    text-align: center;
+    position: relative;
+    left: 0%;
+    right: 0%;
+    margin-top: 1em;
+    display: block;
 }
 
 .screen_middle {
