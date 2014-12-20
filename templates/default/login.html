@@ -9,17 +9,16 @@
         <a href="/">main</a>
     </div>
 </div>
-<div class="page">
-    <div class="post">
-        {% for e in err %}
-            <p id="error">{{e}}</p>
-        {% endfor %}
-        <form action="{{login_url}}" method="POST" id="login_form">
-            <label for="login">Login</label><br /><input type="text" name="login" id="login" /><br /><br />
-            <label for="password">Password</label><br /><input type="password" name="password" id="password" /><br /><br />
-            <input type="submit" value="Send" />
-        </form>
-    </div>
+<div class="page screen_middle">
+    {% for e in err %}
+        <p id="error">{{e}}</p>
+    {% endfor %}
+    <form action="{{login_url}}" method="POST" id="login_form">
+        <label for="login">Login</label><br /><input type="text" name="login" id="login" /><br /><br />
+        <label for="password">Password</label><br /><input type="password" name="password" id="password" /><br /><br />
+        <input type="submit" value="Send" />
+    </form>
 </div>
+{% include "root-footer.html" %}
 </body>
 </html>
