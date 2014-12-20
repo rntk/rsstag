@@ -1,6 +1,7 @@
 ﻿(function($){
 
 function Application() {
+    this.content_posts_defer = $.Deferred();
 }
 
 Application.prototype = {
@@ -30,7 +31,12 @@ scroll_position: 0,
 $toolbar: null,
 $toolbar_bottom: null,
 $loading: null,
+current_posts_id: {},
+current_posts_id_length: 0,
 selected_tags: [],
+attempts_count: 0,
+max_attempts_count: 10,
+content_posts_defer: null,
 urls: {
     'mark_read_posts_url': '/read/posts',
     'update_prev_next_link_url': '/tag/prev-next',
@@ -126,7 +132,14 @@ readOne: function(el_this) {
             alert('Error. Please try again later');
         }
         app.syncReadAllButton();
+        app.repaintPostsStat();
     });
+},
+
+repaintPostsStat: function() {
+    var unread = $('.unread').length;
+    var read = $('.read').length;
+    $('#posts_stat').text('(' + unread + ' / ' + read + ')');
 },
 
 readAll: function(el_this) {
@@ -172,6 +185,7 @@ readAll: function(el_this) {
                 $this.children('span').text('read all');
             }
             //app.udpate_prev_next_links($('.page').data('tag'));
+            app.repaintPostsStat();
         }
         else {
             alert('Error. Please try again later');
@@ -193,7 +207,7 @@ showContent: function(el, show_status) {
     var pos = $content.parent().data('pos');
     var app = this;
     var all_ready = new $.Deferred();
-    all_ready.done(function(){
+    all_ready.done(function() {
         $content.toggleClass('show hide');
         app.scrollTop(app.$current_post);
     });
@@ -236,12 +250,7 @@ showAll: function(el_this) {
     var app = this;
     var all_ready = $.Deferred();
     var show_status = false;
-    all_ready.done(function(){
-        $('div.post_content').each(function(){
-            app.showContent(this, show_status);
-        });
-        app.all_showed = !app.all_showed;
-    });
+    app.collectCurrentPostsID();
     if (app.all_showed) {
         show_status = false;
         $this.children('span').text('show all');
@@ -254,15 +263,20 @@ showAll: function(el_this) {
             all_ready.resolve();
         }
         else {
-            var promise = app.loadPostsContent();
-            promise.done(function() {
+            app.loadPostsContent();
+            this.content_posts_defer.done(function() {
                 show_status = true;
                 $this.children('span').text('hide all');
                 all_ready.resolve();
             });
         }
     }
-
+    all_ready.done(function(){
+        $('div.post_content').each(function(){
+            app.showContent(this, show_status);
+        });
+        app.all_showed = !app.all_showed;
+    });
 },
 
 /*udpate_prev_next_links: function(tag) {
@@ -304,39 +318,70 @@ loadPostContent: function(pos) {
     return(promise);
 },
 
+collectCurrentPostsID: function() {
+    var appl = this;
+    var pos;
+    this.current_posts_id = {};
+    this.current_posts_id_length = 0;
+    $('.post').each(function() {
+        pos = $(this).data('pos');
+        appl.current_posts_id[pos] = pos;
+        appl.current_posts_id_length++;
+    });
+},
+
+getCurrentPostsIDArray: function() {
+    var arr = [];
+    for (var pos in this.current_posts_id) {
+        if (this.current_posts_id.hasOwnProperty(pos)) {
+            arr.push(pos);
+        }
+    }
+    return(arr);
+},
+
 loadPostsContent: function() {
     var app = this;
+    this.attempts_count++;
+    var ps;
+    var defer;
     if (!app.all_page_loaded) {
-        var promise = $.ajax({
+        ps = app.getCurrentPostsIDArray();
+        defer = $.ajax({
             url: app.urls['posts_content_url'],
             type: 'POST',
-            data: {'group': app.group, 'group_id': app.group_id, 'page': app.current_page},
+            data: {'posts': ps},
             dataType: 'json',
             async: true
         });
-        promise.done(function(content){
+        defer.done(function(content) {
+            var del_index = -1;
+            var pos;
             if ((content) && (content['result'] == 'ok')) {
-                for (i = 0; i < content['data'].length; i++) {
-                    app.all_posts_content[content['data'][i]['pos']] = content['data'][i]['content'];
+                for (var i = 0; i < content['data'].length; i++) {
+                    pos = content['data'][i]['pos'];
+                    app.all_posts_content[pos] = content['data'][i]['content'];
+                    if (pos in app.current_posts_id) {
+                        delete app.current_posts_id[pos];
+                        app.current_posts_id_length--;
+                    }
                 }
-                app.all_posts_content['length'] = content['data'].length;
-                if (content['page_count'] <= app.current_page) {
+                if ((app.current_posts_id_length <= 0) || (app.attempts_count > app.max_attempts_count)) {
                     app.all_page_loaded = true;
-                }
-                else {
-                    app.current_page++;
+                    app.attempts_count = 0;
+                    app.content_posts_defer.resolve();
                 }
             }
             else {
                 alert('Error. Please try later');
-                app.all_page_loaded = true
+                app.all_page_loaded = true;
+                app.attempts_count = 0;
             }
             if (!app.all_page_loaded) {
-                promise = app.loadPostsContent();
+                app.loadPostsContent();
             }
         });
     }
-    return(promise);
 },
 
 setCurrentPost: function(current_post) {
@@ -744,7 +789,8 @@ $(document).ready(function() {
         app.$current_post = $div_posts.eq(0);//$('.post').eq(0);
         app.$current_post.addClass('current_post');
         app.posts_count = $div_posts.length;
-        $('#posts_count').text(app.posts_count);
+        //$('#posts_count').text(app.posts_count);
+        app.repaintPostsStat();
         $div_posts.click(function() {
             app.setCurrentPost(this);
         });
