@@ -880,56 +880,23 @@ class RSSCloudApplication(object):
 
     def on_posts_content_post(self):
         err = []
-        try:
-            page = abs(int(self.request.form.get('page')))
-        except:
-            err.append('Page number must be int number')
+        wanted_posts = []
         if not err:
-            group = self.request.form.get('group')
-            if (not group) and (not (group in ['category', 'feed', 'tag'])):
-                err.append('Group must be not empty string or have correct value')
-        if not err:
-            group_id = self.request.form.get('group_id')
-            if group == 'tag':
+            if 'posts[]' in self.request.form:
                 try:
-                    tags = group_id.split(',')
+                    wanted_posts = [int(i) for i in self.request.form.getlist('posts[]')]
                 except Exception as e:
-                    tags = []
-                if self.user['only_unread']:
-                    #posts = self.db.posts.find({'owner': self.user['sid'], 'read': False, 'tags': {'$all': [group_id]}}).sort('unix_time', DESCENDING)
-                    posts = self.db.posts.find({'owner': self.user['sid'], 'read': False, 'tags': {'$in': tags}})
-                else:
-                    #posts = self.db.posts.find({'owner': self.user['sid'], 'tags': {'$all': [group_id]}}).sort('unix_time', DESCENDING)
-                    posts = self.db.posts.find({'owner': self.user['sid'], 'tags': {'$in': tags}})
-
-            elif group == 'feed':
-                if self.user['only_unread']:
-                    #posts = self.db.posts.find({'owner': self.user['sid'], 'read': False, 'feed_id': group_id}).sort('unix_time', DESCENDING)
-                    posts = self.db.posts.find({'owner': self.user['sid'], 'read': False, 'feed_id': group_id})
-                else:
-                    #posts = self.db.posts.find({'owner': self.user['sid'], 'feed_id': group_id}).sort('unix_time', DESCENDING)
-                    posts = self.db.posts.find({'owner': self.user['sid'], 'feed_id': group_id})
-            elif group == 'category':
-                if self.user['only_unread']:
-                    #posts = self.db.posts.find({'owner': self.user['sid'], 'read': False, 'category_id': group_id}).sort('unix_time', DESCENDING)
-                    posts = self.db.posts.find({'owner': self.user['sid'], 'read': False, 'category_id': group_id})
-                else:
-                    #posts = self.db.posts.find({'owner': self.user['sid'], 'category_id': group_id}).sort('unix_time', DESCENDING)
-                    posts = self.db.posts.find({'owner': self.user['sid'], 'category_id': group_id})
+                    wanted_posts = []
+                    err.append('Posts wrong')
+                if (not wanted_posts):
+                    err.append('Posts must be not empty or have correct value')
+        if not err:
+            posts = self.db.posts.find({'owner': self.user['sid'], 'pid': {'$in': wanted_posts}}, limit=self.user['posts_on_page'])
             if not err:
-                posts_count = posts.count()
-                page_count = self.getPageCount(posts_count, self.user['posts_on_page'])
-                if (page > page_count) or (page < 1):
-                    err.append('Page not found')
-                if not err:
-                    posts_content = []
-                    posts_start_range = (page - 1) * self.user['posts_on_page']
-                    posts_end_range = posts_start_range + self.user['posts_on_page']
-                    if posts_end_range > posts_count:
-                        posts_end_range = posts_count
-                    for post in posts[posts_start_range:posts_end_range]:
-                        posts_content.append({'pos': post['pid'], 'content': gzip.decompress(post['content']['content']).decode('utf-8', 'replace')})
-                    result = {'result': 'ok', 'data': posts_content, 'page_count': page_count}
+                posts_content = []
+                for post in posts:
+                    posts_content.append({'pos': post['pid'], 'content': gzip.decompress(post['content']['content']).decode('utf-8', 'replace')})
+                result = {'result': 'ok', 'data': posts_content}
         if not err:
             self.response = Response(json.dumps(result), mimetype='application/json')
         else:
