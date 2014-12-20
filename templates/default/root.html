@@ -11,20 +11,32 @@
 <div id="global_tools">
     {% include "logo.html" %}
     <div class="panel right_half">
-        <span class="login_button global_tools_button">
+        <!--span class="login_button global_tools_button">
             <a href="/provider">Select provider</a>
-        </span>
+        </span-->
     </div>
 </div>
 <div class="page screen_middle">
     {% for e in err %}
         <p id="error">{{e}}</p>
     {% endfor %}
-    <div class="left_half description-text">
-        Это алфаверсия RSS ридера. Это алфаверсия RSS ридера. Это алфаверсия RSS ридера. Это алфаверсия RSS ридера. Это алфаверсия RSS ридера. Это алфаверсия RSS ридера. Это алфаверсия RSS ридера. Это алфаверсия RSS ридера.
-    </div>
-    <div class="description-media right_half">
-        <img src="/static/img/rsstag-screenshot.png" />
+    <div >
+        <h1 class="description_title">
+            What it is?
+        </h1>
+        <div class="description_text">
+            <p>RSS reader with automatic generation tags cloud for posts from your rss.</p>
+            <h3>Example:</h3>
+            <p>Two posts with similar theme:</p>
+            <ol class="description_example">
+                <li><b>Apple Responds To BBC Panorama’s Portrayal Of Supplier Conditions</b></li>
+                <li><b>Apple isn’t happy with the BBC</b></li>
+            </ol>
+            <p>This posts will be grouped by tag: <b>Appl</b> and <b>BBC</b>. If you click on tag <b>Appl</b> or <b>BBC</b> you can read all posts with selected tag.</p
+            <p>
+                <a class="start_reading" href="/provider">Start reading</a>
+            </p>
+        </div>
     </div>
 </div>
 {% include "root-footer.html" %}
