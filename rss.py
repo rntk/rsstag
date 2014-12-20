@@ -318,7 +318,11 @@ class RSSCloudApplication(object):
 
     def on_select_provider_get(self):
         page = self.template_env.get_template('provider.html')
-        self.response = Response(page.render(select_provider_url=self.getUrlByEndpoint(endpoint='on_select_provider_post')), mimetype='text/html')
+        self.response = Response(page.render(
+            select_provider_url=self.getUrlByEndpoint(endpoint='on_select_provider_post'),
+            version=self.config['settings']['version'],
+            support=self.config['settings']['support']
+        ), mimetype='text/html')
 
     def on_select_provider_post(self):
         provider = self.request.form.get('provider')
@@ -336,7 +340,12 @@ class RSSCloudApplication(object):
                 page = self.template_env.get_template('login.html')
                 if not err:
                     err = []
-                self.response = Response(page.render(err=err, login_url=self.getUrlByEndpoint(endpoint='on_login_get')), mimetype='text/html')
+                self.response = Response(page.render(
+                    err=err,
+                    login_url=self.getUrlByEndpoint(endpoint='on_login_get'),
+                    version=self.config['settings']['version'],
+                    support=self.config['settings']['support']
+                ), mimetype='text/html')
             elif provider == 'yandex':
                 self.response = redirect(
                     'https://oauth.yandex.ru/authorize?response_type=code&client_id={0}&client_secret={1}&redirect_uri={2}'.format(
@@ -347,7 +356,11 @@ class RSSCloudApplication(object):
                 )
         else:
             page = self.template_env.get_template('error.html')
-            self.response = Response(page.render(err=['Unknown provider']), mimetype='text/html')
+            self.response = Response(page.render(
+                err=['Unknown provider'],
+                version=self.config['settings']['version'],
+                support=self.config['settings']['support']
+            ), mimetype='text/html')
 
     def on_login_post(self):
         login = self.request.form.get('login')
