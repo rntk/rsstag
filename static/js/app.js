@@ -647,7 +647,7 @@ processTagSelection: function(el) {
             $first_tag.removeClass('selected_tag');
             $second_tag.removeClass('selected_tag');
             this.selected_tags = [];
-            e_tags = encodeURIComponent(tags.join('+'));
+            e_tags = encodeURIComponent(tags.join('-'));
             window.location = this.urls['posts_with_tags'] + '/' + e_tags;
         }
     }
