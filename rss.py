@@ -976,7 +976,7 @@ class RSSCloudApplication(object):
 
     def on_get_posts_with_tags(self, s_tags):
         if s_tags:
-            tags = s_tags.split('+')
+            tags = s_tags.split('-')
             if tags:
                 result = {}
                 query = {'owner': self.user['sid'], 'tag': {'$in': tags}}
