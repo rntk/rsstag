@@ -344,7 +344,8 @@ class RSSCloudApplication(object):
                     err=err,
                     login_url=self.getUrlByEndpoint(endpoint='on_login_get'),
                     version=self.config['settings']['version'],
-                    support=self.config['settings']['support']
+                    support=self.config['settings']['support'],
+                    provider=provider
                 ), mimetype='text/html')
             elif provider == 'yandex':
                 self.response = redirect(
