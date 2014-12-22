@@ -1,0 +1,11 @@
+{% macro getName(provider_id='') -%}
+{% if provider_id == 'yandex' %}
+    Яндекс.Подписки
+{% else %}
+    {% if provider_id == 'bazqux' %}
+        BazQux
+    {% else %}
+        InoReader
+    {% endif %}
+{% endif %}
+{%- endmacro %}
