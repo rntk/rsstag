@@ -5,19 +5,26 @@
 </head>
 <body>
 <div id="global_tools">
-    <div id="link_on_root" class="global_tools_button">
-        <a href="/">main</a>
+    <div class="left_half">
+        {% include "logo.html" %}
+    </div>
+    <div class="right_half">
     </div>
 </div>
+{% import 'providers.html' as providers with context %}
 <div class="page screen_middle">
-    {% for e in err %}
-        <p id="error">{{e}}</p>
-    {% endfor %}
-    <form action="{{login_url}}" method="POST" id="login_form">
-        <label for="login">Login</label><br /><input type="text" name="login" id="login" /><br /><br />
-        <label for="password">Password</label><br /><input type="password" name="password" id="password" /><br /><br />
-        <input type="submit" value="Send" />
-    </form>
+    <div class="middle_screen_middle">
+        {% for e in err %}
+            <p id="error">{{e}}</p>
+        {% endfor %}
+        <h3>{{ providers.getName(provider) }}</h3>
+        <form action="{{login_url}}" method="POST" id="login_form">
+            <label for="login">Login</label><br /><input type="text" name="login" id="login" /><br /><br />
+            <label for="password">Password</label><br /><input type="password" name="password" id="password" /><br /><br />
+            <input type="submit" value="Login" />
+            <a href="/" class="link_in_form">Cancel</a>
+        </form>
+    </div>
 </div>
 {% include "root-footer.html" %}
 </body>
