@@ -419,6 +419,16 @@ h3 {
     left: 0;
     right: 0;
     bottom: 20%;
+    text-align: center;
+}
+
+.middle_screen_middle {
+    display: inline-block;
+    text-align: justify;
+}
+
+.link_in_form {
+    margin: 0 0.8em;
 }
 
 @media all and (max-width: 800px) {
