@@ -4,6 +4,15 @@ $my_gray: #c6c6c6;
 $my_green: #7be15f;
 $selected_color: #dde5ff;
 
+@mixin vendor-prefix($name, $argument) {
+  -webkit-#{$name}: #{$argument};
+  -ms-#{$name}: #{$argument};
+  -moz-#{$name}: #{$argument};
+  -o-#{$name}: #{$argument};
+  #{$name}: #{$argument};
+}
+
+
 body, html, img, p, a, span, div {
     padding: 0;
     margin: 0;
@@ -145,7 +154,7 @@ h3 {
 .read_button {
     float: right;
     padding: 0 0.3em;
-    border-radius: 0.3em;
+    @include vendor-prefix(border-radius, 0.3em);
     cursor: pointer;
 }
 #read_all span {
@@ -167,7 +176,7 @@ h3 {
     text-align: center;
     font-size: 10pt;
     border: 1px solid $my_gray;
-    border-radius: 0.5em;
+    @include vendor-prefix(border-radius, 0.5em);
     cursor: pointer;
 }
 .cloud_item_title {
@@ -210,9 +219,9 @@ h3 {
     text-align: center;
     display: none;
     background-color: #fff;
-    opacity: 0.9;
+    @include vendor-prefix(opacity, 0.9);
     border: 1px solid $my_gray;
-    border-radius: 0.5em;
+    @include vendor-prefix(border-radius, 0.5em);
 }
 #status {
     position: fixed;
@@ -392,7 +401,7 @@ h3 {
 .form_button {
     cursor: pointer;
     border: 1px solid black;
-    border-radius: 0.4em;
+    @include vendor-prefix(border-radius, 0.4em);
     padding: 0.1em;
 }
 
