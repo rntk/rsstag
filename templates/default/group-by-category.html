@@ -6,14 +6,18 @@
 <body>
 {% import 'main-menu.html' as menu with context %}
 <div id="global_tools">
-    <div id="link_on_root" class="global_tools_button">
-        <a href="/">main</a>
+    <div class="left_half">
+        <div id="link_on_root" class="global_tools_button">
+            <a href="/">main</a>
+        </div>
+        <div id="group_by" class="global_tools_button">
+            <a href="{{group_by_link}}">group by tag</a>
+        </div>
     </div>
-    <div id="group_by" class="global_tools_button">
-        <a href="{{group_by_link}}">group by tag</a>
-    </div>
-    <div id="main_menu_button" class="global_tools_button">
-        {{ menu.menu_button('global_tools_button') }}
+    <div class="right_half">
+        <div id="main_menu_button" class="global_tools_button">
+            {{ menu.menu_button('global_tools_button') }}
+        </div>
     </div>
 </div>
 {{ menu.menu_window() }}
