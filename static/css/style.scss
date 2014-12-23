@@ -204,13 +204,15 @@ h3 {
 }
 #loading {
     position: fixed;
-    padding-left: 0.3em;
-    top: 8%;
+    padding: 0.5em;
+    top: 30%;
     left: 45%;
     text-align: center;
     display: none;
-    /*background-color: #ffffff;*/
-    border-radius: 0.3em;
+    background-color: #fff;
+    opacity: 0.9;
+    border: 1px solid $my_gray;
+    border-radius: 0.5em;
 }
 #status {
     position: fixed;
