@@ -983,7 +983,7 @@ class RSSCloudApplication(object):
                 query = {'owner': self.user['sid'], 'tag': {'$in': tags}}
                 tags_cursor = self.db.tags.find(query, {'_id': 0, 'tag': 1, 'words': 1})
                 for tag in tags_cursor:
-                    result[tag['tag']] = {'words': ','.join(tag['words']), 'posts': []}
+                    result[tag['tag']] = {'words': ', '.join(tag['words']), 'posts': []}
 
                 query = {'owner': self.user['sid'], 'tags': {'$in': tags}}
                 if self.user['only_unread']:
