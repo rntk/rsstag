@@ -695,6 +695,8 @@ hideProgressbar: function() {
 
 $(document).ready(function() {
     var app = new Application();
+    app.$window = $(window);
+    app.processScroll();
     if ($('#only_unread_checkbox').length > 0) {
         app.$only_unread_checkbox = $('#only_unread_checkbox');
         app.$only_unread_checkbox.click(function() {
@@ -709,6 +711,7 @@ $(document).ready(function() {
     var status_promise;
     if (path == '/') {
         app.$status_element = $('#status').children('span');
+        $('.page').css('margin-top', app.$toolbar.height());
         //app.status_interval_handler = setInterval(function() {app.checkStatus();}, 5000);
         status_promise = app.checkStatus();
         status_promise.done(function(result) {
@@ -721,8 +724,6 @@ $(document).ready(function() {
     else if (/\/group\/tag\/.*/.test(path)) {
         var t_out = -1;
         var $cloud = $('.cloud');
-        app.$window = $(window);
-        app.processScroll();
         $cloud.on('click', '.cloud_item', function() {
             app.processTagSelection(this);
         });
@@ -752,6 +753,7 @@ $(document).ready(function() {
         var reg_num = 0;
         var $letters = $('.letters').find('.letter');
         var prev_letter = $letters.eq(0).text();
+        $letters.eq(0).parent().css('margin-top', app.$toolbar.height());
         var $letters_array = [];
         var nums_reg = /[0-9]/;
         var e_alpha_reg = /[a-zA-Z]/;
@@ -789,13 +791,12 @@ $(document).ready(function() {
         app.$current_post = $div_posts.eq(0);//$('.post').eq(0);
         app.$current_post.addClass('current_post');
         app.posts_count = $div_posts.length;
+        $('.page').css('margin-top', app.$toolbar.height());
         //$('#posts_count').text(app.posts_count);
         app.repaintPostsStat();
         $div_posts.click(function() {
             app.setCurrentPost(this);
         });
-        app.$window = $(window);
-        app.processScroll();
         $div_posts.on('touchstart', function(e){
             touch = e.originalEvent.changedTouches[0];
             app.startX = touch.pageX;
