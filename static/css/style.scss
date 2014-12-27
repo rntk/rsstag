@@ -3,6 +3,7 @@ $meta_color: #bcbcbc;
 $my_gray: #c6c6c6;
 $my_green: #7be15f;
 $selected_color: #dde5ff;
+$max_z_index: 999;
 
 @mixin vendor-prefix($name, $argument) {
   -webkit-#{$name}: #{$argument};
@@ -106,6 +107,7 @@ h3 {
     box-shadow: 0px 0px 5px 0px gray;
     border-bottom: 1px solid $my_gray;
     padding: 0 0 0.5em 0;
+    z-index: $max_z_index;
 }
 .current_page {
     font-weight: bold;
@@ -376,7 +378,6 @@ h3 {
     vertical-align: bottom;
 }
 .logo {
-    height: 99%;
     padding: 0;
 }
 .login_button {
@@ -397,6 +398,7 @@ h3 {
     background-color: white;
     padding: 0.5em;
     box-shadow: 0px 0px 0.3em 0 black;
+    z-index: $max_z_index;
 }
 .form_button {
     cursor: pointer;
@@ -443,14 +445,20 @@ h3 {
 }
 
 @media all and (max-width: 800px) {
+    .screen_middle {
+        top: 5%;
+    }
     .letters {
-        margin-top: 2.5em;
+        margin-top: 3em;
     }
     .tag_title {
         margin-top: 3em;
     }
     .page {
-        margin-top: 2.5em;
+        /*margin-top: 3em;*/
         width: 98%;
+    }
+    .global_tools_button {
+        margin-top: 1em;
     }
 }
