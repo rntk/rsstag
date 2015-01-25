@@ -254,7 +254,7 @@ class RSSCloudApplication(object):
         except HTTPException as e:
             self.on_error(e)
         if self.need_cookie_update:
-            self.response.set_cookie('sid', self.user['sid'], max_age=self.user_ttl)
+            self.response.set_cookie('sid', self.user['sid'], max_age=self.user_ttl, httponly=True)
             #self.response.set_cookie('sid', self.user['sid'])
         self.request.close()
         self.response.headers['X-Frame-Options'] = 'SAMEORIGIN'
@@ -328,7 +328,7 @@ class RSSCloudApplication(object):
         provider = self.request.form.get('provider')
         if provider:
             self.response = redirect(self.getUrlByEndpoint(endpoint='on_login_get'))
-            self.response.set_cookie('provider', provider, max_age=300)
+            self.response.set_cookie('provider', provider, max_age=300, httponly=True)
         else:
             page = self.template_env.get_template('error.html')
             self.response = Response(page.render(err=['Unknown provider']), mimetype='text/html')
