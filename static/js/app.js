@@ -16,6 +16,7 @@ startY: 0,
 endX: 0,
 endY: 0,
 posts_count: 0,
+max_mark: 50,
 is_gesture: false,
 $window: null,
 $current_post: null,
@@ -150,49 +151,58 @@ readAll: function(el_this) {
     var promise = null;
     var posts = Array();
     var $posts = $('div.post');
+    if ($posts.length == 0) {
+        return;
+    }
     var status = 0;
+    var confirmed = true;
     if ($this.text() == 'read all') {
         status = 1;
     }
     else {
         status = 0;
     }
-    for (i = 0; i < $posts.length; i++) {
-        posts.push($($posts[i]).data('pos'));
+    if (($posts.length > 0) && ((this.max_mark < $posts.length) || (status == 0))) {
+        confirmed = confirm($this.text() + ' ' + $posts.length + ' posts?');
     }
-    promise = $.ajax({
-        url: app.urls['mark_read_posts_url'],
-        type: 'POST',
-        data: {'posts': posts, 'status': status},
-        dataType: 'json',
-        async: true
-    });
-    promise.done(function(result) {
-        if ((result != undefined) && (result['result'] == 'ok')) {
-            $('span.read_button').each(function() {
-                var $this = $(this);
+    if (confirmed) {
+        for (i = 0; i < $posts.length; i++) {
+            posts.push($($posts[i]).data('pos'));
+        }
+        promise = $.ajax({
+            url: app.urls['mark_read_posts_url'],
+            type: 'POST',
+            data: {'posts': posts, 'status': status},
+            dataType: 'json',
+            async: true
+        });
+        promise.done(function(result) {
+            if ((result != undefined) && (result['result'] == 'ok')) {
+                $('span.read_button').each(function() {
+                    var $this = $(this);
+                    if (status == 1) {
+                        $this.toggleClass('read unread')
+                             .text('read');
+                    }
+                    else {
+                        $this.toggleClass('read unread')
+                             .text('unread');
+                    }
+                });
                 if (status == 1) {
-                    $this.toggleClass('read unread')
-                         .text('read');
+                    $this.children('span').text('unread all');
                 }
                 else {
-                    $this.toggleClass('read unread')
-                         .text('unread');
+                    $this.children('span').text('read all');
                 }
-            });
-            if (status == 1) {
-                $this.children('span').text('unread all');
+                //app.udpate_prev_next_links($('.page').data('tag'));
+                app.repaintPostsStat();
             }
             else {
-                $this.children('span').text('read all');
+                alert('Error. Please try again later');
             }
-            //app.udpate_prev_next_links($('.page').data('tag'));
-            app.repaintPostsStat();
-        }
-        else {
-            alert('Error. Please try again later');
-        }
-    });
+        });
+    }
 },
 
 syncReadAllButton: function() {

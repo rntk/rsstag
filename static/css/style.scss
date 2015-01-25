@@ -13,7 +13,6 @@ $max_z_index: 999;
   #{$name}: #{$argument};
 }
 
-
 body, html, img, p, a, span, div {
     padding: 0;
     margin: 0;
@@ -77,6 +76,7 @@ h3.post_title {
 .post_feed_title {
     color: #878787;
 }
+
 .show {
     display: block;
 }
