@@ -2,6 +2,7 @@
 
 function Application() {
     this.content_posts_defer = $.Deferred();
+    this.$window = $(window);
 }
 
 Application.prototype = {
@@ -16,6 +17,7 @@ endX: 0,
 endY: 0,
 posts_count: 0,
 is_gesture: false,
+$window: null,
 $current_post: null,
 $status_element: null,
 status_interval_handler: 0,
@@ -394,7 +396,7 @@ setCurrentPost: function(current_post) {
 },
 
 scrollTop: function(el) {
-    window.scrollTo(0, $(el).offset().top - ($('#global_tools').height() * 2));
+    window.scrollTo(0, $(el).offset().top - (this.$toolbar.height() * 2));
 },
 
 scrollUp: function(position) {
@@ -675,7 +677,7 @@ processMainMenu: function() {
             offset = $this.offset();
             $menu_window.css({
                 top: offset.top + $this.height(),
-                right: $(window).width() - offset.left
+                right: this.$window.width() - offset.left
             });
             $menu_window.show();
         }
@@ -695,7 +697,6 @@ hideProgressbar: function() {
 
 $(document).ready(function() {
     var app = new Application();
-    app.$window = $(window);
     app.processScroll();
     if ($('#only_unread_checkbox').length > 0) {
         app.$only_unread_checkbox = $('#only_unread_checkbox');
@@ -851,8 +852,9 @@ $(document).ready(function() {
         }
         app.current_page = 1;
         app.syncReadAllButton();
-        $('a.post_show_links').click(function() {
+        $('a.post_show_links').on('click', function() {
             app.showPostLinks(this);
+            return(false);
         });
         $('.post_links_close').on('click', function(){
             $(this).parent().hide();
