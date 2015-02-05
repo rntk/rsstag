@@ -2,7 +2,7 @@
 
 function Application() {
     this.content_posts_defer = $.Deferred();
-    //this.$window = $(window);
+    this.$window = $(window);
 }
 
 Application.prototype = {
@@ -679,6 +679,7 @@ processScroll: function() {
     });
 },
 processMainMenu: function() {
+    var appl = this;
     $('.main_menu_button').on('click', function() {
         var offset;
         $this = $(this);
@@ -687,7 +688,7 @@ processMainMenu: function() {
             offset = $this.offset();
             $menu_window.css({
                 top: offset.top + $this.height(),
-                right: this.$window.width() - offset.left
+                right: appl.$window.width() - offset.left
             });
             $menu_window.show();
         }
@@ -707,7 +708,6 @@ hideProgressbar: function() {
 
 $(document).ready(function() {
     var app = new Application();
-    app.$window = $(window);
     app.processScroll();
     if ($('#only_unread_checkbox').length > 0) {
         app.$only_unread_checkbox = $('#only_unread_checkbox');
