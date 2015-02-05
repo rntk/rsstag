@@ -2,7 +2,7 @@
 
 function Application() {
     this.content_posts_defer = $.Deferred();
-    this.$window = $(window);
+    //this.$window = $(window);
 }
 
 Application.prototype = {
@@ -707,6 +707,7 @@ hideProgressbar: function() {
 
 $(document).ready(function() {
     var app = new Application();
+    app.$window = $(window);
     app.processScroll();
     if ($('#only_unread_checkbox').length > 0) {
         app.$only_unread_checkbox = $('#only_unread_checkbox');
