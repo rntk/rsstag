@@ -1306,23 +1306,24 @@ def worker(firsts, seconds, firsts_lock, seconds_lock, config):
                 connection.close()
                 subscriptions = json.loads(json_data.decode('utf-8'))
                 works = []
-                for i, g in enumerate(subscriptions['groups']):
-                    if int(g['unread_count']) > 0:
-                        '''if i == 3:
-                            break'''
-                        for f in g['feeds']:
-                            if int(f['unread_count']) > 0:
-                                by_feed[f['md5']] = {}
-                                by_feed[f['md5']]['category_title'] = g['title']
-                                by_feed[f['md5']]['category_id'] = g['title']
-                                by_feed[f['md5']]['category_local_url'] = getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': g['title']})
-                                by_feed[f['md5']]['feed_id'] = f['md5']
-                                by_feed[f['md5']]['title'] = f['title']
-                                by_feed[f['md5']]['owner'] = user['sid']
-                                by_feed[f['md5']]['favicon'] = f['links']['links']['favicon'] if f['links']['links'].get('favicon') else None
-                                by_feed[f['md5']]['local_url'] = getUrlByEndpoint(endpoint='on_feed_get', params={'quoted_feed': f['md5']})
-                        works.append({'host': config['yandex']['api_host'], 'url': '/posts?items_per_page=100&read_status=unread&group_id={0}'.format(g['group_id']), 'headers': headers, 'title': g['title']})
-                if subscriptions['feeds']:
+                if 'groups' in subscriptions:
+                    for i, g in enumerate(subscriptions['groups']):
+                        if int(g['unread_count']) > 0:
+                            '''if i == 3:
+                                break'''
+                            for f in g['feeds']:
+                                if int(f['unread_count']) > 0:
+                                    by_feed[f['md5']] = {}
+                                    by_feed[f['md5']]['category_title'] = g['title']
+                                    by_feed[f['md5']]['category_id'] = g['title']
+                                    by_feed[f['md5']]['category_local_url'] = getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': g['title']})
+                                    by_feed[f['md5']]['feed_id'] = f['md5']
+                                    by_feed[f['md5']]['title'] = f['title']
+                                    by_feed[f['md5']]['owner'] = user['sid']
+                                    by_feed[f['md5']]['favicon'] = f['links']['links']['favicon'] if f['links']['links'].get('favicon') else None
+                                    by_feed[f['md5']]['local_url'] = getUrlByEndpoint(endpoint='on_feed_get', params={'quoted_feed': f['md5']})
+                            works.append({'host': config['yandex']['api_host'], 'url': '/posts?items_per_page=100&read_status=unread&group_id={0}'.format(g['group_id']), 'headers': headers, 'title': g['title']})
+                if 'feeds' in subscriptions:
                     for f in subscriptions['feeds']:
                         if int(f['unread_count']) > 0:
                             by_feed[f['md5']] = {}
