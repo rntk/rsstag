@@ -457,7 +457,7 @@ setOnlyUnread: function(el_this) {
         }
     });
 },
-showHelp: function(el_this) {
+showHelp: function() {
     var $help = $('#help_window');
     if ($help) {
         if ($help.css('display') === 'none') {
@@ -467,6 +467,9 @@ showHelp: function(el_this) {
             $help.hide();
         }
     }
+},
+hideHelp: function() {
+    $('#help_window').hide();
 },
 showTags: function() {
     var app = this;
@@ -715,6 +718,23 @@ $(document).ready(function() {
             app.setOnlyUnread(this);
         });
     }
+    var $help_button = $('#help_button');
+    if ($help_button.length > 0) {
+        $help_button.on('focusout', function() {
+            app.hideHelp();
+        });
+        $help_button.on('click', function() {
+                app.showHelp(this);
+        });
+        $(document).on('keydown', function(e) {
+            //var event = e || window.event;
+            var key = e.which; //e.keyCode || e.charCode;
+            if (key === 27) {
+                app.hideHelp();
+            }
+        }
+
+    }
     app.$loading = $('#loading');
     path = window.location.pathname;
     app.$toolbar = $('#global_tools');
@@ -870,9 +890,6 @@ $(document).ready(function() {
         $('.post_links_close').on('click', function(){
             $(this).parent().hide();
         });
-        $('#help_button').on('click', function() {
-            app.showHelp(this);
-        });
         $('span.read_button').on('click', function() {
             app.readOne(this);
         });
@@ -903,6 +920,7 @@ $(document).ready(function() {
             $('#cloud_items_count').text(app.cloud_items_count);
         }
         $(document).on('keydown', function(e) {
+            //var event = e || window.event;
             var key = e.which; //e.keyCode || e.charCode;
             switch (key) {
                 case 65: {
@@ -968,7 +986,6 @@ $(document).ready(function() {
                     }
                 }
                 case 27: {
-                    $('#help_window').hide();
                     app.$post_links.hide();
                 }
             }
