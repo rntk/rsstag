@@ -732,8 +732,7 @@ $(document).ready(function() {
             if (key === 27) {
                 app.hideHelp();
             }
-        }
-
+        });
     }
     app.$loading = $('#loading');
     path = window.location.pathname;
