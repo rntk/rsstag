@@ -1032,7 +1032,7 @@ class RSSCloudApplication(object):
     def on_post_tags_search(self):
         errors = []
         result = []
-        s_request = self.request.form.get('req')
+        s_request = unquote_plus(self.request.form.get('req'))
         if s_request:
             field_name = ''
             if self.user['only_unread']:
