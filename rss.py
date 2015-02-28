@@ -102,7 +102,8 @@ class RSSCloudApplication(object):
                 Rule('/ready', endpoint='on_ready_get', methods=['GET', 'HEAD']),
                 Rule('/only-unread', endpoint='on_only_unread_post', methods=['POST']),
                 Rule('/all-tags', endpoint='on_get_all_tags', methods=['GET', 'HEAD']),
-                Rule('/posts/with/tags/<string:s_tags>', endpoint='on_get_posts_with_tags', methods=['GET', 'HEAD'])
+                Rule('/posts/with/tags/<string:s_tags>', endpoint='on_get_posts_with_tags', methods=['GET', 'HEAD']),
+                Rule('/tags-search', endpoint='on_post_tags_search', methods=['POST'])
             ])
             self.updateEndpoints()
             if not self.workers_pool:
@@ -1027,6 +1028,45 @@ class RSSCloudApplication(object):
                 mimetype='text/html')
         else:
             self.response = redirect(self.getUrlByEndpoint('on_root_get'))
+            
+    def on_post_tags_search(self):
+        errors = []
+        result = []
+        s_request = self.request.form.get('req')
+        if s_request:
+            field_name = ''
+            if self.user['only_unread']:
+                field_name = 'unread_count'
+            else:
+                field_name = 'posts_count'
+            try:
+                tags_cur = self.db.tags.find({
+                    'owner': self.user['sid'],
+                    field_name: {'$gt': 0},
+                    'read': not self.user['only_unread'],
+                    'tag': {'$regex': '^{}.*'.format(s_request), '$options': 'i'}
+                }, {
+                    'tag': 1,
+                    'local_url': 1,
+                    field_name: 1,
+                    '_id': 0
+                }, limit=100, compile_re=True)
+            except Exception as e:
+                errors.append('{}'.format(e))
+        else:
+            errors.append('Request can`t be empty')
+        if (not errors):
+            result = {'result': 'ok', 'data': []}
+            for tag in tags_cur:
+                result['data'].append({
+                    'tag': quote_plus(tag['tag']),
+                    'cnt': tag[field_name],
+                    'url': self.getUrlByEndpoint(endpoint='on_tag_get', params={'quoted_tag': quote_plus(tag['local_url'])})
+                })
+        else:
+            result = {'result': 'error', 'data': ''.join(err)}
+        self.response = Response(json.dumps(result), mimetype='application/json')
+        
 
 def getSortedDictByAlphabet(dct, type=None):
     if not type or type == 'k':
