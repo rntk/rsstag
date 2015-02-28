@@ -688,11 +688,6 @@
             path,
             i;
         app.processScroll();
-        $(document).ajaxStart(function () {
-            app.showProgressbar();
-        }).ajaxStop(function () {
-            app.hideProgressbar();
-        });
         if ($('#only_unread_checkbox').length > 0) {
             app.$only_unread_checkbox = $('#only_unread_checkbox');
             app.$only_unread_checkbox.click(function () {
@@ -731,6 +726,11 @@
         } else if (path === '\/group\/category') {
             app.groupByCategory();
         } else if (/\/group\/tag\/.*/.test(path)) {
+            $(document).ajaxStart(function () {
+                app.showProgressbar();
+            }).ajaxStop(function () {
+                app.hideProgressbar();
+            });
             $cloud = $('.cloud');
             $cloud.on('click', '.cloud_item', function () {
                 app.processTagSelection(this);
@@ -784,6 +784,12 @@
                 }
             }
         } else if (/^\/feed*/.test(path) || /^\/category*/.test(path) || /^\/tag/.test(path) || /^\/posts\/with\/tags\/.*/.test(path)) {
+            $(document).ajaxStart(function () {
+                app.showProgressbar();
+            }).ajaxStop(function () {
+                app.hideProgressbar();
+            });
+
             app.$post_links = $('#post_links');
             $div_posts = $('div.post');
             app.$current_post = $div_posts.eq(0);//$('.post').eq(0);
