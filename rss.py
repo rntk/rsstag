@@ -11,7 +11,7 @@ from datetime import date, datetime
 from random import randint
 from hashlib import md5, sha256
 from xml.dom.minidom import parseString
-from multiprocessing import Process, Queue, Pool, Lock
+from multiprocessing import Process, Pool, Manager
 from werkzeug.wrappers import Response, Request
 from werkzeug.routing import Map, Rule
 from werkzeug.serving import run_simple
@@ -34,6 +34,7 @@ class RSSCloudApplication(object):
     user = {}
     config = None
     config_path = None
+    manager = None
     firsts_queue = None
     seconds_queue = None
     workers_pool = []
@@ -50,10 +51,11 @@ class RSSCloudApplication(object):
         if self.setConfig(config_path):
             self.config_path = config_path
             self.template_env = Environment(loader=PackageLoader('rss', os.path.join(os.path.dirname(__file__), 'templates', self.config['settings']['templates'])))
-            self.firsts_queue = Queue()
-            self.seconds_queue = Queue()
-            self.firsts_lock = Lock()
-            self.seconds_lock = Lock()
+            self.manager = Manager()
+            self.firsts_queue = self.manager.Queue()
+            self.seconds_queue = self.manager.Queue()
+            self.firsts_lock = self.manager.Lock()
+            self.seconds_lock = self.manager.Lock()
             self.providers = self.config['settings']['providers'].split(',')
             self.user_ttl = int(self.config['settings']['user_ttl'])
             cl = MongoClient(self.config['settings']['db_host'], int(self.config['settings']['db_port']))
