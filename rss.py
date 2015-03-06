@@ -948,11 +948,21 @@ class RSSCloudApplication(object):
         except Exception as e:
             err.append('Post id must be int number')
         if not err:
-            current_post = self.db.posts.find_one({'owner': self.user['sid'], 'pid': post_id}, fields=['tags', 'feed_id'])
+            current_post = self.db.posts.find_one({'owner': self.user['sid'], 'pid': post_id}, fields=['tags', 'feed_id', 'url'])
             if current_post:
                 feed = self.db.feeds.find_one({'feed_id': current_post['feed_id'], 'owner': self.user['sid']})
                 if feed:
-                    result = {'result': 'ok', 'data': {'c_url': feed['category_local_url'], 'c_title': feed['category_title'], 'f_url': feed['local_url'], 'f_title': feed['title'], 'tags': []}}
+                    result = {
+                        'result': 'ok',
+                        'data': {
+                            'c_url': quote_plus(feed['category_local_url']),
+                            'c_title': feed['category_title'],
+                            'f_url': quote_plus(feed['local_url']),
+                            'f_title': feed['title'],
+                            'p_url': quote_plus(current_post['url']),
+                            'tags': []
+                        }
+                    }
                     for t in current_post['tags']:
                         result['data']['tags'].append({'url': self.getUrlByEndpoint(endpoint='on_tag_get', params={'quoted_tag': t}), 'tag': t})
                 else:
