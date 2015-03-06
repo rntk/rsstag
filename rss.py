@@ -725,20 +725,14 @@ class RSSCloudApplication(object):
                     print('Can`t push in mark queue: {}'.format(e))
                     err.append('Database error')
                 bulk = self.db.tags.initialize_unordered_bulk_op()
-                tags_t = 0
                 if status:
-                    tags_t = -tags[t]
-                    '''for t in tags:
+                    for t in tags:
                         bulk.find({'owner': self.user['sid'], 'tag': t}).update({'$inc': {'unread_count': -tags[t]}})
-                        first_letters[t[0]]['unread_count'] -= tags[t]'''
+                        first_letters[t[0]]['unread_count'] -= tags[t]
                 else:
-                    tags_t = tags[t]
-                    '''for t in tags:
+                    for t in tags:
                         bulk.find({'owner': self.user['sid'], 'tag': t}).update({'$inc': {'unread_count': tags[t]}})
-                        first_letters[t[0]]['unread_count'] += tags[t]'''
-                for t in tags:
-                    bulk.find({'owner': self.user['sid'], 'tag': t}).update({'$inc': {'unread_count': tags_t}})
-                    first_letters[t[0]]['unread_count'] += tags_t
+                        first_letters[t[0]]['unread_count'] += tags[t]
                 try:
                     bulk.execute()
                 except Exception as e:
