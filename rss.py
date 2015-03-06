@@ -102,7 +102,7 @@ class RSSCloudApplication(object):
         self.db.letters.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
         self.db.users.ensure_index([('sid', 1)])
         self.db.users.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
-        self.db.users.update({'in_queue': True}, {'$set': {'in_queue': False}}, multi=True)
+        self.db.users.update({'in_queue': True}, {'$set': {'in_queue': False, 'ready_flag': True}}, multi=True)
         self.db.tags.ensure_index([('owner', 1)])
         self.db.tags.ensure_index([('tag', 1)])
         self.db.tags.ensure_index([('unread_count', 1)])
