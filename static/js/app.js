@@ -562,7 +562,9 @@
                         i;
                     if ((result) && (result.result === 'ok')) {
                             data = result.data;
-                        p_l = '<a href="' + data.c_url + '">' + data.c_title + '</a> | <a href="' + data.f_url + '">' + data.f_title + '</a><br />';
+                        p_l = '<a href="' + data.c_url + '">' + data.c_title +
+                            '</a> | <a href="' + data.f_url + '">' + data.f_title + '</a><br />';
+                            '</a> | <a href="' + data.p_url + '">To site</a><br />';
                         //var d_length = data.tags.length;
                         for (i = 0; i < data.tags.length; i++) {
                             p_l += '<a href="' + data.tags[i].url + '">' + data.tags[i].tag + '</a>, ';
