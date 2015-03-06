@@ -247,6 +247,8 @@ class RSSCloudApplication(object):
             print(handler, end=' - ')
             if self.user and self.user['ready_flag']:
                 self.endpoints[handler](**values)
+            elif (not self.user['in_queue']) and (not self.user['ready_flag']):
+                self.response = redirect(self.getUrlByEndpoint('on_refresh_get_post'))
             else:
                 if handler in self.allow_not_logged:
                     self.endpoints[handler](**values)
