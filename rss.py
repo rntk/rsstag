@@ -34,51 +34,23 @@ class RSSCloudApplication(object):
     user = {}
     config = None
     config_path = None
-    manager = None
-    firsts_queue = None
-    seconds_queue = None
     workers_pool = []
     providers = []
     user_ttl = 0
     count_showed_nubmers = 4
     db = None
     allow_not_logged = ('on_root_get', 'on_login_get', 'on_login_post', 'on_code_get', 'on_select_provider_post', 'on_select_provider_get', 'on_static_get', 'on_ready_get', 'on_refresh_get_post', 'on_favicon_get')
-    firsts_lock = None
-    seconds_lock = None
     no_category_name = 'NotCategorized'
 
     def __init__(self, config_path=None):
         if self.setConfig(config_path):
             self.config_path = config_path
             self.template_env = Environment(loader=PackageLoader('rss', os.path.join(os.path.dirname(__file__), 'templates', self.config['settings']['templates'])))
-            self.manager = Manager()
-            self.firsts_queue = self.manager.Queue()
-            self.seconds_queue = self.manager.Queue()
-            self.firsts_lock = self.manager.Lock()
-            self.seconds_lock = self.manager.Lock()
             self.providers = self.config['settings']['providers'].split(',')
             self.user_ttl = int(self.config['settings']['user_ttl'])
             cl = MongoClient(self.config['settings']['db_host'], int(self.config['settings']['db_port']))
             self.db = cl.rss
-            self.db.posts.ensure_index([('owner', 1)])
-            self.db.posts.ensure_index([('category_id', 1)])
-            self.db.posts.ensure_index([('feed_id', 1)])
-            self.db.posts.ensure_index([('read', 1)])
-            self.db.posts.ensure_index([('tags', 1)])
-            self.db.posts.ensure_index([('pid', 1)])
-            self.db.posts.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
-            self.db.feeds.ensure_index([('owner', 1)])
-            self.db.feeds.ensure_index([('feed_id', 1)])
-            self.db.feeds.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
-            self.db.letters.ensure_index([('owner', 1)])
-            self.db.letters.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
-            self.db.users.ensure_index([('sid', 1)])
-            self.db.users.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
-            self.db.tags.ensure_index([('owner', 1)])
-            self.db.tags.ensure_index([('tag', 1)])
-            self.db.tags.ensure_index([('unread_count', 1)])
-            self.db.tags.ensure_index([('posts_count', 1)])
-            self.db.tags.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
+            self.prepareDB()
             #self.favicon_url_re = re.compile(r'(?imu)<link.*?rel.*?href.{0,2}=.{0,2}"(.*favicon.*?)"')
             self.routes = Map([
                 Rule('/', endpoint='on_root_get', methods=['GET', 'HEAD']),
@@ -110,10 +82,36 @@ class RSSCloudApplication(object):
             self.updateEndpoints()
             if not self.workers_pool:
                 for i in range(int(self.config['settings']['workers_count'])):
-                    self.workers_pool.append(Process(target=worker, args=(self.firsts_queue, self.seconds_queue, self.firsts_lock, self.seconds_lock, self.config)))
+                    self.workers_pool.append(Process(target=worker, args=(self.config, self.routes)))
                     self.workers_pool[-1].start()
         else:
             return None
+
+    def prepareDB(self):
+        self.db.posts.ensure_index([('owner', 1)])
+        self.db.posts.ensure_index([('category_id', 1)])
+        self.db.posts.ensure_index([('feed_id', 1)])
+        self.db.posts.ensure_index([('read', 1)])
+        self.db.posts.ensure_index([('tags', 1)])
+        self.db.posts.ensure_index([('pid', 1)])
+        self.db.posts.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
+        self.db.feeds.ensure_index([('owner', 1)])
+        self.db.feeds.ensure_index([('feed_id', 1)])
+        self.db.feeds.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
+        self.db.letters.ensure_index([('owner', 1)])
+        self.db.letters.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
+        self.db.users.ensure_index([('sid', 1)])
+        self.db.users.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
+        self.db.users.update({'in_queue': True}, {'$set': {'in_queue': False}}, multi=True)
+        self.db.tags.ensure_index([('owner', 1)])
+        self.db.tags.ensure_index([('tag', 1)])
+        self.db.tags.ensure_index([('unread_count', 1)])
+        self.db.tags.ensure_index([('posts_count', 1)])
+        self.db.tags.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
+        self.db.download_queue.ensure_index([('locked', 1)])
+        self.db.download_queue.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
+        self.db.mark_queue.ensure_index([('locked', 1)])
+        self.db.mark_queue.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
 
     def close(self):
         if self.workers_pool:
@@ -406,13 +404,9 @@ class RSSCloudApplication(object):
     def on_refresh_get_post(self):
         if self.user:
             if not self.user['in_queue']:
-                self.firsts_queue.put({'user': self.user, 'type': 'download', 'data': {'host' : self.request.environ['HTTP_HOST'], 'routes': self.routes}})
-                '''self.user['ready_flag'] = False
-                self.user['in_queue'] = True
-                self.user['message'] = 'Downloading data, please wait'''
+                self.db.download_queue.insert({'user': self.user['_id'], 'locked': False, 'host': self.request.environ['HTTP_HOST']})
                 self.db.users.update({'sid': self.user['sid']}, {'$set': {'ready_flag': False, 'in_queue': True, 'message': 'Downloading data, please wait'}})
             else:
-                #self.user['message'] = 'You already in queue, please wait'
                 self.db.users.update({'sid': self.user['sid']}, {'$set': {'message': 'You already in queue, please wait'}})
             self.response = redirect(self.getUrlByEndpoint(endpoint='on_root_get'))
         else:
@@ -705,10 +699,12 @@ class RSSCloudApplication(object):
                 first_letters = {}
             if many:
                 tags = {}
+                current_data = None
+                for_insert = []
                 if self.user['provider'] == 'yandex':
                     current_data = self.db.posts.find({'owner': self.user['sid'], 'read': not status, 'pid': {'$in': posts}}, fields=['links', 'tags'])
                     for d in current_data:
-                        self.seconds_queue.put({'user': self.user, 'type': 'mark', 'data': {'url': d['links']['meta'], 'status': status}})
+                        for_insert.append({'user': self.user['_id'], 'url': d['links']['meta'], 'status': status})
                         for t in d['tags']:
                             if t in tags:
                                 tags[t] += 1
@@ -717,33 +713,45 @@ class RSSCloudApplication(object):
                 elif (self.user['provider'] == 'bazqux') or (self.user['provider'] == 'inoreader'):
                     current_data = self.db.posts.find({'owner': self.user['sid'], 'read': not status, 'pid': {'$in': posts}}, fields=['id', 'tags'])
                     for d in current_data:
-                        self.seconds_queue.put({'user': self.user, 'type': 'mark', 'data': {'id': d['id'], 'status': status}})
+                        for_insert.append({'user': self.user['_id'], 'id': d['id'], 'status': status})
                         for t in d['tags']:
                             if t in tags:
                                 tags[t] += 1
                             else:
                                 tags[t] = 1
+                try:
+                    self.db.mark_queue.insert(for_insert)
+                except Exception as e:
+                    print('Can`t push in mark queue: {}'.format(e))
+                    err.append('Database error')
                 bulk = self.db.tags.initialize_unordered_bulk_op()
+                tags_t = 0
                 if status:
-                    for t in tags:
+                    tags_t = -tags[t]
+                    '''for t in tags:
                         bulk.find({'owner': self.user['sid'], 'tag': t}).update({'$inc': {'unread_count': -tags[t]}})
-                        first_letters[t[0]]['unread_count'] -= tags[t]
+                        first_letters[t[0]]['unread_count'] -= tags[t]'''
                 else:
-                    for t in tags:
+                    tags_t = tags[t]
+                    '''for t in tags:
                         bulk.find({'owner': self.user['sid'], 'tag': t}).update({'$inc': {'unread_count': tags[t]}})
-                        first_letters[t[0]]['unread_count'] += tags[t]
+                        first_letters[t[0]]['unread_count'] += tags[t]'''
+                for t in tags:
+                    bulk.find({'owner': self.user['sid'], 'tag': t}).update({'$inc': {'unread_count': tags_t}})
+                    first_letters[t[0]]['unread_count'] += tags_t
                 try:
                     bulk.execute()
                 except Exception as e:
-                    print(e, 'Bulk failed')
+                    print(e, 'Bulk failed in on_read_posts_post')
+                    err.append('Database error')
                 self.db.posts.update({'owner': self.user['sid'], 'read': not status, 'pid': {'$in': posts}}, {'$set': {'read': status}}, multi=True)
             else:
                 if self.user['provider'] == 'yandex':
                     current_post = self.db.posts.find_one({'owner': self.user['sid'], 'pid': post_id}, fields=['links', 'tags'])
-                    self.seconds_queue.put({'user': self.user, 'type': 'mark', 'data': {'url': current_post['links']['meta'], 'status': status}})
+                    self.db.mark_queue.insert({'user': self.user['_id'], 'url': current_post['links']['meta'], 'status': status})
                 elif (self.user['provider'] == 'bazqux') or (self.user['provider'] == 'inoreader'):
                     current_post = self.db.posts.find_one({'owner': self.user['sid'], 'pid': post_id}, fields=['id', 'tags'])
-                    self.seconds_queue.put({'user': self.user, 'type': 'mark', 'data': {'id': current_post['id'], 'status': status}})
+                    self.db.mark_queue.insert({'user': self.user['_id'], 'id': current_post['id'], 'status': status})
                     self.db.posts.update({'owner': self.user['sid'], 'pid': post_id}, {'$set': {'read': status}})
                 if status:
                     incr = -1
@@ -1030,7 +1038,7 @@ class RSSCloudApplication(object):
                 mimetype='text/html')
         else:
             self.response = redirect(self.getUrlByEndpoint('on_root_get'))
-            
+
     def on_post_tags_search(self):
         errors = []
         result = []
@@ -1068,7 +1076,7 @@ class RSSCloudApplication(object):
         else:
             result = {'result': 'error', 'data': ''.join(err)}
         self.response = Response(json.dumps(result), mimetype='application/json')
-        
+
 
 def getSortedDictByAlphabet(dct, type=None):
     if not type or type == 'k':
@@ -1184,7 +1192,7 @@ def downloader_yandex(data):
         print('Downloaded, category with strange symbols')
     return(result, data['title'])
 
-def worker(firsts, seconds, firsts_lock, seconds_lock, config):
+def worker(config, routes):
     name = str(randint(0, 10000))
     no_category_name = 'NotCategorized'
     workers_downloader_pool = []
@@ -1301,25 +1309,30 @@ def worker(firsts, seconds, firsts_lock, seconds_lock, config):
 
     while True:
         data = None
+        user_id = None
+        user = None
         #st = time.time()
-        firsts_lock.acquire()
         try:
-            if not firsts.empty():
-                data = firsts.get()
-        finally:
-            firsts_lock.release()
-        if not data:
-            seconds_lock.acquire()
-            try:
-                if not seconds.empty():
-                    data = seconds.get()
-            finally:
-                seconds_lock.release()
+            data = db.download_queue.find_and_modify({}, remove=True)
+        except Exception as e:
+            data = None
+            print('Worker can`t get data from queue: {}'.format(e))
         if data:
-            user = data['user']
-            type = data['type']
+            user_id = data['user']
+            type = 'download'
         else:
-            #print('Tasks list is empy.', name, 'going sleep')
+            try:
+                data = db.mark_queue.find_and_modify({}, remove=True)
+            except Exception as e:
+                data = None
+                print('Worker can`t get data from queue: {}'.format(e))
+            if data:
+                user_id = data['user']
+                type = 'mark'
+        if user_id:
+            user = db.users.find_one({'_id': user_id})
+        if not user:
+            #print('Tasks list is empty.', name, 'going sleep')
             time.sleep(randint(3, 8))
             continue
         #print(name, 'lock wait', time.time() - st)
@@ -1337,8 +1350,7 @@ def worker(firsts, seconds, firsts_lock, seconds_lock, config):
             db.posts.remove({'owner': user['sid']})
             db.tags.remove({'owner': user['sid']})
             db.letters.remove({'owner': user['sid']})
-            routes = data['data']['routes']
-            host = data['data']['host']
+            host = data['host']
             if user['provider'] == 'yandex':
                 headers = {'AUTHORIZATION': 'OAuth {0}'.format(user['token'])}
                 connection = client.HTTPSConnection(config['yandex']['api_host'])
@@ -1492,11 +1504,11 @@ def worker(firsts, seconds, firsts_lock, seconds_lock, config):
             user['message'] = 'You can start reading'''
             saveAllData()
         elif type == 'mark':
-            status = data['data']['status']
+            status = data['status']
             if user['provider'] == 'yandex':
                 headers = {'AUTHORIZATION': 'OAuth {0}'.format(user['token'])}
                 err = []
-                url = data['data']['url']
+                url = data['url']
                 counter = 0
                 while (counter < 6):
                     connection = client.HTTPSConnection(config[user['provider']]['api_host'])
@@ -1555,7 +1567,7 @@ def worker(firsts, seconds, firsts_lock, seconds_lock, config):
                                             result_dom.unlink()
                 connection.close()
             elif (user['provider'] == 'bazqux') or (user['provider'] == 'inoreader'):
-                id = data['data']['id']
+                id = data['id']
                 headers = {'Authorization': 'GoogleLogin auth={0}'.format(user['token']), 'Content-type': 'application/x-www-form-urlencoded'}
                 err = []
                 counter = 0
