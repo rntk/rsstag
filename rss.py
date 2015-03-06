@@ -955,11 +955,11 @@ class RSSCloudApplication(object):
                     result = {
                         'result': 'ok',
                         'data': {
-                            'c_url': quote_plus(feed['category_local_url']),
+                            'c_url': feed['category_local_url'],
                             'c_title': feed['category_title'],
-                            'f_url': quote_plus(feed['local_url']),
+                            'f_url': feed['local_url'],
                             'f_title': feed['title'],
-                            'p_url': quote_plus(current_post['url']),
+                            'p_url': current_post['url'],
                             'tags': []
                         }
                     }
