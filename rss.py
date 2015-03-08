@@ -72,7 +72,6 @@ class RSSCloudApplication(object):
             #self.favicon_url_re = re.compile(r'(?imu)<link.*?rel.*?href.{0,2}=.{0,2}"(.*favicon.*?)"')
             self.routes = Map([
                 Rule('/', endpoint='on_root_get', methods=['GET', 'HEAD']),
-                Rule('/favicon.ico', endpoint='on_favicon_get', methods=['GET', 'HEAD']),
                 Rule('/code', endpoint='on_code_get', methods=['GET', 'HEAD']),
                 Rule('/login', endpoint='on_login_get', methods=['GET', 'HEAD']),
                 Rule('/login', endpoint='on_login_post', methods=['POST']),
@@ -82,6 +81,7 @@ class RSSCloudApplication(object):
                 Rule('/group/tag/startwith/<string(length=1):letter>', endpoint='on_group_by_tags_startwith_get', methods=['GET', 'HEAD']),
                 Rule('/group/category', endpoint='on_group_by_category_get', methods=['GET', 'HEAD']),
                 Rule('/refresh', endpoint='on_refresh_get_post', methods=['GET', 'HEAD', 'POST']),
+                Rule('/favicon.ico', endpoint='on_static_get', methods=['GET', 'HEAD']),
                 Rule('/static/<string:directory>/<string:filename>', endpoint='on_static_get', methods=['GET', 'HEAD']),
                 Rule('/static/<string:filename>', endpoint='on_static_get', methods=['GET', 'HEAD']),
                 Rule('/tag/<string:quoted_tag>', endpoint='on_tag_get', methods=['GET', 'HEAD']),
@@ -723,18 +723,6 @@ class RSSCloudApplication(object):
         else:
             self.on_error(NotFound())
 
-    def on_favicon_get(self):
-        mimetype = 'image/x-icon'
-        f_path = 'favicon.ico'
-        l_modify = datetime.fromtimestamp(os.path.getmtime(f_path)).strftime('%a, %d %b %Y %H:%m:%S %Z%z')
-        if (self.request.if_modified_since) and (self.request.if_modified_since.strftime('%a, %d %b %Y %H:%m:%S %Z%z') == l_modify):
-            self.response = Response('', mimetype=mimetype)
-            self.response.status_code = 304
-        else:
-            f = open(f_path, 'rb')
-            self.response = Response(wrap_file(self.request.environ, f), mimetype=mimetype, direct_passthrough=True)
-            self.response.headers['Last-Modified'] = l_modify
-
     def on_static_get(self, directory=None, filename=None):
         mimetype = 'text/plain'
         if not directory:
@@ -745,6 +733,8 @@ class RSSCloudApplication(object):
             mimetype = 'image/gif'
         elif directory == 'css':
             mimetype = 'text/css'
+        elif filename == 'favicon.ico':
+            mimetype = 'image/x-icon'
         if filename:
             f_path = os.path.join('static', directory, filename)
             l_modify = datetime.fromtimestamp(os.path.getmtime(f_path)).strftime('%a, %d %b %Y %H:%m:%S %Z%z')
