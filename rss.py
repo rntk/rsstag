@@ -117,6 +117,7 @@ class RSSCloudApplication(object):
         if self.workers_pool:
             for p in self.workers_pool:
                 p.terminate()
+        print('Goodbye!')
 
     def updateEndpoints(self):
         for i in self.routes.iter_rules():
@@ -263,13 +264,17 @@ class RSSCloudApplication(object):
         return(self.response(http_env, start_resp))
 
     def setConfig(self, config_name):
+        result = False
         if config_name and os.path.exists(config_name):
-            c = ConfigParser()
-            c.read(config_name, encoding='utf-8')
-            self.config = c
-            return(True)
-        else:
-            return(False)
+            try:
+                c = ConfigParser()
+                c.read(config_name, encoding='utf-8')
+                self.config = c
+                result = True
+            except Exception as e:
+                print('Can`t load config: ', e)
+                result = False
+        return(result)
 
     def getUrlByEndpoint(self, endpoint=None, params=None, full_url=False):
         url = None
@@ -285,10 +290,11 @@ class RSSCloudApplication(object):
 
     def on_code_get(self):
         err = []
+        provider = self.request.cookies.get('provider')
         if self.user:
-            self.user['provider'] = self.request.cookies.get('provider')
+            self.user['provider'] = provider
         else:
-            self.user = {'provider': self.request.cookies.get('provider')}
+            self.user = {'provider': provider}
         if self.user['provider'] == 'yandex':
             connection = client.HTTPSConnection(self.config['yandex']['oauth_host'])
             body = 'grant_type=authorization_code&code={0}&client_id={1}&client_secret={2}'.format(self.request.args['code'], self.config['yandex']['id'], self.config['yandex']['secret'])
@@ -1451,17 +1457,17 @@ def worker(config, routes):
                             origin_feed_id = post['origin']['streamId']
                             post['origin']['streamId'] = md5(post['origin']['streamId'].encode('utf-8')).hexdigest()
                             if post['origin']['streamId'] not in by_feed:
-                                by_feed[post['origin']['streamId']] = {}
-                                by_feed[post['origin']['streamId']]['createdAt'] = datetime.utcnow()
-                                by_feed[post['origin']['streamId']]['title'] = post['origin']['title']
-                                by_feed[post['origin']['streamId']]['owner'] = user['sid']
-                                by_feed[post['origin']['streamId']]['category_id'] = category
-                                #by_feed[post['origin']['streamId']]['timestamp'] =
-                                by_feed[post['origin']['streamId']]['feed_id'] = post['origin']['streamId']
-                                by_feed[post['origin']['streamId']]['origin_feed_id'] = origin_feed_id
-                                by_feed[post['origin']['streamId']]['category_title'] = category
-                                by_feed[post['origin']['streamId']]['category_local_url'] = getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': category})
-                                by_feed[post['origin']['streamId']]['local_url'] = getUrlByEndpoint(endpoint='on_feed_get', params={'quoted_feed': post['origin']['streamId']})
+                                by_feed[post['origin']['streamId']] = {
+                                    'createdAt': datetime.utcnow(),
+                                    'title': post['origin']['title'],
+                                    'owner': user['sid'],
+                                    'category_id': category,
+                                    'feed_id': post['origin']['streamId'],
+                                    'origin_feed_id': origin_feed_id,
+                                    'category_title': category,
+                                    'category_local_url': getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': category}),
+                                    'local_url': getUrlByEndpoint(endpoint='on_feed_get', params={'quoted_feed': post['origin']['streamId']})
+                                }
                             p_date = None
                             if 'published' in post:
                                 p_date = date.fromtimestamp(int(post['published'])).strftime('%x')
@@ -1675,14 +1681,7 @@ def getFaviconUrl(data):
 
 if __name__ == '__main__':
     app = RSSCloudApplication('rsscloud.conf')
-    run_simple(app.config['settings']['host'], int(app.config['settings']['port']), app.setResponse)
-    app.close()
-    print('Goodbye!')
-    '''TODO
-        offline mode
-        settings: posts on page, tags on page, provider
-        mark as read page, feed, category
-        reader.aol.com
-        feedly
-        digg.com
-    '''
+    try:
+        run_simple(app.config['settings']['host'], int(app.config['settings']['port']), app.setResponse)
+    except Exception as e:
+        app.close()
