@@ -1,4 +1,5 @@
 ﻿# -*- coding: UTF-8 -*-
+import sys
 from configparser import ConfigParser
 import os, json, re
 from urllib.parse import unquote_plus, quote_plus, urlencode, urlparse
@@ -85,6 +86,7 @@ class RSSCloudApplication(object):
                     self.workers_pool.append(Process(target=worker, args=(self.config, self.routes)))
                     self.workers_pool[-1].start()
         else:
+            print('Can`t load config file "{}"'.format(config_path))
             return None
 
     def prepareDB(self):
@@ -1680,8 +1682,15 @@ def getFaviconUrl(data):
     return(favicon_url, data[1])
 
 if __name__ == '__main__':
-    app = RSSCloudApplication('rsscloud.conf')
-    try:
-        run_simple(app.config['settings']['host'], int(app.config['settings']['port']), app.setResponse)
-    except Exception as e:
-        app.close()
+    config_path = 'rsscloud.conf'
+    if len(sys.argv) > 1:
+        config_path = sys.argv[1]
+    app = RSSCloudApplication(config_path)
+    if app:
+        try:
+            run_simple(app.config['settings']['host'], int(app.config['settings']['port']), app.setResponse)
+        except Exception as e:
+            print(e)
+            app.close()
+    else:
+        print('`Can`t start server')
