@@ -40,13 +40,30 @@ class RSSCloudApplication(object):
     user_ttl = 0
     count_showed_nubmers = 4
     db = None
-    allow_not_logged = ('on_root_get', 'on_login_get', 'on_login_post', 'on_code_get', 'on_select_provider_post', 'on_select_provider_get', 'on_static_get', 'on_ready_get', 'on_refresh_get_post', 'on_favicon_get')
+    allow_not_logged = (
+        'on_root_get',
+        'on_login_get',
+        'on_login_post',
+        'on_code_get',
+        'on_select_provider_post',
+        'on_select_provider_get',
+        'on_static_get',
+        'on_ready_get',
+        'on_refresh_get_post',
+        'on_favicon_get'
+    )
     no_category_name = 'NotCategorized'
 
     def __init__(self, config_path=None):
         if self.setConfig(config_path):
             self.config_path = config_path
-            self.template_env = Environment(loader=PackageLoader('rss', os.path.join(os.path.dirname(__file__), 'templates', self.config['settings']['templates'])))
+            self.template_env = Environment(
+                loader=PackageLoader(
+                    'rss', os.path.join(os.path.dirname(__file__),
+                    'templates',
+                    self.config['settings']['templates'])
+                )
+            )
             self.providers = self.config['settings']['providers'].split(',')
             self.user_ttl = int(self.config['settings']['user_ttl'])
             cl = MongoClient(self.config['settings']['db_host'], int(self.config['settings']['db_port']))
@@ -146,7 +163,15 @@ class RSSCloudApplication(object):
                 try:
                     self.db.users.update(
                         {'sid': self.user['sid']},
-                        {'$set': {'ready_flag': False, 'provider': self.user['provider'], 'token': self.user['token'], 'message': 'Click on "Refresh posts" to start downloading data', 'in_queue': False, 'createdAt': datetime.utcnow()}})
+                        {'$set': {
+                            'ready_flag': False,
+                            'provider': self.user['provider'],
+                            'token': self.user['token'],
+                            'message': 'Click on "Refresh posts" to start downloading data',
+                            'in_queue': False,
+                            'createdAt': datetime.utcnow()
+                        }}
+                    )
                 except Exception as e:
                     self.user = None
                     print(e, 'Can`t create new session')
@@ -299,7 +324,9 @@ class RSSCloudApplication(object):
             self.user = {'provider': provider}
         if self.user['provider'] == 'yandex':
             connection = client.HTTPSConnection(self.config['yandex']['oauth_host'])
-            body = 'grant_type=authorization_code&code={0}&client_id={1}&client_secret={2}'.format(self.request.args['code'], self.config['yandex']['id'], self.config['yandex']['secret'])
+            body = 'grant_type=authorization_code&code={0}&client_id={1}&client_secret={2}'.format(
+                self.request.args['code'], self.config['yandex']['id'], self.config['yandex']['secret']
+            )
             try:
                 connection.request('POST', '/token', body)
             except Exception as e:
@@ -413,7 +440,10 @@ class RSSCloudApplication(object):
         if self.user:
             if not self.user['in_queue']:
                 self.db.download_queue.insert({'user': self.user['_id'], 'locked': False, 'host': self.request.environ['HTTP_HOST']})
-                self.db.users.update({'sid': self.user['sid']}, {'$set': {'ready_flag': False, 'in_queue': True, 'message': 'Downloading data, please wait'}})
+                self.db.users.update(
+                    {'sid': self.user['sid']},
+                    {'$set': {'ready_flag': False, 'in_queue': True, 'message': 'Downloading data, please wait'}}
+                )
             else:
                 self.db.users.update({'sid': self.user['sid']}, {'$set': {'message': 'You already in queue, please wait'}})
             self.response = redirect(self.getUrlByEndpoint(endpoint='on_root_get'))
@@ -481,7 +511,16 @@ class RSSCloudApplication(object):
         else:
             provider = 'Not selected'
             page = self.template_env.get_template('root.html')
-            self.response = Response(page.render(err=err, only_unread=only_unread, provider=provider, support=self.config['settings']['support'], version=self.config['settings']['version']), mimetype='text/html')
+            self.response = Response(
+                page.render(
+                    err=err,
+                    only_unread=only_unread,
+                    provider=provider,
+                    support=self.config['settings']['support'],
+                    version=self.config['settings']['version']
+                ),
+                mimetype='text/html'
+            )
 
     def on_group_by_category_get(self):
         page_number = self.user['page']
@@ -499,14 +538,26 @@ class RSSCloudApplication(object):
             {'$group': {'_id': '$feed_id', 'category_id': {'$first': '$category_id'}, 'count': {'$sum': 1}}}
         ])
         all_feeds = 'All'
-        by_category = {all_feeds: {'unread_count' : 0, 'title': all_feeds, 'url': self.getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': all_feeds}), 'feeds' : []}}
+        by_category = {all_feeds: {
+            'unread_count' : 0,
+            'title': all_feeds,
+            'url': self.getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': all_feeds}), 'feeds' : []
+        }}
         for g in grouped['result']:
             if g['count'] > 0:
                 if g['category_id'] not in by_category:
-                    by_category[g['category_id']] = {'unread_count' : 0, 'title': by_feed[g['_id']]['category_title'], 'url': by_feed[g['_id']]['category_local_url'], 'feeds' : []}
+                    by_category[g['category_id']] = {
+                        'unread_count' : 0,
+                        'title': by_feed[g['_id']]['category_title'],
+                        'url': by_feed[g['_id']]['category_local_url'], 'feeds' : []
+                    }
                 by_category[g['category_id']]['unread_count'] += g['count']
                 by_category[all_feeds]['unread_count'] += g['count']
-                by_category[g['category_id']]['feeds'].append({'unread_count': g['count'], 'url': by_feed[g['_id']]['local_url'], 'title': by_feed[g['_id']]['title']})
+                by_category[g['category_id']]['feeds'].append({
+                    'unread_count': g['count'],
+                    'url': by_feed[g['_id']]['local_url'],
+                    'title': by_feed[g['_id']]['title']
+                })
         if len(by_category) > 1:
             data = getSortedDictByAlphabet(by_category)
             if self.no_category_name in data:
@@ -514,14 +565,16 @@ class RSSCloudApplication(object):
         else:
             data = {}
         page = self.template_env.get_template('group-by-category.html')
-        self.response = Response(page.render(
-            data=data,
-            group_by_link=self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number}),
-            only_unread=self.user['only_unread'],
-            provider=self.user['provider'],
-            posts_per_page=self.user['posts_on_page'],
-            tags_per_page=self.user['cloud_items_on_page']),
-        mimetype='text/html'
+        self.response = Response(
+            page.render(
+                data=data,
+                group_by_link=self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number}),
+                only_unread=self.user['only_unread'],
+                provider=self.user['provider'],
+                posts_per_page=self.user['posts_on_page'],
+                tags_per_page=self.user['cloud_items_on_page']
+            ),
+            mimetype='text/html'
         )
 
     def on_category_get(self, quoted_category=None):
@@ -543,7 +596,11 @@ class RSSCloudApplication(object):
                 if cat == all_feeds:
                     cursor = self.db.posts.find({'owner': self.user['sid'], 'read': False}).sort([('feed_id', DESCENDING), ('unix_date', DESCENDING)])
                 else:
-                    cursor = self.db.posts.find({'owner': self.user['sid'], 'read': False, 'category_id': f['category_id']}).sort([('feed_id', DESCENDING), ('unix_date', DESCENDING)])
+                    cursor = self.db.posts.find({
+                        'owner': self.user['sid'],
+                        'read': False,
+                        'category_id': f['category_id']
+                    }).sort([('feed_id', DESCENDING), ('unix_date', DESCENDING)])
             else:
                 if cat == all_feeds:
                     cursor = self.db.posts.find({'owner': self.user['sid']}).sort('unix_date', DESCENDING)
@@ -551,7 +608,13 @@ class RSSCloudApplication(object):
                     cursor = self.db.posts.find({'owner': self.user['sid'], 'category_id': f['category_id']}).sort('unix_date', DESCENDING)
             posts = []
             for post in cursor:
-                posts.append({'post': post, 'pos': post['pid'], 'category_title': by_feed[post['feed_id']]['category_title'], 'feed_title': by_feed[post['feed_id']]['title'], 'favicon': by_feed[post['feed_id']]['favicon']})
+                posts.append({
+                    'post': post,
+                    'pos': post['pid'],
+                    'category_title': by_feed[post['feed_id']]['category_title'],
+                    'feed_title': by_feed[post['feed_id']]['title'],
+                    'favicon': by_feed[post['feed_id']]['favicon']
+                })
             self.response = Response(
                 page.render(
                     posts=posts,
@@ -589,14 +652,24 @@ class RSSCloudApplication(object):
         if current_tag:
             posts = []
             if self.user['only_unread']:
-                cursor = self.db.posts.find({'owner': self.user['sid'], 'read': False, 'tags': {'$all': [tag]}}).sort([('feed_id', DESCENDING), ('unix_date', DESCENDING)])
+                cursor = self.db.posts.find({
+                    'owner': self.user['sid'],
+                    'read': False,
+                    'tags': {'$all': [tag]}
+                }).sort([('feed_id', DESCENDING), ('unix_date', DESCENDING)])
             else:
                 cursor = self.db.posts.find({'owner': self.user['sid'], 'tags': {'$all': [tag]}}).sort([('feed_id', DESCENDING), ('unix_date', DESCENDING)])
             by_feed = {}
             for post in cursor:
                 if post['feed_id'] not in by_feed:
                     by_feed[post['feed_id']] = self.db.feeds.find_one({'owner': self.user['sid'], 'feed_id': post['feed_id']})
-                posts.append({'post': post, 'pos': post['pid'], 'category_title': by_feed[post['feed_id']]['category_title'], 'feed_title': by_feed[post['feed_id']]['title'], 'favicon': by_feed[post['feed_id']]['favicon']})
+                posts.append({
+                    'post': post,
+                    'pos': post['pid'],
+                    'category_title': by_feed[post['feed_id']]['category_title'],
+                    'feed_title': by_feed[post['feed_id']]['title'],
+                    'favicon': by_feed[post['feed_id']]['favicon']
+                })
             #prev_tag, next_tag = self.getPrevNextTag(tag)
             self.response = Response(
                 page.render(
@@ -626,7 +699,13 @@ class RSSCloudApplication(object):
                 cursor = self.db.posts.find({'owner': self.user['sid'], 'feed_id': current_feed['feed_id']}).sort('unix_date', DESCENDING)
             posts = []
             for post in cursor:
-                posts.append({'post': post, 'category_title': current_feed['category_title'], 'pos': post['pid'], 'feed_title': current_feed['title'], 'favicon': current_feed['favicon']})
+                posts.append({
+                    'post': post,
+                    'category_title': current_feed['category_title'],
+                    'pos': post['pid'],
+                    'feed_title': current_feed['title'],
+                    'favicon': current_feed['favicon']
+                })
             self.response = Response(
                 page.render(
                     posts=posts,
@@ -793,7 +872,9 @@ class RSSCloudApplication(object):
         if numbers_end_range > page_count:
             numbers_end_range = page_count + 1
         if page_count > 11:
-            pages_map['middle'] = [{'p': i, 'url': self.getUrlByEndpoint(endpoint=endpoint, params={'page_number': i})} for i in range(numbers_start_range, numbers_end_range)]
+            pages_map['middle'] = [
+                {'p': i, 'url': self.getUrlByEndpoint(endpoint=endpoint, params={'page_number': i})} for i in range(numbers_start_range, numbers_end_range)
+            ]
             if numbers_start_range > 1:
                 pages_map['start'] = [{'p': 'first', 'url': self.getUrlByEndpoint(endpoint=endpoint, params={'page_number': 1})}]
             if numbers_end_range <= (page_count):
@@ -876,7 +957,11 @@ class RSSCloudApplication(object):
             tags = []
             if self.user['only_unread']:
                 #cursor = self.db.tags.find({'owner': self.user['sid'], 'unread_count': {'$gt': 0}, 'tag': {'$regex': '^{0}'.format(let)}}).sort([('unread_count', DESCENDING), ('tag', ASCENDING)])
-                cursor = self.db.tags.find({'owner': self.user['sid'], 'unread_count': {'$gt': 0}, 'tag': {'$regex': '^{0}'.format(let)}}).sort([('unread_count', DESCENDING)])
+                cursor = self.db.tags.find({
+                    'owner': self.user['sid'],
+                    'unread_count': {'$gt': 0},
+                    'tag': {'$regex': '^{0}'.format(let)}
+                }).sort([('unread_count', DESCENDING)])
                 for t in cursor:
                     tags.append({'tag': t['tag'], 'url': t['local_url'], 'words': t['words'], 'count': t['unread_count']})
             else:
@@ -1086,7 +1171,7 @@ class RSSCloudApplication(object):
                     'url': self.getUrlByEndpoint(endpoint='on_tag_get', params={'quoted_tag': quote_plus(tag['local_url'])})
                 })
         else:
-            result = {'result': 'error', 'data': ''.join(err)}
+            result = {'result': 'error', 'data': ''.join(errors)}
         self.response = Response(json.dumps(result), mimetype='application/json')
 
 
@@ -1270,7 +1355,11 @@ def worker(config, routes):
                     tag = current_word[:-3]
                 if tag:
                     if tag[0] not in first_letters:
-                        first_letters[tag[0]] = {'letter': tag[0], 'local_url': getUrlByEndpoint(endpoint='on_group_by_tags_startwith_get', params={'letter': tag[0]}), 'unread_count': 0}
+                        first_letters[tag[0]] = {
+                            'letter': tag[0],
+                            'local_url': getUrlByEndpoint(endpoint='on_group_by_tags_startwith_get', params={'letter': tag[0]}),
+                            'unread_count': 0
+                        }
                     if tag not in by_tag['tags']:
                         by_tag['unread_count'] += 1
                         by_tag['tags'][tag] =  {'words': [], 'local_url': tag, 'read': False, 'tag': tag, 'owner': user['sid'], 'posts': set()} #'posts': set(), 'read_posts': set(),
@@ -1301,10 +1390,16 @@ def worker(config, routes):
                 db.feeds.insert(by_feed.values())
                 db.tags.insert(tags_list)
                 db.letters.insert({'owner': user['sid'], 'letters': first_letters, 'createdAt': datetime.utcnow()})
-                db.users.update({'sid': user['sid']}, {'$set': {'ready_flag': True, 'in_queue': False, 'message': 'You can start reading', 'createdAt': datetime.utcnow()}})
+                db.users.update(
+                    {'sid': user['sid']},
+                    {'$set': {'ready_flag': True, 'in_queue': False, 'message': 'You can start reading', 'createdAt': datetime.utcnow()}}
+                )
             except Exception as e:
                 print(e, 'Can`t save all data')
-                db.users.update({'sid': user['sid']}, {'$set': {'ready_flag': False, 'in_queue': False, 'message': 'Can`t save to database, please try later', 'createdAt': datetime.utcnow()}})
+                db.users.update(
+                    {'sid': user['sid']},
+                    {'$set': {'ready_flag': False, 'in_queue': False, 'message': 'Can`t save to database, please try later', 'createdAt': datetime.utcnow()}}
+                )
             print('saved all-', time.time() - st, len(tags_list), len(all_posts), len(by_feed))
         else:
             db.users.update({'sid': user['sid']}, {'$set': {'ready_flag': True, 'in_queue': False, 'message': 'You can start reading'}})
@@ -1379,30 +1474,42 @@ def worker(config, routes):
                                 break'''
                             for f in g['feeds']:
                                 if int(f['unread_count']) > 0:
-                                    by_feed[f['md5']] = {}
-                                    by_feed[f['md5']]['category_title'] = g['title']
-                                    by_feed[f['md5']]['category_id'] = g['title']
-                                    by_feed[f['md5']]['category_local_url'] = getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': g['title']})
-                                    by_feed[f['md5']]['feed_id'] = f['md5']
-                                    by_feed[f['md5']]['title'] = f['title']
-                                    by_feed[f['md5']]['owner'] = user['sid']
-                                    by_feed[f['md5']]['favicon'] = f['links']['links']['favicon'] if f['links']['links'].get('favicon') else None
-                                    by_feed[f['md5']]['local_url'] = getUrlByEndpoint(endpoint='on_feed_get', params={'quoted_feed': f['md5']})
-                            works.append({'host': config['yandex']['api_host'], 'url': '/posts?items_per_page=100&read_status=unread&group_id={0}'.format(g['group_id']), 'headers': headers, 'title': g['title']})
+                                    by_feed[f['md5']] = {
+                                        'category_title': g['title'],
+                                        'category_id': g['title'],
+                                        'category_local_url': getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': g['title']}),
+                                        'feed_id': f['md5'],
+                                        'title': f['title'],
+                                        'owner': user['sid'],
+                                        'favicon': f['links']['links']['favicon'] if f['links']['links'].get('favicon') else None,
+                                        'local_url': getUrlByEndpoint(endpoint='on_feed_get', params={'quoted_feed': f['md5']})
+                                    }
+                            works.append({
+                                'host': config['yandex']['api_host'],
+                                'url': '/posts?items_per_page=100&read_status=unread&group_id={0}'.format(g['group_id']),
+                                'headers': headers,
+                                'title': g['title']
+                            })
                 if 'feeds' in subscriptions:
                     for f in subscriptions['feeds']:
                         if int(f['unread_count']) > 0:
-                            by_feed[f['md5']] = {}
-                            by_feed[f['md5']]['createdAt'] = datetime.utcnow()
-                            by_feed[f['md5']]['category_title'] = no_category_name
-                            by_feed[f['md5']]['category_id'] = no_category_name
-                            by_feed[f['md5']]['category_local_url'] = getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': no_category_name})
-                            by_feed[f['md5']]['feed_id'] = f['md5']
-                            by_feed[f['md5']]['title'] = f['title']
-                            by_feed[f['md5']]['owner'] = user['sid']
-                            by_feed[f['md5']]['favicon'] =  f['links']['links']['favicon'] if f['links']['links'].get('favicon') else None
-                            by_feed[f['md5']]['local_url'] = getUrlByEndpoint(endpoint='on_feed_get', params={'quoted_feed': f['md5']})
-                            works.append({'host': config['yandex']['api_host'], 'url': '/posts?items_per_page=100&read_status=unread&md5={0}'.format(f['md5']), 'headers': headers, 'title': no_category_name})
+                            by_feed[f['md5']] = {
+                                'createdAt': datetime.utcnow(),
+                                'category_title': no_category_name,
+                                'category_id': no_category_name,
+                                'category_local_url': getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': no_category_name}),
+                                'feed_id': f['md5'],
+                                'title': f['title'],
+                                'owner': user['sid'],
+                                'favicon':  f['links']['links']['favicon'] if f['links']['links'].get('favicon') else None,
+                                'local_url': getUrlByEndpoint(endpoint='on_feed_get', params={'quoted_feed': f['md5']})
+                            }
+                            works.append({
+                                'host': config['yandex']['api_host'],
+                                'url': '/posts?items_per_page=100&read_status=unread&md5={0}'.format(f['md5']),
+                                'headers': headers,
+                                'title': no_category_name
+                            })
                 workers_downloader_pool = Pool(int(config['settings']['workers_count']))
                 posts = None
                 cateegory = None
@@ -1442,11 +1549,23 @@ def worker(config, routes):
                         category_name = feed['categories'][0]['label']
                     else:
                         category_name = no_category_name
-                        works.append({'headers': headers, 'host': config[user['provider']]['api_host'], 'url': '/reader/api/0/stream/contents?s={0}&xt=user/-/state/com.google/read&n=5000&output=json'.format(quote_plus(feed['id'])), 'category': category_name})
+                        works.append({
+                            'headers': headers,
+                            'host': config[user['provider']]['api_host'],
+                            'url': '/reader/api/0/stream/contents?s={0}&xt=user/-/state/com.google/read&n=5000&output=json'.format(quote_plus(feed['id'])),
+                            'category': category_name
+                        })
                     if category_name not in by_category:
                         by_category[category_name] = True
                         if category_name != no_category_name:
-                            works.append({'headers': headers, 'host': config[user['provider']]['api_host'], 'url': '/reader/api/0/stream/contents?s=user/-/label/{0}&xt=user/-/state/com.google/read&n=1000&output=json'.format(quote_plus(category_name)), 'category': category_name})
+                            works.append({
+                                'headers': headers,
+                                'host': config[user['provider']]['api_host'],
+                                'url': '/reader/api/0/stream/contents?s=user/-/label/{0}&xt=user/-/state/com.google/read&n=1000&output=json'.format(
+                                    quote_plus(category_name)
+                                ),
+                                'category': category_name
+                            })
                 workers_downloader_pool = Pool(int(config['settings']['workers_count']))
                 posts = None
                 category = None
@@ -1494,7 +1613,10 @@ def worker(config, routes):
                                     #by_feed[post['origin']['streamId']]['favicon'] = all_posts[-1]['url']
                                     #favicon_works.append((all_posts[-1]['url'], post['origin']['streamId'], favicon_url_re))'''
                                     parsed_url = urlparse(all_posts[-1]['url'])
-                                    by_feed[post['origin']['streamId']]['favicon'] = '{0}://{1}/favicon.ico'.format(parsed_url.scheme if parsed_url.scheme else 'http', parsed_url.netloc)
+                                    by_feed[post['origin']['streamId']]['favicon'] = '{0}://{1}/favicon.ico'.format(
+                                        parsed_url.scheme if parsed_url.scheme else 'http',
+                                        parsed_url.netloc
+                                    )
                                     #by_feed[post['origin']['streamId']]['favicon'] = getFaviconUrl(all_posts[-1]['url'])
                         treatPosts(category, p_range)
                 workers_downloader_pool.terminate()
