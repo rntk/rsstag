@@ -1798,6 +1798,10 @@ if __name__ == '__main__':
     if len(sys.argv) > 1:
         config_path = sys.argv[1]
     app = RSSCloudApplication(config_path)
+    try:
+        logging.basicConfig(filename=app.config['settings']['log_file'], filemode='a', level=getattr(logging, app.config['settings']['log_level'].upper()))
+    except Exception as e:
+        logging.critical('Error in logging configuration: %s', e)
     if app:
         try:
             run_simple(app.config['settings']['host'], int(app.config['settings']['port']), app.setResponse)
