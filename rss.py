@@ -39,7 +39,7 @@ class RSSCloudApplication(object):
     workers_pool = []
     providers = []
     user_ttl = 0
-    count_showed_nubmers = 4
+    count_showed_numbers = 4
     db = None
     allow_not_logged = (
         'on_root_get',
@@ -855,8 +855,8 @@ class RSSCloudApplication(object):
 
     def calcPagerData(self, p_number, page_count, items_per_page, endpoint):
         pages_map = {}
-        numbers_start_range = p_number - self.count_showed_nubmers + 1
-        numbers_end_range = p_number + self.count_showed_nubmers + 1
+        numbers_start_range = p_number - self.count_showed_numbers + 1
+        numbers_end_range = p_number + self.count_showed_numbers + 1
         if numbers_start_range <= 0:
             numbers_start_range = 1
         if numbers_end_range > page_count:
@@ -1502,7 +1502,7 @@ def worker(config, routes):
                             })
                 workers_downloader_pool = Pool(int(config['settings']['workers_count']))
                 posts = None
-                cateegory = None
+                category = None
                 for posts, category in workers_downloader_pool.imap(downloader_yandex, works, 1):
                     if posts:
                         old_count = len(all_posts)
