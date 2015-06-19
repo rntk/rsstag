@@ -45,7 +45,6 @@ class RSSCloudApplication(object):
         'on_root_get',
         'on_login_get',
         'on_login_post',
-        'on_code_get',
         'on_select_provider_post',
         'on_select_provider_get',
         'on_static_get',
@@ -72,7 +71,6 @@ class RSSCloudApplication(object):
             self.prepareDB()
             self.routes = Map([
                 Rule('/', endpoint='on_root_get', methods=['GET', 'HEAD']),
-                Rule('/code', endpoint='on_code_get', methods=['GET', 'HEAD']),
                 Rule('/login', endpoint='on_login_get', methods=['GET', 'HEAD']),
                 Rule('/login', endpoint='on_login_post', methods=['POST']),
                 Rule('/provider', endpoint='on_select_provider_get', methods=['GET', 'HEAD']),
@@ -250,43 +248,6 @@ class RSSCloudApplication(object):
                 url = next(self.routes.iter_rules(endpoint=endpoint))
         return(url)
 
-    def on_code_get(self):
-        err = []
-        provider = self.request.cookies.get('provider')
-        if self.user:
-            self.user['provider'] = provider
-        else:
-            self.user = {'provider': provider}
-        if self.user['provider'] == 'yandex':
-            connection = client.HTTPSConnection(self.config['yandex']['oauth_host'])
-            body = 'grant_type=authorization_code&code={0}&client_id={1}&client_secret={2}'.format(
-                self.request.args['code'], self.config['yandex']['id'], self.config['yandex']['secret']
-            )
-            try:
-                connection.request('POST', '/token', body)
-            except Exception as e:
-                err.append('Can`t make request to Yandex. {0}'.format(e))
-            resp = connection.getresponse()
-            try:
-                resp_dict = json.loads(resp.read().decode('utf-8'))
-            except Exception as e:
-                err.append('Can`t encode json. {0}'.format(e))
-            connection.close()
-            token = resp_dict.get('access_token')
-            if token:
-                self.user['token'] = token
-                self.createNewSession()
-                if not self.user:
-                    err.append('Cant create session, try later')
-            else:
-                err.append('Can`t get token')
-        if not err:
-            #self.response = redirect(self.getUrlByEndpoint(endpoint='on_root_get'))
-            self.response = redirect(self.getUrlByEndpoint(endpoint='on_refresh_get_post'))
-        else:
-            page = self.template_env.get_template('error.html')
-            self.response = Response(page.render(err=err), mimetype='text/html')
-
     def on_select_provider_get(self):
         page = self.template_env.get_template('provider.html')
         self.response = Response(page.render(
@@ -318,14 +279,6 @@ class RSSCloudApplication(object):
                     support=self.config['settings']['support'],
                     provider=provider
                 ), mimetype='text/html')
-            elif provider == 'yandex':
-                self.response = redirect(
-                    'https://oauth.yandex.ru/authorize?response_type=code&client_id={0}&client_secret={1}&redirect_uri={2}'.format(
-                        self.config['yandex']['id'],
-                        self.config['yandex']['secret'],
-                        self.getUrlByEndpoint(endpoint='on_code_get', full_url=True)
-                    )
-                )
         else:
             page = self.template_env.get_template('error.html')
             self.response = Response(page.render(
@@ -713,16 +666,7 @@ class RSSCloudApplication(object):
                 tags = {}
                 current_data = None
                 for_insert = []
-                if self.user['provider'] == 'yandex':
-                    current_data = self.db.posts.find({'owner': self.user['sid'], 'read': not status, 'pid': {'$in': posts}}, fields=['links', 'tags'])
-                    for d in current_data:
-                        for_insert.append({'user': self.user['_id'], 'url': d['links']['meta'], 'status': status})
-                        for t in d['tags']:
-                            if t in tags:
-                                tags[t] += 1
-                            else:
-                                tags[t] = 1
-                elif (self.user['provider'] == 'bazqux') or (self.user['provider'] == 'inoreader'):
+                if (self.user['provider'] == 'bazqux') or (self.user['provider'] == 'inoreader'):
                     current_data = self.db.posts.find({'owner': self.user['sid'], 'read': not status, 'pid': {'$in': posts}}, fields=['id', 'tags'])
                     for d in current_data:
                         for_insert.append({'user': self.user['_id'], 'id': d['id'], 'status': status})
@@ -752,10 +696,7 @@ class RSSCloudApplication(object):
                     err.append('Database error')
                 self.db.posts.update({'owner': self.user['sid'], 'read': not status, 'pid': {'$in': posts}}, {'$set': {'read': status}}, multi=True)
             else:
-                if self.user['provider'] == 'yandex':
-                    current_post = self.db.posts.find_one({'owner': self.user['sid'], 'pid': post_id}, fields=['links', 'tags'])
-                    self.db.mark_queue.insert({'user': self.user['_id'], 'url': current_post['links']['meta'], 'status': status})
-                elif (self.user['provider'] == 'bazqux') or (self.user['provider'] == 'inoreader'):
+                if (self.user['provider'] == 'bazqux') or (self.user['provider'] == 'inoreader'):
                     current_post = self.db.posts.find_one({'owner': self.user['sid'], 'pid': post_id}, fields=['id', 'tags'])
                     self.db.mark_queue.insert({'user': self.user['_id'], 'id': current_post['id'], 'status': status})
                     self.db.posts.update({'owner': self.user['sid'], 'pid': post_id}, {'$set': {'read': status}})
@@ -1150,70 +1091,6 @@ def downloader_bazqux(data):
         logging.warning('Downloaded, category with strange symbols')
     return(result, data['category'])
 
-def downloader_yandex(data):
-    try:
-        logging.info('Start downloading, %s', data['title'])
-    except Exception as e:
-        logging.warning('Start downloading, category with strange symbols')
-    result = {'posts' : []}
-    connection = client.HTTPSConnection(data['host'])
-    '''if data['title'] == 'Kz':
-        posts = {'navigation': {'next' : ''.join([data['url'], '&format=json'])}}
-    else:'''
-    posts = {'navigation': {'next' : data['url']}}
-    counter_for_downloads = 0
-    counter_for_parse = 0
-    while posts['navigation'].get('next') is not None:
-        try:
-            '''f = open('log/{0}_urls'.format(data['title']), 'a')
-            f.write(''.join([posts['navigation']['next'], '&format=json', '\n']))
-            f.close()'''
-            '''if data['title'] == 'Kz':
-                connection.request('GET', posts['navigation']['next'], '', data['headers'])
-            else:    '''
-            connection.request('GET', ''.join([posts['navigation']['next'], '&format=json']), '', data['headers'])
-            resp = connection.getresponse()
-            json_data = resp.read()
-            if data['title'] == 'Kz':
-                f = open('log/{0}_urlsy'.format(data['title']), 'a')
-                f.write('{0}\r\n{1}\r\n'.format(posts['navigation']['next'], json_data.decode('utf-8', 'ignore')))
-                f.close()
-        except Exception as e:
-            if counter_for_downloads >= 10:
-                posts = {'navigation': {'next' : None}}
-                counter_for_downloads = 0
-            else:
-                counter_for_downloads += 1
-            logging.error('%s: %s %s %s', e, data['title'], posts['navigation'].get('next'), counter_for_downloads)
-            time.sleep(2)
-            continue
-        try:
-            posts = json.loads(json_data.decode('utf-8', 'ignore'))
-        except Exception as e:
-            if counter_for_parse >= 5:
-                posts = {'navigation': {'next' : None}}
-                counter_for_parse = 0
-            else:
-                counter_for_parse += 1
-            f = open('log/{0}_jsonfuckedup'.format(data['title']), 'a')
-            f.write(json_data.decode('utf-8', 'ignore'))
-            f.close()
-            f = open('log/{0}_urls'.format(data['title']), 'a')
-            f.write(json_data.decode('utf-8', 'ignore'))
-            f.close()
-            logging.error('%s: %s %s %s', e, data['title'], 'parse error', counter_for_parse, posts['navigation'].get('next'))
-            time.sleep(2)
-            continue
-        result['posts'].extend(posts['posts'])
-    connection.close()
-    if not result['posts']:
-        result = None
-    try:
-        logging.info('Downloaded, %s', data['title'])
-    except Exception as e:
-        logging.warning('Downloaded, category with strange symbols')
-    return(result, data['title'])
-
 def worker(config, routes):
     name = str(randint(0, 10000))
     no_category_name = 'NotCategorized'
@@ -1383,81 +1260,7 @@ def worker(config, routes):
             db.tags.remove({'owner': user['sid']})
             db.letters.remove({'owner': user['sid']})
             host = data['host']
-            if user['provider'] == 'yandex':
-                headers = {'AUTHORIZATION': 'OAuth {0}'.format(user['token'])}
-                connection = client.HTTPSConnection(config['yandex']['api_host'])
-                connection.request('GET', '/subscriptions?format=json', '', headers)
-                resp = connection.getresponse()
-                json_data = resp.read()
-                connection.close()
-                subscriptions = json.loads(json_data.decode('utf-8'))
-                works = []
-                if 'groups' in subscriptions:
-                    for i, g in enumerate(subscriptions['groups']):
-                        if int(g['unread_count']) > 0:
-                            '''if i == 3:
-                                break'''
-                            for f in g['feeds']:
-                                if int(f['unread_count']) > 0:
-                                    by_feed[f['md5']] = {
-                                        'category_title': g['title'],
-                                        'category_id': g['title'],
-                                        'category_local_url': getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': g['title']}),
-                                        'feed_id': f['md5'],
-                                        'title': f['title'],
-                                        'owner': user['sid'],
-                                        'favicon': f['links']['links']['favicon'] if f['links']['links'].get('favicon') else None,
-                                        'local_url': getUrlByEndpoint(endpoint='on_feed_get', params={'quoted_feed': f['md5']})
-                                    }
-                            works.append({
-                                'host': config['yandex']['api_host'],
-                                'url': '/posts?items_per_page=100&read_status=unread&group_id={0}'.format(g['group_id']),
-                                'headers': headers,
-                                'title': g['title']
-                            })
-                if 'feeds' in subscriptions:
-                    for f in subscriptions['feeds']:
-                        if int(f['unread_count']) > 0:
-                            by_feed[f['md5']] = {
-                                'createdAt': datetime.utcnow(),
-                                'category_title': no_category_name,
-                                'category_id': no_category_name,
-                                'category_local_url': getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': no_category_name}),
-                                'feed_id': f['md5'],
-                                'title': f['title'],
-                                'owner': user['sid'],
-                                'favicon':  f['links']['links']['favicon'] if f['links']['links'].get('favicon') else None,
-                                'local_url': getUrlByEndpoint(endpoint='on_feed_get', params={'quoted_feed': f['md5']})
-                            }
-                            works.append({
-                                'host': config['yandex']['api_host'],
-                                'url': '/posts?items_per_page=100&read_status=unread&md5={0}'.format(f['md5']),
-                                'headers': headers,
-                                'title': no_category_name
-                            })
-                workers_downloader_pool = Pool(int(config['settings']['workers_count']))
-                posts = None
-                category = None
-                for posts, category in workers_downloader_pool.imap(downloader_yandex, works, 1):
-                    if posts:
-                        old_count = len(all_posts)
-                        p_range = (old_count, old_count + len(posts['posts']))
-                        for i, p in enumerate(posts['posts']):
-                            posts['posts'][i]['content']['content'] = gzip.compress(posts['posts'][i]['content']['content'].encode('utf-8', 'replace'))
-                            if p.get('issued'):
-                                dt = datetime.strptime(p['issued'], '%Y-%m-%dT%XZ')
-                                posts['posts'][i]['date'] = dt.strftime('%x %X')
-                                posts['posts'][i]['unix_date'] = dt.timestamp()
-                            else:
-                                posts['posts'][i]['date'] = -1
-                                posts['posts'][i]['unix_date'] = -1
-                        all_posts.extend(posts['posts'])
-                        start = p_range[0]
-                        st = time.strftime('%X', time.localtime())
-                        treatPosts(category, p_range)
-                        logging.info('%s %s %s %s', p_range, st, time.strftime('%X', time.localtime()), category)
-                workers_downloader_pool.terminate()
-            elif (user['provider'] == 'bazqux') or (user['provider'] == 'inoreader'):
+            if (user['provider'] == 'bazqux') or (user['provider'] == 'inoreader'):
                 connection = client.HTTPSConnection(config[user['provider']]['api_host'])
                 headers = {'Authorization': 'GoogleLogin auth={0}'.format(user['token'])}
                 connection.request('GET', '/reader/api/0/subscription/list?output=json', '', headers)
@@ -1551,68 +1354,7 @@ def worker(config, routes):
             saveAllData()
         elif type == 'mark':
             status = data['status']
-            if user['provider'] == 'yandex':
-                headers = {'AUTHORIZATION': 'OAuth {0}'.format(user['token'])}
-                err = []
-                url = data['url']
-                counter = 0
-                while (counter < 6):
-                    connection = client.HTTPSConnection(config[user['provider']]['api_host'])
-                    counter += 1
-                    try:
-                        xml_data = None
-                        connection.request('GET', url, '', headers)
-                        resp = connection.getresponse()
-                        xml_data = resp.read()
-                    except Exception as e:
-                        connection.close()
-                        connection = client.HTTPSConnection(config[user['provider']]['api_host'])
-                        logging.error('Can not GET meta info: %s %s %s %s', e,  url, xml_data, e.args)
-                        err.append(str(e))
-                    if not err:
-                        try:
-                            post_meta = parseString(xml_data)
-                        except Exception as e:
-                            logging.error('Can not parse data: %s', e)
-                            err.append(str(e))
-                        if not err:
-                            try:
-                                if status and (len(post_meta.getElementsByTagName('read')) == 0):
-                                    r = post_meta.createElement('read')
-                                    post_meta.getElementsByTagName('post')[0].appendChild(r)
-                                elif not status and (len(post_meta.getElementsByTagName('read')) > 0):
-                                    post_meta.getElementsByTagName('post')[0].removeChild(post_meta.getElementsByTagName('read')[0])
-                            except Exception as e:
-                                logging.error('Can not working with xml: %s', e)
-                                err.append(str(e))
-                            if not err:
-                                try:
-                                    connection.close()
-                                    connection = client.HTTPSConnection(config[user['provider']]['api_host'])
-                                    connection.request('PUT', url, post_meta.toxml(), headers)
-                                    resp = connection.getresponse()
-                                    xml_data = resp.read()
-                                except Exception as e:
-                                    logging.error('Can not put meta info to server: %s', e)
-                                    err.append(str(e))
-                                if not err:
-                                    try:
-                                        result_dom = parseString(xml_data)
-                                    except Exception as e:
-                                        logging.error('Can not parse response after putting data: %s', e)
-                                        err.append(str(e))
-                                    if not err:
-                                        if len(result_dom.getElementsByTagName('ok')) == 0:
-                                            err.append(xml_data.decode('utf-8', 'ignore'))
-                                            logging.error('%s, try again %s', err, counter)
-                                            time.sleep(randint(2, 7))
-                                        else:
-                                            counter = 6
-                                            #print('marked', name)
-                                            post_meta.unlink()
-                                            result_dom.unlink()
-                connection.close()
-            elif (user['provider'] == 'bazqux') or (user['provider'] == 'inoreader'):
+            if (user['provider'] == 'bazqux') or (user['provider'] == 'inoreader'):
                 id = data['id']
                 headers = {'Authorization': 'GoogleLogin auth={0}'.format(user['token']), 'Content-type': 'application/x-www-form-urlencoded'}
                 err = []
