@@ -7,6 +7,7 @@ from http import client
 import time
 #import pickle
 import gzip
+import logging
 from collections import OrderedDict
 from datetime import date, datetime
 from random import randint
@@ -103,8 +104,7 @@ class RSSCloudApplication(object):
                     self.workers_pool.append(Process(target=worker, args=(self.config, self.routes)))
                     self.workers_pool[-1].start()
         else:
-            print('Can`t load config file "{}"'.format(config_path))
-            return None
+            logging.critical('Can`t load config file "{}"'.format(config_path))
 
     def prepareDB(self):
         self.db.posts.ensure_index([('owner', 1)])
@@ -136,7 +136,7 @@ class RSSCloudApplication(object):
         if self.workers_pool:
             for p in self.workers_pool:
                 p.terminate()
-        print('Goodbye!')
+        logging.info('Goodbye!')
 
     def updateEndpoints(self):
         for i in self.routes.iter_rules():
@@ -174,7 +174,7 @@ class RSSCloudApplication(object):
                     )
                 except Exception as e:
                     self.user = None
-                    print(e, 'Can`t create new session')
+                    logging.error('Can`t create new session: %s', e)
         else:
             self.user['sid'] = sha256(os.urandom(randint(80, 200))).hexdigest()
             self.user['letter'] = ''
@@ -190,7 +190,7 @@ class RSSCloudApplication(object):
                 self.db.users.insert(self.user)
             except Exception as e:
                 self.user = None
-                print(e, 'Can`t create new session')
+                logging.error('Can`t create new session: %s', e)
         self.user = self.db.users.find_one({'sid': self.user['sid']})
 
     def getPageCount(self, items_count, items_on_page_count):
@@ -212,10 +212,10 @@ class RSSCloudApplication(object):
         r = c.getresponse()
         favicon_url = None
         new_host = None
-        print(r.status, host)
+        logging.info('%s %s', r.status, host)
         if r.status != 200:
             favicon_url = None
-            print('try get from page', host)
+            logging.info('try get from page %s', host)
             c.close()
             c = client.HTTPConnection(host)
             c.request('GET', root_url)
@@ -223,25 +223,25 @@ class RSSCloudApplication(object):
             if r.status == 301:
                 c.close()
                 new_host = urlparse(r.getheader('Location')).netloc
-                print('redirected', new_host)
+                logging.info('redirected %s', new_host)
                 c = client.HTTPConnection(new_host)
                 c.request('HEAD', url)
                 r = c.getresponse()
                 if r.status == 200:
-                    print('found on redirect root')
+                    logging.info('found on redirect root')
                     favicon_url = 'http://{0}{1}'.format(new_host, url)
                 else:
                     c.close()
-                    print('try get from redirected page')
+                    logging.info('try get from redirected page')
                     c = client.HTTPConnection(new_host)
                     c.request('GET', root_url)
                     r = c.getresponse()
             if not favicon_url:
                 if r.status == 200:
                     page = r.read()
-                    print('parse page')
+                    logging.info('parse page')
                     result = self.favicon_url_re.search(page.decode('utf-8', 'ignore'))
-                    print('page parsed')
+                    logging.info('page parsed')
                     if result:
                         favicon_url = result.group(1)
                         parsed_url = urlparse(favicon_url)
@@ -254,13 +254,13 @@ class RSSCloudApplication(object):
                                 h = host
                             favicon_url = 'http://{0}/{1}'.format(h, parsed_url.path)
                     else:
-                        print('not found on page')
+                        logging.info('not found on page')
                         favicon_url = None
                 else:
-                    print('page not found')
+                    logging.info('page not found')
                     favicon_url = None
         else:
-            print('all ok')
+            logging.info('all ok')
             favicon_url = 'http://{0}{1}'.format(host, url)
         c.close()
         return(favicon_url)
@@ -272,7 +272,7 @@ class RSSCloudApplication(object):
         self.prepareSession()
         try:
             handler, values = adapter.match()
-            print(handler, end=' - ')
+            logging.info('%s', handler)
             if self.user and self.user['ready_flag']:
                 self.endpoints[handler](**values)
             else:
@@ -287,7 +287,7 @@ class RSSCloudApplication(object):
             #self.response.set_cookie('sid', self.user['sid'])
         self.request.close()
         self.response.headers['X-Frame-Options'] = 'SAMEORIGIN'
-        print(time.time() - st)
+        logging.info('%s', time.time() - st)
         return(self.response(http_env, start_resp))
 
     def setConfig(self, config_name):
@@ -299,7 +299,7 @@ class RSSCloudApplication(object):
                 self.config = c
                 result = True
             except Exception as e:
-                print('Can`t load config: ', e)
+                logging.critical('Can`t load config: %s', e)
                 result = False
         return(result)
 
@@ -799,7 +799,7 @@ class RSSCloudApplication(object):
                 try:
                     self.db.mark_queue.insert(for_insert)
                 except Exception as e:
-                    print('Can`t push in mark queue: {}'.format(e))
+                    logging.error('Can`t push in mark queue: {}'.format(e))
                     err.append('Database error')
                 bulk = self.db.tags.initialize_unordered_bulk_op()
                 if status:
@@ -813,7 +813,7 @@ class RSSCloudApplication(object):
                 try:
                     bulk.execute()
                 except Exception as e:
-                    print(e, 'Bulk failed in on_read_posts_post')
+                    logging.error('Bulk failed in on_read_posts_post: %s', e)
                     err.append('Database error')
                 self.db.posts.update({'owner': self.user['sid'], 'read': not status, 'pid': {'$in': posts}}, {'$set': {'read': status}}, multi=True)
             else:
@@ -832,7 +832,7 @@ class RSSCloudApplication(object):
                     first_letters[t[0]]['unread_count'] += incr
                 self.db.tags.update({'owner': self.user['sid'], 'tag': {'$in': current_post['tags']}}, {'$inc': {'unread_count': incr}}, multi=True)
             self.db.letters.update({'owner': self.user['sid']}, {'$set': {'letters': first_letters}})
-            print(time.time() - st)
+            logging.info('%s', time.time() - st)
         self.response = Response('{{"result": "{0}"}}'.format(''.join(err)), mimetype='application/json')
 
     def fillFirstLetters(self):
@@ -1178,9 +1178,9 @@ def getSortedDictByAlphabet(dct, type=None):
 
 def downloader_bazqux(data):
     try:
-        print('Start downloading, ', data['category'])
+        logging.info('Start downloading, %s', data['category'])
     except Exception as e:
-        print('Start downloading, category with strange symbols')
+        logging.warning('Start downloading, category with strange symbols')
     counter_for_downloads = 0
     result = {'items': []}
     again = True;
@@ -1199,7 +1199,7 @@ def downloader_bazqux(data):
                 result['items'].extend(tmp_result['items'])
                 url = data['url'] + '&c={0}'.format(tmp_result['continuation'])
         except Exception as e:
-            print(e, data['category'], counter_for_downloads, url)
+            logging.error('%s: %s %s %s', e, data['category'], counter_for_downloads, url)
             if counter_for_downloads == 5:
                 again = False
             else:
@@ -1210,16 +1210,16 @@ def downloader_bazqux(data):
             f.write(json_data.decode('utf-8'))
             f.close()
     try:
-        print('Downloaded, ', data['category'])
+        logging.info('Downloaded, %s', data['category'])
     except Exception as e:
-        print('Downloaded, category with strange symbols')
+        logging.warning('Downloaded, category with strange symbols')
     return(result, data['category'])
 
 def downloader_yandex(data):
     try:
-        print('Start downloading, ', data['title'])
+        logging.info('Start downloading, %s', data['title'])
     except Exception as e:
-        print('Start downloading, category with strange symbols')
+        logging.warning('Start downloading, category with strange symbols')
     result = {'posts' : []}
     connection = client.HTTPSConnection(data['host'])
     '''if data['title'] == 'Kz':
@@ -1249,7 +1249,7 @@ def downloader_yandex(data):
                 counter_for_downloads = 0
             else:
                 counter_for_downloads += 1
-            print(e, data['title'], posts['navigation'].get('next'), counter_for_downloads)
+            logging.error('%s: %s %s %s', e, data['title'], posts['navigation'].get('next'), counter_for_downloads)
             time.sleep(2)
             continue
         try:
@@ -1266,7 +1266,7 @@ def downloader_yandex(data):
             f = open('log/{0}_urls'.format(data['title']), 'a')
             f.write(json_data.decode('utf-8', 'ignore'))
             f.close()
-            print(e, data['title'], 'parse error', counter_for_parse, posts['navigation'].get('next'))
+            logging.error('%s: %s %s %s', e, data['title'], 'parse error', counter_for_parse, posts['navigation'].get('next'))
             time.sleep(2)
             continue
         result['posts'].extend(posts['posts'])
@@ -1274,9 +1274,9 @@ def downloader_yandex(data):
     if not result['posts']:
         result = None
     try:
-        print('Downloaded, ', data['title'])
+        logging.info('Downloaded, %s', data['title'])
     except Exception as e:
-        print('Downloaded, category with strange symbols')
+        logging.warning('Downloaded, category with strange symbols')
     return(result, data['title'])
 
 def worker(config, routes):
@@ -1302,9 +1302,9 @@ def worker(config, routes):
 
     def treatPosts(category=None, p_range=None):
         try:
-            print('treating', category)
+            logging.info('treating %s', category)
         except Exception as e:
-            print('treating category with strange symbols')
+            logging.warning('treating category with strange symbols')
         for pos in range(p_range[0], p_range[1]):
             if not all_posts[pos]['content']['title']:
                 all_posts[pos]['content']['title'] = 'Notitle'
@@ -1359,9 +1359,9 @@ def worker(config, routes):
                     if tag not in all_posts[pos]['tags']:
                         all_posts[pos]['tags'].append(tag)
         try:
-            print('treated', category)
+            logging.info('treated %s', category)
         except Exception as e:
-            print('treated category with strange symbols')
+            logging.warning('treated category with strange symbols')
         return(p_range)
 
     def saveAllData():
@@ -1385,15 +1385,15 @@ def worker(config, routes):
                     {'$set': {'ready_flag': True, 'in_queue': False, 'message': 'You can start reading', 'createdAt': datetime.utcnow()}}
                 )
             except Exception as e:
-                print(e, 'Can`t save all data')
+                logging.error('Can`t save all data: %s', e)
                 db.users.update(
                     {'sid': user['sid']},
                     {'$set': {'ready_flag': False, 'in_queue': False, 'message': 'Can`t save to database, please try later', 'createdAt': datetime.utcnow()}}
                 )
-            print('saved all-', time.time() - st, len(tags_list), len(all_posts), len(by_feed))
+            logging.info('saved all-%s %s %s %s', time.time() - st, len(tags_list), len(all_posts), len(by_feed))
         else:
             db.users.update({'sid': user['sid']}, {'$set': {'ready_flag': True, 'in_queue': False, 'message': 'You can start reading'}})
-            print('Nothing to save')
+            logging.warning('Nothing to save')
 
     def getUrlByEndpoint(endpoint=None, params=None, full_url=False):
         url = None
@@ -1413,7 +1413,7 @@ def worker(config, routes):
             data = db.download_queue.find_and_modify({}, remove=True)
         except Exception as e:
             data = None
-            print('Worker can`t get data from queue: {}'.format(e))
+            logging.error('Worker can`t get data from queue: {}'.format(e))
         if data:
             user_id = data['user']
             type = 'download'
@@ -1422,7 +1422,7 @@ def worker(config, routes):
                 data = db.mark_queue.find_and_modify({}, remove=True)
             except Exception as e:
                 data = None
-                print('Worker can`t get data from queue: {}'.format(e))
+                logging.error('Worker can`t get data from queue: {}'.format(e))
             if data:
                 user_id = data['user']
                 type = 'mark'
@@ -1520,7 +1520,7 @@ def worker(config, routes):
                         start = p_range[0]
                         st = time.strftime('%X', time.localtime())
                         treatPosts(category, p_range)
-                        print(p_range, st, time.strftime('%X', time.localtime()), category)
+                        logging.info('%s %s %s %s', p_range, st, time.strftime('%X', time.localtime()), category)
                 workers_downloader_pool.terminate()
             elif (user['provider'] == 'bazqux') or (user['provider'] == 'inoreader'):
                 connection = client.HTTPSConnection(config[user['provider']]['api_host'])
@@ -1645,13 +1645,13 @@ def worker(config, routes):
                     except Exception as e:
                         connection.close()
                         connection = client.HTTPSConnection(config[user['provider']]['api_host'])
-                        print(e, 'can not GET meta info', url, xml_data, e.args)
+                        logging.error('Can not GET meta info: %s %s %s %s', e,  url, xml_data, e.args)
                         err.append(str(e))
                     if not err:
                         try:
                             post_meta = parseString(xml_data)
                         except Exception as e:
-                            print(e, 'can not parse data')
+                            logging.error('Can not parse data: %s', e)
                             err.append(str(e))
                         if not err:
                             try:
@@ -1661,7 +1661,7 @@ def worker(config, routes):
                                 elif not status and (len(post_meta.getElementsByTagName('read')) > 0):
                                     post_meta.getElementsByTagName('post')[0].removeChild(post_meta.getElementsByTagName('read')[0])
                             except Exception as e:
-                                print(e, 'can not working with xml')
+                                logging.error('Can not working with xml: %s', e)
                                 err.append(str(e))
                             if not err:
                                 try:
@@ -1671,18 +1671,18 @@ def worker(config, routes):
                                     resp = connection.getresponse()
                                     xml_data = resp.read()
                                 except Exception as e:
-                                    print(e, 'can not put meta info to server')
+                                    logging.error('Can not put meta info to server: %s', e)
                                     err.append(str(e))
                                 if not err:
                                     try:
                                         result_dom = parseString(xml_data)
                                     except Exception as e:
-                                        print(e, 'can not parse response after putting data')
+                                        logging.error('Can not parse response after putting data: %s', e)
                                         err.append(str(e))
                                     if not err:
                                         if len(result_dom.getElementsByTagName('ok')) == 0:
                                             err.append(xml_data.decode('utf-8', 'ignore'))
-                                            print(err, 'try again', counter)
+                                            logging.error('%s, try again %s', err, counter)
                                             time.sleep(randint(2, 7))
                                         else:
                                             counter = 6
@@ -1711,7 +1711,7 @@ def worker(config, routes):
                     except Exception as e:
                         err.append(str(e))
                         connection.close()
-                        print('Can`t make request', e, counter)
+                        logging.warning('Can`t make request %s %s', e, counter)
                     if not err:
                         if resp_data.decode('utf-8').lower() == 'ok':
                             #print('marked')
@@ -1719,9 +1719,9 @@ def worker(config, routes):
                         else:
                             time.sleep(randint(2, 7))
                             if counter < 6 :
-                                print('try again')
+                                logging.warning('try again')
                             else:
-                                print('not marked', resp_data)
+                                logging.warning('not marked %s', resp_data)
                 connection.close()
 
 def getFaviconUrl(data):
@@ -1798,11 +1798,15 @@ if __name__ == '__main__':
     if len(sys.argv) > 1:
         config_path = sys.argv[1]
     app = RSSCloudApplication(config_path)
+    try:
+        logging.basicConfig(filename=app.config['settings']['log_file'], filemode='a', level=getattr(logging, app.config['settings']['log_level'].upper()))
+    except Exception as e:
+        logging.critical('Error in logging configuration: %s', e)
     if app:
         try:
             run_simple(app.config['settings']['host'], int(app.config['settings']['port']), app.setResponse)
         except Exception as e:
-            print(e)
+            logging.error(e)
             app.close()
     else:
-        print('`Can`t start server')
+        logging.critical('Can`t start server')
