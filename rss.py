@@ -39,7 +39,7 @@ class RSSCloudApplication(object):
     workers_pool = []
     providers = []
     user_ttl = 0
-    count_showed_nubmers = 4
+    count_showed_numbers = 4
     db = None
     allow_not_logged = (
         'on_root_get',
@@ -70,7 +70,6 @@ class RSSCloudApplication(object):
             cl = MongoClient(self.config['settings']['db_host'], int(self.config['settings']['db_port']))
             self.db = cl.rss
             self.prepareDB()
-            #self.favicon_url_re = re.compile(r'(?imu)<link.*?rel.*?href.{0,2}=.{0,2}"(.*favicon.*?)"')
             self.routes = Map([
                 Rule('/', endpoint='on_root_get', methods=['GET', 'HEAD']),
                 Rule('/code', endpoint='on_code_get', methods=['GET', 'HEAD']),
@@ -200,70 +199,6 @@ class RSSCloudApplication(object):
         elif (page_count[1] > 0) or (page_count[0] == 0):
             page_count = page_count[0] + 1
         return(page_count)
-
-    def getFaviconUrl(self, url):
-        parsed_url = urlparse(url)
-        host = parsed_url.netloc
-        url = '/favicon.ico'
-        root_url = '/'
-        favicon_url = None
-        c = client.HTTPConnection(host)
-        c.request('HEAD', url)
-        r = c.getresponse()
-        favicon_url = None
-        new_host = None
-        logging.info('%s %s', r.status, host)
-        if r.status != 200:
-            favicon_url = None
-            logging.info('try get from page %s', host)
-            c.close()
-            c = client.HTTPConnection(host)
-            c.request('GET', root_url)
-            r = c.getresponse()
-            if r.status == 301:
-                c.close()
-                new_host = urlparse(r.getheader('Location')).netloc
-                logging.info('redirected %s', new_host)
-                c = client.HTTPConnection(new_host)
-                c.request('HEAD', url)
-                r = c.getresponse()
-                if r.status == 200:
-                    logging.info('found on redirect root')
-                    favicon_url = 'http://{0}{1}'.format(new_host, url)
-                else:
-                    c.close()
-                    logging.info('try get from redirected page')
-                    c = client.HTTPConnection(new_host)
-                    c.request('GET', root_url)
-                    r = c.getresponse()
-            if not favicon_url:
-                if r.status == 200:
-                    page = r.read()
-                    logging.info('parse page')
-                    result = self.favicon_url_re.search(page.decode('utf-8', 'ignore'))
-                    logging.info('page parsed')
-                    if result:
-                        favicon_url = result.group(1)
-                        parsed_url = urlparse(favicon_url)
-                        if (not parsed_url.scheme) or (not parsed_url.netloc):
-                            if parsed_url.netloc:
-                                h = parsed_url.netloc
-                            elif new_host:
-                                h = new_host
-                            else:
-                                h = host
-                            favicon_url = 'http://{0}/{1}'.format(h, parsed_url.path)
-                    else:
-                        logging.info('not found on page')
-                        favicon_url = None
-                else:
-                    logging.info('page not found')
-                    favicon_url = None
-        else:
-            logging.info('all ok')
-            favicon_url = 'http://{0}{1}'.format(host, url)
-        c.close()
-        return(favicon_url)
 
     def setResponse(self, http_env, start_resp):
         self.request = Request(http_env)
@@ -855,8 +790,8 @@ class RSSCloudApplication(object):
 
     def calcPagerData(self, p_number, page_count, items_per_page, endpoint):
         pages_map = {}
-        numbers_start_range = p_number - self.count_showed_nubmers + 1
-        numbers_end_range = p_number + self.count_showed_nubmers + 1
+        numbers_start_range = p_number - self.count_showed_numbers + 1
+        numbers_end_range = p_number + self.count_showed_numbers + 1
         if numbers_start_range <= 0:
             numbers_start_range = 1
         if numbers_end_range > page_count:
@@ -1502,7 +1437,7 @@ def worker(config, routes):
                             })
                 workers_downloader_pool = Pool(int(config['settings']['workers_count']))
                 posts = None
-                cateegory = None
+                category = None
                 for posts, category in workers_downloader_pool.imap(downloader_yandex, works, 1):
                     if posts:
                         old_count = len(all_posts)
@@ -1601,26 +1536,13 @@ def worker(config, routes):
                             if 'favicon' not in by_feed[post['origin']['streamId']]:
                                 if all_posts[-1]['url']:
                                     #by_feed[post['origin']['streamId']]['favicon'] = all_posts[-1]['url']
-                                    #favicon_works.append((all_posts[-1]['url'], post['origin']['streamId'], favicon_url_re))'''
                                     parsed_url = urlparse(all_posts[-1]['url'])
                                     by_feed[post['origin']['streamId']]['favicon'] = '{0}://{1}/favicon.ico'.format(
                                         parsed_url.scheme if parsed_url.scheme else 'http',
                                         parsed_url.netloc
                                     )
-                                    #by_feed[post['origin']['streamId']]['favicon'] = getFaviconUrl(all_posts[-1]['url'])
                         treatPosts(category, p_range)
                 workers_downloader_pool.terminate()
-                #loaded_data = workers_downloader_pool.map(getFaviconUrl, favicon_works)
-                '''favicon_works = []
-                for f in by_feed:
-                    favicon_works.append((by_feed[f]['favicon'], f, favicon_url_re))
-                for url, feed_id in workers_downloader_pool.imap(getFaviconUrl, favicon_works, 2):
-                    if url:
-                        by_feed[feed_id]['favicon'] = url
-                    else:
-                        by_feed[feed_id]['favicon'] = 'http://ya.ru/favicon.ico'
-                #del favicon_works
-                workers_downloader_pool.terminate()'''
             by_tag = getSortedDictByAlphabet(by_tag)
             #first_letters = getSortedDictByAlphabet(first_letters)
             '''user['ready_flag'] = True
@@ -1723,75 +1645,6 @@ def worker(config, routes):
                             else:
                                 logging.warning('not marked %s', resp_data)
                 connection.close()
-
-def getFaviconUrl(data):
-    parsed_url = urlparse(data[0])
-    host = parsed_url.netloc
-    url = '/favicon.ico'
-    root_url = '/'
-    favicon_url = None
-    c = client.HTTPConnection(host, timeout=3)
-    c.request('HEAD', url)
-    r = c.getresponse()
-    favicon_url = None
-    new_host = None
-    #print(r.status, host)
-    #print('search favicon for', host)
-    if r.status != 200:
-        favicon_url = None
-        #print('try get from page', host)
-        c.close()
-        c = client.HTTPConnection(host, timeout=3)
-        c.request('GET', root_url)
-        r = c.getresponse()
-        if r.status == 301:
-            c.close()
-            new_host = urlparse(r.getheader('Location')).netloc
-            #print('redirected', new_host)
-            c = client.HTTPConnection(new_host, timeout=3)
-            c.request('HEAD', url)
-            r = c.getresponse()
-            if r.status == 200:
-                #print('found on redirect root')
-                favicon_url = 'http://{0}{1}'.format(new_host, url)
-            else:
-                c.close()
-                #print('try get from redirected page')
-                c = client.HTTPConnection(new_host, timeout=3)
-                c.request('GET', root_url)
-                r = c.getresponse()
-        if not favicon_url:
-            if r.status == 200:
-                page = r.read()
-                #print('parse page')
-                result = data[2].search(page.decode('utf-8', 'ignore'))
-                #print('page parsed')
-                if result:
-                    favicon_url = result.group(1)
-                    parsed_url = urlparse(favicon_url)
-                    if (not parsed_url.scheme) or (not parsed_url.netloc):
-                        if parsed_url.netloc:
-                            h = parsed_url.netloc
-                        elif new_host:
-                            h = new_host
-                        else:
-                            h = host
-                        favicon_url = 'http://{0}/{1}'.format(h, parsed_url.path)
-                else:
-                    #print('not found on page')
-                    favicon_url = None
-            else:
-                #print('page not found')
-                favicon_url = None
-    else:
-        #print('all ok')
-        favicon_url = 'http://{0}{1}'.format(host, url)
-    c.close()
-    '''if favicon_url:
-        print('Found', favicon_url)
-    else:
-        print('Not found', url)'''
-    return(favicon_url, data[1])
 
 if __name__ == '__main__':
     config_path = 'rsscloud.conf'
