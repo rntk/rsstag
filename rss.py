@@ -681,19 +681,20 @@ class RSSCloudApplication(object):
                     logging.error('Can`t push in mark queue: {}'.format(e))
                     err.append('Database error')
                 bulk = self.db.tags.initialize_unordered_bulk_op()
-                if status:
-                    for t in tags:
-                        bulk.find({'owner': self.user['sid'], 'tag': t}).update({'$inc': {'unread_count': -tags[t]}})
-                        first_letters[t[0]]['unread_count'] -= tags[t]
-                else:
-                    for t in tags:
-                        bulk.find({'owner': self.user['sid'], 'tag': t}).update({'$inc': {'unread_count': tags[t]}})
-                        first_letters[t[0]]['unread_count'] += tags[t]
-                try:
-                    bulk.execute()
-                except Exception as e:
-                    logging.error('Bulk failed in on_read_posts_post: %s', e)
-                    err.append('Database error')
+                if tags:
+                    if status:
+                        for t in tags:
+                            bulk.find({'owner': self.user['sid'], 'tag': t}).update({'$inc': {'unread_count': -tags[t]}})
+                            first_letters[t[0]]['unread_count'] -= tags[t]
+                    else:
+                        for t in tags:
+                            bulk.find({'owner': self.user['sid'], 'tag': t}).update({'$inc': {'unread_count': tags[t]}})
+                            first_letters[t[0]]['unread_count'] += tags[t]
+                    try:
+                        bulk.execute()
+                    except Exception as e:
+                        logging.error('Bulk failed in on_read_posts_post: %s', e)
+                        err.append('Database error')
                 self.db.posts.update({'owner': self.user['sid'], 'read': not status, 'pid': {'$in': posts}}, {'$set': {'read': status}}, multi=True)
             else:
                 if (self.user['provider'] == 'bazqux') or (self.user['provider'] == 'inoreader'):
@@ -1266,7 +1267,10 @@ def worker(config, routes):
                 connection.request('GET', '/reader/api/0/subscription/list?output=json', '', headers)
                 resp = connection.getresponse()
                 json_data = resp.read()
-                subscriptions = json.loads(json_data.decode('utf-8'))
+                try:
+                    subscriptions = json.loads(json_data.decode('utf-8'))
+                except Exception as e:
+                    logging.error('Can`t decode subscriptions %s', e);
                 works = []
                 i = 0
                 feed = None
