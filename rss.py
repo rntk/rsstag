@@ -1270,92 +1270,94 @@ def worker(config, routes):
                 try:
                     subscriptions = json.loads(json_data.decode('utf-8'))
                 except Exception as e:
+                    subscriptions = None
                     logging.error('Can`t decode subscriptions %s', e);
-                works = []
-                i = 0
-                feed = None
-                for i, feed in enumerate(subscriptions['subscriptions']):
-                    '''if i >= 4:
-                        break'''
-                    if len(feed['categories']) > 0:
-                        category_name = feed['categories'][0]['label']
-                    else:
-                        category_name = no_category_name
-                        works.append({
-                            'headers': headers,
-                            'host': config[user['provider']]['api_host'],
-                            'url': '/reader/api/0/stream/contents?s={0}&xt=user/-/state/com.google/read&n=5000&output=json'.format(quote_plus(feed['id'])),
-                            'category': category_name
-                        })
-                    if category_name not in by_category:
-                        by_category[category_name] = True
-                        if category_name != no_category_name:
+                if subscriptions:
+                    works = []
+                    i = 0
+                    feed = None
+                    for i, feed in enumerate(subscriptions['subscriptions']):
+                        '''if i >= 4:
+                            break'''
+                        if len(feed['categories']) > 0:
+                            category_name = feed['categories'][0]['label']
+                        else:
+                            category_name = no_category_name
                             works.append({
                                 'headers': headers,
                                 'host': config[user['provider']]['api_host'],
-                                'url': '/reader/api/0/stream/contents?s=user/-/label/{0}&xt=user/-/state/com.google/read&n=1000&output=json'.format(
-                                    quote_plus(category_name)
-                                ),
+                                'url': '/reader/api/0/stream/contents?s={0}&xt=user/-/state/com.google/read&n=5000&output=json'.format(quote_plus(feed['id'])),
                                 'category': category_name
                             })
-                workers_downloader_pool = Pool(int(config['settings']['workers_count']))
-                posts = None
-                category = None
-                for posts, category in workers_downloader_pool.imap(downloader_bazqux, works, 1):
-                    if posts and posts['items']:
-                        old_posts_count = len(all_posts)
-                        posts_count = len(posts['items'])
-                        p_range = (old_posts_count, old_posts_count + posts_count)
-                        for post in posts['items']:
-                            origin_feed_id = post['origin']['streamId']
-                            post['origin']['streamId'] = md5(post['origin']['streamId'].encode('utf-8')).hexdigest()
-                            if post['origin']['streamId'] not in by_feed:
-                                by_feed[post['origin']['streamId']] = {
-                                    'createdAt': datetime.utcnow(),
-                                    'title': post['origin']['title'],
-                                    'owner': user['sid'],
-                                    'category_id': category,
+                        if category_name not in by_category:
+                            by_category[category_name] = True
+                            if category_name != no_category_name:
+                                works.append({
+                                    'headers': headers,
+                                    'host': config[user['provider']]['api_host'],
+                                    'url': '/reader/api/0/stream/contents?s=user/-/label/{0}&xt=user/-/state/com.google/read&n=1000&output=json'.format(
+                                        quote_plus(category_name)
+                                    ),
+                                    'category': category_name
+                                })
+                    workers_downloader_pool = Pool(int(config['settings']['workers_count']))
+                    posts = None
+                    category = None
+                    for posts, category in workers_downloader_pool.imap(downloader_bazqux, works, 1):
+                        if posts and posts['items']:
+                            old_posts_count = len(all_posts)
+                            posts_count = len(posts['items'])
+                            p_range = (old_posts_count, old_posts_count + posts_count)
+                            for post in posts['items']:
+                                origin_feed_id = post['origin']['streamId']
+                                post['origin']['streamId'] = md5(post['origin']['streamId'].encode('utf-8')).hexdigest()
+                                if post['origin']['streamId'] not in by_feed:
+                                    by_feed[post['origin']['streamId']] = {
+                                        'createdAt': datetime.utcnow(),
+                                        'title': post['origin']['title'],
+                                        'owner': user['sid'],
+                                        'category_id': category,
+                                        'feed_id': post['origin']['streamId'],
+                                        'origin_feed_id': origin_feed_id,
+                                        'category_title': category,
+                                        'category_local_url': getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': category}),
+                                        'local_url': getUrlByEndpoint(endpoint='on_feed_get', params={'quoted_feed': post['origin']['streamId']})
+                                    }
+                                p_date = None
+                                if 'published' in post:
+                                    p_date = date.fromtimestamp(int(post['published'])).strftime('%x')
+                                    pu_date = float(post['published'])
+                                else:
+                                    p_date = -1
+                                    pu_date = -1
+                                all_posts.append({
+                                    #'category_id': category,
+                                    'content': {'title': post['title'], 'content': gzip.compress(post['summary']['content'].encode('utf-8', 'replace'))},
                                     'feed_id': post['origin']['streamId'],
-                                    'origin_feed_id': origin_feed_id,
-                                    'category_title': category,
-                                    'category_local_url': getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': category}),
-                                    'local_url': getUrlByEndpoint(endpoint='on_feed_get', params={'quoted_feed': post['origin']['streamId']})
-                                }
-                            p_date = None
-                            if 'published' in post:
-                                p_date = date.fromtimestamp(int(post['published'])).strftime('%x')
-                                pu_date = float(post['published'])
-                            else:
-                                p_date = -1
-                                pu_date = -1
-                            all_posts.append({
-                                #'category_id': category,
-                                'content': {'title': post['title'], 'content': gzip.compress(post['summary']['content'].encode('utf-8', 'replace'))},
-                                'feed_id': post['origin']['streamId'],
-                                'id': post['id'],
-                                'url': post['canonical'][0]['href'] if post['canonical'] else 'http://ya.ru',
-                                'date': p_date,
-                                'unix_date': pu_date,
-                                'read': False,
-                                'favorite': False
-                                #'meta': '/reader/api/0/edit-tag?output=json&i={0}'.format(post['id'])
-                            })
-                            if 'favicon' not in by_feed[post['origin']['streamId']]:
-                                if all_posts[-1]['url']:
-                                    #by_feed[post['origin']['streamId']]['favicon'] = all_posts[-1]['url']
-                                    parsed_url = urlparse(all_posts[-1]['url'])
-                                    by_feed[post['origin']['streamId']]['favicon'] = '{0}://{1}/favicon.ico'.format(
-                                        parsed_url.scheme if parsed_url.scheme else 'http',
-                                        parsed_url.netloc
-                                    )
-                        treatPosts(category, p_range)
-                workers_downloader_pool.terminate()
-            by_tag = getSortedDictByAlphabet(by_tag)
-            #first_letters = getSortedDictByAlphabet(first_letters)
-            '''user['ready_flag'] = True
-            user['in_queue'] = False
-            user['message'] = 'You can start reading'''
-            saveAllData()
+                                    'id': post['id'],
+                                    'url': post['canonical'][0]['href'] if post['canonical'] else 'http://ya.ru',
+                                    'date': p_date,
+                                    'unix_date': pu_date,
+                                    'read': False,
+                                    'favorite': False
+                                    #'meta': '/reader/api/0/edit-tag?output=json&i={0}'.format(post['id'])
+                                })
+                                if 'favicon' not in by_feed[post['origin']['streamId']]:
+                                    if all_posts[-1]['url']:
+                                        #by_feed[post['origin']['streamId']]['favicon'] = all_posts[-1]['url']
+                                        parsed_url = urlparse(all_posts[-1]['url'])
+                                        by_feed[post['origin']['streamId']]['favicon'] = '{0}://{1}/favicon.ico'.format(
+                                            parsed_url.scheme if parsed_url.scheme else 'http',
+                                            parsed_url.netloc
+                                        )
+                            treatPosts(category, p_range)
+                    workers_downloader_pool.terminate()
+                    by_tag = getSortedDictByAlphabet(by_tag)
+                    #first_letters = getSortedDictByAlphabet(first_letters)
+                    '''user['ready_flag'] = True
+                    user['in_queue'] = False
+                    user['message'] = 'You can start reading'''
+                    saveAllData()
         elif type == 'mark':
             status = data['status']
             if (user['provider'] == 'bazqux') or (user['provider'] == 'inoreader'):
