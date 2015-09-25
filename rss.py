@@ -379,8 +379,8 @@ class RSSCloudApplication(object):
                 {'$group': {'_id': '$read', 'counter': {'$sum': 1}}}
             ]);
             posts = {'unread': 0, 'read': 0}
-            if cursor and cursor['result']:
-                for result in cursor['result']:
+            if cursor and cursor['alive']:
+                for result in cursor:
                     if result['_id']:
                         posts['read'] = result['counter']
                     else:
@@ -431,7 +431,7 @@ class RSSCloudApplication(object):
             'title': all_feeds,
             'url': self.getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': all_feeds}), 'feeds' : []
         }}
-        for g in grouped['result']:
+        for g in grouped:
             if g['count'] > 0:
                 if g['category_id'] not in by_category:
                     by_category[g['category_id']] = {
