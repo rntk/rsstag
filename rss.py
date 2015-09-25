@@ -379,7 +379,7 @@ class RSSCloudApplication(object):
                 {'$group': {'_id': '$read', 'counter': {'$sum': 1}}}
             ]);
             posts = {'unread': 0, 'read': 0}
-            if cursor and cursor['alive']:
+            if cursor and cursor.alive:
                 for result in cursor:
                     if result['_id']:
                         posts['read'] = result['counter']
