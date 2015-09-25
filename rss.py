@@ -667,7 +667,7 @@ class RSSCloudApplication(object):
                 current_data = None
                 for_insert = []
                 if (self.user['provider'] == 'bazqux') or (self.user['provider'] == 'inoreader'):
-                    current_data = self.db.posts.find({'owner': self.user['sid'], 'read': not status, 'pid': {'$in': posts}}, fields=['id', 'tags'])
+                    current_data = self.db.posts.find({'owner': self.user['sid'], 'read': not status, 'pid': {'$in': posts}}, projection=['id', 'tags'])
                     for d in current_data:
                         for_insert.append({'user': self.user['_id'], 'id': d['id'], 'status': status})
                         for t in d['tags']:
@@ -698,7 +698,7 @@ class RSSCloudApplication(object):
                 self.db.posts.update({'owner': self.user['sid'], 'read': not status, 'pid': {'$in': posts}}, {'$set': {'read': status}}, multi=True)
             else:
                 if (self.user['provider'] == 'bazqux') or (self.user['provider'] == 'inoreader'):
-                    current_post = self.db.posts.find_one({'owner': self.user['sid'], 'pid': post_id}, fields=['id', 'tags'])
+                    current_post = self.db.posts.find_one({'owner': self.user['sid'], 'pid': post_id}, projection=['id', 'tags'])
                     self.db.mark_queue.insert({'user': self.user['_id'], 'id': current_post['id'], 'status': status})
                     self.db.posts.update({'owner': self.user['sid'], 'pid': post_id}, {'$set': {'read': status}})
                 if status:
@@ -908,7 +908,7 @@ class RSSCloudApplication(object):
         except Exception as e:
             err.append('Post id must be int number')
         if not err:
-            current_post = self.db.posts.find_one({'owner': self.user['sid'], 'pid': post_id}, fields=['tags', 'feed_id', 'url'])
+            current_post = self.db.posts.find_one({'owner': self.user['sid'], 'pid': post_id}, projection=['tags', 'feed_id', 'url'])
             if current_post:
                 feed = self.db.feeds.find_one({'feed_id': current_post['feed_id'], 'owner': self.user['sid']})
                 if feed:
