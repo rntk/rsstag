@@ -42,10 +42,6 @@
 </ul>
 </div>
 {{ menu.menu_window() }}
-<div id="post_links">
-    <span class="post_links_close">x</span>
-    <span class="post_links_content"></span>
-</div>
 <div class="page" data-tag="{{tag}}" data-group="{{group}}">
 <div class="tag_title">
     <h3>{{tag}}</h3>
@@ -68,6 +64,7 @@
                 {% else %}
                     <span class=" read_button unread" data-pos="{{p['pos']}}">unread</span>
                 {% endif %}
+                <div class="post_links_content"></div>
             </div>
         </div>
     {% endfor %}

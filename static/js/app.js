@@ -569,17 +569,12 @@
                         for (i = 0; i < data.tags.length; i++) {
                             p_l += '<a href="' + data.tags[i].url + '">' + data.tags[i].tag + '</a>, ';
                         }
-                        offset = $this.offset();
                         app.post_links_id = postid;
-                        app.$post_links.children('.post_links_content').html(p_l);
-                        app.$post_links.css({'top': offset.top, 'left': offset.left})
-                            .show();
+                        $this.parent().find('.post_links_content').html(p_l);
                     } else {
                         alert(result.data);
                     }
                 });
-            } else {
-                app.$post_links.show();
             }
             return false;
         },
@@ -792,7 +787,6 @@
                 app.hideProgressbar();
             });
 
-            app.$post_links = $('#post_links');
             $div_posts = $('div.post');
             app.$current_post = $div_posts.eq(0);//$('.post').eq(0);
             app.$current_post.addClass('current_post');
@@ -964,9 +958,8 @@
                         }
                         break;
                     }
-                    case 27: {
-                        app.$post_links.hide();
-                    }
+                    /*case 27: {
+                    }*/
                 }
             });
             /*$(document).scroll(function () { //not async version, need change
