@@ -890,8 +890,13 @@ class RSSCloudApplication(object):
             err.append('Post id must be int number')
         if not err:
             current_post = self.db.posts.find_one({'owner': self.user['sid'], 'pid': post_id})
+            attachments = ''
+            if current_post['attachments']:
+                for href in current_post['attachments']:
+                    attachments += '<a href="{0}">{0}</a><br />'.format(href)
             if current_post:
-                result = {'result': 'ok', 'data': {'pos': post_id, 'content': gzip.decompress(current_post['content']['content']).decode('utf-8', 'replace')}}
+                content = gzip.decompress(current_post['content']['content']).decode('utf-8', 'replace') + attachments
+                result = {'result': 'ok', 'data': {'pos': post_id, 'content': content}}
             else:
                 err.append('Not found post content')
         if not err:
@@ -1330,6 +1335,11 @@ def worker(config, routes):
                                 else:
                                     p_date = -1
                                     pu_date = -1
+                                attachments = []
+                                if 'enclosure' in post:
+                                    for attachments in post['enclosure']:
+                                        if ('href' in attachments) and attachments['href']:
+                                            attachments.append()
                                 all_posts.append({
                                     #'category_id': category,
                                     'content': {'title': post['title'], 'content': gzip.compress(post['summary']['content'].encode('utf-8', 'replace'))},
@@ -1339,7 +1349,8 @@ def worker(config, routes):
                                     'date': p_date,
                                     'unix_date': pu_date,
                                     'read': False,
-                                    'favorite': False
+                                    'favorite': False,
+                                    'attachments': attachments
                                     #'meta': '/reader/api/0/edit-tag?output=json&i={0}'.format(post['id'])
                                 })
                                 if 'favicon' not in by_feed[post['origin']['streamId']]:
