@@ -874,7 +874,14 @@ class RSSCloudApplication(object):
             if not err:
                 posts_content = []
                 for post in posts:
-                    posts_content.append({'pos': post['pid'], 'content': gzip.decompress(post['content']['content']).decode('utf-8', 'replace')})
+                    attachments = ''
+                    if post['attachments']:
+                        for href in post['attachments']:
+                            attachments += '<a href="{0}">{0}</a><br />'.format(href)
+                    content = gzip.decompress(post['content']['content']).decode('utf-8', 'replace')
+                    if attachments:
+                        content += '<p>Attachments:<br />{0}<p>'.format(attachments)
+                    posts_content.append({'pos': post['pid'], 'content': content})
                 result = {'result': 'ok', 'data': posts_content}
         if not err:
             self.response = Response(json.dumps(result), mimetype='application/json')
@@ -895,7 +902,9 @@ class RSSCloudApplication(object):
                 for href in current_post['attachments']:
                     attachments += '<a href="{0}">{0}</a><br />'.format(href)
             if current_post:
-                content = gzip.decompress(current_post['content']['content']).decode('utf-8', 'replace') + attachments
+                content = gzip.decompress(current_post['content']['content']).decode('utf-8', 'replace')
+                if attachments:
+                    content += '<p>Attachments:<br />{0}<p>'.format(attachments)
                 result = {'result': 'ok', 'data': {'pos': post_id, 'content': content}}
             else:
                 err.append('Not found post content')
