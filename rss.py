@@ -1335,11 +1335,11 @@ def worker(config, routes):
                                 else:
                                     p_date = -1
                                     pu_date = -1
-                                attachments = []
+                                attachments_list = []
                                 if 'enclosure' in post:
                                     for attachments in post['enclosure']:
                                         if ('href' in attachments) and attachments['href']:
-                                            attachments.append()
+                                            attachments_list.append()
                                 all_posts.append({
                                     #'category_id': category,
                                     'content': {'title': post['title'], 'content': gzip.compress(post['summary']['content'].encode('utf-8', 'replace'))},
@@ -1350,7 +1350,7 @@ def worker(config, routes):
                                     'unix_date': pu_date,
                                     'read': False,
                                     'favorite': False,
-                                    'attachments': attachments
+                                    'attachments': attachments_list
                                     #'meta': '/reader/api/0/edit-tag?output=json&i={0}'.format(post['id'])
                                 })
                                 if 'favicon' not in by_feed[post['origin']['streamId']]:
