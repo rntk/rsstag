@@ -6,3 +6,4 @@ log
 *.log
 rsscloud.conf
 jquery*
+*.map
