@@ -1339,7 +1339,7 @@ def worker(config, routes):
                                 if 'enclosure' in post:
                                     for attachments in post['enclosure']:
                                         if ('href' in attachments) and attachments['href']:
-                                            attachments_list.append()
+                                            attachments_list.append(attachments['href'])
                                 all_posts.append({
                                     #'category_id': category,
                                     'content': {'title': post['title'], 'content': gzip.compress(post['summary']['content'].encode('utf-8', 'replace'))},
