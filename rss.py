@@ -1038,7 +1038,7 @@ class RSSCloudApplication(object):
                     'local_url': 1,
                     field_name: 1,
                     '_id': 0
-                }, limit=100, compile_re=True)
+                }, limit=100)
             except Exception as e:
                 errors.append('{}'.format(e))
         else:
