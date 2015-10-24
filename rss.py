@@ -56,6 +56,14 @@ class RSSCloudApplication(object):
 
     def __init__(self, config_path=None):
         if self.setConfig(config_path):
+            try:
+                logging.basicConfig(
+                    filename=self.config['settings']['log_file'],
+                    filemode='a',
+                    level=getattr(logging, self.config['settings']['log_level'].upper())
+                )
+            except Exception as e:
+                logging.critical('Error in logging configuration: %s', e)
             self.config_path = config_path
             self.template_env = Environment(
                 loader=PackageLoader(
@@ -1111,6 +1119,14 @@ def downloader_bazqux(data):
     return(result, data['category'])
 
 def worker(config, routes_list):
+    try:
+        logging.basicConfig(
+            filename=config['settings']['log_file'],
+            filemode='a',
+            level=getattr(logging, config['settings']['log_level'].upper())
+        )
+    except Exception as e:
+        logging.critical('Error in logging configuration: %s', e)
     rules = []
     for route in routes_list:
         rules.append(Rule(route['url'], endpoint=route['endpoint'], methods=route['methods']))
@@ -1427,10 +1443,6 @@ if __name__ == '__main__':
     if len(sys.argv) > 1:
         config_path = sys.argv[1]
     app = RSSCloudApplication(config_path)
-    try:
-        logging.basicConfig(filename=app.config['settings']['log_file'], filemode='a', level=getattr(logging, app.config['settings']['log_level'].upper()))
-    except Exception as e:
-        logging.critical('Error in logging configuration: %s', e)
     if app:
         try:
             run_simple(app.config['settings']['host'], int(app.config['settings']['port']), app.setResponse)
