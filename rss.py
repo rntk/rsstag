@@ -122,7 +122,7 @@ class RSSCloudApplication(object):
         self.db.letters.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
         self.db.users.ensure_index([('sid', 1)])
         self.db.users.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
-        self.db.users.update({'in_queue': True}, {'$set': {'in_queue': False, 'ready_flag': True}}, multi=True)
+        self.db.users.update_many({'in_queue': True}, {'$set': {'in_queue': False, 'ready_flag': True}})
         self.db.tags.ensure_index([('owner', 1)])
         self.db.tags.ensure_index([('tag', 1)])
         self.db.tags.ensure_index([('unread_count', 1)])
@@ -162,7 +162,7 @@ class RSSCloudApplication(object):
             user = self.db.users.find_one({'sid': self.user['sid']})
             if user:
                 try:
-                    self.db.users.update(
+                    self.db.users.update_one(
                         {'sid': self.user['sid']},
                         {'$set': {
                             'ready_flag': False,
@@ -188,7 +188,7 @@ class RSSCloudApplication(object):
             self.user['in_queue'] = False
             self.user['createdAt'] = datetime.utcnow()
             try:
-                self.db.users.insert(self.user)
+                self.db.users.insert_one(self.user)
             except Exception as e:
                 self.user = None
                 logging.error('Can`t create new session: %s', e)
@@ -331,13 +331,13 @@ class RSSCloudApplication(object):
     def on_refresh_get_post(self):
         if self.user:
             if not self.user['in_queue']:
-                self.db.download_queue.insert({'user': self.user['_id'], 'locked': False, 'host': self.request.environ['HTTP_HOST']})
-                self.db.users.update(
+                self.db.download_queue.insert_one({'user': self.user['_id'], 'locked': False, 'host': self.request.environ['HTTP_HOST']})
+                self.db.users.update_one(
                     {'sid': self.user['sid']},
                     {'$set': {'ready_flag': False, 'in_queue': True, 'message': 'Downloading data, please wait'}}
                 )
             else:
-                self.db.users.update({'sid': self.user['sid']}, {'$set': {'message': 'You already in queue, please wait'}})
+                self.db.users.update_one({'sid': self.user['sid']}, {'$set': {'message': 'You already in queue, please wait'}})
             self.response = redirect(self.getUrlByEndpoint(endpoint='on_root_get'))
         else:
             self.response = redirect(self.getUrlByEndpoint(endpoint='on_root_get'))
@@ -361,7 +361,7 @@ class RSSCloudApplication(object):
         result = {}
         if self.user:
             #self.user['only_unread'] = status
-            self.db.users.update({'sid': self.user['sid']}, {'$set': {'only_unread': status}})
+            self.db.users.update_one({'sid': self.user['sid']}, {'$set': {'only_unread': status}})
             result = {'result': 'ok', 'reason': 'ok'}
         else:
             result = {'result': 'error', 'reason': 'Not logged'}
@@ -680,7 +680,7 @@ class RSSCloudApplication(object):
                             else:
                                 tags[t] = 1
                 try:
-                    self.db.mark_queue.insert(for_insert)
+                    self.db.mark_queue.insert_many(for_insert)
                 except Exception as e:
                     logging.error('Can`t push in mark queue: {}'.format(e))
                     err.append('Database error')
@@ -688,31 +688,31 @@ class RSSCloudApplication(object):
                 if tags:
                     if status:
                         for t in tags:
-                            bulk.find({'owner': self.user['sid'], 'tag': t}).update({'$inc': {'unread_count': -tags[t]}})
+                            bulk.find({'owner': self.user['sid'], 'tag': t}).update_one({'$inc': {'unread_count': -tags[t]}})
                             first_letters[t[0]]['unread_count'] -= tags[t]
                     else:
                         for t in tags:
-                            bulk.find({'owner': self.user['sid'], 'tag': t}).update({'$inc': {'unread_count': tags[t]}})
+                            bulk.find({'owner': self.user['sid'], 'tag': t}).update_one({'$inc': {'unread_count': tags[t]}})
                             first_letters[t[0]]['unread_count'] += tags[t]
                     try:
                         bulk.execute()
                     except Exception as e:
                         logging.error('Bulk failed in on_read_posts_post: %s', e)
                         err.append('Database error')
-                self.db.posts.update({'owner': self.user['sid'], 'read': not status, 'pid': {'$in': posts}}, {'$set': {'read': status}}, multi=True)
+                self.db.posts.update_many({'owner': self.user['sid'], 'read': not status, 'pid': {'$in': posts}}, {'$set': {'read': status}})
             else:
                 if (self.user['provider'] == 'bazqux') or (self.user['provider'] == 'inoreader'):
                     current_post = self.db.posts.find_one({'owner': self.user['sid'], 'pid': post_id}, projection=['id', 'tags'])
-                    self.db.mark_queue.insert({'user': self.user['_id'], 'id': current_post['id'], 'status': status})
-                    self.db.posts.update({'owner': self.user['sid'], 'pid': post_id}, {'$set': {'read': status}})
+                    self.db.mark_queue.insert_one({'user': self.user['_id'], 'id': current_post['id'], 'status': status})
+                    self.db.posts.update_one({'owner': self.user['sid'], 'pid': post_id}, {'$set': {'read': status}})
                 if status:
                     incr = -1
                 else:
                     incr = 1
                 for t in current_post['tags']:
                     first_letters[t[0]]['unread_count'] += incr
-                self.db.tags.update({'owner': self.user['sid'], 'tag': {'$in': current_post['tags']}}, {'$inc': {'unread_count': incr}}, multi=True)
-            self.db.letters.update({'owner': self.user['sid']}, {'$set': {'letters': first_letters}})
+                self.db.tags.update_many({'owner': self.user['sid'], 'tag': {'$in': current_post['tags']}}, {'$inc': {'unread_count': incr}})
+            self.db.letters.update_one({'owner': self.user['sid']}, {'$set': {'letters': first_letters}})
             logging.info('%s', time.time() - st)
         self.response = Response('{{"result": "{0}"}}'.format(''.join(err)), mimetype='application/json')
 
@@ -810,7 +810,7 @@ class RSSCloudApplication(object):
                     tags_per_page=self.user['cloud_items_on_page']),
                 mimetype='text/html'
                 )
-            self.db.users.update({'sid': self.user['sid']}, {'$set': {'page': new_cookie_page_value, 'letter': ''}})
+            self.db.users.update_one({'sid': self.user['sid']}, {'$set': {'page': new_cookie_page_value, 'letter': ''}})
         else:
             if not self.response:
                 self.on_error(NotFound())
@@ -857,7 +857,7 @@ class RSSCloudApplication(object):
                     tags_per_page=self.user['cloud_items_on_page']),
                 mimetype='text/html'
             )
-            self.db.users.update({'sid': self.user['sid']}, {'$set': {'letter': let}})
+            self.db.users.update_one({'sid': self.user['sid']}, {'$set': {'letter': let}})
         else:
             self.response = redirect(self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number}))
 
@@ -1211,23 +1211,23 @@ def worker(config, routes_list):
                 del by_tag['tags'][t]['posts']
                 tags_list.append(by_tag['tags'][t])
             try:
-                db.posts.insert(all_posts)
-                db.feeds.insert(by_feed.values())
-                db.tags.insert(tags_list)
-                db.letters.insert({'owner': user['sid'], 'letters': first_letters, 'createdAt': datetime.utcnow()})
-                db.users.update(
+                db.posts.insert_many(all_posts)
+                db.feeds.insert_many(list(by_feed.values()))
+                db.tags.insert_many(tags_list)
+                db.letters.insert_one({'owner': user['sid'], 'letters': first_letters, 'createdAt': datetime.utcnow()})
+                db.users.update_one(
                     {'sid': user['sid']},
                     {'$set': {'ready_flag': True, 'in_queue': False, 'message': 'You can start reading', 'createdAt': datetime.utcnow()}}
                 )
             except Exception as e:
                 logging.error('Can`t save all data: %s', e)
-                db.users.update(
+                db.users.update_one(
                     {'sid': user['sid']},
                     {'$set': {'ready_flag': False, 'in_queue': False, 'message': 'Can`t save to database, please try later', 'createdAt': datetime.utcnow()}}
                 )
             logging.info('saved all-%s %s %s %s', time.time() - st, len(tags_list), len(all_posts), len(by_feed))
         else:
-            db.users.update({'sid': user['sid']}, {'$set': {'ready_flag': True, 'in_queue': False, 'message': 'You can start reading'}})
+            db.users.update_one({'sid': user['sid']}, {'$set': {'ready_flag': True, 'in_queue': False, 'message': 'You can start reading'}})
             logging.warning('Nothing to save')
 
     def getUrlByEndpoint(endpoint=None, params=None, full_url=False):
