@@ -69,36 +69,40 @@ class RSSCloudApplication(object):
             cl = MongoClient(self.config['settings']['db_host'], int(self.config['settings']['db_port']))
             self.db = cl.rss
             self.prepareDB()
-            self.routes = Map([
-                Rule('/', endpoint='on_root_get', methods=['GET', 'HEAD']),
-                Rule('/login', endpoint='on_login_get', methods=['GET', 'HEAD']),
-                Rule('/login', endpoint='on_login_post', methods=['POST']),
-                Rule('/provider', endpoint='on_select_provider_get', methods=['GET', 'HEAD']),
-                Rule('/provider', endpoint='on_select_provider_post', methods=['POST']),
-                Rule('/group/tag/<int:page_number>', endpoint='on_group_by_tags_get', methods=['GET', 'HEAD']),
-                Rule('/group/tag/startwith/<string(length=1):letter>', endpoint='on_group_by_tags_startwith_get', methods=['GET', 'HEAD']),
-                Rule('/group/category', endpoint='on_group_by_category_get', methods=['GET', 'HEAD']),
-                Rule('/refresh', endpoint='on_refresh_get_post', methods=['GET', 'HEAD', 'POST']),
-                Rule('/favicon.ico', endpoint='on_static_get', methods=['GET', 'HEAD']),
-                Rule('/static/<string:directory>/<string:filename>', endpoint='on_static_get', methods=['GET', 'HEAD']),
-                Rule('/static/<string:filename>', endpoint='on_static_get', methods=['GET', 'HEAD']),
-                Rule('/tag/<string:quoted_tag>', endpoint='on_tag_get', methods=['GET', 'HEAD']),
-                Rule('/category/<string:quoted_category>', endpoint='on_category_get', methods=['GET', 'HEAD']),
-                Rule('/feed/<string:quoted_feed>', endpoint='on_feed_get', methods=['GET', 'HEAD']),
-                Rule('/read/posts', endpoint='on_read_posts_post', methods=['POST']),
-                Rule('/posts-content', endpoint='on_posts_content_post', methods=['POST']),
-                Rule('/post-content', endpoint='on_post_content_post', methods=['POST']),
-                Rule('/post-links', endpoint='on_post_links', methods=['POST']),
-                Rule('/ready', endpoint='on_ready_get', methods=['GET', 'HEAD']),
-                Rule('/only-unread', endpoint='on_only_unread_post', methods=['POST']),
-                Rule('/all-tags', endpoint='on_get_all_tags', methods=['GET', 'HEAD']),
-                Rule('/posts/with/tags/<string:s_tags>', endpoint='on_get_posts_with_tags', methods=['GET', 'HEAD']),
-                Rule('/tags-search', endpoint='on_post_tags_search', methods=['POST'])
-            ])
+            routes = [
+                {'url': '/', 'endpoint': 'on_root_get', 'methods': ['GET', 'HEAD']},
+                {'url': '/login', 'endpoint': 'on_login_get', 'methods': ['GET', 'HEAD']},
+                {'url': '/login', 'endpoint': 'on_login_post', 'methods': ['POST']},
+                {'url': '/provider', 'endpoint': 'on_select_provider_get', 'methods': ['GET', 'HEAD']},
+                {'url': '/provider', 'endpoint': 'on_select_provider_post', 'methods': ['POST']},
+                {'url': '/group/tag/<int:page_number>', 'endpoint': 'on_group_by_tags_get', 'methods': ['GET', 'HEAD']},
+                {'url': '/group/tag/startwith/<string(length: 1):letter>', 'endpoint': 'on_group_by_tags_startwith_get', 'methods': ['GET', 'HEAD']},
+                {'url': '/group/category', 'endpoint': 'on_group_by_category_get', 'methods': ['GET', 'HEAD']},
+                {'url': '/refresh', 'endpoint': 'on_refresh_get_post', 'methods': ['GET', 'HEAD', 'POST']},
+                {'url': '/favicon.ico', 'endpoint': 'on_static_get', 'methods': ['GET', 'HEAD']},
+                {'url': '/static/<string:directory>/<string:filename>', 'endpoint': 'on_static_get', 'methods': ['GET', 'HEAD']},
+                {'url': '/static/<string:filename>', 'endpoint': 'on_static_get', 'methods': ['GET', 'HEAD']},
+                {'url': '/tag/<string:quoted_tag>', 'endpoint': 'on_tag_get', 'methods': ['GET', 'HEAD']},
+                {'url': '/category/<string:quoted_category>', 'endpoint': 'on_category_get', 'methods': ['GET', 'HEAD']},
+                {'url': '/feed/<string:quoted_feed>', 'endpoint': 'on_feed_get', 'methods': ['GET', 'HEAD']},
+                {'url': '/read/posts', 'endpoint': 'on_read_posts_post', 'methods': ['POST']},
+                {'url': '/posts-content', 'endpoint': 'on_posts_content_post', 'methods': ['POST']},
+                {'url': '/post-content', 'endpoint': 'on_post_content_post', 'methods': ['POST']},
+                {'url': '/post-links', 'endpoint': 'on_post_links', 'methods': ['POST']},
+                {'url': '/ready', 'endpoint': 'on_ready_get', 'methods': ['GET', 'HEAD']},
+                {'url': '/only-unread', 'endpoint': 'on_only_unread_post', 'methods': ['POST']},
+                {'url': '/all-tags', 'endpoint': 'on_get_all_tags', 'methods': ['GET', 'HEAD']},
+                {'url': '/posts/with/tags/<string:s_tags>', 'endpoint': 'on_get_posts_with_tags', 'methods': ['GET', 'HEAD']},
+                {'url': '/tags-search', 'endpoint': 'on_post_tags_search', 'methods': ['POST']}
+            ]
+            rules = []
+            for route in routes:
+                rules.append(Rule(route['url'], endpoint=route['endpoint'], methods=route['methods']))
+            self.routes = Map(rules)
             self.updateEndpoints()
             if not self.workers_pool:
                 for i in range(int(self.config['settings']['workers_count'])):
-                    self.workers_pool.append(Process(target=worker, args=(self.config, self.routes)))
+                    self.workers_pool.append(Process(target=worker, args=(self.config, routes)))
                     self.workers_pool[-1].start()
         else:
             logging.critical('Can`t load config file "{}"'.format(config_path))
@@ -1106,7 +1110,11 @@ def downloader_bazqux(data):
         logging.warning('Downloaded, category with strange symbols')
     return(result, data['category'])
 
-def worker(config, routes):
+def worker(config, routes_list):
+    rules = []
+    for route in routes_list:
+        rules.append(Rule(route['url'], endpoint=route['endpoint'], methods=route['methods']))
+    routes = Map(rules)
     name = str(randint(0, 10000))
     no_category_name = 'NotCategorized'
     workers_downloader_pool = []
