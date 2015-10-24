@@ -1245,7 +1245,7 @@ def worker(config, routes_list):
         user = None
         #st = time.time()
         try:
-            data = db.download_queue.find_and_modify({}, remove=True)
+            data = db.download_queue.find_one_and_delete({})
         except Exception as e:
             data = None
             logging.error('Worker can`t get data from queue: {}'.format(e))
@@ -1254,7 +1254,7 @@ def worker(config, routes_list):
             type = 'download'
         else:
             try:
-                data = db.mark_queue.find_and_modify({}, remove=True)
+                data = db.mark_queue.find_one_and_delete({})
             except Exception as e:
                 data = None
                 logging.error('Worker can`t get data from queue: {}'.format(e))
