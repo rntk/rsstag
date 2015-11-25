@@ -277,7 +277,9 @@ class RSSCloudApplication(object):
                 'text': text,
                 'format': format,
                 'lang': 'ru‑RU',
-                'speaker': 'jane',
+                'speaker': 'jane', #jane, omazh, zahar, ermil
+                'emotion': 'mixed', #mixed, good, neutral, evil
+                #'robot': False,
                 'key': self.config['yandex']['speech_key']
             }
             conn.request('GET', '/generate?' + urlencode(query))
