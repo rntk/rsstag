@@ -288,6 +288,7 @@ class RSSCloudApplication(object):
                     f = open(path, 'wb')
                     f.write(speech)
                     f.close()
+                    result = hash + '.' + format
                 except Exception as e:
                     result = None
                     logging.error('Can`t save speech in file: {}'.format(e))
