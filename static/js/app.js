@@ -682,7 +682,7 @@
 
             $defer.done(function(data) {
                 if (data.result && data.result === 'ok') {
-                    app.$player.src = data.data;
+                    app.$player_block.html('<audio controls autoplay src="' + data.data + '">');
                 } else {
                     alert(data.reason);
                 }
@@ -812,7 +812,7 @@
             }).ajaxStop(function () {
                 app.hideProgressbar();
             });
-            app.$player = $('#player');
+            app.$player_block = $('#player_block');
             $div_posts = $('div.post');
             app.$current_post = $div_posts.eq(0);//$('.post').eq(0);
             app.$current_post.addClass('current_post');
