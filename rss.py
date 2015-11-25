@@ -311,7 +311,7 @@ class RSSCloudApplication(object):
             page = self.template_env.get_template('error.html')
             self.response = Response(page.render(err=['Unknown provider']), mimetype='text/html')
 
-    def on_speech_post(self):
+    def on_post_speech(self):
         post_id = self.request.form.get('provider')
         if (post_id):
             post = self.db.posts.find_one({'owner': self.user['sid'], 'pid': post_id})
