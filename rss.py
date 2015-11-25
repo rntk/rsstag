@@ -263,7 +263,7 @@ class RSSCloudApplication(object):
 
     def getSpeech(self, text):
         format = 'mp3'
-        hash = md5(text).hexdigest()
+        hash = md5(text.encode('utf-8')).hexdigest()
         path = self.config['settings']['speech_dir'] + os.sep + hash + '.' + format
         if (os.path.exists(path)):
             result = hash + '.' + format
