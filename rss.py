@@ -275,7 +275,7 @@ class RSSCloudApplication(object):
                 'speaker': 'jane',
                 'key': self.config['yandex']['speech_key']
             }
-            conn = client.HTTPSConnection('https://' + self.config['yandex']['speech_host'])
+            conn = client.HTTPSConnection(self.config['yandex']['speech_host'], 443)
             conn.request('GET', '/generate', urlencode(query))
             resp = conn.getresponse()
             if (resp.status == 200):
@@ -289,7 +289,7 @@ class RSSCloudApplication(object):
                     logging.error('Can`t save speech in file: {}'.format(e))
             else:
                 result = None
-                logging.error('Can`t get response from yandex api: {}'.format(resp))
+                logging.error('Can`t get response from yandex api: status: {}, reason: {}'.format(resp.status, resp.reason))
             conn.close()
         return(result)
 
