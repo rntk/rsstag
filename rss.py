@@ -101,7 +101,8 @@ class RSSCloudApplication(object):
                 {'url': '/only-unread', 'endpoint': 'on_only_unread_post', 'methods': ['POST']},
                 {'url': '/all-tags', 'endpoint': 'on_get_all_tags', 'methods': ['GET', 'HEAD']},
                 {'url': '/posts/with/tags/<string:s_tags>', 'endpoint': 'on_get_posts_with_tags', 'methods': ['GET', 'HEAD']},
-                {'url': '/tags-search', 'endpoint': 'on_post_tags_search', 'methods': ['POST']}
+                {'url': '/tags-search', 'endpoint': 'on_post_tags_search', 'methods': ['POST']},
+                {'url': '/speech', 'endpoint': 'on_post_speech', 'methods': ['POST']}
             ]
             rules = []
             for route in routes:
@@ -122,24 +123,24 @@ class RSSCloudApplication(object):
         self.db.posts.ensure_index([('read', 1)])
         self.db.posts.ensure_index([('tags', 1)])
         self.db.posts.ensure_index([('pid', 1)])
-        self.db.posts.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
+        #self.db.posts.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
         self.db.feeds.ensure_index([('owner', 1)])
         self.db.feeds.ensure_index([('feed_id', 1)])
-        self.db.feeds.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
+        #self.db.feeds.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
         self.db.letters.ensure_index([('owner', 1)])
-        self.db.letters.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
+        #self.db.letters.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
         self.db.users.ensure_index([('sid', 1)])
-        self.db.users.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
+        #self.db.users.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
         self.db.users.update_many({'in_queue': True}, {'$set': {'in_queue': False, 'ready_flag': True}})
         self.db.tags.ensure_index([('owner', 1)])
         self.db.tags.ensure_index([('tag', 1)])
         self.db.tags.ensure_index([('unread_count', 1)])
         self.db.tags.ensure_index([('posts_count', 1)])
-        self.db.tags.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
+        #self.db.tags.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
         self.db.download_queue.ensure_index([('locked', 1)])
-        self.db.download_queue.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
+        #self.db.download_queue.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
         self.db.mark_queue.ensure_index([('locked', 1)])
-        self.db.mark_queue.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
+        #self.db.mark_queue.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
 
     def close(self):
         if self.workers_pool:
@@ -260,6 +261,39 @@ class RSSCloudApplication(object):
                 url = next(self.routes.iter_rules(endpoint=endpoint))
         return(url)
 
+    def getSpeech(self, text):
+        format = 'mp3'
+        hash = md5(text).hexdigest()
+        path = self.config['settings']['speech_files'] + os.sep + hash + '.' + format
+        if (os.path.exists(path)):
+            result = path
+        else:
+            query = {
+                'text': text,
+                'format': format,
+                'lang': 'ru‑RU',
+                'speaker': 'jane',
+                'key': self.config['yandex']['speech_key']
+            }
+            conn = client.HTTPConnection('https://' + self.config['settings']['yandex']['speech_host'])
+            conn.request('GET', '/generate', urlencode(query))
+            resp = conn.getresponse()
+            if (resp.status == 200):
+                speech = resp.read()
+                try:
+                    f = open(path, 'wb')
+                    f.write(speech)
+                    f.close()
+                except Exception as e:
+                    result = None
+                    logging.error('Can`t save speech in file: {}'.format(e))
+            else:
+                result = None
+                logging.error('Can`t get response from yandex api: {}'.format(resp))
+            conn.close()
+        return(result)
+
+
     def on_select_provider_get(self):
         page = self.template_env.get_template('provider.html')
         self.response = Response(page.render(
@@ -276,6 +310,23 @@ class RSSCloudApplication(object):
         else:
             page = self.template_env.get_template('error.html')
             self.response = Response(page.render(err=['Unknown provider']), mimetype='text/html')
+
+    def on_speech_post(self):
+        post_id = self.request.form.get('provider')
+        if (post_id):
+            post = self.db.posts.find_one({'owner': self.user['sid'], 'pid': post_id})
+            if (post):
+                title = post['content']['title']
+                speech_file = self.getSpeech(title)
+                if (speech_file):
+                    result = {'result': 'ok', 'data': '/static/speech/{}'.format(speech_file)}
+                else:
+                    result = {'result': 'error', 'reason': 'can`t get speech file'}
+            else:
+                result = {'result': 'error', 'reason': 'post not found'}
+        else:
+            result = {'result': 'error', 'reason': 'no post id'}
+        self.response = Response(json.dumps(result), mimetype='application/json')
 
     def on_login_get(self, err=None):
         provider = self.request.cookies.get('provider')

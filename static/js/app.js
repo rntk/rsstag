@@ -48,7 +48,8 @@
             'only_unread_url': '/only-unread',
             'all_tags_url': '/all-tags',
             'posts_with_tags_url': '/posts/with/tags',
-            'search_tags_url': '/tags-search'
+            'search_tags_url': '/tags-search',
+            'speech_url': '/speech'
         },
         all_showed: false,
         cloud_items_count: 0,
@@ -665,6 +666,31 @@
         },
         hideProgressbar: function () {
             this.$loading.hide();
+        },
+        toSpeech(): function() {
+            var app = this,
+                post_id = this.$current_post.data('pos'),
+                $defer;
+
+            $defer = $.ajax({
+                'url': this.urls.speech_url,
+                'data': post_id,
+                'type': 'POST',
+                'dataType': 'json',
+                'async': true
+            });
+
+            $defer.done(function(data) {
+                if (data.result && data.result === 'ok') {
+                    app.$player.src = data.data;
+                } else {
+                    alert(data.reason);
+                }
+            }).fail(function(data) {
+                console.log(data);
+                alert('Something wrong');
+            });
+            return $defer.promise();
         }
     };
 
@@ -942,6 +968,10 @@
                     case 72: {//h
                         $('#help_button').click();
                         break;
+                    }
+                    case 86: {
+                        app.toSpeech();
+                        break
                     }
                     case 38: {
                         if (e.ctrlKey) {//ctrl-up
