@@ -263,13 +263,24 @@ class RSSCloudApplication(object):
 
     def getSpeech(self, text):
         format = 'mp3'
-        hash = md5(text.encode('utf-8')).hexdigest()
+        try:
+            hash = md5(text.encode('utf-8')).hexdigest()
+        except Exception as e:
+            hash = ''
+            logging.error('Can`t encode text to utf-8: {}'.format(e))
         path = self.config['settings']['speech_dir'] + os.sep + hash + '.' + format
         if (os.path.exists(path)):
             result = hash + '.' + format
         else:
             conn = client.HTTPSConnection(self.config['yandex']['speech_host'], 443)
-            conn.request('GET', '/generate?text={}&format={}&key{}&lang=ru-RU&speaker=jane'.format(text, format, self.config['yandex']['speech_key']))
+            query = {
+                'text': text,
+                'format': format,
+                'lang': 'ru‑RU',
+                'speaker': 'jane',
+                'key': self.config['yandex']['speech_key']
+            }
+            conn.request('GET', '/generate?' + urlencode(query))
             resp = conn.getresponse()
             if (resp.status == 200):
                 speech = resp.read()
