@@ -673,11 +673,11 @@
                 $defer;
 
             $defer = $.ajax({
-                'url': this.urls.speech_url,
-                'data': post_id,
-                'type': 'POST',
-                'dataType': 'json',
-                'async': true
+                url: this.urls.speech_url,
+                data: {post_id: post_id},
+                type: 'POST',
+                dataType: 'json',
+                async: true
             });
 
             $defer.done(function(data) {
