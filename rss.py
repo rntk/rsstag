@@ -268,13 +268,6 @@ class RSSCloudApplication(object):
         if (os.path.exists(path)):
             result = hash + '.' + format
         else:
-            query = {
-                'text': text,
-                'format': format,
-                'lang': 'ru‑RU',
-                'speaker': 'jane',
-                'key':
-            }
             conn = client.HTTPSConnection(self.config['yandex']['speech_host'], 443)
             conn.request('GET', '/generate?text={}&format={}&key{}&lang=ru-RU&speaker=jane'.format(text, format, self.config['yandex']['speech_key']))
             resp = conn.getresponse()
