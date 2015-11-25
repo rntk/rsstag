@@ -275,7 +275,7 @@ class RSSCloudApplication(object):
                 'speaker': 'jane',
                 'key': self.config['yandex']['speech_key']
             }
-            conn = client.HTTPConnection('https://' + self.config['yandex']['speech_host'])
+            conn = client.HTTPSConnection('https://' + self.config['yandex']['speech_host'])
             conn.request('GET', '/generate', urlencode(query))
             resp = conn.getresponse()
             if (resp.status == 200):
