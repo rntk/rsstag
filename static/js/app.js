@@ -667,7 +667,7 @@
         hideProgressbar: function () {
             this.$loading.hide();
         },
-        toSpeech(): function() {
+        toSpeech: function() {
             var app = this,
                 post_id = this.$current_post.data('pos'),
                 $defer;
