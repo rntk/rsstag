@@ -266,7 +266,7 @@ class RSSCloudApplication(object):
         hash = md5(text).hexdigest()
         path = self.config['settings']['speech_dir'] + os.sep + hash + '.' + format
         if (os.path.exists(path)):
-            result = path
+            result = hash + '.' + format
         else:
             query = {
                 'text': text,

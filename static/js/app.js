@@ -812,7 +812,7 @@
             }).ajaxStop(function () {
                 app.hideProgressbar();
             });
-
+            app.$player = $('#player');
             $div_posts = $('div.post');
             app.$current_post = $div_posts.eq(0);//$('.post').eq(0);
             app.$current_post.addClass('current_post');
