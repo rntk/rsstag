@@ -4,6 +4,7 @@ from configparser import ConfigParser
 import os, json, re
 from urllib.parse import unquote_plus, quote_plus, urlencode, urlparse
 from http import client
+import html
 import time
 #import pickle
 import gzip
@@ -326,7 +327,7 @@ class RSSCloudApplication(object):
         if (post_id):
             post = self.db.posts.find_one({'owner': self.user['sid'], 'pid': post_id})
             if (post):
-                title = post['content']['title']
+                title = html.unescape(post['content']['title'])
                 speech_file = self.getSpeech(title)
                 if (speech_file):
                     result = {'result': 'ok', 'data': '/static/speech/{}'.format(speech_file)}
