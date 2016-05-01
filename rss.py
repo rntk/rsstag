@@ -1159,12 +1159,18 @@ def downloader_bazqux(data):
             tmp_result = {}
             if json_data:
                 tmp_result = json.loads(json_data.decode('utf-8'))
+            else:
+                logging.error('json_data is empty - %s', json_data)
             if tmp_result:
                 if 'continuation' not in tmp_result:
                     again = False
                 else:
                     url = data['url'] + '&c={0}'.format(tmp_result['continuation'])
                 result['items'].extend(tmp_result['items'])
+            else:
+                if counter_for_downloads == 5:
+                    again = False
+                logging.error('tmp_result is empty - %s', tmp_result)
         except Exception as e:
             logging.error('%s: %s %s %s', e, data['category'], counter_for_downloads, url)
             if counter_for_downloads == 5:
