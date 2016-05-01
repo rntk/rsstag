@@ -1169,10 +1169,11 @@ def downloader_bazqux(data):
                 result['items'].extend(tmp_result['items'])
             else:
                 if counter_for_downloads == 5:
+                    logging.error('enough downloading')
                     again = False
                 logging.error('tmp_result is empty - %s', tmp_result)
         except Exception as e:
-            logging.error('%s: %s %s %s', e, data['category'], counter_for_downloads, url)
+            logging.error('%s: %s %s %s yoyoyo', e, data['category'], counter_for_downloads, url)
             if counter_for_downloads == 5:
                 again = False
             else:
