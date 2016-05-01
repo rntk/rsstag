@@ -1156,13 +1156,15 @@ def downloader_bazqux(data):
             connection.request('GET', url, '', data['headers'])
             resp = connection.getresponse()
             json_data = resp.read()
-            tmp_result = json.loads(json_data.decode('utf-8'))
-            if 'continuation' not in tmp_result:
-                again = False
+            tmp_result = {}
+            if json_data:
+                tmp_result = json.loads(json_data.decode('utf-8'))
+            if tmp_result:
+                if 'continuation' not in tmp_result:
+                    again = False
+                else:
+                    url = data['url'] + '&c={0}'.format(tmp_result['continuation'])
                 result['items'].extend(tmp_result['items'])
-            else:
-                result['items'].extend(tmp_result['items'])
-                url = data['url'] + '&c={0}'.format(tmp_result['continuation'])
         except Exception as e:
             logging.error('%s: %s %s %s', e, data['category'], counter_for_downloads, url)
             if counter_for_downloads == 5:
