@@ -317,6 +317,8 @@ class RSSCloudApplication(object):
                 err.append('Can`t login. Try later.')
             if user:
                 self.prepareSession(user)
+                self.response = redirect(self.getUrlByEndpoint(endpoint='on_root_get'))
+                return ('')
             elif not err:
                 if self.user:
                     self.user['provider'] = self.request.cookies.get('provider')
