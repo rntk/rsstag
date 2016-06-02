@@ -150,13 +150,17 @@ class RSSCloudApplication(object):
     def updateEndpoints(self):
         for i in self.routes.iter_rules():
             self.endpoints[i.endpoint] = getattr(self, i.endpoint)
-
-    def prepareSession(self):
-        sid = self.request.cookies.get('sid')
-        if sid:
-            self.user = self.db.users.find_one({'sid': sid})
-        else:
-            self.user = None
+            
+    def prepareSession(self, user=None):
+        if user == None:
+            sid = self.request.cookies.get('sid')
+            if sid:
+                self.user = self.db.users.find_one({'sid': sid})
+            else:
+                self.user = None
+        else: 
+            self.user = user
+            
         if self.user:
             self.need_cookie_update = True
             return(True)
@@ -164,7 +168,7 @@ class RSSCloudApplication(object):
             self.need_cookie_update = False
             return(False)
 
-    def createNewSession(self):
+    def createNewSession(self, login, password):
         self.need_cookie_update = True
         if self.user and 'sid' in self.user:
             user = self.db.users.find_one({'sid': self.user['sid']})
@@ -195,6 +199,7 @@ class RSSCloudApplication(object):
             self.user['message'] = 'Click on "Refresh posts" to start downloading data'
             self.user['in_queue'] = False
             self.user['createdAt'] = datetime.utcnow()
+            self.user['lp'] = sha256((login + password).encode('utf-8')).hexdigest()
             try:
                 self.db.users.insert_one(self.user)
             except Exception as e:
@@ -276,7 +281,7 @@ class RSSCloudApplication(object):
         else:
             page = self.template_env.get_template('error.html')
             self.response = Response(page.render(err=['Unknown provider']), mimetype='text/html')
-
+            
     def on_login_get(self, err=None):
         provider = self.request.cookies.get('provider')
         if provider in self.providers:
@@ -305,35 +310,43 @@ class RSSCloudApplication(object):
         page = self.template_env.get_template('login.html')
         err = []
         if login and password:
-            self.response = Response('', mimetype='text/html')
-            if self.user:
-                self.user['provider'] = self.request.cookies.get('provider')
-            else:
-                self.user = {'provider': self.request.cookies.get('provider')}
-            if (self.user['provider'] == 'bazqux') or (self.user['provider'] == 'inoreader'):
-                connection = client.HTTPSConnection(self.config[self.user['provider']]['api_host'])
-                headers = {'Content-type': 'application/x-www-form-urlencoded'}
-                data = urlencode({'Email': login, 'Passwd': password})
-                try:
-                    connection.request('POST', '/accounts/ClientLogin', data, headers)
-                except Exception as e:
-                    err.append('Can`t request to server. {0}'.format(e))
-                if not err:
-                    resp = connection.getresponse().read().splitlines()
-                    if resp and resp[0].decode('utf-8').split('=')[0] != 'Error':
-                        token = resp[-1].decode('utf-8').split('=')[-1]
-                        self.user['token'] = token
-                        self.createNewSession()
-                        if not self.user:
-                            err.append('Can`t create session, try later')
-                    else:
-                        err.append('Wrong Login or Password')
+            try:
+                hash = sha256((login + password).encode('utf-8')).hexdigest()
+                user = self.db.users.find_one({'lp': hash})
+            except:
+                err.append('Can`t login. Try later.')
+            if user:
+                self.prepareSession(user)
+            elif not err:
+                if self.user:
+                    self.user['provider'] = self.request.cookies.get('provider')
+                else:
+                    self.user = {'provider': self.request.cookies.get('provider')}
+                if (self.user['provider'] == 'bazqux') or (self.user['provider'] == 'inoreader'):
+                    connection = client.HTTPSConnection(self.config[self.user['provider']]['api_host'])
+                    headers = {'Content-type': 'application/x-www-form-urlencoded'}
+                    data = urlencode({'Email': login, 'Passwd': password})
+                    try:
+                        connection.request('POST', '/accounts/ClientLogin', data, headers)
+                    except Exception as e:
+                        err.append('Can`t request to server. {0}'.format(e))
+                    if not err:
+                        resp = connection.getresponse().read().splitlines()
+                        if resp and resp[0].decode('utf-8').split('=')[0] != 'Error':
+                            token = resp[-1].decode('utf-8').split('=')[-1]
+                            self.user['token'] = token
+                            self.createNewSession(login, password)
+                            if not self.user:
+                                err.append('Can`t create session, try later')
+                        else:
+                            err.append('Wrong Login or Password')
         else:
             err.append('Login or Password can`t be empty')
         if not err:
             #self.response = redirect(self.getUrlByEndpoint(endpoint='on_root_get'))
             self.response = redirect(self.getUrlByEndpoint(endpoint='on_refresh_get_post'))
         else:
+            self.response = Response('', mimetype='text/html')
             self.on_login_get(err)
 
     def on_refresh_get_post(self):
