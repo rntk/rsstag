@@ -906,11 +906,11 @@ class RSSCloudApplication(object):
         page = self.template_env.get_template('group-by-hottag.html')
         if self.user['only_unread']:
             # cursor = self.db.tags.find({'owner': self.user['sid'], 'unread_count': {'$gt': 0}}).sort([('unread_count', DESCENDING), ('tag', ASCENDING)])
-            cursor = self.db.tags.find({'owner': self.user['sid'], 'unread_count': {'$gt': 0}}).sort(
+            cursor = self.db.tags.find({'owner': self.user['sid'], 'unread_count': {'$gt': 1}}).sort(
                 [('temperature', DESCENDING), ('unread_count', DESCENDING)])
         else:
             # cursor = self.db.tags.find({'owner': self.user['sid']}).sort([('posts_count', DESCENDING), ('tag', ASCENDING)])
-            cursor = self.db.tags.find({'owner': self.user['sid']}).sort([('temperature', DESCENDING), ('posts_count', DESCENDING)])
+            cursor = self.db.tags.find({'owner': self.user['sid'], 'posts_count': {'$gt': 1}}).sort([('temperature', DESCENDING), ('posts_count', DESCENDING)])
         tags_count = cursor.count()
         page_count = self.getPageCount(tags_count, self.user['cloud_items_on_page'])
 
