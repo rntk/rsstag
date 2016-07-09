@@ -748,7 +748,7 @@
             });
         } else if (path === '\/group\/category') {
             app.groupByCategory();
-        } else if (/\/group\/tag\/.*/.test(path)) {
+        } else if (/\/group\/(tag|hottag)\/.*/.test(path)) {
             $(document).ajaxStart(function () {
                 app.showProgressbar();
             }).ajaxStop(function () {

@@ -85,6 +85,7 @@ class RSSCloudApplication(object):
                 {'url': '/provider', 'endpoint': 'on_select_provider_get', 'methods': ['GET', 'HEAD']},
                 {'url': '/provider', 'endpoint': 'on_select_provider_post', 'methods': ['POST']},
                 {'url': '/group/tag/<int:page_number>', 'endpoint': 'on_group_by_tags_get', 'methods': ['GET', 'HEAD']},
+                {'url': '/group/hottag/<int:page_number>', 'endpoint': 'on_group_by_hottags_get', 'methods': ['GET', 'HEAD']},
                 {'url': '/group/tag/startwith/<string(length: 1):letter>', 'endpoint': 'on_group_by_tags_startwith_get', 'methods': ['GET', 'HEAD']},
                 {'url': '/group/category', 'endpoint': 'on_group_by_category_get', 'methods': ['GET', 'HEAD']},
                 {'url': '/refresh', 'endpoint': 'on_refresh_get_post', 'methods': ['GET', 'HEAD', 'POST']},
@@ -900,6 +901,74 @@ class RSSCloudApplication(object):
             if not self.response:
                 self.on_error(NotFound())
 
+    def on_group_by_hottags_get(self, page_number):
+        self.response = None
+        page = self.template_env.get_template('group-by-hottag.html')
+        if self.user['only_unread']:
+            # cursor = self.db.tags.find({'owner': self.user['sid'], 'unread_count': {'$gt': 0}}).sort([('unread_count', DESCENDING), ('tag', ASCENDING)])
+            cursor = self.db.tags.find({'owner': self.user['sid'], 'unread_count': {'$gt': 0}}).sort(
+                [('temperature', DESCENDING), ('unread_count', DESCENDING)])
+        else:
+            # cursor = self.db.tags.find({'owner': self.user['sid']}).sort([('posts_count', DESCENDING), ('tag', ASCENDING)])
+            cursor = self.db.tags.find({'owner': self.user['sid']}).sort([('temperature', DESCENDING), ('posts_count', DESCENDING)])
+        tags_count = cursor.count()
+        page_count = self.getPageCount(tags_count, self.user['cloud_items_on_page'])
+
+        if page_number <= 0:
+            p_number = 1
+            self.user['page'] = p_number
+        elif page_number > page_count:
+            p_number = page_count
+            self.response = redirect(
+                self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': p_number}))
+            self.user['page'] = p_number
+        else:
+            p_number = page_number
+        p_number -= 1
+        if p_number < 0:
+            p_number = 1
+        new_cookie_page_value = p_number + 1
+        if not self.response:
+            pages_map, start_tags_range, end_tags_range = self.calcPagerData(p_number, page_count,
+                                                                             self.user['cloud_items_on_page'],
+                                                                             'on_group_by_tags_get')
+            if end_tags_range > tags_count:
+                end_tags_range = tags_count
+            sorted_tags = []
+            load_tags = OrderedDict()
+            if self.user['only_unread']:
+                for t in cursor[start_tags_range:end_tags_range]:
+                    sorted_tags.append(
+                        {'tag': t['tag'], 'url': t['local_url'], 'words': t['words'], 'count': t['unread_count']})
+            else:
+                for t in cursor[start_tags_range:end_tags_range]:
+                    sorted_tags.append(
+                        {'tag': t['tag'], 'url': t['local_url'], 'words': t['words'], 'count': t['posts_count']})
+            self.fillFirstLetters()
+            letters = self.getLetters()
+            self.response = Response(
+                page.render(
+                    tags=sorted_tags,
+                    sort_by_title='tags',
+                    sort_by_link=self.getUrlByEndpoint(endpoint='on_group_by_hottags_get',
+                                                       params={'page_number': new_cookie_page_value}),
+                    group_by_link=self.getUrlByEndpoint(endpoint='on_group_by_category_get'),
+                    pages_map=pages_map,
+                    current_page=new_cookie_page_value,
+                    letters=letters,
+                    only_unread=self.user['only_unread'],
+                    provider=self.user['provider'],
+                    posts_per_page=self.user['posts_on_page'],
+                    tags_per_page=self.user['cloud_items_on_page']),
+                mimetype='text/html'
+            )
+            self.db.users.update_one({'sid': self.user['sid']},
+                                     {'$set': {'page': new_cookie_page_value, 'letter': ''}})
+        else:
+            if not self.response:
+                self.on_error(NotFound())
+
+
     def on_group_by_tags_startwith_get(self, letter=None):
         self.response = None
         page_number = self.user['page']
@@ -1289,7 +1358,7 @@ def worker(config, routes_list):
                         }
                     if tag not in by_tag['tags']:
                         by_tag['unread_count'] += 1
-                        by_tag['tags'][tag] =  {'words': [], 'local_url': tag, 'read': False, 'tag': tag, 'owner': user['sid'], 'posts': set()} #'posts': set(), 'read_posts': set(),
+                        by_tag['tags'][tag] =  {'words': [], 'local_url': tag, 'read': False, 'tag': tag, 'owner': user['sid'], 'posts': set(), 'temperature': 0} #'posts': set(), 'read_posts': set(),
                     if current_word not in by_tag['tags'][tag]['words']:
                         by_tag['tags'][tag]['words'].append(current_word)
                     by_tag['tags'][tag]['posts'].add(pos)
@@ -1331,6 +1400,26 @@ def worker(config, routes_list):
         else:
             db.users.update_one({'sid': user['sid']}, {'$set': {'ready_flag': True, 'in_queue': False, 'message': 'You can start reading'}})
             logging.warning('Nothing to save')
+
+    def processWords():
+        cur = db.tags.find({'owner': user['sid']})
+        for tag in cur:
+            word = db.words.find_one({'word': tag['tag']})
+            if word:
+                old_mid = sum(word['numbers']) / len(word['numbers'])
+                word['numbers'].append(tag['posts_count'])
+                new_mid = sum(word['numbers']) / len(word['numbers'])
+                temperature = abs(new_mid - old_mid)
+                db.tags.find_one_and_update(
+                    {'tag': tag['tag']},
+                    {'$set': {'temperature': temperature}}
+                )
+            db.words.find_one_and_update(
+                {'word': tag['tag']},
+                {'$push': {'numbers': tag['posts_count']}},
+                upsert = True
+            )
+
 
     def getUrlByEndpoint(endpoint=None, params=None, full_url=False):
         url = None
@@ -1488,6 +1577,7 @@ def worker(config, routes_list):
                     user['in_queue'] = False
                     user['message'] = 'You can start reading'''
                     saveAllData()
+                    processWords()
         elif type == 'mark':
             status = data['status']
             if (user['provider'] == 'bazqux') or (user['provider'] == 'inoreader'):
