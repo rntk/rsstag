@@ -103,6 +103,7 @@ class RSSCloudApplication(object):
                 {'url': '/only-unread', 'endpoint': 'on_only_unread_post', 'methods': ['POST']},
                 {'url': '/all-tags', 'endpoint': 'on_get_all_tags', 'methods': ['GET', 'HEAD']},
                 {'url': '/posts/with/tags/<string:s_tags>', 'endpoint': 'on_get_posts_with_tags', 'methods': ['GET', 'HEAD']},
+                {'url': '/tag-siblings/<string:tag>', 'endpoint': 'on_get_tag_siblings', 'methods': ['GET', 'HEAD']},
                 {'url': '/tags-search', 'endpoint': 'on_post_tags_search', 'methods': ['POST']},
                 {'url': '/speech', 'endpoint': 'on_post_speech', 'methods': ['POST']}
             ]
@@ -968,7 +969,6 @@ class RSSCloudApplication(object):
             if not self.response:
                 self.on_error(NotFound())
 
-
     def on_group_by_tags_startwith_get(self, letter=None):
         self.response = None
         page_number = self.user['page']
@@ -1014,6 +1014,18 @@ class RSSCloudApplication(object):
             self.db.users.update_one({'sid': self.user['sid']}, {'$set': {'letter': let}})
         else:
             self.response = redirect(self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number}))
+
+    def on_get_tag_siblings(self, tag=''):
+        if tag:
+            cur = self.db.posts.find({
+                'owner': self.user['sid'],
+                'tags': tag
+            }, projection=['tags'])
+            all_tags = set()
+            for tags in cur:
+                all_tags |= set(tags['tags'])
+            self.response = Response(json.dumps(list(all_tags)), mimetype='application/json')
+
 
     def on_posts_content_post(self):
         err = []

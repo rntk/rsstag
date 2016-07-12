@@ -181,6 +181,7 @@ h3 {
     border: 1px solid $my_gray;
     @include vendor-prefix(border-radius, 0.5em);
     cursor: pointer;
+    max-width: 100%;
 }
 .cloud_item_title {
     font-size: 13pt;
@@ -445,6 +446,15 @@ h3 {
 
 .link_in_form {
     margin: 0 0.8em;
+}
+
+.tag_siblings {
+    max-width: 98%;
+    text-align: center;
+}
+
+.tag_siblings a {
+    margin: 0.5em;
 }
 
 @media all and (max-width: 800px) {

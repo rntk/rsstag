@@ -49,7 +49,8 @@
             'all_tags_url': '/all-tags',
             'posts_with_tags_url': '/posts/with/tags',
             'search_tags_url': '/tags-search',
-            'speech_url': '/speech'
+            'speech_url': '/speech',
+            'tag_siblings': '/tag-siblings'
         },
         all_showed: false,
         cloud_items_count: 0,
@@ -691,7 +692,42 @@
                 alert('Something wrong');
             });
             return $defer.promise();
-        }
+        },
+        fetchTagSiblings: function(el) {
+            var app = this,
+                $el = $(el),
+                $promise,
+                tag = $el.parent().data('tag');
+
+            if ((typeof tag === 'string') && (tag !== '')) {
+                $promise = $.ajax({
+                    url: this.urls.tag_siblings + '/' + encodeURIComponent(tag),
+                    type: 'GET',
+                    dataType: 'json',
+                    async: true
+                });
+                $promise.done(function(data) {
+                    var links = [];
+                    if (data && data.length) {
+                        links = data.map(function(tag) {
+                            var a = document.createElement('a');
+
+                            a.textContent = ' ' + tag + ' ';
+                            a.href = '/tag/' + encodeURIComponent(tag);
+                            a.className = 'cloud_item_title';
+
+                            return(a);
+                        });
+                        $el.next('.tag_siblings').append(links);
+                    }
+                });
+            } else {
+                $promise = $.Deferred();
+                $promise.resolve({});
+            }
+            return($promise)
+
+        },
     };
 
     $(document).on('ready', function () {
@@ -755,8 +791,14 @@
                 app.hideProgressbar();
             });
             $cloud = $('.cloud');
-            $cloud.on('click', '.cloud_item', function () {
-                app.processTagSelection(this);
+            $cloud.on('click', '.cloud_item', function (e) {
+                var $el = $(e.target);
+                if (!$el.hasClass('get_tag_siblings') && !$el.parent().hasClass('tag_siblings')) {
+                    app.processTagSelection(this);
+                }
+            });
+            $cloud.on('click', '.get_tag_siblings', function() {
+                app.fetchTagSiblings(this);
             });
             app.$search_field = $('.search_field');
             app.$search_result_window = $('.search_result');
