@@ -1017,14 +1017,21 @@ class RSSCloudApplication(object):
 
     def on_get_tag_siblings(self, tag=''):
         if tag:
-            cur = self.db.posts.find({
+            query = {
                 'owner': self.user['sid'],
                 'tags': tag
-            }, projection=['tags'])
-            all_tags = set()
+            }
+            if self.user['only_unread']:
+                query['read'] = False
+            cur = self.db.posts.find(query, projection=['tags'])
+            all_tags = {}
             for tags in cur:
-                all_tags |= set(tags['tags'])
-            self.response = Response(json.dumps(list(all_tags)), mimetype='application/json')
+                for tag in tags['tags']:
+                    if tag not in all_tags:
+                        all_tags[tag] = {'t': tag, 'n': 0}
+                    all_tags[tag]['n'] += 1
+
+            self.response = Response(json.dumps(list(all_tags.values())), mimetype='application/json')
 
 
     def on_posts_content_post(self):

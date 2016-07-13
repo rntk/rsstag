@@ -709,16 +709,28 @@
                 $promise.done(function(data) {
                     var links = [];
                     if (data && data.length) {
+                        data.sort(function(a, b) {
+                            if (a.n > b.n) {
+                                return(-1);
+                            } else if (a.n < b.n){
+                                return(1);
+                            } else {
+                                return(0);
+                            }
+                        });
                         links = data.map(function(tag) {
                             var a = document.createElement('a');
 
-                            a.textContent = ' ' + tag + ' ';
-                            a.href = '/tag/' + encodeURIComponent(tag);
+                            a.textContent = ' ' + tag.t + '(' + tag.n + ') ';
+                            a.href = '/tag/' + encodeURIComponent(tag.t);
                             a.className = 'cloud_item_title';
 
                             return(a);
                         });
-                        $el.next('.tag_siblings').append(links);
+                        if (links) {
+                            $el.next('.tag_siblings').append(links);
+                            $el.next('.tag_siblings').append('<br><span class="hide_tag_siblings">...</span>');
+                        }
                     }
                 });
             } else {
@@ -793,12 +805,24 @@
             $cloud = $('.cloud');
             $cloud.on('click', '.cloud_item', function (e) {
                 var $el = $(e.target);
-                if (!$el.hasClass('get_tag_siblings') && !$el.parent().hasClass('tag_siblings')) {
+                if (!$el.hasClass('hide_tag_siblings') && !$el.hasClass('get_tag_siblings') && !$el.parent().hasClass('tag_siblings')) {
                     app.processTagSelection(this);
                 }
             });
-            $cloud.on('click', '.get_tag_siblings', function() {
-                app.fetchTagSiblings(this);
+            $cloud.on('click', '.hide_tag_siblings', function(e) {
+                $(e.target).parent('.tag_siblings').empty();
+            });
+            $cloud.on('click', '.get_tag_siblings', function(e) {
+                var $el = $(e.target),
+                    $parent = $el.parent();
+
+                if ($parent.data('siblings')) {
+                    $parent.data('siblings', 0);
+                    $el.next('.tag_siblings').empty();
+                } else {
+                    $parent.data('siblings', 1);
+                    app.fetchTagSiblings(e.target);
+                }
             });
             app.$search_field = $('.search_field');
             app.$search_result_window = $('.search_result');
