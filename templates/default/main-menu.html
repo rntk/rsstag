@@ -5,19 +5,22 @@
 {%- endmacro %}
 {% macro menu_window() -%}
     <div class="main_menu_window">
-        <div id="posts_per_page">
-            <label for="post_per_page_edit">posts per page</label><br />
-            <input id="post_per_page_edit" name="post_per_page_edit" type="text" value="{{posts_per_page}}" />
-            <span class="form_button">ok</span>
+        <div>
+            <label for="post_on_page">posts per page</label><br />
+            <input id="post_on_page" name="post_on_page" type="text" value="{{user_settings['posts_on_page']}}" />
         </div>
         <div id="tags_per_page">
-            <label for="tags_per_page_edit">posts per page</label><br />
-            <input id="tags_per_page_edit" name="tags_per_page_edit" type="text" value="{{tags_per_page}}" />
-            <span class="form_button">ok</span>
+            <label for="tags_on_page">posts per page</label><br />
+            <input id="tags_on_page" name="tags_on_page" type="text" value="{{user_settings['tags_on_page']}}" />
         </div>
-        <div id="only_unread">
-            <input id="only_unread_checkbox" name="only_unread_checkbox" type="checkbox" {% if only_unread %} checked {% endif %} />
-            <label for="only_unread_checkbox">only unread</label>
+        <div>
+            <input id="only_unread" name="only_unread" type="checkbox" {% if user_settings['only_unread'] %} checked {% endif %} />
+            <label for="only_unread">only unread</label>
         </div>
+        <div>
+            <input id="hot_tags" name="hot_tags" type="checkbox" {% if user_settings['hot_tags'] %} checked {% endif %} />
+            <label for="hot_tags">hot tags</label>
+        </div>
+        <button id="save_settings">Save</button>
     </div>
 {%- endmacro %}

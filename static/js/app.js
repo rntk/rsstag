@@ -21,7 +21,6 @@
         $current_post: null,
         $status_element: null,
         status_interval_handler: 0,
-        $only_unread_checkbox: null,
         $post_links: null,
         post_links_id: -1,
         current_search_result: [],
@@ -45,7 +44,7 @@
             'post_content_url': '/post-content',
             'post_links_url': '/post-links',
             'ready_check_url': '/ready',
-            'only_unread_url': '/only-unread',
+            'save_settings': '/settings',
             'all_tags_url': '/all-tags',
             'posts_with_tags_url': '/posts/with/tags',
             'search_tags_url': '/tags-search',
@@ -416,33 +415,44 @@
             this.$toolbar.hide();
             this.$toolbar_bottom.hide();
         },
+        buildSettings: function() {
+            var $inputs = $('.main_menu_window').find('input'),
+                settings = {};
 
-        setOnlyUnread: function () {
+            $inputs.each(function(i, el) {
+                if (el.type === 'checkbox') {
+                    settings[el.id] = el.checked;
+                } else {
+                    settings[el.id] = el.value;
+                }
+            });
+            return(settings);
+        },
+        saveSettings: function () {
             var app = this,
                 promise,
-                status;
-            if (app.$only_unread_checkbox.prop('checked')) {
-                status = 1;
-            } else {
-                status = 0;
-            }
+                settings;
+
+            settings = this.buildSettings();
             promise = $.ajax({
-                url: app.urls.only_unread_url,
+                url: app.urls.save_settings,
                 type: 'POST',
-                data: {'status': status},
+                headers: {'Content-Type': 'application/json'},
+                data: JSON.stringify(settings),
                 dataType: 'json',
                 async: true
             });
             promise.done(function (content) {
                 if ((content) && (content.result === 'ok')) {
-                    app.$only_unread_checkbox.val(true);
                     if (window.location.pathname !== '/') {
                         window.location.reload();
                     }
                 } else {
-                    app.$only_unread_checkbox.prop('checked', !app.$only_unread_checkbox.prop('checked'));
                     alert('error');
                 }
+            }).fail(function(e) {
+                console.log(e)
+                alert('error');
             });
         },
         showHelp: function () {
@@ -759,12 +769,9 @@
             path,
             i;
         app.processScroll();
-        if ($('#only_unread_checkbox').length > 0) {
-            app.$only_unread_checkbox = $('#only_unread_checkbox');
-            app.$only_unread_checkbox.click(function () {
-                app.setOnlyUnread();
-            });
-        }
+        $('#save_settings').on('click', function() {
+            app.saveSettings();
+        });
         $help_button = $('#help_button');
         if ($help_button.length > 0) {
             $help_button.on('focusout', function () {

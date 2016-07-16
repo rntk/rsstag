@@ -18,7 +18,7 @@ from multiprocessing import Process, Pool, Manager
 from werkzeug.wrappers import Response, Request
 from werkzeug.routing import Map, Rule
 from werkzeug.serving import run_simple
-from werkzeug.exceptions import HTTPException, NotFound
+from werkzeug.exceptions import HTTPException, NotFound, InternalServerError
 from werkzeug.utils import redirect
 from werkzeug.wsgi import wrap_file
 from jinja2 import Environment, PackageLoader
@@ -85,7 +85,6 @@ class RSSCloudApplication(object):
                 {'url': '/provider', 'endpoint': 'on_select_provider_get', 'methods': ['GET', 'HEAD']},
                 {'url': '/provider', 'endpoint': 'on_select_provider_post', 'methods': ['POST']},
                 {'url': '/group/tag/<int:page_number>', 'endpoint': 'on_group_by_tags_get', 'methods': ['GET', 'HEAD']},
-                {'url': '/group/hottag/<int:page_number>', 'endpoint': 'on_group_by_hottags_get', 'methods': ['GET', 'HEAD']},
                 {'url': '/group/tag/startwith/<string(length: 1):letter>', 'endpoint': 'on_group_by_tags_startwith_get', 'methods': ['GET', 'HEAD']},
                 {'url': '/group/category', 'endpoint': 'on_group_by_category_get', 'methods': ['GET', 'HEAD']},
                 {'url': '/refresh', 'endpoint': 'on_refresh_get_post', 'methods': ['GET', 'HEAD', 'POST']},
@@ -100,7 +99,7 @@ class RSSCloudApplication(object):
                 {'url': '/post-content', 'endpoint': 'on_post_content_post', 'methods': ['POST']},
                 {'url': '/post-links', 'endpoint': 'on_post_links', 'methods': ['POST']},
                 {'url': '/ready', 'endpoint': 'on_ready_get', 'methods': ['GET', 'HEAD']},
-                {'url': '/only-unread', 'endpoint': 'on_only_unread_post', 'methods': ['POST']},
+                {'url': '/settings', 'endpoint': 'on_settings_post', 'methods': ['POST']},
                 {'url': '/all-tags', 'endpoint': 'on_get_all_tags', 'methods': ['GET', 'HEAD']},
                 {'url': '/posts/with/tags/<string:s_tags>', 'endpoint': 'on_get_posts_with_tags', 'methods': ['GET', 'HEAD']},
                 {'url': '/tag-siblings/<string:tag>', 'endpoint': 'on_get_tag_siblings', 'methods': ['GET', 'HEAD']},
@@ -193,13 +192,17 @@ class RSSCloudApplication(object):
                     self.user = None
                     logging.error('Can`t create new session: %s', e)
         else:
+            settings = {
+                'only_unread': True,
+                'tags_on_page': 100,
+                'posts_on_page': 30,
+                'hot_tags' : False
+            }
             self.user['sid'] = sha256(os.urandom(randint(80, 200))).hexdigest()
             self.user['letter'] = ''
             self.user['page'] = '1'
-            self.user['only_unread'] = True
+            self.user['settings'] = settings;
             self.user['ready_flag'] = False
-            self.user['cloud_items_on_page'] = 100
-            self.user['posts_on_page'] = 30
             self.user['message'] = 'Click on "Refresh posts" to start downloading data'
             self.user['in_queue'] = False
             self.user['createdAt'] = datetime.utcnow()
@@ -443,16 +446,55 @@ class RSSCloudApplication(object):
             result = {'status': 'not logged', 'reason': 'Not logged', 'message': 'Click on "Select provider" to start work'}
         self.response = Response(json.dumps(result), mimetype='text/html')
 
-    def on_only_unread_post(self):
-        status = bool(int(self.request.form.get('status')))
-        result = {}
-        if self.user:
-            #self.user['only_unread'] = status
-            self.db.users.update_one({'sid': self.user['sid']}, {'$set': {'only_unread': status}})
-            result = {'result': 'ok', 'reason': 'ok'}
+    def on_settings_post(self):
+        try:
+            settings = json.loads(self.request.get_data(as_text=True))
+        except Exception as e:
+            logging.warning('Can`t json load settings. Cause: %s', e)
+            settings = {}
+        if (settings):
+            result = {}
+            if self.user:
+                changed = False
+                result = {'result': 'ok', 'reason': 'ok'}
+                code = 200
+                try:
+                    for k, v in settings.items():
+                        if (k in self.user['settings']) and (self.user['settings'][k] != v):
+                            old_value = self.user['settings'][k]
+                            if isinstance(old_value, int):
+                                self.user['settings'][k] = int(v)
+                            elif isinstance(old_value, float):
+                                self.user['settings'][k] = float(v)
+                            elif isinstance(old_value, bool):
+                                self.user['settings'][k] = bool(v)
+                            else:
+                                raise ValueError('bad settings value')
+                            changed = True
+                except Exception as e:
+                    changed = False
+                    logging.warning('Wrong settings value. Cause: %s', e)
+                    result = {'result': 'error', 'reason': 'Bad settings'}
+                    code = 400
+                try:
+                    if changed:
+                        self.db.users.update_one(
+                            {'sid': self.user['sid']},
+                            {'$set': {'settings': self.user['settings']}}
+                        )
+                except Exception as e:
+                    logging.error('Can`t save settings in db. Cause: %s', e)
+                    result = {'result': 'error', 'reason': 'Server in trouble'}
+                    code = 500
+            else:
+                result = {'result': 'error', 'reason': 'Not logged'}
+                code = 401
+            self.response = Response(json.dumps(result), mimetype='application/json')
         else:
-            result = {'result': 'error', 'reason': 'Not logged'}
-        self.response = Response(json.dumps(result), mimetype='text/html')
+            result = {'result': 'error', 'reason': 'Something wrong with settings'}
+            code = 400
+        self.response = Response(json.dumps(result), mimetype='application/json')
+        self.response.status_code = code
 
     def on_error(self, e):
         page = self.template_env.get_template('error.html')
@@ -477,16 +519,17 @@ class RSSCloudApplication(object):
                     else:
                         posts['unread'] = result['counter']
             page = self.template_env.get_template('root-logged.html')
-            self.response = Response(page.render(
+            self.response = Response(
+                page.render(
                 err=err,
-                support=self.config['settings']['support'],
-                version=self.config['settings']['version'],
-                only_unread=self.user['only_unread'],
-                provider=self.user['provider'],
-                posts_per_page=self.user['posts_on_page'],
-                tags_per_page=self.user['cloud_items_on_page'],
-                posts=posts),
-            mimetype='text/html')
+                    support=self.config['settings']['support'],
+                    version=self.config['settings']['version'],
+                    user_settings=self.user['settings'],
+                    provider=self.user['provider'],
+                    posts=posts
+                ),
+                mimetype='text/html'
+            )
         else:
             provider = 'Not selected'
             page = self.template_env.get_template('root.html')
@@ -508,7 +551,7 @@ class RSSCloudApplication(object):
         by_feed = {}
         for f in self.db.feeds.find({'owner': self.user['sid']}):
             by_feed[f['feed_id']] = f
-        if self.user['only_unread']:
+        if self.user['settings']['only_unread']:
             match = {'owner': self.user['sid'], 'read':False}
         else:
             match = {'owner': self.user['sid']}
@@ -548,10 +591,8 @@ class RSSCloudApplication(object):
             page.render(
                 data=data,
                 group_by_link=self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number}),
-                only_unread=self.user['only_unread'],
+                user_settings=self.user['settings'],
                 provider=self.user['provider'],
-                posts_per_page=self.user['posts_on_page'],
-                tags_per_page=self.user['cloud_items_on_page']
             ),
             mimetype='text/html'
         )
@@ -571,7 +612,7 @@ class RSSCloudApplication(object):
             by_feed = {}
             for f in cat_cursor:
                 by_feed[f['feed_id']] = f
-            if self.user['only_unread']:
+            if self.user['settings']['only_unread']:
                 if cat == all_feeds:
                     cursor = self.db.posts.find({'owner': self.user['sid'], 'read': False}).sort([('feed_id', DESCENDING), ('unix_date', DESCENDING)])
                 else:
@@ -601,13 +642,13 @@ class RSSCloudApplication(object):
                     back_link=self.getUrlByEndpoint(endpoint='on_group_by_category_get'),
                     group='category',
                     words='',
-                    only_unread=self.user['only_unread'],
-                    provider=self.user['provider'],
-                    posts_per_page=self.user['posts_on_page'],
-                    tags_per_page=self.user['cloud_items_on_page']),
-                    #next_tag=self.getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': next_cat}),
-                    #prev_tag=self.getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': prev_cat})),
-                mimetype='text/html')
+                    user_settings=self.user['settings'],
+                    provider=self.user['provider']
+                    # next_tag=self.getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': next_cat}),
+                    # prev_tag=self.getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': prev_cat})),
+                ),
+                mimetype='text/html'
+            )
         else:
             self.on_error(NotFound())
 
@@ -630,7 +671,7 @@ class RSSCloudApplication(object):
         current_tag = self.db.tags.find_one({'owner': self.user['sid'], 'tag': tag})
         if current_tag:
             posts = []
-            if self.user['only_unread']:
+            if self.user['settings']['only_unread']:
                 cursor = self.db.posts.find({
                     'owner': self.user['sid'],
                     'read': False,
@@ -657,13 +698,13 @@ class RSSCloudApplication(object):
                     back_link=back_link,
                     group='tag',
                     words=', '.join(current_tag['words']),
-                    only_unread=self.user['only_unread'],
-                    provider=self.user['provider'],
-                    posts_per_page=self.user['posts_on_page'],
-                    tags_per_page=self.user['cloud_items_on_page']),
-                    #next_tag=self.getUrlByEndpoint(endpoint='on_tag_get', params={'quoted_tag': next_tag}) if next_tag else '/',
-                    #prev_tag=self.getUrlByEndpoint(endpoint='on_tag_get', params={'quoted_tag': prev_tag}) if prev_tag else '/'),
-                mimetype='text/html')
+                    user_settings=self.user['settings'],
+                    provider=self.user['provider']
+                    # next_tag=self.getUrlByEndpoint(endpoint='on_tag_get', params={'quoted_tag': next_tag}) if next_tag else '/',
+                    # prev_tag=self.getUrlByEndpoint(endpoint='on_tag_get', params={'quoted_tag': prev_tag}) if prev_tag else '/'),
+                ),
+                mimetype='text/html'
+            )
         else:
             self.on_error(NotFound())
 
@@ -672,7 +713,7 @@ class RSSCloudApplication(object):
         feed = unquote_plus(quoted_feed)
         current_feed = self.db.feeds.find_one({'owner': self.user['sid'], 'feed_id': feed})
         if feed:
-            if self.user['only_unread']:
+            if self.user['settings']['only_unread']:
                 cursor = self.db.posts.find({'owner': self.user['sid'], 'read': False, 'feed_id': current_feed['feed_id']}).sort('unix_date', DESCENDING)
             else:
                 cursor = self.db.posts.find({'owner': self.user['sid'], 'feed_id': current_feed['feed_id']}).sort('unix_date', DESCENDING)
@@ -692,13 +733,13 @@ class RSSCloudApplication(object):
                     back_link=self.getUrlByEndpoint(endpoint='on_group_by_category_get'),
                     group='feed',
                     words='',
-                    only_unread=self.user['only_unread'],
-                    provider=self.user['provider'],
-                    posts_per_page=self.user['posts_on_page'],
-                    tags_per_page=self.user['cloud_items_on_page']),
-                    #next_tag=self.getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': next_cat}),
-                    #prev_tag=self.getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': prev_cat})),
-                mimetype='text/html')
+                    user_settings=self.user['settings'],
+                    provider=self.user['provider']
+                    # next_tag=self.getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': next_cat}),
+                    # prev_tag=self.getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': prev_cat})),
+                ),
+                mimetype='text/html'
+            )
         else:
             self.on_error(NotFound())
 
@@ -812,7 +853,7 @@ class RSSCloudApplication(object):
 
     def getLetters(self):
         letters = []
-        if self.user['only_unread']:
+        if self.user['settings']['only_unread']:
             for s_let in self.first_letters:
                 if self.first_letters[s_let]['unread_count'] > 0:
                     letters.append({'letter': self.first_letters[s_let]['letter'], 'local_url': self.first_letters[s_let]['local_url']})
@@ -839,135 +880,82 @@ class RSSCloudApplication(object):
                 pages_map['end'] = [{'p': 'last', 'url': self.getUrlByEndpoint(endpoint=endpoint, params={'page_number': page_count})}]
         else:
             pages_map['start'] = [{'p': i, 'url': self.getUrlByEndpoint(endpoint=endpoint, params={'page_number': i})} for i in range(1, page_count + 1)]
-        start_tags_range = ((p_number - 1) * items_per_page) + items_per_page
-        end_tags_range = start_tags_range + items_per_page
+        start_tags_range = round(((p_number - 1) * items_per_page) + items_per_page)
+        end_tags_range = round(start_tags_range + items_per_page)
         return(pages_map, start_tags_range, end_tags_range)
 
     def on_group_by_tags_get(self, page_number):
         self.response = None
         page = self.template_env.get_template('group-by-tag.html')
-        if self.user['only_unread']:
-            #cursor = self.db.tags.find({'owner': self.user['sid'], 'unread_count': {'$gt': 0}}).sort([('unread_count', DESCENDING), ('tag', ASCENDING)])
-            cursor = self.db.tags.find({'owner': self.user['sid'], 'unread_count': {'$gt': 0}}).sort([('unread_count', DESCENDING)])
-        else:
-            #cursor = self.db.tags.find({'owner': self.user['sid']}).sort([('posts_count', DESCENDING), ('tag', ASCENDING)])
-            cursor = self.db.tags.find({'owner': self.user['sid']}).sort([('posts_count', DESCENDING)])
-        tags_count = cursor.count()
-        page_count = self.getPageCount(tags_count, self.user['cloud_items_on_page'])
+        sort_data = []
+        query = {'owner': self.user['sid']}
 
-        if page_number <= 0:
-            p_number = 1
-            self.user['page'] = p_number
-        elif page_number > page_count:
-            p_number = page_count
-            self.response = redirect(self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': p_number}))
-            self.user['page'] = p_number
-        else:
-            p_number = page_number
-        p_number -= 1
-        if p_number < 0:
-            p_number = 1
-        new_cookie_page_value = p_number + 1
-        if not self.response:
-            pages_map, start_tags_range, end_tags_range = self.calcPagerData(p_number, page_count, self.user['cloud_items_on_page'], 'on_group_by_tags_get')
-            if end_tags_range > tags_count:
-                end_tags_range = tags_count
-            sorted_tags = []
-            load_tags = OrderedDict()
-            if self.user['only_unread']:
-                for t in cursor[start_tags_range:end_tags_range]:
-                    sorted_tags.append({'tag': t['tag'], 'url': t['local_url'], 'words': t['words'], 'count': t['unread_count']})
+        if self.user['settings']['only_unread']:
+            if (self.user['settings']['hot_tags']):
+                sort_data = [('temperature', DESCENDING)]
             else:
-                for t in cursor[start_tags_range:end_tags_range]:
-                    sorted_tags.append({'tag': t['tag'], 'url': t['local_url'], 'words': t['words'], 'count': t['posts_count']})
-            self.fillFirstLetters()
-            letters = self.getLetters()
-            self.response = Response(
-                page.render(
-                    tags=sorted_tags,
-                    sort_by_title = 'tags',
-                    sort_by_link=self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': new_cookie_page_value}),
-                    group_by_link=self.getUrlByEndpoint(endpoint='on_group_by_category_get'),
-                    pages_map=pages_map,
-                    current_page=new_cookie_page_value,
-                    letters=letters,
-                    only_unread=self.user['only_unread'],
-                    provider=self.user['provider'],
-                    posts_per_page=self.user['posts_on_page'],
-                    tags_per_page=self.user['cloud_items_on_page']),
-                mimetype='text/html'
+                sort_data = [('unread_count', DESCENDING)]
+            query['unread_count'] = {'$gt': 0}
+        else:
+            if (self.user['settings']['hot_tags']):
+                sort_data = [('temperature', DESCENDING)]
+            else:
+                sort_data = [('posts_count', DESCENDING)]
+        try:
+            cursor = self.db.tags.find(query).sort(sort_data)
+            tags_count = cursor.count()
+        except Exception as e:
+            cursor = None
+            logging.error('Can`t get tags. Cause: %s', e)
+        if cursor:
+            page_count = self.getPageCount(tags_count, self.user['settings']['tags_on_page'])
+            if page_number <= 0:
+                p_number = 1
+                self.user['page'] = p_number
+            elif page_number > page_count:
+                p_number = page_count
+                self.response = redirect(self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': p_number}))
+                self.user['page'] = p_number
+            else:
+                p_number = page_number
+            p_number -= 1
+            if p_number < 0:
+                p_number = 1
+            new_cookie_page_value = p_number + 1
+            if not self.response:
+                pages_map, start_tags_range, end_tags_range = self.calcPagerData(p_number, page_count, self.user['settings']['tags_on_page'], 'on_group_by_tags_get')
+                if end_tags_range > tags_count:
+                    end_tags_range = tags_count
+                sorted_tags = []
+                load_tags = OrderedDict()
+                if self.user['settings']['only_unread']:
+                    for t in cursor[start_tags_range:end_tags_range]:
+                        sorted_tags.append({'tag': t['tag'], 'url': t['local_url'], 'words': t['words'], 'count': t['unread_count']})
+                else:
+                    for t in cursor[start_tags_range:end_tags_range]:
+                        sorted_tags.append({'tag': t['tag'], 'url': t['local_url'], 'words': t['words'], 'count': t['posts_count']})
+                self.fillFirstLetters()
+                letters = self.getLetters()
+                self.response = Response(
+                    page.render(
+                        tags=sorted_tags,
+                        sort_by_title = 'tags',
+                        sort_by_link=self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': new_cookie_page_value}),
+                        group_by_link=self.getUrlByEndpoint(endpoint='on_group_by_category_get'),
+                        pages_map=pages_map,
+                        current_page=new_cookie_page_value,
+                        letters=letters,
+                        user_settings=self.user['settings'],
+                        provider=self.user['provider']
+                    ),
+                    mimetype='text/html'
                 )
-            self.db.users.update_one({'sid': self.user['sid']}, {'$set': {'page': new_cookie_page_value, 'letter': ''}})
-        else:
-            if not self.response:
-                self.on_error(NotFound())
-
-    def on_group_by_hottags_get(self, page_number):
-        self.response = None
-        page = self.template_env.get_template('group-by-hottag.html')
-        if self.user['only_unread']:
-            # cursor = self.db.tags.find({'owner': self.user['sid'], 'unread_count': {'$gt': 0}}).sort([('unread_count', DESCENDING), ('tag', ASCENDING)])
-            cursor = self.db.tags.find({'owner': self.user['sid'], 'unread_count': {'$gt': 1}}).sort(
-                [('temperature', DESCENDING), ('unread_count', DESCENDING)])
-        else:
-            # cursor = self.db.tags.find({'owner': self.user['sid']}).sort([('posts_count', DESCENDING), ('tag', ASCENDING)])
-            cursor = self.db.tags.find({'owner': self.user['sid'], 'posts_count': {'$gt': 1}}).sort([('temperature', DESCENDING), ('posts_count', DESCENDING)])
-        tags_count = cursor.count()
-        page_count = self.getPageCount(tags_count, self.user['cloud_items_on_page'])
-
-        if page_number <= 0:
-            p_number = 1
-            self.user['page'] = p_number
-        elif page_number > page_count:
-            p_number = page_count
-            self.response = redirect(
-                self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': p_number}))
-            self.user['page'] = p_number
-        else:
-            p_number = page_number
-        p_number -= 1
-        if p_number < 0:
-            p_number = 1
-        new_cookie_page_value = p_number + 1
-        if not self.response:
-            pages_map, start_tags_range, end_tags_range = self.calcPagerData(p_number, page_count,
-                                                                             self.user['cloud_items_on_page'],
-                                                                             'on_group_by_tags_get')
-            if end_tags_range > tags_count:
-                end_tags_range = tags_count
-            sorted_tags = []
-            load_tags = OrderedDict()
-            if self.user['only_unread']:
-                for t in cursor[start_tags_range:end_tags_range]:
-                    sorted_tags.append(
-                        {'tag': t['tag'], 'url': t['local_url'], 'words': t['words'], 'count': t['unread_count']})
+                self.db.users.update_one({'sid': self.user['sid']}, {'$set': {'page': new_cookie_page_value, 'letter': ''}})
             else:
-                for t in cursor[start_tags_range:end_tags_range]:
-                    sorted_tags.append(
-                        {'tag': t['tag'], 'url': t['local_url'], 'words': t['words'], 'count': t['posts_count']})
-            self.fillFirstLetters()
-            letters = self.getLetters()
-            self.response = Response(
-                page.render(
-                    tags=sorted_tags,
-                    sort_by_title='tags',
-                    sort_by_link=self.getUrlByEndpoint(endpoint='on_group_by_hottags_get',
-                                                       params={'page_number': new_cookie_page_value}),
-                    group_by_link=self.getUrlByEndpoint(endpoint='on_group_by_category_get'),
-                    pages_map=pages_map,
-                    current_page=new_cookie_page_value,
-                    letters=letters,
-                    only_unread=self.user['only_unread'],
-                    provider=self.user['provider'],
-                    posts_per_page=self.user['posts_on_page'],
-                    tags_per_page=self.user['cloud_items_on_page']),
-                mimetype='text/html'
-            )
-            self.db.users.update_one({'sid': self.user['sid']},
-                                     {'$set': {'page': new_cookie_page_value, 'letter': ''}})
+                if not self.response:
+                    self.on_error(NotFound())
         else:
-            if not self.response:
-                self.on_error(NotFound())
+            raise InternalServerError()
 
     def on_group_by_tags_startwith_get(self, letter=None):
         self.response = None
@@ -980,7 +968,7 @@ class RSSCloudApplication(object):
             letters = self.getLetters()
             page = self.template_env.get_template('group-by-tag.html')
             tags = []
-            if self.user['only_unread']:
+            if self.user['settings']['only_unread']:
                 #cursor = self.db.tags.find({'owner': self.user['sid'], 'unread_count': {'$gt': 0}, 'tag': {'$regex': '^{0}'.format(let)}}).sort([('unread_count', DESCENDING), ('tag', ASCENDING)])
                 cursor = self.db.tags.find({
                     'owner': self.user['sid'],
@@ -1005,10 +993,9 @@ class RSSCloudApplication(object):
                     pages_map={},
                     current_page=1,
                     letters=letters,
-                    only_unread=self.user['only_unread'],
                     provider=self.user['provider'],
-                    posts_per_page=self.user['posts_on_page'],
-                    tags_per_page=self.user['cloud_items_on_page']),
+                    user_settings=self.user['settings']
+                ),
                 mimetype='text/html'
             )
             self.db.users.update_one({'sid': self.user['sid']}, {'$set': {'letter': let}})
@@ -1021,7 +1008,7 @@ class RSSCloudApplication(object):
                 'owner': self.user['sid'],
                 'tags': tag
             }
-            if self.user['only_unread']:
+            if self.user['settings']['only_unread']:
                 query['read'] = False
             cur = self.db.posts.find(query, projection=['tags'])
             all_tags = {}
@@ -1047,7 +1034,7 @@ class RSSCloudApplication(object):
                 if (not wanted_posts):
                     err.append('Posts must be not empty or have correct value')
         if not err:
-            posts = self.db.posts.find({'owner': self.user['sid'], 'pid': {'$in': wanted_posts}}, limit=self.user['posts_on_page'])
+            posts = self.db.posts.find({'owner': self.user['sid'], 'pid': {'$in': wanted_posts}}, limit=self.user['settings']['posts_on_page'])
             if not err:
                 posts_content = []
                 for post in posts:
@@ -1129,7 +1116,7 @@ class RSSCloudApplication(object):
     def on_get_all_tags(self):
         err = []
         result = []
-        if self.user['only_unread']:
+        if self.user['settings']['only_unread']:
             all_tags = self.db.tags.find({'owner': self.user['sid'], 'unread_count': {'$gt': 0}})
         else:
             all_tags = self.db.tags.find({'owner': self.user['sid']})
@@ -1152,7 +1139,7 @@ class RSSCloudApplication(object):
                     result[tag['tag']] = {'words': ', '.join(tag['words']), 'posts': []}
 
                 query = {'owner': self.user['sid'], 'tags': {'$in': tags}}
-                if self.user['only_unread']:
+                if self.user['settings']['only_unread']:
                     query['read'] = False
                 posts_cursor = self.db.posts.find(query, {'content.content': 0})
                 feeds = {}
@@ -1179,18 +1166,21 @@ class RSSCloudApplication(object):
                 page_number = self.user['page']
                 if letter:
                     back_link = self.getUrlByEndpoint(endpoint='on_group_by_tags_startwith_get', params={'letter': letter})
+                elif self.user['settings']['hot_tags']:
+                    back_link = self.getUrlByEndpoint(endpoint='on_group_by_hottags_get', params={'page_number': page_number})
                 else:
                     back_link = self.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number})
                 page = self.template_env.get_template('tags-posts.html')
-                self.response = Response(page.render(
-                    tags=result,
-                    selected_tags=','.join(tags),
-                    back_link=back_link, group='tag',
-                    only_unread=self.user['only_unread'],
-                    provider=self.user['provider'],
-                    posts_per_page=self.user['posts_on_page'],
-                    tags_per_page=self.user['cloud_items_on_page']),
-                mimetype='text/html')
+                self.response = Response(
+                    page.render(
+                        tags=result,
+                        selected_tags=','.join(tags),
+                        back_link=back_link, group='tag',
+                        user_settings=self.user['settings'],
+                        provider=self.user['provider']
+                    ),
+                    mimetype='text/html'
+                )
         else:
             self.response = redirect(self.getUrlByEndpoint('on_root_get'))
 
@@ -1200,7 +1190,7 @@ class RSSCloudApplication(object):
         s_request = unquote_plus(self.request.form.get('req'))
         if s_request:
             field_name = ''
-            if self.user['only_unread']:
+            if self.user['settings']['only_unread']:
                 field_name = 'unread_count'
             else:
                 field_name = 'posts_count'
@@ -1208,7 +1198,7 @@ class RSSCloudApplication(object):
                 tags_cur = self.db.tags.find({
                     'owner': self.user['sid'],
                     field_name: {'$gt': 0},
-                    'read': not self.user['only_unread'],
+                    'read': not self.user['settings']['only_unread'],
                     'tag': {'$regex': '^{}.*'.format(s_request), '$options': 'i'}
                 }, {
                     'tag': 1,
