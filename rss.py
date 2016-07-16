@@ -892,13 +892,13 @@ class RSSCloudApplication(object):
 
         if self.user['settings']['only_unread']:
             if (self.user['settings']['hot_tags']):
-                sort_data = [('temperature', DESCENDING)]
+                sort_data = [('temperature', DESCENDING), ('unread_count', DESCENDING)]
             else:
                 sort_data = [('unread_count', DESCENDING)]
             query['unread_count'] = {'$gt': 0}
         else:
             if (self.user['settings']['hot_tags']):
-                sort_data = [('temperature', DESCENDING)]
+                sort_data = [('temperature', DESCENDING), ('posts_count', DESCENDING)]
             else:
                 sort_data = [('posts_count', DESCENDING)]
         try:
