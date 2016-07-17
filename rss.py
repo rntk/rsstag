@@ -864,6 +864,7 @@ class RSSCloudApplication(object):
 
     def calcPagerData(self, p_number, page_count, items_per_page, endpoint):
         pages_map = {}
+        page_count = round(page_count)
         numbers_start_range = p_number - self.count_showed_numbers + 1
         numbers_end_range = p_number + self.count_showed_numbers + 1
         if numbers_start_range <= 0:
@@ -889,7 +890,6 @@ class RSSCloudApplication(object):
         page = self.template_env.get_template('group-by-tag.html')
         sort_data = []
         query = {'owner': self.user['sid']}
-
         if self.user['settings']['only_unread']:
             if (self.user['settings']['hot_tags']):
                 sort_data = [('temperature', DESCENDING), ('unread_count', DESCENDING)]
