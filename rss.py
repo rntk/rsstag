@@ -1034,7 +1034,7 @@ class RSSCloudApplication(object):
                 if (not wanted_posts):
                     err.append('Posts must be not empty or have correct value')
         if not err:
-            posts = self.db.posts.find({'owner': self.user['sid'], 'pid': {'$in': wanted_posts}}, limit=self.user['settings']['posts_on_page'])
+            posts = self.db.posts.find({'owner': self.user['sid'], 'pid': {'$in': wanted_posts}}, limit=round(self.user['settings']['posts_on_page']))
             if not err:
                 posts_content = []
                 for post in posts:
