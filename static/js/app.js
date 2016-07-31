@@ -709,7 +709,7 @@
                 $promise,
                 tag = $el.parent().data('tag');
 
-            if ((typeof tag === 'string') && (tag !== '')) {
+            if (tag) {
                 $promise = $.ajax({
                     url: this.urls.tag_siblings + '/' + encodeURIComponent(tag),
                     type: 'GET',
