@@ -153,7 +153,7 @@ class RSSCloudApplication(object):
     def updateEndpoints(self):
         for i in self.routes.iter_rules():
             self.endpoints[i.endpoint] = getattr(self, i.endpoint)
-            
+
     def prepareSession(self, user=None):
         if user == None:
             sid = self.request.cookies.get('sid')
@@ -161,9 +161,9 @@ class RSSCloudApplication(object):
                 self.user = self.db.users.find_one({'sid': sid})
             else:
                 self.user = None
-        else: 
+        else:
             self.user = user
-            
+
         if self.user:
             self.need_cookie_update = True
             return(True)
@@ -1011,14 +1011,31 @@ class RSSCloudApplication(object):
             if self.user['settings']['only_unread']:
                 query['read'] = False
             cur = self.db.posts.find(query, projection=['tags'])
-            all_tags = {}
+            tags_set = set()
             for tags in cur:
                 for tag in tags['tags']:
-                    if tag not in all_tags:
-                        all_tags[tag] = {'t': tag, 'n': 0}
-                    all_tags[tag]['n'] += 1
+                    tags_set.add(tag)
+            if tags_set:
+                query = {
+                    'owner': self.user['sid'],
+                    'tag': {'$in': list(tags_set)}
+                }
+                if self.user['settings']['only_unread']:
+                    query['read'] = False
+                cur = self.db.tags.find(query, projection=['tag', 'posts_count', 'unread_count'])
+                if self.user['settings']['only_unread']:
+                    field = 'unread_count'
+                else:
+                    field = 'posts_count'
+                all_tags = []
+                for tag in cur:
+                    all_tags.append({
+                        't': tag['tag'],
+                        'n': tag[field]
+                    })
 
-            self.response = Response(json.dumps(list(all_tags.values())), mimetype='application/json')
+
+            self.response = Response(json.dumps(all_tags), mimetype='application/json')
 
 
     def on_posts_content_post(self):
