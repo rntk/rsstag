@@ -1,8 +1,10 @@
+'''Build tags from text. Support languages: english, russian'''
 import re
 import pymorphy2
 from nltk.stem import PorterStemmer
 
 class TagsBuilder:
+    '''Build tags from text. Support languages: english, russian'''
     def __init__(self, text_clean_re):
         self._text = ''
         self._tags = set()
@@ -15,18 +17,22 @@ class TagsBuilder:
         self.cyrillic = pymorphy2.MorphAnalyzer()
 
     def purge(self):
-        self._text = '';
-        self._tags= set()
-        self._words= {}
+        '''Clear state'''
+        self._text = ''
+        self._tags = set()
+        self._words = {}
 
     def get_tags(self):
+        '''Get builded tags'''
         return list(self._tags)
 
     def get_words(self):
+        '''Get words grouped by tag'''
         return self._words
 
     def build_tags(self, text):
-        self.text = text;
+        '''Build tags and words from text'''
+        self._text = text
         text = self.clear_html_esc.sub(' ', text)
         text = self.text_clearing.sub(' ', text)
         text = text.strip()
