@@ -1355,7 +1355,7 @@ def worker(config, routes_list):
             tags_builder.purge()
             tags_builder.build_tags(content)
             tags = tags_builder.get_tags()
-            words = tags_builder.get_words();
+            words = tags_builder.get_words()
             for tag in tags:
                 if tag[0] not in first_letters:
                     first_letters[tag[0]] = {
@@ -1369,7 +1369,7 @@ def worker(config, routes_list):
                     by_tag['tags'][tag] = {'words': [], 'local_url': tag, 'read': False, 'tag': tag,
                                            'owner': user['sid'], 'posts': set(),
                                            'temperature': 0}  # 'posts': set(), 'read_posts': set(),
-                by_tag['tags'][tag]['words'] = words[tag]
+                by_tag['tags'][tag]['words'] = list(words[tag])
                 by_tag['tags'][tag]['posts'].add(pos)
                 if tag not in all_posts[pos]['tags']:
                     all_posts[pos]['tags'].append(tag)

@@ -26,9 +26,9 @@ class TagsBuilder:
         return self._words
 
     def build_tags(self, text):
-        self.text_clearing = text;
+        self.text = text;
         text = self.clear_html_esc.sub(' ', text)
-        text = self.title_clearing.sub(' ', text)
+        text = self.text_clearing.sub(' ', text)
         text = text.strip()
         words = text.split()
         for current_word in words:
@@ -52,7 +52,7 @@ class TagsBuilder:
             else:
                 tag = current_word[:-3]
             if tag:
-                self.tags.add(tag)
+                self._tags.add(tag)
                 if tag not in self._words:
                     self._words[tag] = set()
                 self._words[tag].add(current_word)

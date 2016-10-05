@@ -8,14 +8,15 @@ class TestTagsBuilder(unittest.TestCase):
         text = 'тестировали тестировала тестировал testing tested оно 2016'
         builder.build_tags(text)
         tags = builder.get_tags()
-        self.assertEqual(tags, ['тестировать', 'test', 'оно', '2016'])
+        expect_tags = ['тестировать', 'test', 'оно', '2016']
+        self.assertEqual(tags.sort(), expect_tags.sort())
         words = builder.get_words()
         self.assertEqual(words, {
             'тестировать': set(
                 ['тестировали', 'тестировала', 'тестировал']
             ),
             'test': set(
-                'testing', 'tested'
+                ['testing', 'tested']
             ),
             'оно': set(['оно']),
             '2016': set(['2016'])
