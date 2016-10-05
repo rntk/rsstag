@@ -22,10 +22,9 @@ from werkzeug.exceptions import HTTPException, NotFound, InternalServerError
 from werkzeug.utils import redirect
 from werkzeug.wsgi import wrap_file
 from jinja2 import Environment, PackageLoader
-import pymorphy2
-from nltk.stem import PorterStemmer
 from pymongo import MongoClient, DESCENDING #, ASCENDING
 from html_cleaner import HTMLCleaner
+from tags_builder import TagsBuilder
 #from bson.regex import Regex
 
 class RSSCloudApplication(object):
@@ -1315,13 +1314,7 @@ def worker(config, routes_list):
     routes = Map(rules)
     name = str(randint(0, 10000))
     no_category_name = 'NotCategorized'
-    workers_downloader_pool = []
-    title_clearing = re.compile(config['settings']['replacement'])
-    only_cyrillic = re.compile(r'^[а-яА-ЯёЁ]*$')
-    only_latin = re.compile(r'^[a-zA-Z]*$')
-    clear_html_esc = re.compile(r'&[#a-zA-Z0-9]*?;')
-    latin = PorterStemmer()
-    cyrillic = pymorphy2.MorphAnalyzer()
+    tags_builder = TagsBuilder(config['settings']['replacement'])
     html_clnr = HTMLCleaner()
     by_category = {}
     by_feed = {}
@@ -1329,59 +1322,11 @@ def worker(config, routes_list):
     first_letters = {}
     user = None
     all_posts = []
+
     user_ttl = int(config['settings']['user_ttl'])
     #all_posts_content = []
     cl = MongoClient(config['settings']['db_host'], int(config['settings']['db_port']))
     db = cl.rss
-
-    def buildTags(text, pos):
-        text = clear_html_esc.sub(' ', text)
-        text = title_clearing.sub(' ', text)
-        text = text.strip()
-        words = text.split()
-        for current_word in words:
-            current_word = current_word.strip().lower()
-            word_length = len(current_word)
-            tag = ''
-            if only_cyrillic.match(current_word):
-                temp = cyrillic.parse(current_word)
-                if temp:
-                    for pw in temp:
-                        if pw.normal_form in by_tag['tags']:
-                            tag = pw.normal_form
-                            break
-                    if tag == '':
-                        tag = temp[0].normal_form
-                else:
-                    tag = current_word
-            elif only_latin.match(current_word):
-                tag = latin.stem(current_word)
-            elif current_word.isnumeric or word_length < 4:
-                tag = current_word
-            elif word_length == 4 or word_length == 5:
-                tag = current_word[:-1]
-            elif word_length == 6:
-                tag = current_word[:-2]
-            else:
-                tag = current_word[:-3]
-            if tag:
-                if tag[0] not in first_letters:
-                    first_letters[tag[0]] = {
-                        'letter': tag[0],
-                        'local_url': getUrlByEndpoint(endpoint='on_group_by_tags_startwith_get',
-                                                      params={'letter': tag[0]}),
-                        'unread_count': 0
-                    }
-                if tag not in by_tag['tags']:
-                    by_tag['unread_count'] += 1
-                    by_tag['tags'][tag] = {'words': [], 'local_url': tag, 'read': False, 'tag': tag,
-                                           'owner': user['sid'], 'posts': set(),
-                                           'temperature': 0}  # 'posts': set(), 'read_posts': set(),
-                if current_word not in by_tag['tags'][tag]['words']:
-                    by_tag['tags'][tag]['words'].append(current_word)
-                by_tag['tags'][tag]['posts'].add(pos)
-                if tag not in all_posts[pos]['tags']:
-                    all_posts[pos]['tags'].append(tag)
 
     def treatPosts(category=None, p_range=None):
         try:
@@ -1397,7 +1342,6 @@ def worker(config, routes_list):
             all_posts[pos]['pid'] = pos
             all_posts[pos]['createdAt'] = datetime.utcnow()
             title = all_posts[pos]['content']['title']
-            buildTags(title, pos)
             content = gzip.decompress(all_posts[pos]['content']['content'])
             content = content.decode('utf-8')
             if content:
@@ -1406,8 +1350,30 @@ def worker(config, routes_list):
                 strings = html_clnr.get_content()
                 if strings:
                     content = ' '.join(strings)
-            if content:
-                buildTags(content, pos)
+
+            content = title + ' ' + content
+            tags_builder.purge()
+            tags_builder.build_tags(content)
+            tags = tags_builder.get_tags()
+            words = tags_builder.get_words();
+            for tag in tags:
+                if tag[0] not in first_letters:
+                    first_letters[tag[0]] = {
+                        'letter': tag[0],
+                        'local_url': getUrlByEndpoint(endpoint='on_group_by_tags_startwith_get',
+                                                      params={'letter': tag[0]}),
+                        'unread_count': 0
+                    }
+                if tag not in by_tag['tags']:
+                    by_tag['unread_count'] += 1
+                    by_tag['tags'][tag] = {'words': [], 'local_url': tag, 'read': False, 'tag': tag,
+                                           'owner': user['sid'], 'posts': set(),
+                                           'temperature': 0}  # 'posts': set(), 'read_posts': set(),
+                by_tag['tags'][tag]['words'] = words[tag]
+                by_tag['tags'][tag]['posts'].add(pos)
+                if tag not in all_posts[pos]['tags']:
+                    all_posts[pos]['tags'].append(tag)
+
         try:
             logging.info('treated %s', category)
         except Exception as e:
