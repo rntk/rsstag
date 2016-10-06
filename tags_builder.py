@@ -26,6 +26,7 @@ class TagsBuilder:
         self._prepared_text = ''
 
     def text2words(self, text: str) -> List[str]:
+        '''Make words list from text'''
         text = self.clear_html_esc.sub(' ', text)
         text = self.text_clearing.sub(' ', text)
         text = text.strip()
@@ -93,4 +94,3 @@ class TagsBuilder:
                 tags.append(tag)
 
         self._prepared_text = ' '.join(tags)
-
