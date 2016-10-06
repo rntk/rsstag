@@ -22,23 +22,23 @@ class RSSTagWorker:
     '''Rsstag workers handler'''
     def __init__(self, config_path):
         self._config = load_config(config_path)
-        self.routes = RSSTagRoutes(self._config['settings']['host_name'])
         self._workers_pool = []
         logging.basicConfig(
             filename=self._config['settings']['log_file'],
             filemode='a',
             level=getattr(logging, self._config['settings']['log_level'].upper())
         )
-        self.log = logging
 
     def start(self):
         '''Start worker'''
         for i in range(int(self._config['settings']['workers_count'])):
             self._workers_pool.append(Process(target=self.worker))
             self._workers_pool[-1].start()
+        self._workers_pool[-1].join()
 
-    def worker(self):
+    def worker(self, *args, **kwargs):
         '''Worker for bazqux.com'''
+        routes = RSSTagRoutes(self._config['settings']['host_name'])
         no_category_name = 'NotCategorized'
         tags_builder = TagsBuilder(self._config['settings']['replacement'])
         html_clnr = HTMLCleaner()
@@ -54,9 +54,9 @@ class RSSTagWorker:
 
         def treatPosts(category=None, p_range=None):
             try:
-                self.log.info('treating %s', category)
+                logging.info('treating %s', category)
             except Exception as e:
-                self.log.warning('treating category with strange symbols')
+                logging.warning('treating category with strange symbols')
             for pos in range(p_range[0], p_range[1]):
                 if not all_posts[pos]['content']['title']:
                     all_posts[pos]['content']['title'] = 'Notitle'
@@ -84,7 +84,7 @@ class RSSTagWorker:
                     if tag[0] not in first_letters:
                         first_letters[tag[0]] = {
                             'letter': tag[0],
-                            'local_url': self.routes.getUrlByEndpoint(
+                            'local_url': routes.getUrlByEndpoint(
                                 endpoint='on_group_by_tags_startwith_get',
                                 params={'letter': tag[0]}
                             ),
@@ -101,9 +101,9 @@ class RSSTagWorker:
                         all_posts[pos]['tags'].append(tag)
 
             try:
-                self.log.info('treated %s', category)
+                logging.info('treated %s', category)
             except Exception as e:
-                self.log.warning('treated category with strange symbols')
+                logging.warning('treated category with strange symbols')
             return p_range
 
         def saveAllData():
@@ -133,7 +133,7 @@ class RSSTagWorker:
                         }}
                     )
                 except Exception as e:
-                    self.log.error('Can`t save all data: %s', e)
+                    logging.error('Can`t save all data: %s', e)
                     db.users.update_one(
                         {'sid': user['sid']},
                         {'$set': {
@@ -143,13 +143,13 @@ class RSSTagWorker:
                             'createdAt': datetime.utcnow()
                         }}
                     )
-                self.log.info('saved all-%s %s %s %s', time.time() - st, len(tags_list), len(all_posts), len(by_feed))
+                logging.info('saved all-%s %s %s %s', time.time() - st, len(tags_list), len(all_posts), len(by_feed))
             else:
                 db.users.update_one(
                     {'sid': user['sid']},
                     {'$set': {'ready_flag': True, 'in_queue': False, 'message': 'You can start reading'}}
                 )
-                self.log.warning('Nothing to save')
+                logging.warning('Nothing to save')
 
         def processWords():
             cur = db.tags.find({'owner': user['sid']})
@@ -178,7 +178,7 @@ class RSSTagWorker:
                 data = db.download_queue.find_one_and_delete({})
             except Exception as e:
                 data = None
-                self.log.error('Worker can`t get data from queue: %s', e)
+                logging.error('Worker can`t get data from queue: %s', e)
             if data:
                 user_id = data['user']
                 action_type = 'download'
@@ -187,7 +187,7 @@ class RSSTagWorker:
                     data = db.mark_queue.find_one_and_delete({})
                 except Exception as e:
                     data = None
-                    self.log.error('Worker can`t get data from queue: %s', e)
+                    logging.error('Worker can`t get data from queue: %s', e)
                 if data:
                     user_id = data['user']
                     action_type = 'mark'
@@ -221,7 +221,7 @@ class RSSTagWorker:
                         subscriptions = json.loads(json_data.decode('utf-8'))
                     except Exception as e:
                         subscriptions = None
-                        self.log.error('Can`t decode subscriptions %s', e)
+                        logging.error('Can`t decode subscriptions %s', e)
                     if subscriptions:
                         works = []
                         i = 0
@@ -269,9 +269,9 @@ class RSSTagWorker:
                                             'feed_id': post['origin']['streamId'],
                                             'origin_feed_id': origin_feed_id,
                                             'category_title': category,
-                                            'category_local_url': self.routes.getUrlByEndpoint(endpoint='on_category_get', params={
+                                            'category_local_url': routes.getUrlByEndpoint(endpoint='on_category_get', params={
                                                 'quoted_category': category}),
-                                            'local_url': self.routes.getUrlByEndpoint(endpoint='on_feed_get', params={
+                                            'local_url': routes.getUrlByEndpoint(endpoint='on_feed_get', params={
                                                 'quoted_feed': post['origin']['streamId']})
                                         }
                                     p_date = None
@@ -336,16 +336,16 @@ class RSSTagWorker:
                         except Exception as e:
                             err.append(str(e))
                             connection.close()
-                            self.log.warning('Can`t make request %s %s', e, counter)
+                            logging.warning('Can`t make request %s %s', e, counter)
                         if not err:
                             if resp_data.decode('utf-8').lower() == 'ok':
                                 counter = 6
                             else:
                                 time.sleep(randint(2, 7))
                                 if counter < 6:
-                                    self.log.warning('try again')
+                                    logging.warning('try again')
                                 else:
-                                    self.log.warning('not marked %s', resp_data)
+                                    logging.warning('not marked %s', resp_data)
                     connection.close()
 
 if __name__ == '__main__':
