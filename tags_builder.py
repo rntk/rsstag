@@ -1,12 +1,14 @@
 '''Build tags from text. Support languages: english, russian'''
 import re
+from typing import List, Dict
 import pymorphy2
 from nltk.stem import PorterStemmer
 
 class TagsBuilder:
     '''Build tags from text. Support languages: english, russian'''
-    def __init__(self, text_clean_re):
+    def __init__(self, text_clean_re: str) -> None:
         self._text = ''
+        self._prepared_text = ''
         self._tags = set()
         self._words = {}
         self.text_clearing = re.compile(text_clean_re)
@@ -16,49 +18,79 @@ class TagsBuilder:
         self.latin = PorterStemmer()
         self.cyrillic = pymorphy2.MorphAnalyzer()
 
-    def purge(self):
+    def purge(self) -> None:
         '''Clear state'''
         self._text = ''
         self._tags = set()
         self._words = {}
+        self._prepared_text = ''
 
-    def get_tags(self):
-        '''Get builded tags'''
-        return list(self._tags)
-
-    def get_words(self):
-        '''Get words grouped by tag'''
-        return self._words
-
-    def build_tags(self, text):
-        '''Build tags and words from text'''
-        self._text = text
+    def text2words(self, text: str) -> List[str]:
         text = self.clear_html_esc.sub(' ', text)
         text = self.text_clearing.sub(' ', text)
         text = text.strip()
         words = text.split()
-        for current_word in words:
-            current_word = current_word.strip().lower()
-            word_length = len(current_word)
-            tag = ''
-            if self.only_cyrillic.match(current_word):
-                temp = self.cyrillic.parse(current_word)
-                if temp:
-                    tag = temp[0].normal_form
-                else:
-                    tag = current_word
-            elif self.only_latin.match(current_word):
-                tag = self.latin.stem(current_word)
-            elif current_word.isnumeric or word_length < 4:
-                tag = current_word
-            elif word_length == 4 or word_length == 5:
-                tag = current_word[:-1]
-            elif word_length == 6:
-                tag = current_word[:-2]
+
+        return words
+
+    def process_word(self, current_word: str) -> str:
+        '''Make tag/token from gven word'''
+        current_word = current_word.strip().lower()
+        word_length = len(current_word)
+        tag = ''
+        if self.only_cyrillic.match(current_word):
+            temp = self.cyrillic.parse(current_word)
+            if temp:
+                tag = temp[0].normal_form
             else:
-                tag = current_word[:-3]
+                tag = current_word
+        elif self.only_latin.match(current_word):
+            tag = self.latin.stem(current_word)
+        elif current_word.isnumeric or word_length < 4:
+            tag = current_word
+        elif word_length == 4 or word_length == 5:
+            tag = current_word[:-1]
+        elif word_length == 6:
+            tag = current_word[:-2]
+        else:
+            tag = current_word[:-3]
+
+        return tag
+
+    def get_tags(self) -> List[str]:
+        '''Get builded tags'''
+        return list(self._tags)
+
+    def get_words(self) -> Dict[str, set]:
+        '''Get words grouped by tag'''
+        return self._words
+
+    def build_tags(self, text: str) -> None:
+        '''Build tags and words from text'''
+        self._text = text
+        words = self.text2words(text)
+        for current_word in words:
+            tag = self.process_word(current_word)
             if tag:
                 self._tags.add(tag)
                 if tag not in self._words:
                     self._words[tag] = set()
                 self._words[tag].add(current_word)
+
+    def get_prepared_text(self) -> str:
+        '''Get text prepared for Doc2Vec'''
+        return self._prepared_text
+
+    def prepare_text(self, text: str) -> None:
+        '''Prepare text for Doc2vec'''
+        self._text = text
+        words = self.text2words(text)
+        self._prepared_text = ''
+        tags = []
+        for current_word in words:
+            tag = self.process_word(current_word)
+            if tag:
+                tags.append(tag)
+
+        self._prepared_text = ' '.join(tags)
+

@@ -27,6 +27,19 @@ class TestTagsBuilder(unittest.TestCase):
         words = builder.get_words()
         self.assertEqual(words, {})
 
+    def test_text2words(self):
+        builder = TagsBuilder('[^a-zA-Zа-яА-ЯёЁ0-9 ]')
+        text = 'тестировали? тестировала тестировал testing, tested оно 2016   '
+        words = ['тестировали', 'тестировала', 'тестировал', 'testing', 'tested', 'оно', '2016']
+        self.assertEqual(builder.text2words(text), words)
+
+    def test_process_word(self):
+        builder = TagsBuilder('[^a-zA-Zа-яА-ЯёЁ0-9 ]')
+        words = ['тестировали', 'testing', 'оно', '2016']
+        expect = ['тестировать', 'test', 'оно', '2016']
+        for i, word in enumerate(words):
+            self.assertEqual(builder.process_word(word), expect[i])
+
 
 if __name__ == '__main__':
     unittest.main()
