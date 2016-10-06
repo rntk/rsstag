@@ -20,6 +20,7 @@ from jinja2 import Environment, PackageLoader
 from pymongo import MongoClient, DESCENDING
 from rsstag_routes import RSSTagRoutes
 from rsstag_utils import getSortedDictByAlphabet, load_config
+from gensim.models.doc2vec import Doc2Vec
 
 class RSSCloudApplication(object):
     request = None
@@ -52,6 +53,7 @@ class RSSCloudApplication(object):
 
     def __init__(self, config_path=None):
         self.config = load_config(config_path)
+        self.d2v = Doc2Vec.load(self.config['settings']['model'])
         try:
             logging.basicConfig(
                 filename=self.config['settings']['log_file'],
@@ -1018,7 +1020,32 @@ class RSSCloudApplication(object):
             self.response = redirect(self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number}))
 
     def on_get_tag_siblings(self, tag=''):
+        all_tags = []
         if tag:
+            siblings = self.d2v.similar_by_word(tag, topn=20)
+            if siblings:
+                tags_set = set()
+                for sibling in siblings:
+                    tags_set.add(sibling[0])
+                query = {
+                    'owner': self.user['sid'],
+                    'tag': {'$in': list(tags_set)}
+                }
+                if self.user['settings']['only_unread']:
+                    query['read'] = False
+                cur = self.db.tags.find(query, projection=['tag', 'posts_count', 'unread_count'])
+                if self.user['settings']['only_unread']:
+                    field = 'unread_count'
+                else:
+                    field = 'posts_count'
+                all_tags = []
+                for tag in cur:
+                    all_tags.append({
+                        't': tag['tag'],
+                        'n': tag[field]
+                    })
+
+        '''if tag:
             query = {
                 'owner': self.user['sid'],
                 'tags': tag
@@ -1047,10 +1074,9 @@ class RSSCloudApplication(object):
                     all_tags.append({
                         't': tag['tag'],
                         'n': tag[field]
-                    })
+                    })'''
 
-
-            self.response = Response(json.dumps(all_tags), mimetype='application/json')
+        self.response = Response(json.dumps(all_tags), mimetype='application/json')
 
 
     def on_posts_content_post(self):
