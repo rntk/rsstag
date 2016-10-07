@@ -4,17 +4,16 @@ import time
 import sys
 from random import randint
 from multiprocessing import Process
-from collections import OrderedDict
+'''from collections import OrderedDict
 from html_cleaner import HTMLCleaner
-from tags_builder import TagsBuilder
+from tags_builder import TagsBuilder'''
 from pymongo import MongoClient
 from rsstag_providers import BazquxProvider
-from rsstag_utils import getSortedDictByAlphabet, load_config
+from rsstag_utils import load_config
 
 class RSSTagWorker:
     '''Rsstag workers handler'''
     def __init__(self, config_path):
-        self.no_category_name = 'NotCategorized'
         self._config = load_config(config_path)
         self._workers_pool = []
         logging.basicConfig(
@@ -75,12 +74,13 @@ class RSSTagWorker:
                 time.sleep(randint(3, 8))
                 continue
             if action_type == 'download':
-                if self.clear_user_data(user):
-                    posts, feeds = provider.download(data, user)
+                if self.clear_user_data(db, user):
+                    posts, feeds = provider.download(user)
                     if posts:
                         try:
                             db.feeds.insert_many(feeds)
                             db.posts.insert_many(posts)
+                            db.users.update_one({'sid': user['sid']}, {'$set': {'ready_flag': True}})
                         except Exception as e:
                             logging.error('Can`t save in db for user %s. Info: %s', user['sid'], e)
             elif action_type == 'mark':

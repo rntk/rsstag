@@ -4,7 +4,6 @@ import time
 import gzip
 import logging
 import asyncio
-import aiohttp
 from hashlib import md5
 from datetime import date, datetime
 from random import randint
@@ -12,11 +11,13 @@ from urllib.parse import quote_plus, urlencode
 from http import client
 from typing import Tuple
 from rsstag_routes import RSSTagRoutes
+import aiohttp
 
 class BazquxProvider:
     '''rss downloader from bazqux.com'''
 
     def __init__(self, config: dict):
+        self.no_category_name = 'NotCategorized'
         self._config = config
 
     def get_headers(self, user: dict) -> dict:
@@ -34,7 +35,7 @@ class BazquxProvider:
         url = data['url']
         async with aiohttp.ClientSession(loop=loop) as session:
             while again:
-                async with session.get(url, data['headers']) as resp:
+                async with session.get(url, headers=data['headers']) as resp:
                     if resp.status == 200:
                         downloaded = await resp.json()
                         if 'continuation' in downloaded:
@@ -66,54 +67,69 @@ class BazquxProvider:
             subscriptions = None
             logging.error('Can`t decode subscriptions %s', e)
         if subscriptions:
-            routes = RSSTagRoutes()
+            routes = RSSTagRoutes(self._config['settings']['host_name'])
             by_category = {}
             loop = asyncio.get_event_loop()
             futures = []
-            for i, feed in enumerate(subscriptions['subscriptions']):
+            for feed in subscriptions['subscriptions']:
                 if len(feed['categories']) > 0:
                     category_name = feed['categories'][0]['label']
                 else:
                     category_name = self.no_category_name
-                    futures.append(self.fetch({
-                        'headers': headers,
-                        'url': '{}/reader/api/0/stream/contents?s={}&xt=user/-/state/com.google/read&n=5000&output=json'.format(
-                            self._config[user['provider']]['api_host'],
-                            quote_plus(feed['id'])
-                        ),
-                        'category': category_name
-                    }))
+                    futures.append(self.fetch(
+                        {
+                            'headers': headers,
+                            'url': 'https://{}/reader/api/0/stream/contents?s={}&xt=user/-/state/com.google/read&n=5000&output=json'.format(
+                                self._config[user['provider']]['api_host'],
+                                quote_plus(feed['id'])
+                            ),
+                            'category': category_name
+                        },
+                        loop
+                    ))
                 if category_name not in by_category:
                     by_category[category_name] = True
                     if category_name != self.no_category_name:
-                        futures.append(self.fetch({
-                            'headers': headers,
-                            'url': '{}/reader/api/0/stream/contents?s=user/-/label/{}&xt=user/-/state/com.google/read&n=1000&output=json'.format(
-                                self._config[user['provider']]['api_host'],
-                                quote_plus(category_name)
-                            ),
-                            'category': category_name
-                        }))
+                        futures.append(self.fetch(
+                            {
+                                'headers': headers,
+                                'url': 'https://{}/reader/api/0/stream/contents?s=user/-/label/{}&xt=user/-/state/com.google/read&n=1000&output=json'.format(
+                                    self._config[user['provider']]['api_host'],
+                                    quote_plus(category_name)
+                                ),
+                                'category': category_name
+                            },
+                            loop
+                        ))
             future = asyncio.ensure_future(asyncio.wait(futures, loop=loop))
             loop.run_until_complete(future)
             loop.close()
             pid = 0
-            for cat_data in future.result():
-                cat_posts, category = cat_data
+            data_set = future.result()
+            for cat_data in data_set:
+                if cat_data:
+                    cat_posts, category = cat_data.pop().result()
+                else:
+                    cat_posts = []
                 for post in cat_posts:
-                    if post['origin']['streamId'] not in feeds:
-                        feeds[post['origin']['streamId']] = {
+                    stream_id = md5(post['origin']['streamId'].encode('utf-8')).hexdigest()
+                    if stream_id not in feeds:
+                        feeds[stream_id] = {
                             'createdAt': datetime.utcnow(),
-                            'title': cat_posts['origin']['title'],
+                            'title': post['origin']['title'],
                             'owner': user['sid'],
                             'category_id': category,
-                            'feed_id': post['origin']['streamId'],
+                            'feed_id': stream_id,
                             'origin_feed_id': post['origin']['streamId'],
                             'category_title': category,
-                            'category_local_url': routes.getUrlByEndpoint(endpoint='on_category_get', params={
-                                'quoted_category': category}),
-                            'local_url': routes.getUrlByEndpoint(endpoint='on_feed_get', params={
-                                'quoted_feed': post['origin']['streamId']})
+                            'category_local_url': routes.getUrlByEndpoint(
+                                endpoint='on_category_get',
+                                params={'quoted_category': category}
+                            ),
+                            'local_url': routes.getUrlByEndpoint(
+                                endpoint='on_feed_get',
+                                params={'quoted_feed': stream_id}
+                            )
                         }
                     if 'published' in post:
                         p_date = date.fromtimestamp(int(post['published'])).strftime('%x')
@@ -131,7 +147,7 @@ class BazquxProvider:
                             'title': post['title'],
                             'content': gzip.compress(post['summary']['content'].encode('utf-8', 'replace'))
                         },
-                        'feed_id': post['origin']['streamId'],
+                        'feed_id': stream_id,
                         'id': post['id'],
                         'url': post['canonical'][0]['href'] if post['canonical'] else 'http://google.com',
                         'date': p_date,
