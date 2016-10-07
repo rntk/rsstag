@@ -15,7 +15,6 @@ from werkzeug.wrappers import Response, Request
 from werkzeug.serving import run_simple
 from werkzeug.exceptions import HTTPException, NotFound, InternalServerError
 from werkzeug.utils import redirect
-from werkzeug.wsgi import wrap_file
 from jinja2 import Environment, PackageLoader
 from pymongo import MongoClient, DESCENDING
 from rsstag_routes import RSSTagRoutes

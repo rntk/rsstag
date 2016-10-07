@@ -1,58 +1,182 @@
 '''RSSTag downloaders'''
 import json
 import time
+import gzip
 import logging
+import asyncio
+import aiohttp
+from hashlib import md5
+from datetime import date, datetime
+from random import randint
+from urllib.parse import quote_plus, urlencode
 from http import client
 from typing import Tuple
+from rsstag_routes import RSSTagRoutes
 
-class BazquxDownloader():
-    '''rss downloder from bazqux.com'''
-    def start(self, data: dict) -> Tuple[dict, str]:
-        '''Worker download rss from bazqux.com'''
-        try:
-            logging.info('Start downloading, %s', data['category'])
-        except Exception as e:
-            logging.warning('Start downloading, category with strange symbols')
-        counter_for_downloads = 0
-        result = {'items': []}
+class BazquxProvider:
+    '''rss downloader from bazqux.com'''
+
+    def __init__(self, config: dict):
+        self._config = config
+
+    def get_headers(self, user: dict) -> dict:
+        return {
+            'Authorization': 'GoogleLogin auth={0}'.format(user['token']),
+            'Content-type': 'application/x-www-form-urlencoded'
+        }
+
+
+    async def fetch(self, data: dict, loop: object) -> Tuple[dict, str]:
+        posts = []
+        max_repetitions = 5
+        repetitions = 0
         again = True
         url = data['url']
-        while again:
-            try:
-                connection = client.HTTPSConnection(data['host'])
-                connection.request('GET', url, '', data['headers'])
-                resp = connection.getresponse()
-                json_data = resp.read()
-                tmp_result = {}
-                if json_data:
-                    tmp_result = json.loads(json_data.decode('utf-8'))
-                else:
-                    logging.error('json_data is empty - %s', json_data)
-                if tmp_result:
-                    if 'continuation' not in tmp_result:
-                        again = False
+        async with aiohttp.ClientSession(loop=loop) as session:
+            while again:
+                async with session.get(url, data['headers']) as resp:
+                    if resp.status == 200:
+                        downloaded = await resp.json()
+                        if 'continuation' in downloaded:
+                            again = True
+                            url = '{}&c={}'.format(data['url'], downloaded['continuation'])
+                            repetitions = 0
+                        else:
+                            again = False
+                        if 'items' in downloaded:
+                            posts = posts + downloaded['items']
                     else:
-                        url = data['url'] + '&c={0}'.format(tmp_result['continuation'])
-                    result['items'].extend(tmp_result['items'])
-                else:
-                    if counter_for_downloads == 5:
-                        logging.error('enough downloading')
-                        again = False
-                    logging.error('tmp_result is empty - %s', tmp_result)
-            except Exception as e:
-                logging.error('%s: %s %s %s yoyoyo', e, data['category'], counter_for_downloads, url)
-                if counter_for_downloads == 5:
-                    again = False
-                else:
-                    counter_for_downloads += 1
-                    time.sleep(2)
-                result = None
-                f = open('log/{0}'.format(data['category']), 'w')
-                f.write(json_data.decode('utf-8'))
-                f.close()
-        try:
-            logging.info('Downloaded, %s', data['category'])
-        except Exception as e:
-            logging.warning('Downloaded, category with strange symbols')
+                        repetitions += 1
+                        again = (repetitions < max_repetitions)
 
-        return (result, data['category'])
+        return (posts, data['category'])
+
+
+    def download(self, user: dict) -> None:
+        posts = []
+        feeds = {}
+        connection = client.HTTPSConnection(self._config[user['provider']]['api_host'])
+        headers = self.get_headers(user)
+        connection.request('GET', '/reader/api/0/subscription/list?output=json', '', headers)
+        resp = connection.getresponse()
+        json_data = resp.read()
+        try:
+            subscriptions = json.loads(json_data.decode('utf-8'))
+        except Exception as e:
+            subscriptions = None
+            logging.error('Can`t decode subscriptions %s', e)
+        if subscriptions:
+            routes = RSSTagRoutes()
+            by_category = {}
+            loop = asyncio.get_event_loop()
+            futures = []
+            for i, feed in enumerate(subscriptions['subscriptions']):
+                if len(feed['categories']) > 0:
+                    category_name = feed['categories'][0]['label']
+                else:
+                    category_name = self.no_category_name
+                    futures.append(self.fetch({
+                        'headers': headers,
+                        'url': '{}/reader/api/0/stream/contents?s={}&xt=user/-/state/com.google/read&n=5000&output=json'.format(
+                            self._config[user['provider']]['api_host'],
+                            quote_plus(feed['id'])
+                        ),
+                        'category': category_name
+                    }))
+                if category_name not in by_category:
+                    by_category[category_name] = True
+                    if category_name != self.no_category_name:
+                        futures.append(self.fetch({
+                            'headers': headers,
+                            'url': '{}/reader/api/0/stream/contents?s=user/-/label/{}&xt=user/-/state/com.google/read&n=1000&output=json'.format(
+                                self._config[user['provider']]['api_host'],
+                                quote_plus(category_name)
+                            ),
+                            'category': category_name
+                        }))
+            future = asyncio.ensure_future(asyncio.wait(futures, loop=loop))
+            loop.run_until_complete(future)
+            loop.close()
+            pid = 0
+            for cat_data in future.result():
+                cat_posts, category = cat_data
+                for post in cat_posts:
+                    if post['origin']['streamId'] not in feeds:
+                        feeds[post['origin']['streamId']] = {
+                            'createdAt': datetime.utcnow(),
+                            'title': cat_posts['origin']['title'],
+                            'owner': user['sid'],
+                            'category_id': category,
+                            'feed_id': post['origin']['streamId'],
+                            'origin_feed_id': post['origin']['streamId'],
+                            'category_title': category,
+                            'category_local_url': routes.getUrlByEndpoint(endpoint='on_category_get', params={
+                                'quoted_category': category}),
+                            'local_url': routes.getUrlByEndpoint(endpoint='on_feed_get', params={
+                                'quoted_feed': post['origin']['streamId']})
+                        }
+                    if 'published' in post:
+                        p_date = date.fromtimestamp(int(post['published'])).strftime('%x')
+                        pu_date = float(post['published'])
+                    else:
+                        p_date = -1
+                        pu_date = -1.0
+                    attachments_list = []
+                    if 'enclosure' in post:
+                        for attachments in post['enclosure']:
+                            if ('href' in attachments) and attachments['href']:
+                                attachments_list.append(attachments['href'])
+                    posts.append({
+                        'content': {
+                            'title': post['title'],
+                            'content': gzip.compress(post['summary']['content'].encode('utf-8', 'replace'))
+                        },
+                        'feed_id': post['origin']['streamId'],
+                        'id': post['id'],
+                        'url': post['canonical'][0]['href'] if post['canonical'] else 'http://google.com',
+                        'date': p_date,
+                        'unix_date': pu_date,
+                        'read': False,
+                        'favorite': False,
+                        'attachments': attachments_list,
+                        'tags': [],
+                        'pid': pid,
+                        'owner': user['sid']
+                    })
+                    pid += 1
+
+        return (posts, list(feeds.values()))
+
+    def mark(self, data: dict, user: dict) -> None:
+        status = data['status']
+        data_id = data['id']
+        headers = self.get_headers(user)
+        counter = 0
+        read_tag = 'user/-/state/com.google/read'
+        if status:
+            data = urlencode({'i': data_id, 'a': read_tag})
+        else:
+            data = urlencode({'i': data_id, 'r': read_tag})
+        max_repetitions = 6
+        while counter < max_repetitions:
+            connection = client.HTTPSConnection(self._config[user['provider']]['api_host'])
+            counter += 1
+            err = []
+            try:
+                connection.request('POST', '/reader/api/0/edit-tag?output=json', data, headers)
+                resp = connection.getresponse()
+                resp_data = resp.read()
+            except Exception as e:
+                err.append(str(e))
+                connection.close()
+                logging.warning('Can`t make request %s %s', e, counter)
+            if not err:
+                if resp_data.decode('utf-8').lower() == 'ok':
+                    counter = max_repetitions
+                else:
+                    time.sleep(randint(2, 7))
+                    if counter < max_repetitions:
+                        logging.warning('try again')
+                    else:
+                        logging.warning('not marked %s', resp_data)
+        connection.close()
