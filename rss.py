@@ -38,6 +38,7 @@ class RSSCloudApplication(object):
     db = None
     need_cookie_update = False
     first_letters = None
+    d2v = None
     allow_not_logged = (
         'on_root_get',
         'on_login_get',
@@ -53,7 +54,9 @@ class RSSCloudApplication(object):
 
     def __init__(self, config_path=None):
         self.config = load_config(config_path)
-        self.d2v = Doc2Vec.load(self.config['settings']['model'])
+        if os.path.exists(self.config['settings']['model']):
+            self.d2v = Doc2Vec.load(self.config['settings']['model'])
+
         try:
             logging.basicConfig(
                 filename=self.config['settings']['log_file'],
@@ -1022,42 +1025,29 @@ class RSSCloudApplication(object):
     def on_get_tag_siblings(self, tag=''):
         all_tags = []
         if tag:
-            siblings = self.d2v.similar_by_word(tag, topn=20)
-            if siblings:
-                tags_set = set()
+            tags_set = set()
+            if self.d2v:
+                try:
+                    siblings = self.d2v.similar_by_word(tag, topn=30)
+                except Exception as e:
+                    logging.error('In %s not found tag %s', self.config['settings']['model'], tag)
+                    siblings = []
                 for sibling in siblings:
                     tags_set.add(sibling[0])
+
+            if not siblings:
                 query = {
                     'owner': self.user['sid'],
-                    'tag': {'$in': list(tags_set)}
+                    'tags': tag
                 }
                 if self.user['settings']['only_unread']:
                     query['read'] = False
-                cur = self.db.tags.find(query, projection=['tag', 'posts_count', 'unread_count'])
-                if self.user['settings']['only_unread']:
-                    field = 'unread_count'
-                else:
-                    field = 'posts_count'
-                all_tags = []
-                for tag in cur:
-                    if tag[field] > 0:
-                        all_tags.append({
-                            't': tag['tag'],
-                            'n': tag[field]
-                        })
+                cur = self.db.posts.find(query, projection=['tags'])
+                tags_set = set()
+                for tags in cur:
+                    for tag in tags['tags']:
+                        tags_set.add(tag)
 
-        '''if tag:
-            query = {
-                'owner': self.user['sid'],
-                'tags': tag
-            }
-            if self.user['settings']['only_unread']:
-                query['read'] = False
-            cur = self.db.posts.find(query, projection=['tags'])
-            tags_set = set()
-            for tags in cur:
-                for tag in tags['tags']:
-                    tags_set.add(tag)
             if tags_set:
                 query = {
                     'owner': self.user['sid'],
@@ -1070,12 +1060,12 @@ class RSSCloudApplication(object):
                     field = 'unread_count'
                 else:
                     field = 'posts_count'
-                all_tags = []
                 for tag in cur:
-                    all_tags.append({
-                        't': tag['tag'],
-                        'n': tag[field]
-                    })'''
+                    if tag[field] > 0:
+                        all_tags.append({
+                            't': tag['tag'],
+                            'n': tag[field]
+                        })
 
         self.response = Response(json.dumps(all_tags), mimetype='application/json')
 
