@@ -573,11 +573,18 @@
                         data,
                         i;
                     if ((result) && (result.result === 'ok')) {
-                            data = result.data;
+                        data = result.data;
                         p_l = '<a href="' + data.c_url + '">' + data.c_title +
                             '</a> | <a href="' + data.f_url + '">' + data.f_title + '</a>' +
                             '</a> | <a href="' + data.p_url + '">To site</a><br />';
                         //var d_length = data.tags.length;
+                        data.tags.sort(function(a,b) {
+                            if (a.tag.charAt(0) > b.tag.charAt(0)) {
+                                return 1;
+                            } else {
+                                return -1;
+                            }
+                        });
                         for (i = 0; i < data.tags.length; i++) {
                             p_l += '<a href="' + data.tags[i].url + '">' + data.tags[i].tag + '</a>, ';
                         }
