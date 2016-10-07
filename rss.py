@@ -45,7 +45,6 @@ class RSSCloudApplication(object):
         'on_login_post',
         'on_select_provider_post',
         'on_select_provider_get',
-        'on_static_get',
         'on_ready_get',
         'on_refresh_get_post',
         'on_favicon_get'
@@ -704,32 +703,6 @@ class RSSCloudApplication(object):
         else:
             self.on_error(NotFound())
 
-    def on_static_get(self, directory=None, filename=None):
-        mimetype = 'text/plain'
-        if not directory:
-            directory = ''
-        elif directory == 'js':
-            mimetype = 'application/javascript'
-        elif directory == 'img':
-            mimetype = 'image/gif'
-        elif directory == 'css':
-            mimetype = 'text/css'
-        elif filename == 'favicon.ico':
-            mimetype = 'image/x-icon'
-        if filename:
-            f_path = os.path.join('static', directory, filename)
-            l_modify = datetime.fromtimestamp(os.path.getmtime(f_path)).strftime('%a, %d %b %Y %H:%m:%S %Z%z')
-            if (self.request.if_modified_since) and \
-                (self.request.if_modified_since.strftime('%a, %d %b %Y %H:%m:%S %Z%z') == l_modify):
-                self.response = Response('', mimetype=mimetype)
-                self.response.status_code = 304
-            else:
-                f = open(f_path, 'rb')
-                self.response = Response(wrap_file(self.request.environ, f), mimetype=mimetype, direct_passthrough=True)
-                self.response.headers['Last-Modified'] = l_modify
-        else:
-            self.response = Response('', mimetype=mimetype)
-
     def on_read_posts_post(self):
         err = []
         many = False
@@ -1282,8 +1255,18 @@ if __name__ == '__main__':
         config_path = sys.argv[1]
     app = RSSCloudApplication(config_path)
     if app:
+        static_files = {
+            '/static': 'static',
+            '/favicon.ico': 'static/favicon.ico'
+        }
         try:
-            run_simple(app.config['settings']['host'], int(app.config['settings']['port']), app.setResponse)
+            run_simple(
+                app.config['settings']['host'],
+                int(app.config['settings']['port']),
+                app.setResponse,
+                static_files=static_files,
+                threaded=True
+            )
         except Exception as e:
             logging.error(e)
             app.close()

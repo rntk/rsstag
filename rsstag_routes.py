@@ -20,13 +20,7 @@ class RSSTagRoutes:
             },
             {'url': '/group/category', 'endpoint': 'on_group_by_category_get', 'methods': ['GET', 'HEAD']},
             {'url': '/refresh', 'endpoint': 'on_refresh_get_post', 'methods': ['GET', 'HEAD', 'POST']},
-            {'url': '/favicon.ico', 'endpoint': 'on_static_get', 'methods': ['GET', 'HEAD']},
-            {
-                'url': '/static/<string:directory>/<string:filename>',
-                'endpoint': 'on_static_get',
-                'methods': ['GET', 'HEAD']
-            },
-            {'url': '/static/<string:filename>', 'endpoint': 'on_static_get', 'methods': ['GET', 'HEAD']},
+
             {'url': '/tag/<string:quoted_tag>', 'endpoint': 'on_tag_get', 'methods': ['GET', 'HEAD']},
             {'url': '/category/<string:quoted_category>', 'endpoint': 'on_category_get', 'methods': ['GET', 'HEAD']},
             {'url': '/feed/<string:quoted_feed>', 'endpoint': 'on_feed_get', 'methods': ['GET', 'HEAD']},
