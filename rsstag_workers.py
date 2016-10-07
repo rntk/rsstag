@@ -250,7 +250,7 @@ class RSSTagWorker:
                                         'category': category_name
                                     })
                         workers_downloader_pool = Pool(int(self._config['settings']['workers_count']))
-                        downloader = BazquxDownloader(self.log)
+                        downloader = BazquxDownloader()
                         for posts, category in workers_downloader_pool.imap(downloader.start, works, 1):
                             if posts and posts['items']:
                                 old_posts_count = len(all_posts)

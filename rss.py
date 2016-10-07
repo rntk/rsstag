@@ -1040,10 +1040,11 @@ class RSSCloudApplication(object):
                     field = 'posts_count'
                 all_tags = []
                 for tag in cur:
-                    all_tags.append({
-                        't': tag['tag'],
-                        'n': tag[field]
-                    })
+                    if tag[field] > 0:
+                        all_tags.append({
+                            't': tag['tag'],
+                            'n': tag[field]
+                        })
 
         '''if tag:
             query = {
