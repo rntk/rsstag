@@ -50,6 +50,8 @@ class RSSTagApplication(object):
 
     def __init__(self, config_path=None):
         self.config = load_config(config_path)
+        if self.config['settings']['no_category_name']:
+            self.no_category_name = self.config['settings']['no_category_name']
         if os.path.exists(self.config['settings']['model']):
             self.d2v = Doc2Vec.load(self.config['settings']['model'])
 

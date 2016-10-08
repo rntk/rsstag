@@ -17,8 +17,11 @@ class BazquxProvider:
     '''rss downloader from bazqux.com'''
 
     def __init__(self, config: dict):
-        self.no_category_name = 'NotCategorized'
         self._config = config
+        if self._config['settings']['no_category_name']:
+            self.no_category_name = self._config['settings']['no_category_name']
+        else:
+            self.no_category_name = 'NotCategorized'
 
     def get_headers(self, user: dict) -> dict:
         return {
@@ -152,6 +155,7 @@ class BazquxProvider:
                             'content': gzip.compress(post['summary']['content'].encode('utf-8', 'replace'))
                         },
                         'feed_id': stream_id,
+                        'category_id': category,
                         'id': post['id'],
                         'url': post['canonical'][0]['href'] if post['canonical'] else 'http://google.com',
                         'date': p_date,
