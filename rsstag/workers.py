@@ -6,6 +6,7 @@ from urllib.parse import quote
 from random import randint
 from multiprocessing import Process
 from rsstag.tags_builder import TagsBuilder
+from rsstag.html_cleaner import HTMLCleaner
 from pymongo import MongoClient, UpdateOne
 from rsstag.providers import BazquxProvider
 from rsstag.utils import load_config
@@ -43,10 +44,14 @@ class RSSTagWorker:
 
         return result
 
-    def make_tags(self, db: MongoClient, post: dict, builder: TagsBuilder) -> bool:
+    def make_tags(self, db: MongoClient, post: dict, builder: TagsBuilder, cleaner: HTMLCleaner) -> bool:
         #logging.info('Start process %s', post['_id'])
         content = gzip.decompress(post['content']['content'])
         text = post['content']['title'] + ' '+ content.decode('utf-8')
+        cleaner.purge()
+        cleaner.feed(text)
+        strings = cleaner.get_content()
+        text = ' '.join(strings)
         builder.purge()
         builder.build_tags(text)
         tags = builder.get_tags()
@@ -88,9 +93,9 @@ class RSSTagWorker:
                 {'$set': {
                     key + '.letter': letter,
                     key + '.local_url': routes.getUrlByEndpoint(
-                            endpoint='on_group_by_tags_startwith_get',
-                            params={'letter': letter}
-                        )
+                        endpoint='on_group_by_tags_startwith_get',
+                        params={'letter': letter}
+                    )
                 }},
                 upsert=True
             ))
@@ -215,6 +220,7 @@ class RSSTagWorker:
 
         provider = BazquxProvider(self._config)
         builder = TagsBuilder(self._config['settings']['replacement'])
+        cleaner = HTMLCleaner()
         while True:
             task = self.get_task(db)
             if task['type'] == TASK_NOOP:
@@ -237,7 +243,7 @@ class RSSTagWorker:
                 task_done = provider.mark(task['data'], task['user'])
 
             elif task['type'] == TASK_TAGS:
-                task_done = self.make_tags(db, task['data'], builder)
+                task_done = self.make_tags(db, task['data'], builder, cleaner)
 
             if task_done:
                 self.finish_task(db, task)
