@@ -1,9 +1,8 @@
 import os
-import sys
 import gzip
-from rsstag_utils import load_config
+from rsstag.utils import load_config
 from pymongo import MongoClient
-from tags_builder import TagsBuilder
+from rsstag.tags_builder import TagsBuilder
 from gensim.models.doc2vec import Doc2Vec, TaggedDocument
 
 class D2VLearn:
@@ -34,11 +33,3 @@ class D2VLearn:
         else:
             model = Doc2Vec(tagged_docs, iter=30, sample=1e-5, workers=os.cpu_count())
         model.save(self._config['settings']['model'])
-
-if __name__ == '__main__':
-    config_path = 'rsscloud.conf'
-    if len(sys.argv) > 1:
-        config_path = sys.argv[1]
-    learn = D2VLearn(config_path)
-    learn.fetch_texts()
-    learn.learn()

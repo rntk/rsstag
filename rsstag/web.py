@@ -1,5 +1,4 @@
-﻿import sys
-import os
+﻿import os
 import json
 from urllib.parse import unquote_plus, quote_plus, urlencode
 from http import client
@@ -12,16 +11,15 @@ from datetime import datetime
 from random import randint
 from hashlib import md5, sha256
 from werkzeug.wrappers import Response, Request
-from werkzeug.serving import run_simple
 from werkzeug.exceptions import HTTPException, NotFound, InternalServerError
 from werkzeug.utils import redirect
 from jinja2 import Environment, PackageLoader
 from pymongo import MongoClient, DESCENDING
-from rsstag_routes import RSSTagRoutes
-from rsstag_utils import getSortedDictByAlphabet, load_config
+from rsstag.routes import RSSTagRoutes
+from rsstag.utils import getSortedDictByAlphabet, load_config
 from gensim.models.doc2vec import Doc2Vec
 
-class RSSCloudApplication(object):
+class RSSTagApplication(object):
     request = None
     response = None
     template_env = None
@@ -1247,27 +1245,3 @@ class RSSCloudApplication(object):
         else:
             result = {'result': 'error', 'data': ''.join(errors)}
         self.response = Response(json.dumps(result), mimetype='application/json')
-
-if __name__ == '__main__':
-    config_path = 'rsscloud.conf'
-    if len(sys.argv) > 1:
-        config_path = sys.argv[1]
-    app = RSSCloudApplication(config_path)
-    if app:
-        static_files = {
-            '/static': 'static',
-            '/favicon.ico': 'static/favicon.ico'
-        }
-        try:
-            run_simple(
-                app.config['settings']['host'],
-                int(app.config['settings']['port']),
-                app.setResponse,
-                static_files=static_files,
-                threaded=True
-            )
-        except Exception as e:
-            logging.error(e)
-            app.close()
-    else:
-        logging.critical('Can`t start server')

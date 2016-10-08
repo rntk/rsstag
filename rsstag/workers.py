@@ -1,15 +1,14 @@
 '''RSSTag workers'''
 import logging
 import time
-import sys
 from random import randint
 from multiprocessing import Process
 '''from collections import OrderedDict
 from html_cleaner import HTMLCleaner
 from tags_builder import TagsBuilder'''
 from pymongo import MongoClient
-from rsstag_providers import BazquxProvider
-from rsstag_utils import load_config
+from rsstag.providers import BazquxProvider
+from rsstag.utils import load_config
 
 class RSSTagWorker:
     '''Rsstag workers handler'''
@@ -85,11 +84,3 @@ class RSSTagWorker:
                             logging.error('Can`t save in db for user %s. Info: %s', user['sid'], e)
             elif action_type == 'mark':
                 provider.mark(data, user)
-
-if __name__ == '__main__':
-    config_path = 'rsscloud.conf'
-    if len(sys.argv) > 1:
-        config_path = sys.argv[1]
-
-    worker = RSSTagWorker(config_path)
-    worker.start()

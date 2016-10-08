@@ -10,7 +10,7 @@ from random import randint
 from urllib.parse import quote_plus, urlencode
 from http import client
 from typing import Tuple
-from rsstag_routes import RSSTagRoutes
+from rsstag.routes import RSSTagRoutes
 import aiohttp
 
 class BazquxProvider:
