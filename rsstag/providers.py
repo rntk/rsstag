@@ -10,6 +10,7 @@ from random import randint
 from urllib.parse import quote_plus, urlencode
 from http import client
 from typing import Tuple
+from rsstag.workers import POST_NOT_IN_PROCESSING
 from rsstag.routes import RSSTagRoutes
 import aiohttp
 
@@ -136,7 +137,8 @@ class BazquxProvider:
                             'local_url': routes.getUrlByEndpoint(
                                 endpoint='on_feed_get',
                                 params={'quoted_feed': stream_id}
-                            )
+                            ),
+                            'favicon': ''
                         }
                     if 'published' in post:
                         p_date = date.fromtimestamp(int(post['published'])).strftime('%x')
@@ -165,42 +167,38 @@ class BazquxProvider:
                         'attachments': attachments_list,
                         'tags': [],
                         'pid': pid,
-                        'owner': user['sid']
+                        'owner': user['sid'],
+                        'processing': POST_NOT_IN_PROCESSING
                     })
                     pid += 1
 
         return (posts, list(feeds.values()))
 
-    def mark(self, data: dict, user: dict) -> None:
+    def mark(self, data: dict, user: dict) -> bool:
         status = data['status']
         data_id = data['id']
         headers = self.get_headers(user)
-        counter = 0
         read_tag = 'user/-/state/com.google/read'
         if status:
             data = urlencode({'i': data_id, 'a': read_tag})
         else:
             data = urlencode({'i': data_id, 'r': read_tag})
-        max_repetitions = 6
-        while counter < max_repetitions:
+        max_repetitions = 10
+        for i in range(max_repetitions):
             connection = client.HTTPSConnection(self._config[user['provider']]['api_host'])
-            counter += 1
-            err = []
             try:
                 connection.request('POST', '/reader/api/0/edit-tag?output=json', data, headers)
                 resp = connection.getresponse()
                 resp_data = resp.read()
             except Exception as e:
-                err.append(str(e))
-                connection.close()
-                logging.warning('Can`t make request %s %s', e, counter)
-            if not err:
-                if resp_data.decode('utf-8').lower() == 'ok':
-                    counter = max_repetitions
-                else:
-                    time.sleep(randint(2, 7))
-                    if counter < max_repetitions:
-                        logging.warning('try again')
-                    else:
-                        logging.warning('not marked %s', resp_data)
-        connection.close()
+                result = False
+                resp_data = None
+                logging.warning('Can`t make request %s %s', e, i)
+
+            if resp_data and (resp_data.decode('utf-8').lower() == 'ok'):
+                result = True
+                break
+            time.sleep(randint(2, 7))
+            connection.close()
+
+        return result

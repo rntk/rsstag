@@ -17,6 +17,7 @@ from jinja2 import Environment, PackageLoader
 from pymongo import MongoClient, DESCENDING
 from rsstag.routes import RSSTagRoutes
 from rsstag.utils import getSortedDictByAlphabet, load_config
+from rsstag.workers import TASK_NOT_IN_PROCESSING
 from gensim.models.doc2vec import Doc2Vec
 
 class RSSTagApplication(object):
@@ -102,9 +103,9 @@ class RSSTagApplication(object):
         self.db.tags.ensure_index([('unread_count', 1)])
         self.db.tags.ensure_index([('posts_count', 1)])
         #self.db.tags.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
-        self.db.download_queue.ensure_index([('locked', 1)])
+        self.db.download_queue.ensure_index([('processing', 1)])
         #self.db.download_queue.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
-        self.db.mark_queue.ensure_index([('locked', 1)])
+        self.db.mark_queue.ensure_index([('processing', 1)])
         #self.db.mark_queue.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
 
     def close(self):
@@ -361,7 +362,7 @@ class RSSTagApplication(object):
         if self.user:
             if not self.user['in_queue']:
                 self.db.download_queue.insert_one(
-                    {'user': self.user['_id'], 'locked': False, 'host': self.request.environ['HTTP_HOST']}
+                    {'user': self.user['_id'], 'processing': TASK_NOT_IN_PROCESSING, 'host': self.request.environ['HTTP_HOST']}
                 )
                 self.db.users.update_one(
                     {'sid': self.user['sid']},
@@ -741,7 +742,12 @@ class RSSTagApplication(object):
                         projection=['id', 'tags']
                     )
                     for d in current_data:
-                        for_insert.append({'user': self.user['_id'], 'id': d['id'], 'status': status})
+                        for_insert.append({
+                            'user': self.user['_id'],
+                            'id': d['id'],
+                            'status': status,
+                            'processing': TASK_NOT_IN_PROCESSING
+                        })
                         for t in d['tags']:
                             if t in tags:
                                 tags[t] += 1
@@ -779,7 +785,12 @@ class RSSTagApplication(object):
                         {'owner': self.user['sid'], 'pid': post_id},
                         projection=['id', 'tags']
                     )
-                    self.db.mark_queue.insert_one({'user': self.user['_id'], 'id': current_post['id'], 'status': status})
+                    self.db.mark_queue.insert_one({
+                        'user': self.user['_id'],
+                        'id': current_post['id'],
+                        'status': status,
+                        'processing': TASK_NOT_IN_PROCESSING
+                    })
                     self.db.posts.update_one({'owner': self.user['sid'], 'pid': post_id}, {'$set': {'read': status}})
                 if status:
                     incr = -1
