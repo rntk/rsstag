@@ -76,6 +76,7 @@ class RSSTagWorker:
                 if self.clear_user_data(db, user):
                     posts, feeds = provider.download(user)
                     if posts:
+                        logging.info('Try save data in db. Posts: %s. Feeds: %s', len(posts), len(feeds))
                         try:
                             db.feeds.insert_many(feeds)
                             db.posts.insert_many(posts)

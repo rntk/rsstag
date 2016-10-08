@@ -37,7 +37,12 @@ class BazquxProvider:
             while again:
                 async with session.get(url, headers=data['headers']) as resp:
                     if resp.status == 200:
-                        downloaded = await resp.json()
+                        raw_json = await resp.text()
+                        try:
+                            downloaded = json.loads(raw_json)
+                        except Exception as e:
+                            logging.error('Get strange json from %s. Info: %s', url, e)
+                            downloaded = {}
                         if 'continuation' in downloaded:
                             again = True
                             url = '{}&c={}'.format(data['url'], downloaded['continuation'])
@@ -49,8 +54,8 @@ class BazquxProvider:
                     else:
                         repetitions += 1
                         again = (repetitions < max_repetitions)
-
-        return (posts, data['category'])
+            logging.info('Loaded posts %s for category "%s"', len(posts), data['category'])
+            return (posts, data['category'])
 
 
     def download(self, user: dict) -> None:
@@ -101,16 +106,15 @@ class BazquxProvider:
                             },
                             loop
                         ))
-            future = asyncio.ensure_future(asyncio.wait(futures, loop=loop))
+            future = asyncio.gather(*futures, loop=loop)
             loop.run_until_complete(future)
+            cats_data = future.result()
             loop.close()
             pid = 0
-            data_set = future.result()
-            for cat_data in data_set:
-                if cat_data:
-                    cat_posts, category = cat_data.pop().result()
-                else:
-                    cat_posts = []
+            logging.info('Was loaded %s categories', len(cats_data))
+            for cat_data in cats_data:
+                cat_posts, category = cat_data
+                logging.info('Fetched %s posts for category "%s"', len(cat_posts), category_name)
                 for post in cat_posts:
                     stream_id = md5(post['origin']['streamId'].encode('utf-8')).hexdigest()
                     if stream_id not in feeds:
