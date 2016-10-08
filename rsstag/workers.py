@@ -86,13 +86,11 @@ class RSSTagWorker:
             letters_updates.append(UpdateOne(
                 {'owner': post['owner']},
                 {'$set': {
-                    key: {
-                        'letter': letter,
-                        'local_url': routes.getUrlByEndpoint(
+                    key + '.letter': letter,
+                    key + '.local_url': routes.getUrlByEndpoint(
                             endpoint='on_group_by_tags_startwith_get',
                             params={'letter': letter}
                         )
-                    }
                 }},
                 upsert=True
             ))
@@ -106,7 +104,7 @@ class RSSTagWorker:
 
         if tags_updates:
             try:
-                db.tags.bulk_write(tags_updates)
+                db.tags.bulk_write(tags_updates, ordered=False)
                 db.letters.bulk_write(letters_updates)
                 db.posts.update({'_id': post['_id']}, {'$set': {'tags': tags}})
                 result = True
