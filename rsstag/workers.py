@@ -46,7 +46,7 @@ class RSSTagWorker:
     def make_tags(self, db: MongoClient, post: dict, builder: TagsBuilder) -> bool:
         #logging.info('Start process %s', post['_id'])
         content = gzip.decompress(post['content']['content'])
-        text = post['content']['title'] + content.decode('utf-8')
+        text = post['content']['title'] + ' '+ content.decode('utf-8')
         builder.purge()
         builder.build_tags(text)
         tags = builder.get_tags()
