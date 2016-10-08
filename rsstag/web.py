@@ -64,9 +64,8 @@ class RSSTagApplication(object):
         self.config_path = config_path
         self.template_env = Environment(
             loader=PackageLoader(
-                'rss',
+                'web',
                 os.path.join(
-                    os.path.dirname(__file__),
                     'templates',
                     self.config['settings']['templates']
                 )
