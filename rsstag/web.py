@@ -1,6 +1,6 @@
 ﻿import os
 import json
-from urllib.parse import unquote_plus, quote_plus, urlencode
+from urllib.parse import unquote_plus, quote_plus, urlencode, unquote
 from http import client
 import html
 import time
@@ -17,7 +17,7 @@ from jinja2 import Environment, PackageLoader
 from pymongo import MongoClient, DESCENDING
 from rsstag.routes import RSSTagRoutes
 from rsstag.utils import getSortedDictByAlphabet, load_config
-from rsstag.workers import TASK_NOT_IN_PROCESSING
+from rsstag import TASK_NOT_IN_PROCESSING
 from gensim.models.doc2vec import Doc2Vec
 
 class RSSTagApplication(object):
@@ -83,30 +83,33 @@ class RSSTagApplication(object):
         self.updateEndpoints()
 
     def prepareDB(self):
-        self.db.posts.ensure_index([('owner', 1)])
-        self.db.posts.ensure_index([('category_id', 1)])
-        self.db.posts.ensure_index([('feed_id', 1)])
-        self.db.posts.ensure_index([('read', 1)])
-        self.db.posts.ensure_index([('tags', 1)])
-        self.db.posts.ensure_index([('pid', 1)])
-        #self.db.posts.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
-        self.db.feeds.ensure_index([('owner', 1)])
-        self.db.feeds.ensure_index([('feed_id', 1)])
-        #self.db.feeds.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
-        self.db.letters.ensure_index([('owner', 1)])
-        #self.db.letters.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
-        self.db.users.ensure_index([('sid', 1)])
-        #self.db.users.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
-        self.db.users.update_many({'in_queue': True}, {'$set': {'in_queue': False, 'ready_flag': True}})
-        self.db.tags.ensure_index([('owner', 1)])
-        self.db.tags.ensure_index([('tag', 1)])
-        self.db.tags.ensure_index([('unread_count', 1)])
-        self.db.tags.ensure_index([('posts_count', 1)])
-        #self.db.tags.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
-        self.db.download_queue.ensure_index([('processing', 1)])
-        #self.db.download_queue.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
-        self.db.mark_queue.ensure_index([('processing', 1)])
-        #self.db.mark_queue.ensure_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
+        try:
+            self.db.posts.create_index('owner')
+            self.db.posts.create_index('category_id')
+            self.db.posts.create_index('feed_id')
+            self.db.posts.create_index('read')
+            self.db.posts.create_index('tags')
+            self.db.posts.create_index('pid')
+            #self.db.posts.create_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
+            self.db.feeds.create_index('owner')
+            self.db.feeds.create_index('feed_id')
+            #self.db.feeds.create_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
+            self.db.letters.create_index('owner', unique=True)
+            #self.db.letters.create_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
+            self.db.users.create_index('sid')
+            #self.db.users.create_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
+            #self.db.users.update_many({'in_queue': True}, {'$set': {'in_queue': False, 'ready_flag': True}})
+            self.db.tags.create_index('owner')
+            self.db.tags.create_index('tag')
+            self.db.tags.create_index('unread_count')
+            self.db.tags.create_index('posts_count')
+            #self.db.tags.create_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
+            self.db.download_queue.create_index('processing')
+            #self.db.download_queue.create_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
+            self.db.mark_queue.create_index('processing')
+            #self.db.mark_queue.create_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
+        except Exception as e:
+            logging.warning('Indexses not created. May be already exists.')
 
     def close(self):
         if self.workers_pool:
@@ -623,7 +626,7 @@ class RSSTagApplication(object):
             back_link = self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_startwith_get', params={'letter': letter})
         else:
             back_link = self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number})
-        tag = unquote_plus(quoted_tag)
+        tag = unquote(quoted_tag)
         current_tag = self.db.tags.find_one({'owner': self.user['sid'], 'tag': tag})
         if current_tag:
             posts = []

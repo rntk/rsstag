@@ -29,7 +29,7 @@ class TagsBuilder:
         '''Make words list from text'''
         text = self.clear_html_esc.sub(' ', text)
         text = self.text_clearing.sub(' ', text)
-        text = text.strip()
+        text = text.strip().lower()
         words = text.split()
 
         return words

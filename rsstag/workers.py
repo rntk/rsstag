@@ -1,22 +1,16 @@
 '''RSSTag workers'''
 import logging
 import time
-from typing import Tuple
+import gzip
+from urllib.parse import quote
 from random import randint
 from multiprocessing import Process
-from rsstag.html_cleaner import HTMLCleaner
 from rsstag.tags_builder import TagsBuilder
-from pymongo import MongoClient
+from pymongo import MongoClient, UpdateOne
 from rsstag.providers import BazquxProvider
 from rsstag.utils import load_config
-
-ACTION_NOOP = 0
-ACTION_DOWNLOAD = 1
-ACTION_MARK = 2
-ACTION_TAGS = 3
-
-POST_NOT_IN_PROCESSING = 0
-TASK_NOT_IN_PROCESSING = 0
+from rsstag.routes import RSSTagRoutes
+from rsstag import TASK_NOOP, TASK_DOWNLOAD, TASK_MARK, TASK_TAGS, POST_NOT_IN_PROCESSING, TASK_NOT_IN_PROCESSING
 
 class RSSTagWorker:
     '''Rsstag workers handler'''
@@ -49,39 +43,109 @@ class RSSTagWorker:
 
         return result
 
-    def make_tags(self, builder: TagsBuilder, cleaner: HTMLCleaner) -> bool:
-        pass
+    def make_tags(self, db: MongoClient, post: dict, builder: TagsBuilder) -> bool:
+        logging.info('Start process %s', post['_id'])
+        content = gzip.decompress(post['content']['content'])
+        text = post['content']['title'] + content.decode('utf-8')
+        builder.purge()
+        builder.build_tags(text)
+        tags = builder.get_tags()
+        words = builder.get_words()
+        result = False
+        tags_updates = []
+        first_letters = set()
+        routes = RSSTagRoutes(self._config['settings']['host_name'])
+        for tag in tags:
+            tags_updates.append(UpdateOne(
+                {'owner': post['owner'], 'tag': tag},
+                {
+                    '$set': {
+                        'read': False,
+                        'tag': tag,
+                        'owner': post['owner'],
+                        'temperature': 0,
+                        'local_url': routes.getUrlByEndpoint(
+                            endpoint='on_tag_get',
+                            params={'quoted_tag': quote(tag)}
+                        )
+                    },
+                    '$inc': {'posts_count': 1, 'unread_count': 1},
+                    '$addToSet': {'words': {'$each': list(words[tag])}}
+                },
+                upsert=True
+            ))
+            first_letters.add(tag[0])
+
+        letters_set = {}
+        letters_inc = {}
+        letters_updates = []
+        for letter in first_letters:
+            key = 'letters.' + letter
+            letters_updates.append(UpdateOne(
+                {'owner': post['owner']},
+                {'$set': {
+                    key: {
+                        'letter': letter,
+                        'local_url': routes.getUrlByEndpoint(
+                            endpoint='on_group_by_tags_startwith_get',
+                            params={'letter': letter}
+                        )
+                    }
+                }},
+                upsert=True
+            ))
+            letters_updates.append(UpdateOne(
+                {'owner': post['owner']},
+                {'$inc': {
+                    key + '.unread_count': 1
+                }},
+                upsert=True
+            ))
+
+        if tags_updates:
+            try:
+                db.tags.bulk_write(tags_updates)
+                db.letters.bulk_write(letters_updates)
+                db.posts.update({'_id': post['_id']}, {'$set': {'tags': tags}})
+                result = True
+            except Exception as e:
+                result = False
+                logging.error('Can`t make tags for post %s. Info: %s', post['_id'], e)
+
+        logging.info('Processed %s', post['_id'])
+
+        return result
 
     def get_task(self, db: MongoClient) -> dict:
         task = {
-            'action': ACTION_NOOP,
+            'type': TASK_NOOP,
             'user': None,
             'data': None
         }
         try:
-            data = db.download_queue.find_one_and_update({
+            data = db.download_queue.find_one_and_update(
                 {'processing': TASK_NOT_IN_PROCESSING},
                 {'$set': {'processing': time.time()}}
-            })
+            )
             if data:
-                task['action'] = ACTION_DOWNLOAD
+                task['type'] = TASK_DOWNLOAD
         except Exception as e:
             data = None
             logging.error('Worker can`t get data from queue: %s', e)
 
-        if task['action'] == ACTION_NOOP:
+        if task['type'] == TASK_NOOP:
             try:
-                data = db.mark_queue.find_one_and_update({
+                data = db.mark_queue.find_one_and_update(
                     {'processing': TASK_NOT_IN_PROCESSING},
                     {'$set': {'processing': time.time()}}
-                })
+                )
                 if data:
-                    task['action'] = ACTION_MARK
+                    task['type'] = TASK_MARK
             except Exception as e:
                 data = None
                 logging.error('Worker can`t get data from queue: %s', e)
 
-        if task['action'] == ACTION_NOOP:
+        if task['type'] == TASK_NOOP:
             try:
                 data = db.posts.find_one_and_update(
                     {
@@ -91,7 +155,7 @@ class RSSTagWorker:
                     {'$set': {'processing': time.time()}}
                 )
                 if data:
-                    task['action'] = ACTION_MARK
+                    task['type'] = TASK_TAGS
             except Exception as e:
                 data = None
                 logging.error('Worker can`t get data from queue: %s', e)
@@ -103,6 +167,8 @@ class RSSTagWorker:
                 if 'user_id' in data:
                     user_id = data['user_id']
                     user = db.users.find_one({'sid': user_id})
+                    if not user:
+                        task['type'] = TASK_NOOP
                 '''elif 'owner' in data:
                     user_id = data['owner']'''
             except Exception as e:
@@ -111,10 +177,10 @@ class RSSTagWorker:
                     'Cant`t get user %s for task %s, type %s. Info: %e',
                     user_id,
                     data['_id'],
-                    task['action'],
+                    task['type'],
                     e
                 )
-                task['action'] = ACTION_NOOP
+                task['type'] = TASK_NOOP
 
         task['data'] = data
         task['user'] = user
@@ -125,37 +191,36 @@ class RSSTagWorker:
         max_repeats = 5
         for i in range(max_repeats):
             try:
-                if task['action'] == ACTION_DOWNLOAD:
-                    db.download_queue.remove({'_id': task['_id']})
-                elif task['action'] == ACTION_MARK:
-                    db.mark_queue.remove({'_id': task['_id']})
-                elif task['action'] == ACTION_TAGS:
+                if task['type'] == TASK_DOWNLOAD:
+                    db.download_queue.remove({'_id': task['data']['_id']})
+                elif task['type'] == TASK_MARK:
+                    db.mark_queue.remove({'_id': task['data']['_id']})
+                elif task['type'] == TASK_TAGS:
                     db.posts.find_one_and_update(
-                        {'_id': task['_id']},
+                        {'_id': task['data']['_id']},
                         {'$set': {'processing': POST_NOT_IN_PROCESSING}}
                     )
                 result = True
                 break
             except Exception as e:
                 result = False
-                logging.error('Can`t finish task %s, type %s. Info: %s', task['id'], task['action'], e)
+                logging.error('Can`t finish task %s, type %s. Info: %s', task['data']['_id'], task['type'], e)
 
         return result
 
-    def worker(self, *args, **kwargs):
+    def worker(self):
         '''Worker for bazqux.com'''
         cl = MongoClient(self._config['settings']['db_host'], int(self._config['settings']['db_port']))
         db = cl.rss
 
         provider = BazquxProvider(self._config)
-        cleaner = HTMLCleaner()
         builder = TagsBuilder(self._config['settings']['replacement'])
         while True:
             task = self.get_task(db)
-            if task['action'] == ACTION_NOOP:
+            if task['type'] == TASK_NOOP:
                 time.sleep(randint(3, 8))
                 continue
-            if task['action'] == ACTION_DOWNLOAD:
+            if task['type'] == TASK_DOWNLOAD:
                 if self.clear_user_data(db, task['user']):
                     posts, feeds = provider.download(task['user'])
                     if posts:
@@ -168,11 +233,11 @@ class RSSTagWorker:
                         except Exception as e:
                             task_done = False
                             logging.error('Can`t save in db for user %s. Info: %s', task['user']['sid'], e)
-            elif task['action'] == ACTION_MARK:
+            elif task['type'] == TASK_MARK:
                 task_done = provider.mark(task['data'], task['user'])
 
-            elif task['action'] == ACTION_TAGS:
-                task_done = self.make_tags(task['data'], builder, cleaner)
+            elif task['type'] == TASK_TAGS:
+                task_done = self.make_tags(db, task['data'], builder)
 
             if task_done:
                 self.finish_task(db, task)

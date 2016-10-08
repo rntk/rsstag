@@ -45,7 +45,7 @@
         {% if tags %}
             {% for h in tags %}
                 <li class="cloud_item" data-tag="{{h['tag']}}">
-                    <a href="/tag/{{h['url']}}" class="cloud_item_title">{{h['tag']}}</a> ({{h['count']}})<br />({{h['words']|join(', ')}})<br />
+                    <a href="{{h['url']}}" class="cloud_item_title">{{h['tag']}}</a> ({{h['count']}})<br />({{h['words']|join(', ')}})<br />
                     <span class="get_tag_siblings">...</span>
                     <div class="tag_siblings"></div>
                 </li>
