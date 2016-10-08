@@ -44,7 +44,7 @@ class RSSTagWorker:
         return result
 
     def make_tags(self, db: MongoClient, post: dict, builder: TagsBuilder) -> bool:
-        logging.info('Start process %s', post['_id'])
+        #logging.info('Start process %s', post['_id'])
         content = gzip.decompress(post['content']['content'])
         text = post['content']['title'] + content.decode('utf-8')
         builder.purge()
@@ -55,6 +55,10 @@ class RSSTagWorker:
         tags_updates = []
         first_letters = set()
         routes = RSSTagRoutes(self._config['settings']['host_name'])
+        if tags == []:
+            tag = 'notitle'
+            tags = [tag]
+            words[tag] = set(tags)
         for tag in tags:
             tags_updates.append(UpdateOne(
                 {'owner': post['owner'], 'tag': tag},
@@ -76,8 +80,6 @@ class RSSTagWorker:
             ))
             first_letters.add(tag[0])
 
-        letters_set = {}
-        letters_inc = {}
         letters_updates = []
         for letter in first_letters:
             key = 'letters.' + letter
@@ -112,7 +114,7 @@ class RSSTagWorker:
                 result = False
                 logging.error('Can`t make tags for post %s. Info: %s', post['_id'], e)
 
-        logging.info('Processed %s', post['_id'])
+        #logging.info('Processed %s', post['_id'])
 
         return result
 
