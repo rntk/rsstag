@@ -164,9 +164,9 @@ class RSSTagWorker:
         if data:
             try:
                 user_id = None
-                if 'user_id' in data:
-                    user_id = data['user_id']
-                    user = db.users.find_one({'sid': user_id})
+                if 'user' in data:
+                    user_id = data['user']
+                    user = db.users.find_one({'_id': user_id})
                     if not user:
                         task['type'] = TASK_NOOP
                 '''elif 'owner' in data:
