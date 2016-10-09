@@ -21,40 +21,13 @@
         </div>
     </div>
     <div class="right_half">
-        <div id="main_menu_button" class="global_tools_button">
-            {{ menu.menu_button('global_tools_button') }}
-        </div>
+        {{ menu.settings_menu() }}
     </div>
 </div>
-{% if letters %}
-<div class="letters">
-    {% for l in letters %}
-        <a href="{{l['local_url']}}" class="letter">{{l['letter']}}</a>
-    {% endfor %}
-</div>
-<div class="search_tools">
-    <div id="loading"><img src="/static/img/g_load.gif" /></div>
-    <input class="search_field" type="text" placeholder="Search" />
-    <div class="search_result">
-    </div>
-</div>
-{% endif %}
-{{ menu.menu_window() }}
-<div class="page">
-    <ol class="cloud">
-        {% if tags %}
-            {% for h in tags %}
-                <li class="cloud_item" data-tag="{{h['tag']}}">
-                    <a href="{{h['url']}}" class="cloud_item_title">{{h['tag']}}</a> ({{h['count']}})<br />({{h['words']|join(', ')}})<br />
-                    <span class="get_tag_siblings">...</span>
-                    <div class="tag_siblings"></div>
-                </li>
-            {% endfor %}
-        {% else %}
-            <p>No unread tags</p>
-        {% endif %}
-    </ol>
-</div>
+<div id="letters_list"></div>
+<div id="search_tools"></div>
+{{ menu.settings_menu() }}
+<div class="page" id="tags_page"></div>
 <div id="global_tools_bottom">
     <ul id="paginator">
         {% if pages_map['start'] %}
@@ -94,6 +67,10 @@
     var count = document.getElementById('cloud_items_count');
     count.innerHTML = document.getElementsByTagName('li').length;
 </script-->
+<script type="text/javascript">
+    var initial_tags_list = {{tags|json}};
+    var initial_letters_list = {{letters|json}};
+</script>
 <div id="help_window">
 <ul>
     <li>Click/tap on one tag and then click/tap on other tag, will open the page with posts have selected tags</li>

@@ -15,34 +15,14 @@
         </div>
     </div>
     <div class="right_half">
-        <div id="main_menu_button" class="global_tools_button">
-            {{ menu.menu_button('global_tools_button') }}
-        </div>
+        {{ menu.settings_menu() }}
     </div>
 </div>
-{{ menu.menu_window() }}
 <div class="page">
-    <div class="post">
-    <ul>
-        {% if data %}
-            {% for cat in data %}
-                {% if cat != 'All' %}
-                    <li class="category"><a href="{{data[cat]['url']}}">{{data[cat]['title']}}</a>({{data[cat]['unread_count']}})<span class="show_btn minimized"></span>
-                {% else %}
-                    <li class="category"><a href="{{data[cat]['url']}}">{{data[cat]['title']}}</a>({{data[cat]['unread_count']}})
-                {% endif %}
-                    <ul class="feeds hidden">
-                        {% for feed in data[cat]['feeds'] %}
-                            <li><a href="{{feed['url']}}">{{feed['title']}}</a>({{feed['unread_count']}})</li>
-                        {% endfor %}
-                    </ul>
-                </li>
-            {% endfor %}
-        {% else %}
-            <p>No unread feeds</p>
-        {% endif %}
-    </ul>
-    </div>
+    <div class="post" id="cats_list"></div>
 </div>
+<script type="text/javascript">
+    var initial_cats_list = {{data|json}}
+</script>
 </body>
 </html>

@@ -1,26 +1,6 @@
-{% macro menu_button(class='') -%}
-<span class="main_menu_button">
-    <img src="/static/img/menu.png" alt="Main menu"/>
-</span>
-{%- endmacro %}
-{% macro menu_window() -%}
-    <div class="main_menu_window">
-        <div>
-            <label for="post_on_page">posts per page</label><br />
-            <input id="post_on_page" name="post_on_page" type="text" value="{{user_settings['posts_on_page']}}" />
-        </div>
-        <div id="tags_per_page">
-            <label for="tags_on_page">posts per page</label><br />
-            <input id="tags_on_page" name="tags_on_page" type="text" value="{{user_settings['tags_on_page']}}" />
-        </div>
-        <div>
-            <input id="only_unread" name="only_unread" type="checkbox" {% if user_settings['only_unread'] %} checked {% endif %} />
-            <label for="only_unread">only unread</label>
-        </div>
-        <div>
-            <input id="hot_tags" name="hot_tags" type="checkbox" {% if user_settings['hot_tags'] %} checked {% endif %} />
-            <label for="hot_tags">hot tags</label>
-        </div>
-        <button id="save_settings">Save</button>
-    </div>
+{% macro settings_menu() -%}
+    <div id="settings_menu" class="global_tools_button"></div>
+    <script type="text/javascript">
+        var rss_settings = {{ user_settings|json }};
+    </script>
 {%- endmacro %}

@@ -22,11 +22,9 @@
     <div class="right_half">
         <div id="player_block" class="global_tools_button"></div>
         <div id="posts_stat" class="global_tools_button"></div>
-        <div id="read_all" class="global_tools_button"><span>read all</span></div>
-        <div id="show_all" class="global_tools_button"><span>show all</span></div>
-        <div id="main_menu_button" class="global_tools_button">
-            {{ menu.menu_button('global_tools_button') }}
-        </div>
+        <div id="read_all" class="global_tools_button"></div>
+        <div id="show_all" class="global_tools_button"></div>
+        {{ menu.settings_menu() }}
     </div>
 </div>
 <div id="help_window">
@@ -42,37 +40,15 @@
     <li><b>H</b> - show\hide this window</li>
 </ul>
 </div>
-{{ menu.menu_window() }}
-<div class="page" data-tag="{{tag}}" data-group="{{group}}">
-<div class="tag_title">
-    <h3>{{tag}}</h3>
-    {% if words %}
-        <span>({{words}})</span>
-    {% endif %}
+<div class="page">
+    <div id="posts_page"></div>
 </div>
-{% if posts %}
-    {% for p in posts %}
-        <div class="post" data-feed="{{p['post']['feed_id']}}" id="p{{p['pos']}}" data-pos="{{p['pos']}}"><a name="p{{p['pos']}}"></a>
-            <h3 class="post_title"><a class="post_title_link" href="{{p['post']['url']}}" target="_blank">{{p['post']['content']['title']}}</a></h3>
-            <div class="post_meta">{{p['category_title']}} | {#<img src="{{p['favicon']}}" class="favicon" />#}<b class="post_feed_title">{{p['feed_title']}}</b> | {{p['post']['date']}}</div>
-            <div class="post_content hide">{# {{p['post']['content']['content']}} #}</div>
-            <div class="post_tools">
-                {#<a href="{{p['post']['url']}}" class="post_show_original" target="_blank">Show original...</a>#}
-                <a href="#p{{p['pos']}}" class="post_show_content">Show post</a>
-                <a href="#p{{p['pos']}}" class="post_show_links">Show links</a>
-                {% if p['post']['read'] %}
-                    <span class="read_button read" data-pos="{{p['pos']}}">read</span>
-                {% else %}
-                    <span class=" read_button unread" data-pos="{{p['pos']}}">unread</span>
-                {% endif %}
-                <div class="post_links_content"></div>
-            </div>
-        </div>
-    {% endfor %}
-{% else %}
-    <p>No unread posts</p>
-{% endif %}
 <!--div id="show_tags"><a href="#tags">Show "level up"</a><a name="tags"></div-->
-</div>
+<script type="text/javascript">
+    window.posts_list = {{posts|json}};
+    window.group = '{{group}}';
+    window.group_title = '{{tag}}';
+    window.words = {{words}};
+</script>
 </body>
 </html>

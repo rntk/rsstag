@@ -15,12 +15,9 @@
         <span class="login_button global_tools_button">
             <a href="/provider">{{provider}} ({{posts['unread']}} / {{posts['read']}})</a>
         </span>
-        <span class="global_tools_button">
-            {{ menu.menu_button('global_tools_button') }}
-        </span>
+        {{ menu.settings_menu() }}
     </div>
 </div>
-{{ menu.menu_window() }}
 <div class="page screen_middle">
     {% for e in err %}
         <p id="error">{{e}}</p>
