@@ -8,3 +8,5 @@ rsscloud.conf
 jquery*
 *.map
 *.model
+node_modules
+bundle.js

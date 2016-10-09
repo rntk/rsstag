@@ -74,6 +74,7 @@ class RSSTagApplication(object):
                 )
             )
         )
+        self.template_env.filters['json'] = json.dumps
         self.providers = self.config['settings']['providers'].split(',')
         self.user_ttl = int(self.config['settings']['user_ttl'])
         cl = MongoClient(self.config['settings']['db_host'], int(self.config['settings']['db_port']))
@@ -404,10 +405,9 @@ class RSSTagApplication(object):
             logging.warning('Can`t json load settings. Cause: %s', e)
             settings = {}
         if settings:
-            result = {}
             if self.user:
                 changed = False
-                result = {'result': 'ok', 'reason': 'ok'}
+                result = {'data': 'ok'}
                 code = 200
                 try:
                     for k, v in settings.items():
@@ -425,7 +425,7 @@ class RSSTagApplication(object):
                 except Exception as e:
                     changed = False
                     logging.warning('Wrong settings value. Cause: %s', e)
-                    result = {'result': 'error', 'reason': 'Bad settings'}
+                    result = {'error': 'Bad settings'}
                     code = 400
                 if changed:
                     try:
@@ -435,15 +435,16 @@ class RSSTagApplication(object):
                         )
                     except Exception as e:
                         logging.error('Can`t save settings in db. Cause: %s', e)
-                        result = {'result': 'error', 'reason': 'Server in trouble'}
+                        result = {'error': 'Server in trouble'}
                         code = 500
             else:
-                result = {'result': 'error', 'reason': 'Not logged'}
+                result = {'error': 'Not logged'}
                 code = 401
             self.response = Response(json.dumps(result), mimetype='application/json')
         else:
-            result = {'result': 'error', 'reason': 'Something wrong with settings'}
+            result = {'error': 'Something wrong with settings'}
             code = 400
+
         self.response = Response(json.dumps(result), mimetype='application/json')
         self.response.status_code = code
 
@@ -569,23 +570,29 @@ class RSSTagApplication(object):
             for f in cat_cursor:
                 by_feed[f['feed_id']] = f
                 cat_id = f['category_id']
+            projection = {'_id': False, 'content.content': False}
             if self.user['settings']['only_unread']:
                 if cat == all_feeds:
                     cursor = self.db.posts\
-                        .find({'owner': self.user['sid'], 'read': False})\
+                        .find({'owner': self.user['sid'], 'read': False}, projection=projection)\
                         .sort([('feed_id', DESCENDING), ('unix_date', DESCENDING)])
                 else:
-                    cursor = self.db.posts.find({
-                        'owner': self.user['sid'],
-                        'read': False,
-                        'category_id': cat_id
-                    }).sort([('feed_id', DESCENDING), ('unix_date', DESCENDING)])
+                    cursor = self.db.posts.find(
+                        {
+                            'owner': self.user['sid'],
+                            'read': False,
+                            'category_id': cat_id
+                        },
+                        projection = projection
+                    ).sort([('feed_id', DESCENDING), ('unix_date', DESCENDING)])
             else:
                 if cat == all_feeds:
-                    cursor = self.db.posts.find({'owner': self.user['sid']}).sort('unix_date', DESCENDING)
+                    cursor = self.db.posts\
+                        .find({'owner': self.user['sid']}, projection=projection)\
+                        .sort('unix_date', DESCENDING)
                 else:
                     cursor = self.db.posts\
-                        .find({'owner': self.user['sid'], 'category_id': cat_id})\
+                        .find({'owner': self.user['sid'], 'category_id': cat_id}, projection=projection)\
                         .sort('unix_date', DESCENDING)
             posts = []
             for post in cursor:
@@ -602,7 +609,7 @@ class RSSTagApplication(object):
                     tag=cat,
                     back_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
                     group='category',
-                    words='',
+                    words=[],
                     user_settings=self.user['settings'],
                     provider=self.user['provider']
                     # next_tag=self.routes.getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': next_cat}),
@@ -631,16 +638,20 @@ class RSSTagApplication(object):
         tag = unquote(quoted_tag)
         current_tag = self.db.tags.find_one({'owner': self.user['sid'], 'tag': tag})
         if current_tag:
+            projection = {'_id': False, 'content.content': False}
             posts = []
             if self.user['settings']['only_unread']:
-                cursor = self.db.posts.find({
-                    'owner': self.user['sid'],
-                    'read': False,
-                    'tags': {'$all': [tag]}
-                }).sort([('feed_id', DESCENDING), ('unix_date', DESCENDING)])
+                cursor = self.db.posts.find(
+                    {
+                        'owner': self.user['sid'],
+                        'read': False,
+                        'tags': {'$all': [tag]}
+                    },
+                    projection=projection
+                ).sort([('feed_id', DESCENDING), ('unix_date', DESCENDING)])
             else:
                 cursor = self.db.posts\
-                    .find({'owner': self.user['sid'], 'tags': {'$all': [tag]}})\
+                    .find({'owner': self.user['sid'], 'tags': {'$all': [tag]}}, projection=projection)\
                     .sort([('feed_id', DESCENDING), ('unix_date', DESCENDING)])
             by_feed = {}
             for post in cursor:
@@ -661,7 +672,7 @@ class RSSTagApplication(object):
                     tag=tag,
                     back_link=back_link,
                     group='tag',
-                    words=', '.join(current_tag['words']),
+                    words=current_tag['words'],
                     user_settings=self.user['settings'],
                     provider=self.user['provider']
                 ),
@@ -698,7 +709,7 @@ class RSSTagApplication(object):
                     tag=current_feed['title'],
                     back_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
                     group='feed',
-                    words='',
+                    words=[],
                     user_settings=self.user['settings'],
                     provider=self.user['provider']
                 ),
@@ -708,108 +719,93 @@ class RSSTagApplication(object):
             self.on_error(NotFound())
 
     def on_read_posts_post(self):
-        err = []
-        many = False
-        if 'pos' in self.request.form:
-            many = False
-            try:
-                post_id = int(self.request.form['pos'])
-                status = bool(int(self.request.form.get('status')))
-            except Exception as e:
-                err.append('Pos or Status wrong')
-        elif 'posts[]' in self.request.form:
-            many = True
-            posts = []
-            try:
-                posts = [int(i) for i in self.request.form.getlist('posts[]')]
-                status = bool(int(self.request.form.get('status')))
-            except Exception as e:
-                err.append('Posts or Status wrong')
-        if not err:
-            err.append('ok')
-            st = time.time()
+        code = 200
+        try:
+            data = json.loads(self.request.get_data(as_text=True))
+            if (data['ids'] and isinstance(data['ids'], list)):
+                post_ids = data['ids']
+            else:
+                raise Exception('Bad ids for posts status');
+            readed = bool(data['readed'])
+            result = None
+        except Exception as e:
+            logging.warning('Send wrond data for read posts. Cause: %s', e)
+            post_ids = None
+            result = {'error': 'Bad ids or status'}
+            code = 400
+
+        if result is None:
+            #st = time.time()
             tmp_letters = self.db.letters.find_one({'owner': self.user['sid']})
             if tmp_letters:
                 first_letters = tmp_letters['letters']
             else:
                 first_letters = {}
-            if many:
-                tags = {}
-                current_data = None
-                for_insert = []
-                if (self.user['provider'] == 'bazqux') or (self.user['provider'] == 'inoreader'):
-                    current_data = self.db.posts.find(
-                        {
-                            'owner': self.user['sid'],
-                            'read': not status,
-                            'pid': {'$in': posts}
-                        },
-                        projection=['id', 'tags']
-                    )
-                    for d in current_data:
-                        for_insert.append({
-                            'user': self.user['_id'],
-                            'id': d['id'],
-                            'status': status,
-                            'processing': TASK_NOT_IN_PROCESSING
-                        })
-                        for t in d['tags']:
-                            if t in tags:
-                                tags[t] += 1
-                            else:
-                                tags[t] = 1
+            tags = {}
+            for_insert = []
+            if (self.user['provider'] == 'bazqux') or (self.user['provider'] == 'inoreader'):
+                current_data = self.db.posts.find(
+                    {
+                        'owner': self.user['sid'],
+                        'read': not readed,
+                        'pid': {'$in': post_ids}
+                    },
+                    projection=['id', 'tags']
+                )
+                for d in current_data:
+                    for_insert.append({
+                        'user': self.user['_id'],
+                        'id': d['id'],
+                        'status': readed,
+                        'processing': TASK_NOT_IN_PROCESSING
+                    })
+                    for t in d['tags']:
+                        if t in tags:
+                            tags[t] += 1
+                        else:
+                            tags[t] = 1
+            if for_insert:
                 try:
                     self.db.mark_queue.insert_many(for_insert)
                 except Exception as e:
+                    result = {'error': 'Database queue error'}
                     logging.error('Can`t push in mark queue: %s', e)
-                    err.append('Database error')
-                bulk = self.db.tags.initialize_unordered_bulk_op()
-                if tags:
-                    if status:
-                        for t in tags:
-                            bulk.find({'owner': self.user['sid'], 'tag': t})\
-                                .update_one({'$inc': {'unread_count': -tags[t]}})
-                            first_letters[t[0]]['unread_count'] -= tags[t]
-                    else:
-                        for t in tags:
-                            bulk.find({'owner': self.user['sid'], 'tag': t})\
-                                .update_one({'$inc': {'unread_count': tags[t]}})
-                            first_letters[t[0]]['unread_count'] += tags[t]
-                    try:
-                        bulk.execute()
-                    except Exception as e:
-                        logging.error('Bulk failed in on_read_posts_post: %s', e)
-                        err.append('Database error')
-                self.db.posts.update_many(
-                    {'owner': self.user['sid'], 'read': not status, 'pid': {'$in': posts}},
-                    {'$set': {'read': status}}
-                )
-            else:
-                if (self.user['provider'] == 'bazqux') or (self.user['provider'] == 'inoreader'):
-                    current_post = self.db.posts.find_one(
-                        {'owner': self.user['sid'], 'pid': post_id},
-                        projection=['id', 'tags']
-                    )
-                    self.db.mark_queue.insert_one({
-                        'user': self.user['_id'],
-                        'id': current_post['id'],
-                        'status': status,
-                        'processing': TASK_NOT_IN_PROCESSING
-                    })
-                    self.db.posts.update_one({'owner': self.user['sid'], 'pid': post_id}, {'$set': {'read': status}})
-                if status:
-                    incr = -1
+                    code = 500
+
+        if result is None:
+            bulk = self.db.tags.initialize_unordered_bulk_op()
+            if tags:
+                if readed:
+                    for t in tags:
+                        bulk.find({'owner': self.user['sid'], 'tag': t})\
+                            .update_one({'$inc': {'unread_count': -tags[t]}})
+                        first_letters[t[0]]['unread_count'] -= tags[t]
                 else:
-                    incr = 1
-                for t in current_post['tags']:
-                    first_letters[t[0]]['unread_count'] += incr
-                self.db.tags.update_many(
-                    {'owner': self.user['sid'], 'tag': {'$in': current_post['tags']}},
-                    {'$inc': {'unread_count': incr}}
+                    for t in tags:
+                        bulk.find({'owner': self.user['sid'], 'tag': t})\
+                            .update_one({'$inc': {'unread_count': tags[t]}})
+                        first_letters[t[0]]['unread_count'] += tags[t]
+                try:
+                    bulk.execute()
+                except Exception as e:
+                    result = {'error': 'Database error'}
+                    logging.error('Bulk failed in on_read_posts_post: %s', e)
+                    code = 500
+            try:
+                self.db.posts.update_many(
+                    {'owner': self.user['sid'], 'read': not readed, 'pid': {'$in': post_ids}},
+                    {'$set': {'read': readed}}
                 )
-            self.db.letters.update_one({'owner': self.user['sid']}, {'$set': {'letters': first_letters}})
-            logging.info('%s', time.time() - st)
-        self.response = Response('{{"result": "{0}"}}'.format(''.join(err)), mimetype='application/json')
+                self.db.letters.update_one({'owner': self.user['sid']}, {'$set': {'letters': first_letters}})
+                result = {'data': 'ok'}
+            except Exception as e:
+                result = {'error': 'Database error'}
+                logging.error('Can`t mark posts or on_read_posts_post: %s', e)
+                code = 500
+
+            #logging.info('%s', time.time() - st)
+        self.response = Response(json.dumps(result), mimetype='application/json')
+        self.response.status_code = code
 
     def fillFirstLetters(self):
         tmp_letters = self.db.letters.find_one({'owner': self.user['sid']})
@@ -1010,7 +1006,9 @@ class RSSTagApplication(object):
             self.response = redirect(self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number}))
 
     def on_get_tag_siblings(self, tag=''):
+        code = 200
         all_tags = []
+        result = None
         if tag:
             tags_set = set()
             if self.d2v:
@@ -1029,12 +1027,19 @@ class RSSTagApplication(object):
                 }
                 if self.user['settings']['only_unread']:
                     query['read'] = False
-                cur = self.db.posts.find(query, projection=['tags'])
+                try:
+                    cur = self.db.posts.find(query, projection=['tags'])
+                except Exception as e:
+                    logging.error('Can`t get tag siblings %s. Info: %s', tag, e)
+                    result = {'error': 'Database error'}
+                    code = 500
+                    cur = []
                 tags_set = set()
                 for tags in cur:
                     for tag in tags['tags']:
                         tags_set.add(tag)
 
+        if result is None:
             if tags_set:
                 query = {
                     'owner': self.user['sid'],
@@ -1054,43 +1059,55 @@ class RSSTagApplication(object):
                             'n': tag[field]
                         })
 
-        self.response = Response(json.dumps(all_tags), mimetype='application/json')
+            result = {'data': all_tags}
+
+        self.response = Response(json.dumps(result), mimetype='application/json')
+        self.response.status_code = code
 
 
     def on_posts_content_post(self):
-        err = []
-        wanted_posts = []
-        if not err:
-            if 'posts[]' in self.request.form:
-                try:
-                    wanted_posts = [int(i) for i in self.request.form.getlist('posts[]')]
-                except Exception as e:
-                    wanted_posts = []
-                    err.append('Posts wrong')
-                if not wanted_posts:
-                    err.append('Posts must be not empty or have correct value')
-        if not err:
-            posts = self.db.posts.find(
-                {'owner': self.user['sid'], 'pid': {'$in': wanted_posts}},
-                limit=round(self.user['settings']['posts_on_page'])
-            )
-            if not err:
-                posts_content = []
-                for post in posts:
-                    attachments = ''
-                    if post['attachments']:
-                        for href in post['attachments']:
-                            attachments += '<a href="{0}">{0}</a><br />'.format(href)
-                    content = gzip.decompress(post['content']['content']).decode('utf-8', 'replace')
-                    if attachments:
-                        content += '<p>Attachments:<br />{0}<p>'.format(attachments)
-                    posts_content.append({'pos': post['pid'], 'content': content})
-                result = {'result': 'ok', 'data': posts_content}
-        if not err:
-            self.response = Response(json.dumps(result), mimetype='application/json')
-        else:
-            self.response = Response('{{"result": "error", "data":"{0}"}}'.format(''.join(err)), mimetype='application/json')
-            self.response.status_code = 404
+        code = 200
+        try:
+            wanted_posts = json.loads(self.request.get_data(as_text=True))
+            if isinstance(wanted_posts, list) and wanted_posts:
+                result = None
+            else:
+                raise Exception('Empty list of ids for post content')
+        except Exception as e:
+            logging.warning('Send bad posts ids for posts content. Cause: %s', e)
+            wanted_posts = []
+            result = {'error': 'Bad posts ids'}
+            code = 400
+        if result is None:
+            try:
+                #posts = self.db.posts.find({'owner': self.user['sid'], 'pid': {'$in': wanted_posts}}, limit=round(self.user['settings']['posts_on_page']))
+                posts = self.db.posts.find(
+                    {
+                        'owner': self.user['sid'],
+                        'pid': {'$in': wanted_posts}
+                    },
+                    projection = ['pid', 'content', 'attachments']
+                )
+            except Exception as e:
+                logging.warning('Can`t get posts content. Cause: %s', e)
+                wanted_posts = []
+                result = {'error': 'Database error'}
+                code = 500
+
+        if result is None:
+            posts_content = []
+            for post in posts:
+                attachments = ''
+                if post['attachments']:
+                    for href in post['attachments']:
+                        attachments += '<a href="{0}">{0}</a><br />'.format(href)
+                content = gzip.decompress(post['content']['content']).decode('utf-8', 'replace')
+                if attachments:
+                    content += '<p>Attachments:<br />{0}<p>'.format(attachments)
+                posts_content.append({'pos': post['pid'], 'content': content})
+            result = {'data': posts_content}
+        self.response = Response(json.dumps(result), mimetype='application/json')
+        self.response.status_code = code
 
     def on_post_content_post(self):
         err = []
@@ -1117,43 +1134,50 @@ class RSSTagApplication(object):
             self.response = Response('{{"result": "error", "data":"{0}"}}'.format(''.join(err)), mimetype='application/json')
             self.response.status_code = 404
 
-    def on_post_links(self):
-        err = []
+    def on_post_links_get(self, post_id: int) -> None:
+        code = 200
         result = None
         try:
-            post_id = int(self.request.form.get('postid'))
+            current_post = self.db.posts.find_one(
+                {'owner': self.user['sid'], 'pid': post_id},
+                projection=['tags', 'feed_id', 'url']
+            )
+            if not current_post:
+                result = {'error': 'Post not found'}
+                code = 404
         except Exception as e:
-            err.append('Post id must be int number')
-        if not err:
-            current_post = self.db.posts.find_one({'owner': self.user['sid'], 'pid': post_id}, projection=['tags', 'feed_id', 'url'])
-            if current_post:
+            logging.error('Can`t find post by id %s. Info: %s', post_id, e)
+            result = {'error': 'Database error'}
+            code = 500
+        if result is None:
+            try:
                 feed = self.db.feeds.find_one({'feed_id': current_post['feed_id'], 'owner': self.user['sid']})
-                if feed:
-                    result = {
-                        'result': 'ok',
-                        'data': {
-                            'c_url': feed['category_local_url'],
-                            'c_title': feed['category_title'],
-                            'f_url': feed['local_url'],
-                            'f_title': feed['title'],
-                            'p_url': current_post['url'],
-                            'tags': []
-                        }
-                    }
-                    for t in current_post['tags']:
-                        result['data']['tags'].append({
-                            'url': self.routes.getUrlByEndpoint(endpoint='on_tag_get', params={'quoted_tag': t}),
-                            'tag': t
-                        })
-                else:
-                    err.append('Can`t find feed')
-            else:
-                err.append('Can`t find post')
-        if not err:
-            self.response = Response(json.dumps(result), mimetype='application/json')
-        else:
-            self.response = Response('{{"result": "error", "data":"{0}"}}'.format(''.join(err)), mimetype='application/json')
-            self.response.status_code = 404
+                if not feed:
+                    result = {'error': 'Feed not found'}
+                    code = 500
+            except Exception as e:
+                logging.error('Can`t find feed. Post %s, feed id %s. Info: %s', post_id, current_post['feed_id'], e)
+                result = {'error': 'Database error'}
+                code = 500
+
+        if result is None:
+            result = {
+                'data': {
+                    'c_url': feed['category_local_url'],
+                    'c_title': feed['category_title'],
+                    'f_url': feed['local_url'],
+                    'f_title': feed['title'],
+                    'p_url': current_post['url'],
+                    'tags': []
+                }
+            }
+            for t in current_post['tags']:
+                result['data']['tags'].append({
+                    'url': self.routes.getUrlByEndpoint(endpoint='on_tag_get', params={'quoted_tag': t}),
+                    'tag': t
+                })
+        self.response = Response(json.dumps(result), mimetype='application/json')
+        self.response.status_code = code
 
     def on_get_all_tags(self):
         err = []

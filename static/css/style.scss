@@ -54,18 +54,18 @@ h3.post_title {
     text-decoration: none;
     font: 14pt Arial, sans-serif;
 }
-.tag_title {
+.tag_title, .group_title {
     font-weight: lighter;
     color: $meta_color;
     margin: 0.7em 0 0.5em 0.7em;
     width: 90%;
     /*text-align: center;*/
 }
-.tag_title h3 {
+.tag_title, .group_title h3 {
     padding: 0.3em 0 0.3em 0;
     display: inline;
 }
-.tag_title span {
+.tag_title, .group_title span {
     font-size: 11pt;
 }
 .post_meta {
@@ -305,6 +305,8 @@ h3 {
     border-bottom: 1px dashed blue;
     text-decoration: none;
     margin: 0 1em 0 0;
+    cursor: pointer;
+    color: blue;
 }
 #post_links {
     display: none;
@@ -338,7 +340,7 @@ h3 {
     position: relative;
 }
 .search_result {
-    display: none;
+    /*display: none;*/
     padding: 0;
     margin: 0;
     width: 60%;
@@ -397,8 +399,9 @@ h3 {
     vertical-align: bottom;
 }
 .main_menu_window {
+    text-align: left;
     position: fixed;
-    display: none;
+    /*display: none;*/
     background-color: white;
     padding: 0.5em;
     box-shadow: 0px 0px 0.3em 0 black;
@@ -469,7 +472,7 @@ h3 {
     .letters {
         margin-top: 3em;
     }
-    .tag_title {
+    .tag_title, .group_title {
         margin-top: 3em;
     }
     .page {
