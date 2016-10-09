@@ -1,16 +1,21 @@
 var path = require('path');
 var webpack = require('webpack');
 
+var plugins = [
+    new webpack.EnvironmentPlugin(['NODE_ENV'])
+];
+
+if (process.env.NODE_ENV === 'production') {
+    plugins = plugins.concat([
+        new webpack.optimize.DedupePlugin(),
+        new webpack.optimize.UglifyJsPlugin()
+    ]);
+}
+
 module.exports = {
     devtool: 'cheap-module-source-map',
     entry: path.join(__dirname, 'apps', 'app.js'),
-    plugins: [
-        new webpack.DefinePlugin({
-            'process.env': { 
-                NODE_ENV: JSON.stringify(process.env.NODE_ENV)
-            }
-        })
-    ],
+    plugins: plugins,
     module: {
         loaders: [
             {
