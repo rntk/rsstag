@@ -3,6 +3,7 @@ import gzip
 from rsstag.utils import load_config
 from pymongo import MongoClient
 from rsstag.tags_builder import TagsBuilder
+from rsstag.html_cleaner import HTMLCleaner
 from gensim.models.doc2vec import Doc2Vec, TaggedDocument
 
 class D2VLearn:
@@ -16,8 +17,13 @@ class D2VLearn:
     def fetch_texts(self) -> None:
         cursor = self.db.posts.find({})
         builder = TagsBuilder(self._config['settings']['replacement'])
+        cleaner = HTMLCleaner()
         for post in cursor:
             text = post['content']['title'] + ' ' + gzip.decompress(post['content']['content']).decode('utf-8', 'replace')
+            cleaner.purge()
+            cleaner.feed(text)
+            strings = cleaner.get_content()
+            text = ' '.join(strings)
             builder.purge()
             builder.prepare_text(text)
             self._texts.append(builder.get_prepared_text())
