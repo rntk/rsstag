@@ -64,6 +64,13 @@ export default class TagsStorage {
                         let state = this.getState();
 
                         if (state.tags.has(tag)) {
+                            data.data.sort((a, b) => {
+                                if (a.count > b.count) {
+                                    return -1;
+                                } else {
+                                    return 1;
+                                }
+                            });
                             let tag_data = state.tags.get(tag);
                             tag_data.siblings = [];
                             for (let i = 0; i < data.data.length; i++) {
