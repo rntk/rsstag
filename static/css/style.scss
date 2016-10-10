@@ -183,6 +183,18 @@ h3 {
     cursor: pointer;
     max-width: 100%;
 }
+.cloud_item_group {
+    padding: 0.5em;
+    margin: 0.5em;
+    display: inline-block;
+    text-align: center;
+    font-size: 10pt;
+    border: 1px solid $my_gray;
+    @include vendor-prefix(border-radius, 0.5em);
+    @include vendor-prefix(box-shadow, 0px 0px 2px 0px gray);
+    cursor: pointer;
+    max-width: 100%;
+}
 .cloud_item_title {
     font-size: 13pt;
     font-variant: small-caps;

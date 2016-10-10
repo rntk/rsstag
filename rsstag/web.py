@@ -918,21 +918,16 @@ class RSSTagApplication(object):
                     end_tags_range = tags_count
                 sorted_tags = []
                 if self.user['settings']['only_unread']:
-                    for t in cursor[start_tags_range:end_tags_range]:
-                        sorted_tags.append({
-                            'tag': t['tag'],
-                            'url': t['local_url'],
-                            'words': t['words'],
-                            'count': t['unread_count']
-                        })
+                    field = 'unread_count'
                 else:
-                    for t in cursor[start_tags_range:end_tags_range]:
-                        sorted_tags.append({
-                            'tag': t['tag'],
-                            'url': t['local_url'],
-                            'words': t['words'],
-                            'count': t['posts_count']
-                        })
+                    field = 'posts_count'
+                for t in cursor[start_tags_range:end_tags_range]:
+                    sorted_tags.append({
+                        'tag': t['tag'],
+                        'url': t['local_url'],
+                        'words': t['words'],
+                        'count': t[field]
+                    })
                 self.fillFirstLetters()
                 letters = self.getLetters()
                 self.response = Response(
@@ -1041,23 +1036,31 @@ class RSSTagApplication(object):
 
         if result is None:
             if tags_set:
-                query = {
-                    'owner': self.user['sid'],
-                    'tag': {'$in': list(tags_set)}
-                }
-                if self.user['settings']['only_unread']:
-                    query['read'] = False
-                cur = self.db.tags.find(query, projection=['tag', 'posts_count', 'unread_count'])
                 if self.user['settings']['only_unread']:
                     field = 'unread_count'
                 else:
                     field = 'posts_count'
+                query = {
+                    'owner': self.user['sid'],
+                    'tag': {'$in': list(tags_set)},
+                    field: {'$gt': 0}
+                }
+                if self.user['settings']['only_unread']:
+                    query['read'] = False
+                try:
+                    cur = self.db.tags.find(query, projection={'_id': False})
+                except Exception as e:
+                    logging.error('Can`t fetch tags siblings for %s. Info: %s', tag, e)
+                    cur = []
+
+                all_tags = []
                 for tag in cur:
-                    if tag[field] > 0:
-                        all_tags.append({
-                            't': tag['tag'],
-                            'n': tag[field]
-                        })
+                    all_tags.append({
+                        'tag': tag['tag'],
+                        'url': tag['local_url'],
+                        'words': tag['words'],
+                        'count': tag[field]
+                    })
 
             result = {'data': all_tags}
 

@@ -14,6 +14,7 @@ export default class TagsStorage {
         let tags_m = new Map();
 
         tags.forEach(tag => {
+            tag.root = true;
             tags_m.set(tag.tag, tag);
         });
 
@@ -43,18 +44,8 @@ export default class TagsStorage {
     }
 
     changeTagSiblingsState(tag) {
-        let state = this.getState();
-
-        if (state.tags.has(tag)) {
-            let tag_data = state.tags.get(tag);
-
-            if (tag_data.siblings && tag_data.siblings.length) {
-                tag_data.siblings = [];
-                state.tags.set(tag, tag_data);
-                this.setState(state);
-            } else {
-                this.fetchTagSiblings(tag);
-            }
+        if (this._state.tags.has(tag)) {
+            this.fetchTagSiblings(tag);
         }
     }
 
@@ -74,18 +65,14 @@ export default class TagsStorage {
 
                         if (state.tags.has(tag)) {
                             let tag_data = state.tags.get(tag);
-
-                            data.data.sort((a, b) => {
-                                if (a.n > b.n) {
-                                    return(-1);
-                                } else if (a.n < b.n) {
-                                    return(1);
-                                } else {
-                                    return(0);
-                                }
-                            })
-
-                            tag_data.siblings = data.data;
+                            tag_data.siblings = [];
+                            for (let i = 0; i < data.data.length; i++) {
+                                let sibling = data.data[i];
+                                sibling.parent = tag;
+                                sibling.root = state.tags.has(tag);
+                                tag_data.siblings.push(sibling.tag);
+                                state.tags.set(sibling.tag, sibling);
+                            }
                             state.tags.set(tag, tag_data);
                             this.setState(state);
                         }
