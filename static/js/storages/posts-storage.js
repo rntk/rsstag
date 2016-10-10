@@ -241,7 +241,16 @@ export default class PostsStorage {
 
                     if (state.posts.has(post_id)) {
                         let post = state.posts.get(post_id);
-                        post.links = data.data;
+                        if (data.data.tags) {
+                            data.data.tags.sort((a, b) => {
+                                if (a.tag.charAt(0) > b.tag.charAt(0)) {
+                                    return 1;
+                                } else {
+                                    return -1;
+                                }
+                            });
+                        }
+                        post.links = data.data
                         state.posts.set(post_id, post);
                         this.setState(state);
                     }

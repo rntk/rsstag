@@ -41,7 +41,7 @@ export default class PostsItem extends React.Component{
             if (post.links) {
                 let tags = post.links.tags.map(tag => {
                     return(
-                        <a href={tag.url} key={tag.tag}>{tag.tag},&nbsp; </a>
+                        <a href={tag.url} key={tag.tag} style={{margin: '0 0.2em'}}> {tag.tag}</a>
                     );
                 });
                 links = (
