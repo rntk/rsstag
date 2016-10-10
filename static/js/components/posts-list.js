@@ -73,7 +73,9 @@ export default class PostsList extends React.Component{
                 }
                 posts.push(
                     <div className="post" key={post.pos}><a name={'p' + post.pos}></a>
-                        <h3 className="post_title"><a className="post_title_link" href={post.post.url} target="_blank">{post.post.content.title}</a></h3>
+                        <h3 className="post_title">
+                            <a className="post_title_link" href={post.post.url} target="_blank" dangerouslySetInnerHTML={{__html: post.post.content.title}}></a>
+                        </h3>
                         <div className="post_meta">{post.category_title} | <b className="post_feed_title">{post.feed_title}</b> | {post.post.date}</div>
                         <div className={'post_content ' + post.showed? '': 'hide'} dangerouslySetInnerHTML={this.dangerHTML(post)}></div>
                         <div className="post_tools">
