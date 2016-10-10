@@ -1,6 +1,6 @@
 ﻿import os
 import json
-from urllib.parse import unquote_plus, quote_plus, urlencode, unquote
+from urllib.parse import unquote_plus, quote_plus, urlencode, unquote, quote
 from http import client
 import html
 import time
@@ -1282,9 +1282,9 @@ class RSSTagApplication(object):
             result = {'result': 'ok', 'data': []}
             for tag in tags_cur:
                 result['data'].append({
-                    'tag': quote_plus(tag['tag']),
+                    'tag': tag['tag'],
                     'cnt': tag[field_name],
-                    'url': self.routes.getUrlByEndpoint(endpoint='on_tag_get', params={'quoted_tag': quote_plus(tag['local_url'])})
+                    'url': tag['local_url']
                 })
         else:
             result = {'result': 'error', 'data': ''.join(errors)}
