@@ -1,5 +1,5 @@
 import unittest
-from html_cleaner import HTMLCleaner
+from rsstag.html_cleaner import HTMLCleaner
 
 class TestHTMLCleaner(unittest.TestCase):
 
