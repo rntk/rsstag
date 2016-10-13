@@ -7,7 +7,7 @@ from rsstag.html_cleaner import HTMLCleaner
 from gensim.models.doc2vec import Doc2Vec, TaggedDocument
 
 class D2VLearn:
-    _texts = []
+    _tagged_texts = []
 
     def __init__(self, config_path: str) -> None:
         self._config = load_config(config_path)
@@ -26,12 +26,14 @@ class D2VLearn:
             text = ' '.join(strings)
             builder.purge()
             builder.prepare_text(text)
-            self._texts.append(builder.get_prepared_text())
+            #tag = 'post_'.format(post['pid'])
+            tag = post['pid']
+            self._tagged_texts.append((builder.get_prepared_text(), tag))
 
     def learn(self):
         tagged_docs = []
-        for i, text in enumerate(self._texts):
-            tagged_docs.append(TaggedDocument(text.split(), [i]))
+        for i, tagged_text in enumerate(self._tagged_texts):
+            tagged_docs.append(TaggedDocument(tagged_text[0].split(), [tagged_text[1]]))
 
         if os.path.exists(self._config['settings']['model']):
             model = Doc2Vec.load(self._config['settings']['model'])
