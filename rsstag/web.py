@@ -1176,7 +1176,8 @@ class RSSTagApplication(object):
             }
             for t in current_post['tags']:
                 result['data']['tags'].append({
-                    'url': self.routes.getUrlByEndpoint(endpoint='on_tag_get', params={'quoted_tag': t}),
+                    #'url': self.routes.getUrlByEndpoint(endpoint='on_tag_get', params={'quoted_tag': t}),
+                    'url': self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_startwith_get', params={'letter': t[0]}) + '#' + t,
                     'tag': t
                 })
         self.response = Response(json.dumps(result), mimetype='application/json')
