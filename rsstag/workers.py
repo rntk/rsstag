@@ -11,7 +11,8 @@ from pymongo import MongoClient, UpdateOne
 from rsstag.providers import BazquxProvider
 from rsstag.utils import load_config
 from rsstag.routes import RSSTagRoutes
-from rsstag import TASK_NOOP, TASK_DOWNLOAD, TASK_MARK, TASK_TAGS, POST_NOT_IN_PROCESSING, TASK_NOT_IN_PROCESSING
+from rsstag import TASK_NOOP, TASK_DOWNLOAD, TASK_MARK, TASK_TAGS, TASK_WORDS
+from rsstag import POST_NOT_IN_PROCESSING, TASK_NOT_IN_PROCESSING, TAG_NOT_IN_PROCESSING
 
 class RSSTagWorker:
     '''Rsstag workers handler'''
@@ -76,7 +77,8 @@ class RSSTagWorker:
                         'local_url': routes.getUrlByEndpoint(
                             endpoint='on_tag_get',
                             params={'quoted_tag': quote(tag)}
-                        )
+                        ),
+                        'processing': TAG_NOT_IN_PROCESSING
                     },
                     '$inc': {'posts_count': 1, 'unread_count': 1},
                     '$addToSet': {'words': {'$each': list(words[tag])}}
@@ -163,7 +165,22 @@ class RSSTagWorker:
                     task['type'] = TASK_TAGS
             except Exception as e:
                 data = None
-                logging.error('Worker can`t get data from queue: %s', e)
+                logging.error('Worker can`t get data from posts: %s', e)
+
+        if task['type'] == TASK_NOOP:
+            try:
+                data = db.tags.find_one_and_update(
+                    {
+                        'processing': TASK_NOT_IN_PROCESSING,
+                        'worded': {'$exists': False}
+                    },
+                    {'$set': {'processing': time.time()}}
+                )
+                if data:
+                    task['type'] = TASK_WORDS
+            except Exception as e:
+                data = None
+                logging.error('Worker can`t get data from words queue: %s', e)
 
         user = None
         if data:
@@ -205,12 +222,69 @@ class RSSTagWorker:
                         {'_id': task['data']['_id']},
                         {'$set': {'processing': POST_NOT_IN_PROCESSING}}
                     )
+                elif task['type'] == TASK_WORDS:
+                    db.tags.find_one_and_update(
+                        {'_id': task['data']['_id']},
+                        {'$set': {
+                            'processing': POST_NOT_IN_PROCESSING,
+                            'worded': True
+                        }}
+                    )
                 result = True
                 break
             except Exception as e:
                 result = False
                 logging.error('Can`t finish task %s, type %s. Info: %s', task['data']['_id'], task['type'], e)
 
+        return result
+
+    def process_words(self, db: MongoClient, tag: dict) -> bool:
+        seconds_in_day = 86400
+        current_time = time.time()
+        max_repeats = 5
+        result = True
+        word_query = {'word': tag['tag'], 'owner': tag['owner']}
+        for i in range(0, max_repeats):
+            try:
+                word = db.words.find_one(word_query)
+                if word:
+                    old_mid = sum(word['numbers']) / len(word['numbers'])
+                    time_delta = current_time - word['it']
+                    if time_delta > seconds_in_day:
+                        update_query = {
+                            '$set': {'it': current_time},
+                            '$push': {'numbers': tag['posts_count']}
+                        }
+                        word['numbers'].append(tag['posts_count'])
+                        new_mid = sum(word['numbers']) / len(word['numbers'])
+                    else:
+                        numbers_length = len(word['numbers']) - 1
+                        key_name = 'numbers.' + str(numbers_length)
+                        update_query = {
+                            '$inc': {key_name: tag['posts_count']}
+                        }
+                        word['numbers'][-1] += tag['posts_count']
+                        new_mid = sum(word['numbers']) / len(word['numbers'])
+                    temperature = abs(new_mid - old_mid)
+                    db.tags.find_one_and_update(
+                        {'tag': tag['tag'], 'owner': tag['owner']},
+                        {'$set': {'temperature': temperature}}
+                    )
+                    db.words.find_one_and_update(word_query, update_query)
+                else:
+                    db.words.insert({
+                        'word': tag['tag'],
+                        'owner': tag['owner'],
+                        'numbers': [tag['posts_count']],
+                        'it': current_time
+                    })
+            except Exception as e:
+                result = False
+                logging.error('Can`t process word %s for user %s. Info: %s', tag['tag'], tag['owner'], e)
+            if result:
+                break
+            else:
+                time.sleep(randint(3,10))
         return result
 
     def worker(self):
@@ -244,6 +318,8 @@ class RSSTagWorker:
 
             elif task['type'] == TASK_TAGS:
                 task_done = self.make_tags(db, task['data'], builder, cleaner)
+            elif task['type'] == TASK_WORDS:
+                task_done = self.process_words(db, task['data'])
 
             if task_done:
                 self.finish_task(db, task)

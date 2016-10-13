@@ -103,10 +103,12 @@ class RSSTagApplication(object):
             self.db.tags.create_index('tag')
             self.db.tags.create_index('unread_count')
             self.db.tags.create_index('posts_count')
+            self.db.tags.create_index('processing')
             #self.db.tags.create_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
             self.db.download_queue.create_index('processing')
             #self.db.download_queue.create_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
             self.db.mark_queue.create_index('processing')
+            self.db.words.create_index('word')
             #self.db.mark_queue.create_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
         except Exception as e:
             logging.warning('Indexses not created. May be already exists.')
