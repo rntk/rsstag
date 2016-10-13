@@ -2,8 +2,10 @@
 export default class TagsStorage {
     constructor(event_system) {
         this.ES = event_system;
+        let tag_hash = decodeURIComponent(document.location.hash);
         this._state = {
             tags: new Map(),
+            tag_hash: (tag_hash)? tag_hash.substr(1): ''
         };
         this.urls = {
             get_tag_siblings: '/tag-siblings'

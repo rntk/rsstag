@@ -22,7 +22,8 @@ export default class TagItem extends React.Component{
             style= {
                 display: 'inline-block'
             },
-            div_class_name = '';
+            div_class_name = '',
+            tag_hash_class = '';
 
 
         if (this.state.tag.siblings) {
@@ -40,9 +41,13 @@ export default class TagItem extends React.Component{
         } else {
             siblings_button = (<div><span className="get_tag_siblings" onClick={this.changeSiblingsState}>...</span></div>);
         }
+        if (this.state.tag.tag === this.props.tag_hash) {
+            tag_hash_class = 'tag_hash';
+        }
         return (
             <div style={style} className={div_class_name}>
-                <li className="cloud_item">
+                <a name={this.state.tag.tag}></a>
+                <li className={'cloud_item ' + tag_hash_class}>
                     <a href={this.state.tag.url} className="cloud_item_title">
                         {this.state.tag.tag}
                     </a> ({this.state.tag.count})<br />

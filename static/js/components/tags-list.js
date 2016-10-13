@@ -31,7 +31,7 @@ export default class TagsList extends React.Component{
 
                 if (tag.root) {
                     tags.push(
-                        <TagItem key={tag.tag} tag={tag} tags={this.state.tags} ES={this.props.ES} uniq_id={tag.tag}/>
+                        <TagItem key={tag.tag} tag={tag} tags={this.state.tags} tag_hash={this.state.tag_hash} ES={this.props.ES} uniq_id={tag.tag}/>
                     );
                 }
             }
