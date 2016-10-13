@@ -15,6 +15,7 @@ import TagsList from '../components/tags-list.js';
 import LettersList from '../components/letters-list.js';
 import SearchInput from '../components/search-input.js';
 import CategoriesList from '../components/categories-list.js';
+import PostsNumbers from '../components/posts-numbers.js';
 
 
 window.onload = () => {
@@ -64,6 +65,10 @@ window.onload = () => {
         ReactDOM.render(
             <ShowAllButton ES={window.EVSYS} />,
             document.getElementById('show_all')
+        );
+        ReactDOM.render(
+            <PostsNumbers ES={window.EVSYS} />,
+            document.getElementById('posts_stat')
         );
         posts_storage.start();
     }
