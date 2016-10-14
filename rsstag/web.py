@@ -685,14 +685,15 @@ class RSSTagApplication(object):
         page = self.template_env.get_template('posts.html')
         feed = unquote_plus(quoted_feed)
         current_feed = self.db.feeds.find_one({'owner': self.user['sid'], 'feed_id': feed})
+        projection = {'_id': False, 'content.content': False}
         if feed:
             if self.user['settings']['only_unread']:
                 cursor = self.db.posts\
-                    .find({'owner': self.user['sid'], 'read': False, 'feed_id': current_feed['feed_id']})\
+                    .find({'owner': self.user['sid'], 'read': False, 'feed_id': current_feed['feed_id']}, projection=projection)\
                     .sort('unix_date', DESCENDING)
             else:
                 cursor = self.db.posts\
-                    .find({'owner': self.user['sid'], 'feed_id': current_feed['feed_id']})\
+                    .find({'owner': self.user['sid'], 'feed_id': current_feed['feed_id']}, projection=projection)\
                     .sort('unix_date', DESCENDING)
             posts = []
             for post in cursor:
