@@ -4,16 +4,17 @@ import React from 'react';
 export default class PostsNumbers extends React.Component{
     constructor(props) {
         super(props);
-        this.state = {
+        this._default_state = {
             read: 0,
             unread: 0,
             all: 0
         };
+        this.state = Object.assign({}, this._default_state);
         this.updateNumbers = this.updateNumbers.bind(this);
     }
 
     updateNumbers(posts_state) {
-        let state = Object.assign({}, this.state);
+        let state = Object.assign({}, this._default_state);
 
         for (let item of posts_state.posts) {
             let post = item[1];
