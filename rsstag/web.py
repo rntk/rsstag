@@ -892,6 +892,7 @@ class RSSTagApplication(object):
             else:
                 first_letters = {}
             tags = {}
+            bi_grams = {}
             for_insert = []
             if (self.user['provider'] == 'bazqux') or (self.user['provider'] == 'inoreader'):
                 current_data = self.db.posts.find(
@@ -900,7 +901,7 @@ class RSSTagApplication(object):
                         'read': not readed,
                         'pid': {'$in': post_ids}
                     },
-                    projection=['id', 'tags']
+                    projection=['id', 'tags', 'bi-grams']
                 )
                 for d in current_data:
                     for_insert.append({
@@ -910,10 +911,14 @@ class RSSTagApplication(object):
                         'processing': TASK_NOT_IN_PROCESSING
                     })
                     for t in d['tags']:
-                        if t in tags:
-                            tags[t] += 1
-                        else:
-                            tags[t] = 1
+                        if t not in tags:
+                            tags[t] = 0
+                        tags[t] += 1
+                    for bi_g in d['bi-grams']:
+                        if bi_g not in bi_grams:
+                            bi_grams[bi_g] = 0
+                        bi_grams[bi_g] += 1
+
             if for_insert:
                 try:
                     self.db.mark_queue.insert_many(for_insert)
@@ -923,8 +928,8 @@ class RSSTagApplication(object):
                     code = 500
 
         if result is None:
-            bulk = self.db.tags.initialize_unordered_bulk_op()
             if tags:
+                bulk = self.db.tags.initialize_unordered_bulk_op()
                 if readed:
                     for t in tags:
                         bulk.find({'owner': self.user['sid'], 'tag': t})\
@@ -941,6 +946,26 @@ class RSSTagApplication(object):
                     result = {'error': 'Database error'}
                     logging.error('Bulk failed in on_read_posts_post: %s', e)
                     code = 500
+
+            if bi_grams:
+                bulk = self.db.bi_grams.initialize_unordered_bulk_op()
+                if readed:
+                    for t in bi_grams:
+                        bulk.find({'owner': self.user['sid'], 'tag': t})\
+                            .update_one({'$inc': {'unread_count': -bi_grams[t]}})
+                        first_letters[t[0]]['unread_count'] -= bi_grams[t]
+                else:
+                    for t in bi_grams:
+                        bulk.find({'owner': self.user['sid'], 'tag': t})\
+                            .update_one({'$inc': {'unread_count': bi_grams[t]}})
+                        first_letters[t[0]]['unread_count'] += bi_grams[t]
+                try:
+                    bulk.execute()
+                except Exception as e:
+                    result = {'error': 'Database error'}
+                    logging.error('Bi-grams bulk failed in on_read_posts_post: %s', e)
+                    code = 500
+
             try:
                 self.db.posts.update_many(
                     {'owner': self.user['sid'], 'read': not readed, 'pid': {'$in': post_ids}},
