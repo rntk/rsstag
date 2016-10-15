@@ -93,8 +93,7 @@ class TagsBuilder:
     def build_bi_grams(self, text: str) -> dict:
         words = self.text2words(text)
         if words:
-            bi_gram = ''
-            prev_word = words[1]
+            prev_word = words[0]
             prev_tag = self.process_word(prev_word)
             for current_word in words[1:]:
                 current_tag = self.process_word(current_word)
@@ -108,9 +107,6 @@ class TagsBuilder:
                     self._bi_grams_words[bi_gram].add(current_word)
                     prev_word = current_word
                     prev_tag = current_tag
-
-
-
 
     def get_prepared_text(self) -> str:
         '''Get text prepared for Doc2Vec'''

@@ -365,8 +365,7 @@ class RSSTagWorker:
                 task_done = provider.mark(task['data'], task['user'])
 
             elif task['type'] == TASK_TAGS:
-                #task_done = self.make_tags(db, task['data'], builder, cleaner) and self.make_bi_grams(db, task['data'], builder, cleaner)
-                task_done = self.make_bi_grams(db, task['data'], builder, cleaner)
+                task_done = (self.make_tags(db, task['data'], builder, cleaner) and self.make_bi_grams(db, task['data'], builder, cleaner))
             elif task['type'] == TASK_WORDS:
                 task_done = self.process_words(db, task['data'])
 
