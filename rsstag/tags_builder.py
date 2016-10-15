@@ -11,6 +11,8 @@ class TagsBuilder:
         self._prepared_text = ''
         self._tags = set()
         self._words = {}
+        self._bi_grams = {}
+        self._bi_grams_words = {}
         self.text_clearing = re.compile(text_clean_re)
         self.only_cyrillic = re.compile(r'^[а-яА-ЯёЁ]*$')
         self.only_latin = re.compile(r'^[a-zA-Z]*$')
@@ -24,6 +26,8 @@ class TagsBuilder:
         self._tags = set()
         self._words = {}
         self._prepared_text = ''
+        self._bi_grams = {}
+        self._bi_grams_words = {}
 
     def text2words(self, text: str) -> List[str]:
         '''Make words list from text'''
@@ -66,6 +70,14 @@ class TagsBuilder:
         '''Get words grouped by tag'''
         return self._words
 
+    def get_bi_grams(self) -> dict:
+        '''Get bi-grams'''
+        return self._bi_grams
+
+    def get_bi_grams_words(self) -> dict:
+        '''Return words for bi-grams'''
+        return self._bi_grams_words
+
     def build_tags(self, text: str) -> None:
         '''Build tags and words from text'''
         self._text = text
@@ -77,6 +89,27 @@ class TagsBuilder:
                 if tag not in self._words:
                     self._words[tag] = set()
                 self._words[tag].add(current_word)
+
+    def build_bi_grams(self, text: str) -> dict:
+        words = self.text2words(text)
+        if words:
+            bi_gram = ''
+            prev_word = words[1]
+            prev_tag = self.process_word(prev_word)
+            for current_word in words[1:]:
+                current_tag = self.process_word(current_word)
+                if current_tag:
+                    bi_gram = prev_tag + ' ' + current_tag
+                    if bi_gram not in self._bi_grams:
+                        self._bi_grams[bi_gram] = set([prev_tag, current_tag])
+                    if bi_gram not in self._bi_grams_words:
+                        self._bi_grams_words[bi_gram] = set()
+                    self._bi_grams_words[bi_gram].add(prev_word, current_word)
+                    prev_word = current_word
+                    prev_tag = current_tag
+
+
+
 
     def get_prepared_text(self) -> str:
         '''Get text prepared for Doc2Vec'''
