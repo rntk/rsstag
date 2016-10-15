@@ -38,7 +38,7 @@ export default class PostsNumbers extends React.Component{
 
     render() {
         if (this.state) {
-            return (<p>{this.state.all} / {this.state.read}</p>)
+            return (<p>{this.state.unread} / {this.state.read}</p>)
         } else {
             return(<p>0/0</p>);
         }
