@@ -161,7 +161,7 @@ class RSSTagWorker:
         if tags_updates:
             try:
                 db.bi_grams.bulk_write(tags_updates, ordered=False)
-                db.posts.update({'_id': post['_id']}, {'$set': {'tags': list(bi_grams.keys())}})
+                db.posts.update({'_id': post['_id']}, {'$set': {'bi-grams': list(bi_grams.keys())}})
                 result = True
             except Exception as e:
                 result = False
@@ -365,7 +365,8 @@ class RSSTagWorker:
                 task_done = provider.mark(task['data'], task['user'])
 
             elif task['type'] == TASK_TAGS:
-                task_done = self.make_tags(db, task['data'], builder, cleaner)
+                #task_done = self.make_tags(db, task['data'], builder, cleaner) and self.make_bi_grams(db, task['data'], builder, cleaner)
+                task_done = self.make_bi_grams(db, task['data'], builder, cleaner)
             elif task['type'] == TASK_WORDS:
                 task_done = self.process_words(db, task['data'])
 

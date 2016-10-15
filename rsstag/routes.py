@@ -41,8 +41,8 @@ class RSSTagRoutes:
             {'url': '/speech', 'endpoint': 'on_post_speech', 'methods': ['POST']},
 
             {'url': '/group/bi-gram/<int:page_number>', 'endpoint': 'on_group_by_bi_grams_get', 'methods': ['GET', 'HEAD']},
-            {'url': '/bi-gram/<string:quoted_tag>', 'endpoint': 'on_bi_gram_get', 'methods': ['GET', 'HEAD']}
-
+            {'url': '/bi-gram/<string:quoted_tag>', 'endpoint': 'on_bi_gram_get', 'methods': ['GET', 'HEAD']},
+            {'url': '/bi-grams-siblings/<string:tag>', 'endpoint': 'on_get_bi_grams_siblings', 'methods': ['GET', 'HEAD']}
         ]
 
         self._rules = []

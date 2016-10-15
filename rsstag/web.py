@@ -785,7 +785,7 @@ class RSSTagApplication(object):
             page_number = 1
         back_link = self.routes.getUrlByEndpoint(endpoint='on_group_by_bi_grams_get', params={'page_number': page_number})
         tag = unquote(quoted_tag)
-        current_tag = self.db.tags.find_one({'owner': self.user['sid'], 'tag': tag})
+        current_tag = self.db.bi_grams.find_one({'owner': self.user['sid'], 'tag': tag})
         if current_tag:
             projection = {'_id': False, 'content.content': False}
             posts = []
@@ -794,13 +794,13 @@ class RSSTagApplication(object):
                     {
                         'owner': self.user['sid'],
                         'read': False,
-                        'tags': {'$all': [tag]}
+                        'bi-grams': {'$all': [tag]}
                     },
                     projection=projection
                 ).sort([('feed_id', DESCENDING), ('unix_date', DESCENDING)])
             else:
                 cursor = self.db.posts\
-                    .find({'owner': self.user['sid'], 'tags': {'$all': [tag]}}, projection=projection)\
+                    .find({'owner': self.user['sid'], 'bi-grams': {'$all': [tag]}}, projection=projection)\
                     .sort([('feed_id', DESCENDING), ('unix_date', DESCENDING)])
             by_feed = {}
             for post in cursor:
@@ -1217,6 +1217,75 @@ class RSSTagApplication(object):
         self.response = Response(json.dumps(result), mimetype='application/json')
         self.response.status_code = code
 
+    def on_get_bi_grams_siblings(self, tag=''):
+        code = 200
+        all_tags = []
+        result = None
+        if tag:
+            q_tags = tag.split()
+            tags_set = set()
+            if self.d2v:
+                try:
+                    siblings = self.d2v.most_similar(positive=q_tags, topn=20)
+                except Exception as e:
+                    logging.error('In %s not found tag %s', self.config['settings']['model'], tag)
+                    siblings = []
+                for i, sibling_i in enumerate(siblings):
+                    for j, sibling_j in enumerate(siblings):
+                        if (i != j):
+                            tags_set.add(sibling_i[0] + ' ' + sibling_j[0])
+
+            if not siblings:
+                query = {
+                    'owner': self.user['sid'],
+                    'bi-grams': q_tags
+                }
+                if self.user['settings']['only_unread']:
+                    query['read'] = False
+                try:
+                    cur = self.db.posts.find(query, projection=['tags'])
+                except Exception as e:
+                    logging.error('Can`t get tag siblings %s. Info: %s', tag, e)
+                    result = {'error': 'Database error'}
+                    code = 500
+                    cur = []
+                tags_set = set()
+                for tags in cur:
+                    for tag in tags['tags']:
+                        tags_set.add(tag)
+
+        if result is None:
+            if tags_set:
+                if self.user['settings']['only_unread']:
+                    field = 'unread_count'
+                else:
+                    field = 'posts_count'
+                query = {
+                    'owner': self.user['sid'],
+                    'tag': {'$in': list(tags_set)},
+                    field: {'$gt': 0}
+                }
+                if self.user['settings']['only_unread']:
+                    query['read'] = False
+                try:
+                    cur = self.db.bi_grams.find(query, projection={'_id': False})
+                except Exception as e:
+                    logging.error('Can`t fetch tags siblings for %s. Info: %s', tag, e)
+                    cur = []
+
+                all_tags = []
+                for tag in cur:
+                    all_tags.append({
+                        'tag': tag['tag'],
+                        'url': tag['local_url'],
+                        'words': tag['words'],
+                        'count': tag[field]
+                    })
+
+            result = {'data': all_tags}
+
+        self.response = Response(json.dumps(result), mimetype='application/json')
+        self.response.status_code = code
 
     def on_posts_content_post(self):
         code = 200

@@ -104,7 +104,8 @@ class TagsBuilder:
                         self._bi_grams[bi_gram] = set([prev_tag, current_tag])
                     if bi_gram not in self._bi_grams_words:
                         self._bi_grams_words[bi_gram] = set()
-                    self._bi_grams_words[bi_gram].add(prev_word, current_word)
+                    self._bi_grams_words[bi_gram].add(prev_word)
+                    self._bi_grams_words[bi_gram].add(current_word)
                     prev_word = current_word
                     prev_tag = current_tag
 

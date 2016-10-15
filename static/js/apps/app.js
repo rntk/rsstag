@@ -16,6 +16,7 @@ import LettersList from '../components/letters-list.js';
 import SearchInput from '../components/search-input.js';
 import CategoriesList from '../components/categories-list.js';
 import PostsNumbers from '../components/posts-numbers.js';
+import BiGramsStorage from '../storages/bi-grams-storage.js';
 
 
 window.onload = () => {
@@ -51,8 +52,21 @@ window.onload = () => {
             document.getElementById('search_tools')
         );
         tags_storage.start();
-
-    } else if (/^\/feed*/.test(path) || /^\/category*/.test(path) || /^\/tag/.test(path) || /^\/posts\/with\/tags\/.*/.test(path)) {
+    } else if (/\/group\/bi-gram\/.*/.test(path)) {
+        const bi_grams_storage = new BiGramsStorage(window.EVSYS);
+        ReactDOM.render(
+            <TagsList ES={window.EVSYS} />,
+            document.getElementById('tags_page')
+        );
+        bi_grams_storage.start();
+    } else if
+        (
+            /^\/feed*/.test(path) ||
+            /^\/category*/.test(path) ||
+            /^\/tag/.test(path) ||
+            /^\/posts\/with\/tags\/.*/.test(path) ||
+            /^\/bi-gram/.test(path)
+        ) {
         const posts_storage = new PostsStorage(window.EVSYS);
         ReactDOM.render(
             <PostsList ES={window.EVSYS} />,
