@@ -76,7 +76,7 @@ class RSSTagWorker:
                         'temperature': 0,
                         'local_url': routes.getUrlByEndpoint(
                             endpoint='on_tag_get',
-                            params={'quoted_tag': quote(tag)}
+                            params={'quoted_tag': tag}
                         ),
                         'processing': TAG_NOT_IN_PROCESSING
                     },
@@ -114,6 +114,54 @@ class RSSTagWorker:
                 db.tags.bulk_write(tags_updates, ordered=False)
                 db.letters.bulk_write(letters_updates)
                 db.posts.update({'_id': post['_id']}, {'$set': {'tags': tags}})
+                result = True
+            except Exception as e:
+                result = False
+                logging.error('Can`t make tags for post %s. Info: %s', post['_id'], e)
+
+        #logging.info('Processed %s', post['_id'])
+
+        return result
+
+    def make_bi_grams(self, db: MongoClient, post: dict, builder: TagsBuilder, cleaner: HTMLCleaner) -> bool:
+        content = gzip.decompress(post['content']['content'])
+        text = post['content']['title'] + ' '+ content.decode('utf-8')
+        cleaner.purge()
+        cleaner.feed(text)
+        strings = cleaner.get_content()
+        text = ' '.join(strings)
+        builder.purge()
+        builder.build_bi_grams(text)
+        bi_grams = builder.get_bi_grams()
+        words = builder.get_bi_grams_words()
+        result = False
+        tags_updates = []
+        routes = RSSTagRoutes(self._config['settings']['host_name'])
+        for bi_gram, bi_value in bi_grams.items():
+            tags_updates.append(UpdateOne(
+                {'owner': post['owner'], 'tag':bi_gram},
+                {
+                    '$set': {
+                        'read': False,
+                        'tag': bi_gram,
+                        'owner': post['owner'],
+                        'temperature': 0,
+                        'local_url': routes.getUrlByEndpoint(
+                            endpoint='on_bi_gram_get',
+                            params={'quoted_tag': bi_gram}
+                        ),
+                        'processing': TAG_NOT_IN_PROCESSING
+                    },
+                    '$inc': {'posts_count': 1, 'unread_count': 1},
+                    '$addToSet': {'words': {'$each': list(words[bi_gram])}}
+                },
+                upsert=True
+            ))
+
+        if tags_updates:
+            try:
+                db.bi_grams.bulk_write(tags_updates, ordered=False)
+                db.posts.update({'_id': post['_id']}, {'$set': {'tags': list(bi_grams.keys())}})
                 result = True
             except Exception as e:
                 result = False
