@@ -105,6 +105,10 @@ class RSSTagApplication(object):
             self.db.tags.create_index('unread_count')
             self.db.tags.create_index('posts_count')
             self.db.tags.create_index('processing')
+            self.db.bi_grams.create_index('owner')
+            self.db.bi_grams.create_index('tag')
+            self.db.bi_grams.create_index('unread_count')
+            self.db.bi_grams.create_index('posts_count')
             #self.db.tags.create_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
             self.db.download_queue.create_index('processing')
             #self.db.download_queue.create_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
@@ -635,6 +639,151 @@ class RSSTagApplication(object):
             back_link = self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_startwith_get', params={'letter': letter})
         else:
             back_link = self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number})
+        tag = unquote(quoted_tag)
+        current_tag = self.db.tags.find_one({'owner': self.user['sid'], 'tag': tag})
+        if current_tag:
+            projection = {'_id': False, 'content.content': False}
+            posts = []
+            if self.user['settings']['only_unread']:
+                cursor = self.db.posts.find(
+                    {
+                        'owner': self.user['sid'],
+                        'read': False,
+                        'tags': {'$all': [tag]}
+                    },
+                    projection=projection
+                ).sort([('feed_id', DESCENDING), ('unix_date', DESCENDING)])
+            else:
+                cursor = self.db.posts\
+                    .find({'owner': self.user['sid'], 'tags': {'$all': [tag]}}, projection=projection)\
+                    .sort([('feed_id', DESCENDING), ('unix_date', DESCENDING)])
+            by_feed = {}
+            for post in cursor:
+                if post['feed_id'] not in by_feed:
+                    by_feed[post['feed_id']] = self.db.feeds.find_one(
+                        {'owner': self.user['sid'], 'feed_id': post['feed_id']}
+                    )
+                posts.append({
+                    'post': post,
+                    'pos': post['pid'],
+                    'category_title': by_feed[post['feed_id']]['category_title'],
+                    'feed_title': by_feed[post['feed_id']]['title'],
+                    'favicon': by_feed[post['feed_id']]['favicon']
+                })
+            self.response = Response(
+                page.render(
+                    posts=posts,
+                    tag=tag,
+                    back_link=back_link,
+                    group='tag',
+                    words=current_tag['words'],
+                    user_settings=self.user['settings'],
+                    provider=self.user['provider']
+                ),
+                mimetype='text/html'
+            )
+        else:
+            self.on_error(NotFound())
+
+    def on_group_by_bi_grams_get(self, page_number):
+        self.response = None
+        page = self.template_env.get_template('group-by-tag.html')
+        query = {'owner': self.user['sid']}
+        if self.user['settings']['only_unread']:
+            if self.user['settings']['hot_tags']:
+                sort_data = [('temperature', DESCENDING), ('unread_count', DESCENDING)]
+            else:
+                sort_data = [('unread_count', DESCENDING)]
+            query['unread_count'] = {'$gt': 0}
+        else:
+            if self.user['settings']['hot_tags']:
+                sort_data = [('temperature', DESCENDING), ('posts_count', DESCENDING)]
+            else:
+                sort_data = [('posts_count', DESCENDING)]
+        try:
+            cursor = self.db.bi_grams.find(query).sort(sort_data)
+            tags_count = cursor.count()
+        except Exception as e:
+            cursor = None
+            logging.error('Can`t get tags. Cause: %s', e)
+        if cursor:
+            page_count = self.getPageCount(tags_count, self.user['settings']['tags_on_page'])
+            if page_number <= 0:
+                p_number = 1
+                self.user['page'] = p_number
+            elif page_number > page_count:
+                p_number = page_count
+                self.response = redirect(
+                    self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': p_number})
+                )
+                self.user['page'] = p_number
+            else:
+                p_number = page_number
+            p_number -= 1
+            if p_number < 0:
+                p_number = 1
+            new_cookie_page_value = p_number + 1
+            if not self.response:
+                pages_map, start_tags_range, end_tags_range = self.calcPagerData(
+                    p_number,
+                    page_count,
+                    self.user['settings']['tags_on_page'],
+                    'on_group_by_bi_grams_get'
+                )
+                if end_tags_range > tags_count:
+                    end_tags_range = tags_count
+                sorted_tags = []
+                if self.user['settings']['only_unread']:
+                    field = 'unread_count'
+                else:
+                    field = 'posts_count'
+                for t in cursor[start_tags_range:end_tags_range]:
+                    sorted_tags.append({
+                        'tag': t['tag'],
+                        'url': t['local_url'],
+                        'words': t['words'],
+                        'count': t[field]
+                    })
+                self.fillFirstLetters()
+                letters = self.getLetters()
+                self.response = Response(
+                    page.render(
+                        tags=sorted_tags,
+                        sort_by_title='tags',
+                        sort_by_link=self.routes.getUrlByEndpoint(
+                            endpoint='on_group_by_tags_get',
+                            params={'page_number': new_cookie_page_value}
+                        ),
+                        group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
+                        pages_map=pages_map,
+                        current_page=new_cookie_page_value,
+                        letters=letters,
+                        user_settings=self.user['settings'],
+                        provider=self.user['provider']
+                    ),
+                    mimetype='text/html'
+                )
+                self.db.users.update_one(
+                    {'sid': self.user['sid']},
+                    {'$set': {'page': new_cookie_page_value, 'letter': ''}}
+                )
+            else:
+                if not self.response:
+                    self.on_error(NotFound())
+        else:
+            raise InternalServerError()
+
+    def on_bi_gram_get(self, quoted_tag=None):
+        page = self.template_env.get_template('posts.html')
+        page_number = self.user['page']
+        tmp_letters = self.db.letters.find_one({'owner': self.user['sid']})
+        if tmp_letters:
+            self.first_letters = getSortedDictByAlphabet(tmp_letters['letters'])
+        else:
+            self.first_letters = OrderedDict()
+        if not page_number:
+            page_number = 1
+        back_link = self.routes.getUrlByEndpoint(endpoint='on_group_by_bi_grams_get', params={'page_number': page_number})
         tag = unquote(quoted_tag)
         current_tag = self.db.tags.find_one({'owner': self.user['sid'], 'tag': tag})
         if current_tag:
