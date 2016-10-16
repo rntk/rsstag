@@ -7,8 +7,7 @@ export default class PostsStorage {
             group: '',
             group_title: '',
             posts: new Map(),
-            readed: false,
-            showed: false
+            readed: false
         };
         this.urls = {
             fetch_content: '/posts-content',
@@ -39,9 +38,6 @@ export default class PostsStorage {
         if (this.isNeedReadedChange(state)) {
             state.readed = !state.readed;
         }
-        /*if (this.isNeedShowedChange(state)) {
-            state.showed = !state.showed;
-        }*/
         this.setState(state);
 
     }
@@ -98,9 +94,6 @@ export default class PostsStorage {
         }
 
         if (changed) {
-            if (this.isNeedShowedChange(state)) {
-                state.showed = !state.showed;
-            }
             this.setState(state);
         }
     }
@@ -134,9 +127,6 @@ export default class PostsStorage {
                             }
                         });
                         if (changed) {
-                            if (this.isNeedShowedChange(state)) {
-                                state.showed = !state.showed;
-                            }
                             this.setState(state);
                         }
                     } else {
@@ -161,21 +151,7 @@ export default class PostsStorage {
             }
         }
 
-        return(change_readed);
-    }
-
-    isNeedShowedChange(state) {
-        let change_showed = true;
-
-        for (let item of state.posts) {
-            if ((item[1].showed === state.showed)) {
-                change_showed = false;
-            }
-            if (!change_showed) {
-                break;
-            }
-        }
-        return(change_showed);
+        return change_readed;
     }
 
     changePostsStatus(data) {

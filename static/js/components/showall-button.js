@@ -12,10 +12,24 @@ export default class ShowAllButton extends React.Component{
         this.updatePosts = this.updatePosts.bind(this);
     }
 
+    isShowed(state) {
+        let showed = false;
+
+        for (let item of state.posts) {
+            if (item[1].showed) {
+                showed = true;
+            }
+            if (showed) {
+                break;
+            }
+        }
+        return showed;
+    }
+
     updatePosts(state) {
         let new_state = {
             ids: Array.from(state.posts.keys()),
-            showed: state.showed
+            showed: this.isShowed(state)
         };
         this.setState(new_state);
     }
