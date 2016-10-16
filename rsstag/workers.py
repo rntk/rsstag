@@ -37,7 +37,8 @@ class RSSTagWorker:
             db.posts.remove({'owner': user['sid']})
             db.feeds.remove({'owner': user['sid']})
             db.tags.remove({'owner': user['sid']})
-            db.letters.remove({'owner': user['sid']})
+            db.bi_grams.remove({'owner': user['sid']})
+            db.letters.update({'owner': user['sid']}, {'$set': {'letters': {}}})
             result = True
         except Exception as e:
             logging.error('Can`t clear user data %s. Info: %s', user['sid'], e)
@@ -99,14 +100,12 @@ class RSSTagWorker:
                         params={'letter': letter}
                     )
                 }},
-                upsert=True
             ))
             letters_updates.append(UpdateOne(
                 {'owner': post['owner']},
                 {'$inc': {
                     key + '.unread_count': 1
                 }},
-                upsert=True
             ))
 
         if tags_updates:
@@ -182,7 +181,7 @@ class RSSTagWorker:
                 {'processing': TASK_NOT_IN_PROCESSING},
                 {'$set': {'processing': time.time()}}
             )
-            if data:
+            if data and (data['processing'] == TASK_NOT_IN_PROCESSING):
                 task['type'] = TASK_DOWNLOAD
         except Exception as e:
             data = None
@@ -194,7 +193,7 @@ class RSSTagWorker:
                     {'processing': TASK_NOT_IN_PROCESSING},
                     {'$set': {'processing': time.time()}}
                 )
-                if data:
+                if data and (data['processing'] == TASK_NOT_IN_PROCESSING):
                     task['type'] = TASK_MARK
             except Exception as e:
                 data = None
@@ -209,7 +208,7 @@ class RSSTagWorker:
                     },
                     {'$set': {'processing': time.time()}}
                 )
-                if data:
+                if data and (data['processing'] == TASK_NOT_IN_PROCESSING):
                     task['type'] = TASK_TAGS
             except Exception as e:
                 data = None
@@ -224,7 +223,7 @@ class RSSTagWorker:
                     },
                     {'$set': {'processing': time.time()}}
                 )
-                if data:
+                if data and (data['processing'] == TASK_NOT_IN_PROCESSING):
                     task['type'] = TASK_WORDS
             except Exception as e:
                 data = None
@@ -287,7 +286,7 @@ class RSSTagWorker:
         return result
 
     def process_words(self, db: MongoClient, tag: dict) -> bool:
-        seconds_in_day = 86400
+        seconds_interval = 3600
         current_time = time.time()
         max_repeats = 5
         result = True
@@ -298,7 +297,7 @@ class RSSTagWorker:
                 if word:
                     old_mid = sum(word['numbers']) / len(word['numbers'])
                     time_delta = current_time - word['it']
-                    if time_delta > seconds_in_day:
+                    if time_delta > seconds_interval:
                         update_query = {
                             '$set': {'it': current_time},
                             '$push': {'numbers': tag['posts_count']}
