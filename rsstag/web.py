@@ -954,12 +954,10 @@ class RSSTagApplication(object):
                     for t in bi_grams:
                         bulk.find({'owner': self.user['sid'], 'tag': t})\
                             .update_one({'$inc': {'unread_count': -bi_grams[t]}})
-                        first_letters[t[0]]['unread_count'] -= bi_grams[t]
                 else:
                     for t in bi_grams:
                         bulk.find({'owner': self.user['sid'], 'tag': t})\
                             .update_one({'$inc': {'unread_count': bi_grams[t]}})
-                        first_letters[t[0]]['unread_count'] += bi_grams[t]
                 try:
                     bulk.execute()
                 except Exception as e:
