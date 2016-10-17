@@ -149,6 +149,7 @@ class RSSTagWorker:
                             endpoint='on_bi_gram_get',
                             params={'quoted_tag': bi_gram}
                         ),
+                        'tags': bi_value,
                         'processing': TAG_NOT_IN_PROCESSING
                     },
                     '$inc': {'posts_count': 1, 'unread_count': 1},

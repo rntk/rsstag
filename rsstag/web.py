@@ -107,6 +107,7 @@ class RSSTagApplication(object):
             self.db.tags.create_index('processing')
             self.db.bi_grams.create_index('owner')
             self.db.bi_grams.create_index('tag')
+            self.db.bi_grams.create_index('tags')
             self.db.bi_grams.create_index('unread_count')
             self.db.bi_grams.create_index('posts_count')
             #self.db.tags.create_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
@@ -116,7 +117,7 @@ class RSSTagApplication(object):
             self.db.words.create_index('word')
             #self.db.mark_queue.create_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
         except Exception as e:
-            logging.warning('Indexses not created. May be already exists.')
+            logging.warning('Indexes not created. May be already exists.')
 
     def close(self):
         if self.workers_pool:
