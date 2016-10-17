@@ -1175,7 +1175,7 @@ class RSSTagApplication(object):
             self.response = redirect(self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number}))
 
     def on_get_tag_siblings(self, tag=''):
-        code = 200
+        '''code = 200
         all_tags = []
         result = None
         if tag:
@@ -1235,6 +1235,37 @@ class RSSTagApplication(object):
                         'words': tag['words'],
                         'count': tag[field]
                     })
+
+            result = {'data': all_tags}'''
+
+        code = 200
+        result = []
+        if tag:
+            if self.user['settings']['only_unread']:
+                field = 'unread_count'
+            else:
+                field = 'posts_count'
+            query = {
+                'owner': self.user['sid'],
+                'tags': {'$all': [tag]},
+                field: {'$gt': 0}
+            }
+            if self.user['settings']['only_unread']:
+                query['read'] = False
+            try:
+                cur = self.db.bi_grams.find(query, projection={'_id': False}).sort([('unread_count', DESCENDING)])
+            except Exception as e:
+                logging.error('Can`t fetch tags siblings for %s. Info: %s', tag, e)
+                cur = []
+
+            all_tags = []
+            for tag in cur:
+                all_tags.append({
+                    'tag': tag['tag'],
+                    'url': tag['local_url'],
+                    'words': tag['words'],
+                    'count': tag[field]
+                })
 
             result = {'data': all_tags}
 
@@ -1498,38 +1529,43 @@ class RSSTagApplication(object):
             self.response = redirect(self.routes.getUrlByEndpoint('on_root_get'))
 
     def on_post_tags_search(self):
-        errors = []
         s_request = unquote_plus(self.request.form.get('req'))
         if s_request:
-            field_name = ''
             if self.user['settings']['only_unread']:
                 field_name = 'unread_count'
             else:
                 field_name = 'posts_count'
             try:
-                tags_cur = self.db.tags.find({
-                    'owner': self.user['sid'],
-                    field_name: {'$gt': 0},
-                    'read': not self.user['settings']['only_unread'],
-                    'tag': {'$regex': '^{}.*'.format(s_request), '$options': 'i'}
-                }, {
-                    'tag': 1,
-                    'local_url': 1,
-                    field_name: 1,
-                    '_id': 0
-                }, limit=100)
+                tags_cur = self.db.tags.find(
+                    {
+                        'owner': self.user['sid'],
+                        field_name: {'$gt': 0},
+                        #'read': not self.user['settings']['only_unread'],
+                        'tag': {'$regex': '^{}.*'.format(s_request), '$options': 'i'}
+                    },
+                    {
+                        'tag': True,
+                        'local_url': True,
+                        field_name: True,
+                        '_id': False
+                    },
+                    limit=50
+                )
+                code = 200
+                result = {'data': []}
+                for tag in tags_cur:
+                    result['data'].append({
+                        'tag': tag['tag'],
+                        'cnt': tag[field_name],
+                        'url': tag['local_url']
+                    })
             except Exception as e:
-                errors.append('{}'.format(e))
+                code = 500
+                result = {'error': 'Database error'}
+                logging.error('Can`t search tag %s. Info: %s', s_request, e)
         else:
-            errors.append('Request can`t be empty')
-        if not errors:
-            result = {'result': 'ok', 'data': []}
-            for tag in tags_cur:
-                result['data'].append({
-                    'tag': tag['tag'],
-                    'cnt': tag[field_name],
-                    'url': tag['local_url']
-                })
-        else:
-            result = {'result': 'error', 'data': ''.join(errors)}
+            code = 400
+            result = {'error': 'Request can`t be empty'}
+
         self.response = Response(json.dumps(result), mimetype='application/json')
+        self.response.status_code = code

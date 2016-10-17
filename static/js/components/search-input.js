@@ -57,7 +57,7 @@ export default class SearchInput extends React.Component{
                             suggestions: data.data
                         });
                     } else {
-                        this.errorMessage('Error. Try later');
+                        this.errorMessage('Error. Try later. ' + data.error);
                     }
                 });
             }).catch(err => {
