@@ -496,6 +496,33 @@ h3.post_title {
 .tag_siblings a {
   margin: 0.5em; }
 
+#progressbar {
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  position: fixed;
+  z-index: 999; }
+
+.filling {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background-color: maroon;
+  -webkit-transition: width 1s;
+  -ms-transition: width 1s;
+  -moz-transition: width 1s;
+  -o-transition: width 1s;
+  transition: width 1s;
+  -webkit-opacity: 0.5;
+  -ms-opacity: 0.5;
+  -moz-opacity: 0.5;
+  -o-opacity: 0.5;
+  opacity: 0.5; }
+
 @media all and (max-width: 800px) {
   .screen_middle {
     top: 5%; }

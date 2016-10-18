@@ -1,4 +1,6 @@
 'use strict';
+import rsstag_utils from '../libs/rsstag_utils.js';
+
 export default class BiGramsStorage {
     constructor(event_system) {
         this.ES = event_system;
@@ -53,42 +55,40 @@ export default class BiGramsStorage {
 
     fetchTagSiblings(tag) {
         if (tag) {
-            fetch(
+            rsstag_utils.fetchJSON(
                 this.urls.get_tag_siblings + '/' + encodeURIComponent(tag),
                 {
                     method: 'GET',
                     credentials: 'include',
                     headers: {'Content-Type': 'application/json'}
                 }
-            ).then(response => {
-                response.json().then(data => {
-                    if (data.data) {
-                        let state = this.getState();
+            ).then(data => {
+                if (data.data) {
+                    let state = this.getState();
 
-                        if (state.tags.has(tag)) {
-                            data.data.sort((a, b) => {
-                                if (a.count > b.count) {
-                                    return -1;
-                                } else {
-                                    return 1;
-                                }
-                            });
-                            let tag_data = state.tags.get(tag);
-                            tag_data.siblings = [];
-                            for (let i = 0; i < data.data.length; i++) {
-                                let sibling = data.data[i];
-                                sibling.parent = tag;
-                                sibling.root = state.tags.has(tag);
-                                tag_data.siblings.push(sibling.tag);
-                                state.tags.set(sibling.tag, sibling);
+                    if (state.tags.has(tag)) {
+                        data.data.sort((a, b) => {
+                            if (a.count > b.count) {
+                                return -1;
+                            } else {
+                                return 1;
                             }
-                            state.tags.set(tag, tag_data);
-                            this.setState(state);
+                        });
+                        let tag_data = state.tags.get(tag);
+                        tag_data.siblings = [];
+                        for (let i = 0; i < data.data.length; i++) {
+                            let sibling = data.data[i];
+                            sibling.parent = tag;
+                            sibling.root = state.tags.has(tag);
+                            tag_data.siblings.push(sibling.tag);
+                            state.tags.set(sibling.tag, sibling);
                         }
-                    } else {
-                        this.errorMessage('Error. Try later');
+                        state.tags.set(tag, tag_data);
+                        this.setState(state);
                     }
-                });
+                } else {
+                    this.errorMessage('Error. Try later');
+                }
             }).catch(err => {
                 this.errorMessage('Error. Try later');
             })

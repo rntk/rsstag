@@ -1,4 +1,6 @@
 ﻿'use strict';
+import rsstag_utils from '../libs/rsstag_utils.js';
+
 export default class TagsStorage {
     constructor(event_system, url) {
         this.ES = event_system;
@@ -53,33 +55,31 @@ export default class TagsStorage {
 
     fetchTagSiblings(tag) {
         if (tag) {
-            fetch(
+            rsstag_utils.fetchJSON(
                 this.urls.get_tag_siblings + '/' + encodeURIComponent(tag),
                 {
                     method: 'GET',
                     credentials: 'include',
                     headers: {'Content-Type': 'application/json'}
                 }
-            ).then(response => {
-                response.json().then(data => {
-                    if (data.data) {
-                        let state = this.getState();
+            ).then(data => {
+                if (data.data) {
+                    let state = this.getState();
 
-                        data.data.sort((a, b) => {
-                            if (a.count > b.count) {
-                                return -1;
-                            } else {
-                                return 1;
-                            }
-                        });
-                        for (let i = 0; i < data.data.length; i++) {
-                            state.tags.set(data.data[i].tag, data.data[i]);
+                    data.data.sort((a, b) => {
+                        if (a.count > b.count) {
+                            return -1;
+                        } else {
+                            return 1;
                         }
-                        this.setState(state);
-                    } else {
-                        this.errorMessage('Error. Try later');
+                    });
+                    for (let i = 0; i < data.data.length; i++) {
+                        state.tags.set(data.data[i].tag, data.data[i]);
                     }
-                });
+                    this.setState(state);
+                } else {
+                    this.errorMessage('Error. Try later');
+                }
             }).catch(err => {
                 this.errorMessage('Error. Try later');
             })

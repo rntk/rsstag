@@ -17,18 +17,28 @@ import CategoriesList from '../components/categories-list.js';
 import PostsNumbers from '../components/posts-numbers.js';
 import BiGramsStorage from '../storages/bi-grams-storage.js';
 import TagButton from '../components/tag-button.js';
-
+import ProgressBarStorage from '../storages/progressbar-storage.js';
+import ProgressBar from '../components/progressbar.js';
 
 window.onload = () => {
     if (window.EVSYS === undefined) {
         window.EVSYS = new EventsSystem();
     }
+
     ReactDOM.render(
         <SettingsMenu ES={window.EVSYS} />,
         document.getElementById('settings_menu')
     );
     const settings_storage = new SettingsStorage(window.EVSYS);
     settings_storage.start();
+
+    ReactDOM.render(
+        <ProgressBar ES={window.EVSYS} />,
+        document.getElementById('progressbar')
+    );
+    const progressbar_storage = new ProgressBarStorage(window.EVSYS);
+    progressbar_storage.start();
+
     let path = document.location.pathname;
     if (path === '/') {
         ;

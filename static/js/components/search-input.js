@@ -1,5 +1,6 @@
 ﻿'use strict';
 import React from 'react';
+import rsstag_utils from '../libs/rsstag_utils.js';
 
 export default class SearchInput extends React.Component{
     constructor(props) {
@@ -42,24 +43,22 @@ export default class SearchInput extends React.Component{
             let form = new FormData();
 
             form.append('req', request);
-            fetch(
+            rsstag_utils.fetchJSON(
                 this.urls.tags_search,
                 {
                     method: 'POST',
                     credentials: 'include',
                     body: form
                 }
-            ).then(response => {
-                response.json().then(data => {
-                    if (data.data) {
-                        this.setState({
-                            request: request,
-                            suggestions: data.data
-                        });
-                    } else {
-                        this.errorMessage('Error. Try later. ' + data.error);
-                    }
-                });
+            ).then(data => {
+                if (data.data) {
+                    this.setState({
+                        request: request,
+                        suggestions: data.data
+                    });
+                } else {
+                    this.errorMessage('Error. Try later. ' + data.error);
+                }
             }).catch(err => {
                 this.errorMessage('Error. Try later');
             });

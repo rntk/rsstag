@@ -1,4 +1,6 @@
 ﻿'use strict';
+import rsstag_utils from '../libs/rsstag_utils.js';
+
 export default class PostsStorage {
     constructor(event_system) {
         this.ES = event_system;
@@ -100,7 +102,7 @@ export default class PostsStorage {
 
     fetchPostsContent(ids) {
         if (ids) {
-            fetch(
+            rsstag_utils.fetchJSON(
                 this.urls.fetch_content,
                 {
                     method: 'POST',
@@ -108,34 +110,32 @@ export default class PostsStorage {
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(ids)
                 }
-            ).then(response => {
-                response.json().then(data => {
-                    if (data.data) {
-                        let state = this.getState(),
-                            changed = false,
-                            content = data.data.slice(0);
+            ).then(data => {
+                if (data.data) {
+                    let state = this.getState(),
+                        changed = false,
+                        content = data.data.slice(0);
 
-                        content.forEach(content => {
-                            let id = +content.pos;
+                    content.forEach(content => {
+                        let id = +content.pos;
 
-                            if (state.posts.has(id)) {
-                                let post = state.posts.get(id);
-                                post.showed = true;
-                                post.post.content.content = content.content;
-                                state.posts.set(id, post);
-                                changed = true;
-                            }
-                        });
-                        if (changed) {
-                            this.setState(state);
+                        if (state.posts.has(id)) {
+                            let post = state.posts.get(id);
+                            post.showed = true;
+                            post.post.content.content = content.content;
+                            state.posts.set(id, post);
+                            changed = true;
                         }
-                    } else {
-                        this.errorMessage('Error. Try later');
+                    });
+                    if (changed) {
+                        this.setState(state);
                     }
-                });
+                } else {
+                    this.errorMessage('Error. Try later');
+                }
             }).catch(err => {
                 this.errorMessage('Error. Try later');
-            })
+            });
         }
     }
 
@@ -156,7 +156,7 @@ export default class PostsStorage {
 
     changePostsStatus(data) {
         if (data.ids && data.ids.length) {
-            fetch(
+            rsstag_utils.fetchJSON(
                 this.urls.read_posts,
                 {
                     method: 'POST',
@@ -164,35 +164,33 @@ export default class PostsStorage {
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify(data)
                 }
-            ).then(response => {
-                response.json().then(resp => {
-                    if (resp.data) {
-                        let state = this.getState(),
-                            changed = false;
+            ).then(resp => {
+                if (resp.data) {
+                    let state = this.getState(),
+                        changed = false;
 
-                        data.ids.forEach(post_id => {
-                            let id = +post_id
+                    data.ids.forEach(post_id => {
+                        let id = +post_id
 
-                            if (state.posts.has(id)) {
-                                let post = state.posts.get(id);
+                        if (state.posts.has(id)) {
+                            let post = state.posts.get(id);
 
-                                if (post.post.read !== data.readed) {
-                                    post.post.read = data.readed;
-                                    state.posts.set(id, post);
-                                    changed = true;
-                                }
+                            if (post.post.read !== data.readed) {
+                                post.post.read = data.readed;
+                                state.posts.set(id, post);
+                                changed = true;
                             }
-                        });
-                        if (changed) {
-                            if (this.isNeedReadedChange(state)) {
-                                state.readed = !state.readed;
-                            }
-                            this.setState(state);
                         }
-                    } else {
-                        this.errorMessage('Error. Try later');
+                    });
+                    if (changed) {
+                        if (this.isNeedReadedChange(state)) {
+                            state.readed = !state.readed;
+                        }
+                        this.setState(state);
                     }
-                });
+                } else {
+                    this.errorMessage('Error. Try later');
+                }
             }).catch(err => {//mutate state
                 this.errorMessage('Error. Try later');
             });
@@ -203,37 +201,35 @@ export default class PostsStorage {
         let promise,
             post_id = +id;
 
-        promise = fetch(
+        promise = rsstag_utils.fetchJSON(
             `${this.urls.fetch_links}/${post_id}`,
             {
                 method: 'GET',
                 credentials: 'include'
             }
         );
-        promise.then(response => {
-            response.json().then(data => {
-                if (data.data) {
-                    let state = this.getState();
+        promise.then(data => {
+            if (data.data) {
+                let state = this.getState();
 
-                    if (state.posts.has(post_id)) {
-                        let post = state.posts.get(post_id);
-                        if (data.data.tags) {
-                            data.data.tags.sort((a, b) => {
-                                if (a.tag.charAt(0) > b.tag.charAt(0)) {
-                                    return 1;
-                                } else {
-                                    return -1;
-                                }
-                            });
-                        }
-                        post.links = data.data
-                        state.posts.set(post_id, post);
-                        this.setState(state);
+                if (state.posts.has(post_id)) {
+                    let post = state.posts.get(post_id);
+                    if (data.data.tags) {
+                        data.data.tags.sort((a, b) => {
+                            if (a.tag.charAt(0) > b.tag.charAt(0)) {
+                                return 1;
+                            } else {
+                                return -1;
+                            }
+                        });
                     }
-                } else {
-                    this.errorMessage(data.error);
+                    post.links = data.data
+                    state.posts.set(post_id, post);
+                    this.setState(state);
                 }
-            });
+            } else {
+                this.errorMessage(data.error);
+            }
         }).catch(err => {
             this.errorMessage('Error');
         });

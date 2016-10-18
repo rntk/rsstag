@@ -491,6 +491,26 @@ h3 {
     margin: 0.5em;
 }
 
+#progressbar {
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+    position: fixed;
+    z-index: $max_z_index;
+}
+.filling {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    background-color: maroon;
+    @include vendor-prefix(transition, width 1s);
+    @include vendor-prefix(opacity, 0.5);
+}
+
 @media all and (max-width: 800px) {
     .screen_middle {
         top: 5%;
