@@ -26,7 +26,7 @@
 </div>
 <div class="page">
     <div class="group_title">
-        <h3>{{tag['tag']}}&nbsp;</h3>
+        <h3><a href="{{tag['local_url']}}">{{tag['tag']}}</a> ({{tag['unread_count']}} / {{tag['posts_count']}})&nbsp;</h3>
         {{','.join(tag['words'])}}
     </div>
     <h3 class="group_title tag_info_title">Similar tags</h3><span id="load_similar"></span>
