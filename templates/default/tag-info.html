@@ -1,0 +1,55 @@
+<html>
+<head>
+<title>Page of tag {{tag['tag']}}</title>
+{%  include "head-data.html" %}
+</head>
+<body>
+{% import 'main-menu.html' as menu with context %}
+<div id="global_tools">
+    <div class="left_half">
+        <div id="link_on_root" class="global_tools_button">
+            <a href="/">main</a>
+        </div>
+        <div id="help_button" class="global_tools_button">
+            <a href="#">help</a>
+        </div>
+        <div id="sotr_by" class="global_tools_button">
+            <a href="{{sort_by_link}}">group by tag</a>
+        </div>
+        <div id="group_by" class="global_tools_button">
+            <a href="{{group_by_link}}">group by category</a>
+        </div>
+    </div>
+    <div class="right_half">
+        {{ menu.settings_menu() }}
+    </div>
+</div>
+<div class="page">
+    <div class="group_title">
+        <h3>{{tag['tag']}}&nbsp;</h3>
+        {{','.join(tag['words'])}}
+    </div>
+    <h3 class="group_title tag_info_title">Similar tags</h3><span id="load_similar"></span>
+    <div id="similar_tags" class="tag_info_block"></div>
+    <h3 class="group_title tag_info_title">Siblings tags</h3><span id="load_siblings"></span>
+    <div id="siblings_tags" class="tag_info_block"></div>
+    <h3 class="group_title tag_info_title">Bi-grams</h3><span id="load_bi_grams"></span>
+    <div id="bi_grams" class="tag_info_block"></div>
+</div>
+<div id="global_tools_bottom">
+    <ul id="paginator"></ul>
+</div>
+<!--script language="javascript" type="application/javascript">
+    var count = document.getElementById('cloud_items_count');
+    count.innerHTML = document.getElementsByTagName('li').length;
+</script-->
+<script type="text/javascript">
+    var initial_tag = {{tag|json}};
+</script>
+<div id="help_window">
+<ul>
+    <li>Click/tap on one tag and then click/tap on other tag, will open the page with posts have selected tags</li>
+</ul>
+</div>
+</body>
+</html>

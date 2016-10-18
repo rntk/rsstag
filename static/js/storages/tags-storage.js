@@ -1,6 +1,6 @@
 ﻿'use strict';
 export default class TagsStorage {
-    constructor(event_system) {
+    constructor(event_system, url) {
         this.ES = event_system;
         let tag_hash = decodeURIComponent(document.location.hash);
         this._state = {
@@ -8,7 +8,7 @@ export default class TagsStorage {
             tag_hash: (tag_hash)? tag_hash.substr(1): ''
         };
         this.urls = {
-            get_tag_siblings: '/tag-siblings'
+            get_tag_siblings: url
         }
     }
 
@@ -20,7 +20,7 @@ export default class TagsStorage {
             tags_m.set(tag.tag, tag);
         });
 
-        return(tags_m);
+        return tags_m;
     }
 
     fetchTags() {
@@ -46,9 +46,9 @@ export default class TagsStorage {
     }
 
     changeTagSiblingsState(tag) {
-        if (this._state.tags.has(tag)) {
-            this.fetchTagSiblings(tag);
-        }
+        //if (this._state.tags.has(tag)) {
+        this.fetchTagSiblings(tag);
+        //}
     }
 
     fetchTagSiblings(tag) {
@@ -65,26 +65,17 @@ export default class TagsStorage {
                     if (data.data) {
                         let state = this.getState();
 
-                        if (state.tags.has(tag)) {
-                            data.data.sort((a, b) => {
-                                if (a.count > b.count) {
-                                    return -1;
-                                } else {
-                                    return 1;
-                                }
-                            });
-                            let tag_data = state.tags.get(tag);
-                            tag_data.siblings = [];
-                            for (let i = 0; i < data.data.length; i++) {
-                                let sibling = data.data[i];
-                                sibling.parent = tag;
-                                sibling.root = state.tags.has(tag);
-                                tag_data.siblings.push(sibling.tag);
-                                state.tags.set(sibling.tag, sibling);
+                        data.data.sort((a, b) => {
+                            if (a.count > b.count) {
+                                return -1;
+                            } else {
+                                return 1;
                             }
-                            state.tags.set(tag, tag_data);
-                            this.setState(state);
+                        });
+                        for (let i = 0; i < data.data.length; i++) {
+                            state.tags.set(data.data[i].tag, data.data[i]);
                         }
+                        this.setState(state);
                     } else {
                         this.errorMessage('Error. Try later');
                     }

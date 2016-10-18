@@ -29,11 +29,9 @@ export default class TagsList extends React.Component{
             for (let tag_item of this.state.tags) {
                 let tag = tag_item[1];
 
-                if (tag.root) {
-                    tags.push(
-                        <TagItem key={tag.tag} tag={tag} tags={this.state.tags} tag_hash={this.state.tag_hash} ES={this.props.ES} uniq_id={tag.tag}/>
-                    );
-                }
+                tags.push(
+                    <TagItem key={tag.tag} tag={tag} tags={this.state.tags} tag_hash={this.state.tag_hash} ES={this.props.ES} uniq_id={tag.tag}/>
+                );
             }
             return(
                 <ol className="cloud">

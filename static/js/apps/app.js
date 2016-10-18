@@ -4,7 +4,6 @@ import React from 'react';
 import ReactDOM from 'react-dom';
 import PostsStorage from '../storages/posts-storage.js';
 import PostsList from '../components/posts-list.js';
-import MicroEvent from '../libs/microevent_mod.js';
 import EventsSystem from '../libs/event_system.js';
 import SettingsMenu from '../components/settings-menu.js';
 import ReadAllButton from '../components/readall-button.js';
@@ -17,11 +16,12 @@ import SearchInput from '../components/search-input.js';
 import CategoriesList from '../components/categories-list.js';
 import PostsNumbers from '../components/posts-numbers.js';
 import BiGramsStorage from '../storages/bi-grams-storage.js';
+import TagButton from '../components/tag-button.js';
 
 
 window.onload = () => {
     if (window.EVSYS === undefined) {
-        window.EVSYS = new EventsSystem(MicroEvent);
+        window.EVSYS = new EventsSystem();
     }
     ReactDOM.render(
         <SettingsMenu ES={window.EVSYS} />,
@@ -59,14 +59,8 @@ window.onload = () => {
             document.getElementById('tags_page')
         );
         bi_grams_storage.start();
-    } else if
-        (
-            /^\/feed*/.test(path) ||
-            /^\/category*/.test(path) ||
-            /^\/tag/.test(path) ||
-            /^\/posts\/with\/tags\/.*/.test(path) ||
-            /^\/bi-gram/.test(path)
-        ) {
+    } else if ( /^\/feed*/.test(path) || /^\/category*/.test(path) ||
+            /^\/tag\/.*/.test(path) || /^\/posts\/with\/tags\/.*/.test(path) || /^\/bi-gram\/.*/.test(path)) {
         const posts_storage = new PostsStorage(window.EVSYS);
         ReactDOM.render(
             <PostsList ES={window.EVSYS} />,
@@ -85,5 +79,43 @@ window.onload = () => {
             document.getElementById('posts_stat')
         );
         posts_storage.start();
+    } else if (/\/tag-info\/.*/.test(path)) {
+        let tag = window.initial_tag;
+
+        const similar_evsys = new EventsSystem();
+        const similar_storage = new TagsStorage(similar_evsys, '/tag-similar');
+        ReactDOM.render(
+            <TagsList ES={similar_evsys} />,
+            document.getElementById('similar_tags')
+        );
+        ReactDOM.render(
+            <TagButton ES={similar_evsys} title="Load similar" tag={tag} />,
+            document.getElementById('load_similar')
+        );
+        similar_storage.start();
+
+        const siblings_evsys = new EventsSystem();
+        const siblings_storage = new TagsStorage(siblings_evsys, '/tag-siblings');
+        ReactDOM.render(
+            <TagsList ES={siblings_evsys} />,
+            document.getElementById('siblings_tags')
+        );
+        ReactDOM.render(
+            <TagButton ES={siblings_evsys} title="Load siblings" tag={tag} />,
+            document.getElementById('load_siblings')
+        );
+        siblings_storage.start();
+
+        const bi_grams_evsys = new EventsSystem();
+        const bi_grams_storage = new TagsStorage(bi_grams_evsys, '/tag-bi-grams');
+        ReactDOM.render(
+            <TagsList ES={bi_grams_evsys} />,
+            document.getElementById('bi_grams')
+        );
+        ReactDOM.render(
+            <TagButton ES={bi_grams_evsys} title="Load bi-grams" tag={tag} />,
+            document.getElementById('load_bi_grams')
+        );
+        bi_grams_storage.start();
     }
 }

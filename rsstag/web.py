@@ -1042,6 +1042,34 @@ class RSSTagApplication(object):
         end_tags_range = round(start_tags_range + items_per_page)
         return (pages_map, start_tags_range, end_tags_range)
 
+    def on_get_tag_page(self, tag=''):
+        page = self.template_env.get_template('tag-info.html')
+        query = {'owner': self.user['sid'], 'tag': tag}
+        try:
+            tag_data = self.db.tags.find_one(query, projection={'_id': False})
+        except Exception as e:
+            logging.error('Can`t get tag for tag info page. Cause: %s', e)
+            raise InternalServerError()
+
+        if tag_data:
+            self.response = Response(
+                page.render(
+                    tag=tag_data,
+                    sort_by_title='tags',
+                    sort_by_link=self.routes.getUrlByEndpoint(
+                        endpoint='on_group_by_tags_get',
+                        params={'page_number': 1}
+                    ),
+                    group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
+                    user_settings=self.user['settings'],
+                    provider=self.user['provider']
+                ),
+                mimetype='text/html'
+            )
+        else:
+            self.on_error(NotFound())
+
+
     def on_group_by_tags_get(self, page_number):
         self.response = None
         page = self.template_env.get_template('group-by-tag.html')
@@ -1174,8 +1202,8 @@ class RSSTagApplication(object):
         else:
             self.response = redirect(self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number}))
 
-    def on_get_tag_siblings(self, tag=''):
-        '''code = 200
+    def on_get_tag_similar(self, tag=''):
+        code = 200
         all_tags = []
         result = None
         if tag:
@@ -1188,25 +1216,6 @@ class RSSTagApplication(object):
                     siblings = []
                 for sibling in siblings:
                     tags_set.add(sibling[0])
-
-            if not siblings:
-                query = {
-                    'owner': self.user['sid'],
-                    'tags': tag
-                }
-                if self.user['settings']['only_unread']:
-                    query['read'] = False
-                try:
-                    cur = self.db.posts.find(query, projection=['tags'])
-                except Exception as e:
-                    logging.error('Can`t get tag siblings %s. Info: %s', tag, e)
-                    result = {'error': 'Database error'}
-                    code = 500
-                    cur = []
-                tags_set = set()
-                for tags in cur:
-                    for tag in tags['tags']:
-                        tags_set.add(tag)
 
         if result is None:
             if tags_set:
@@ -1236,8 +1245,67 @@ class RSSTagApplication(object):
                         'count': tag[field]
                     })
 
-            result = {'data': all_tags}'''
+            result = {'data': all_tags}
 
+        self.response = Response(json.dumps(result), mimetype='application/json')
+        self.response.status_code = code
+
+    def on_get_tag_siblings(self, tag=''):
+        code = 200
+        all_tags = []
+        result = None
+        if tag:
+            query = {
+                'owner': self.user['sid'],
+                'tags': tag
+            }
+            if self.user['settings']['only_unread']:
+                query['read'] = False
+            try:
+                cur = self.db.posts.find(query, projection=['tags'])
+            except Exception as e:
+                logging.error('Can`t get tag siblings %s. Info: %s', tag, e)
+                result = {'error': 'Database error'}
+                code = 500
+                cur = []
+            tags_set = set()
+            for tags in cur:
+                for tag in tags['tags']:
+                    tags_set.add(tag)
+
+        if result is None:
+            if tags_set:
+                if self.user['settings']['only_unread']:
+                    field = 'unread_count'
+                else:
+                    field = 'posts_count'
+                query = {
+                    'owner': self.user['sid'],
+                    'tag': {'$in': list(tags_set)},
+                    field: {'$gt': 0}
+                }
+                if self.user['settings']['only_unread']:
+                    query['read'] = False
+                try:
+                    cur = self.db.tags.find(query, projection={'_id': False})
+                except Exception as e:
+                    logging.error('Can`t fetch tags siblings for %s. Info: %s', tag, e)
+                    cur = []
+
+                all_tags = []
+                for tag in cur:
+                    all_tags.append({
+                        'tag': tag['tag'],
+                        'url': tag['local_url'],
+                        'words': tag['words'],
+                        'count': tag[field]
+                    })
+            result = {'data': all_tags}
+
+        self.response = Response(json.dumps(result), mimetype='application/json')
+        self.response.status_code = code
+
+    def on_get_tag_bi_grams(self, tag=''):
         code = 200
         result = []
         if tag:
@@ -1386,31 +1454,6 @@ class RSSTagApplication(object):
         self.response = Response(json.dumps(result), mimetype='application/json')
         self.response.status_code = code
 
-    def on_post_content_post(self):
-        err = []
-        try:
-            post_id = int(self.request.form.get('postid'))
-        except Exception as e:
-            err.append('Post id must be int number')
-        if not err:
-            current_post = self.db.posts.find_one({'owner': self.user['sid'], 'pid': post_id})
-            attachments = ''
-            if current_post['attachments']:
-                for href in current_post['attachments']:
-                    attachments += '<a href="{0}">{0}</a><br />'.format(href)
-            if current_post:
-                content = gzip.decompress(current_post['content']['content']).decode('utf-8', 'replace')
-                if attachments:
-                    content += '<p>Attachments:<br />{0}<p>'.format(attachments)
-                result = {'result': 'ok', 'data': {'pos': post_id, 'content': content}}
-            else:
-                err.append('Not found post content')
-        if not err:
-            self.response = Response(json.dumps(result), mimetype='application/json')
-        else:
-            self.response = Response('{{"result": "error", "data":"{0}"}}'.format(''.join(err)), mimetype='application/json')
-            self.response.status_code = 404
-
     def on_post_links_get(self, post_id: int) -> None:
         code = 200
         result = None
@@ -1451,7 +1494,7 @@ class RSSTagApplication(object):
             for t in current_post['tags']:
                 result['data']['tags'].append({
                     #'url': self.routes.getUrlByEndpoint(endpoint='on_tag_get', params={'quoted_tag': t}),
-                    'url': self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_startwith_get', params={'letter': t[0]}) + '#' + t,
+                    'url': self.routes.getUrlByEndpoint(endpoint='on_get_tag_page', params={'tag': t}),
                     'tag': t
                 })
         self.response = Response(json.dumps(result), mimetype='application/json')

@@ -1,11 +1,9 @@
 'use strict';
+/*
+Based on MicroEvent library from https://github.com/jeromeetienne/microevent.js
+*/
 export default class EventsSystem {
-    constructor(MicroEvent) {
-        if (MicroEvent) {
-            MicroEvent.mixin(this);
-        } else {
-            throw Error('I need MicroEvents');
-        }
+    constructor() {
         this.POSTS_UPDATED = 'posts_updated';
         this.CHANGE_POSTS_STATUS = 'change_post_status';
         this.CHANGE_POSTS_CONTENT_STATE = 'change_post_content_state';
@@ -21,5 +19,28 @@ export default class EventsSystem {
         this.TAGS_ERROR_MESSAGE = 'tags_error_message';
         this.TAGS_UPDATED = 'tags_updated';
         this.CHANGE_TAG_SIBLINGS_STATE = 'change_tag_siblings_state';
-    }   
+        this._events = {};
+    }
+
+	bind(event, fct) {
+		this._events = this._events || {};
+		this._events[event] = this._events[event] || [];
+		this._events[event].push(fct);
+	}
+
+	unbind(event, fct) {
+		this._events = this._events || {};
+		if (event in this._events === false) {
+		    return;
+		}
+		this._events[event].splice(this._events[event].indexOf(fct), 1);
+	}
+
+	trigger(event /* , args... */) {
+		this._events = this._events || {};
+		if( event in this._events === false  )	return;
+		for(var i = 0; i < this._events[event].length; i++) {
+            this._events[event][i].apply(undefined, Array.prototype.slice.call(arguments, 1));
+		}
+	}
 };

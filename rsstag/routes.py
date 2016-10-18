@@ -7,42 +7,44 @@ class RSSTagRoutes:
     def __init__(self, host: str) -> None:
         self._host = host
         self._routes = [
-            {'url': '/', 'endpoint': 'on_root_get', 'methods': ['GET', 'HEAD']},
-            {'url': '/login', 'endpoint': 'on_login_get', 'methods': ['GET', 'HEAD']},
+            {'url': '/', 'endpoint': 'on_root_get', 'methods': ['GET']},
+            {'url': '/login', 'endpoint': 'on_login_get', 'methods': ['GET']},
             {'url': '/login', 'endpoint': 'on_login_post', 'methods': ['POST']},
-            {'url': '/provider', 'endpoint': 'on_select_provider_get', 'methods': ['GET', 'HEAD']},
+            {'url': '/provider', 'endpoint': 'on_select_provider_get', 'methods': ['GET']},
             {'url': '/provider', 'endpoint': 'on_select_provider_post', 'methods': ['POST']},
-            {'url': '/group/tag/<int:page_number>', 'endpoint': 'on_group_by_tags_get', 'methods': ['GET', 'HEAD']},
+            {'url': '/group/tag/<int:page_number>', 'endpoint': 'on_group_by_tags_get', 'methods': ['GET']},
             {
                 'url': '/group/tag/startwith/<string(length: 1):letter>',
                 'endpoint': 'on_group_by_tags_startwith_get',
-                'methods': ['GET', 'HEAD']
+                'methods': ['GET']
             },
-            {'url': '/group/category', 'endpoint': 'on_group_by_category_get', 'methods': ['GET', 'HEAD']},
-            {'url': '/refresh', 'endpoint': 'on_refresh_get_post', 'methods': ['GET', 'HEAD', 'POST']},
+            {'url': '/group/category', 'endpoint': 'on_group_by_category_get', 'methods': ['GET']},
+            {'url': '/refresh', 'endpoint': 'on_refresh_get_post', 'methods': ['GET', 'POST']},
 
-            {'url': '/tag/<string:quoted_tag>', 'endpoint': 'on_tag_get', 'methods': ['GET', 'HEAD']},
-            {'url': '/category/<string:quoted_category>', 'endpoint': 'on_category_get', 'methods': ['GET', 'HEAD']},
-            {'url': '/feed/<string:quoted_feed>', 'endpoint': 'on_feed_get', 'methods': ['GET', 'HEAD']},
+            {'url': '/tag/<string:quoted_tag>', 'endpoint': 'on_tag_get', 'methods': ['GET']},
+            {'url': '/category/<string:quoted_category>', 'endpoint': 'on_category_get', 'methods': ['GET']},
+            {'url': '/feed/<string:quoted_feed>', 'endpoint': 'on_feed_get', 'methods': ['GET']},
             {'url': '/read/posts', 'endpoint': 'on_read_posts_post', 'methods': ['POST']},
             {'url': '/posts-content', 'endpoint': 'on_posts_content_post', 'methods': ['POST']},
-            {'url': '/post-content', 'endpoint': 'on_post_content_post', 'methods': ['POST']},
-            {'url': '/post-links/<int:post_id>', 'endpoint': 'on_post_links_get', 'methods': ['GET', 'HEAD']},
-            {'url': '/ready', 'endpoint': 'on_ready_get', 'methods': ['GET', 'HEAD']},
+            {'url': '/post-links/<int:post_id>', 'endpoint': 'on_post_links_get', 'methods': ['GET']},
+            {'url': '/ready', 'endpoint': 'on_ready_get', 'methods': ['GET']},
             {'url': '/settings', 'endpoint': 'on_settings_post', 'methods': ['POST']},
-            {'url': '/all-tags', 'endpoint': 'on_get_all_tags', 'methods': ['GET', 'HEAD']},
+            {'url': '/all-tags', 'endpoint': 'on_get_all_tags', 'methods': ['GET']},
             {
                 'url': '/posts/with/tags/<string:s_tags>',
                 'endpoint': 'on_get_posts_with_tags',
-                'methods': ['GET', 'HEAD']
+                'methods': ['GET']
             },
-            {'url': '/tag-siblings/<string:tag>', 'endpoint': 'on_get_tag_siblings', 'methods': ['GET', 'HEAD']},
+            {'url': '/tag-siblings/<string:tag>', 'endpoint': 'on_get_tag_siblings', 'methods': ['GET']},
+            {'url': '/tag-similar/<string:tag>', 'endpoint': 'on_get_tag_similar', 'methods': ['GET']},
+            {'url': '/tag-bi-grams/<string:tag>', 'endpoint': 'on_get_tag_bi_grams', 'methods': ['GET']},
             {'url': '/tags-search', 'endpoint': 'on_post_tags_search', 'methods': ['POST']},
             {'url': '/speech', 'endpoint': 'on_post_speech', 'methods': ['POST']},
 
-            {'url': '/group/bi-gram/<int:page_number>', 'endpoint': 'on_group_by_bi_grams_get', 'methods': ['GET', 'HEAD']},
-            {'url': '/bi-gram/<string:quoted_tag>', 'endpoint': 'on_bi_gram_get', 'methods': ['GET', 'HEAD']},
-            {'url': '/bi-grams-siblings/<string:tag>', 'endpoint': 'on_get_bi_grams_siblings', 'methods': ['GET', 'HEAD']}
+            {'url': '/group/bi-gram/<int:page_number>', 'endpoint': 'on_group_by_bi_grams_get', 'methods': ['GET']},
+            {'url': '/bi-gram/<string:quoted_tag>', 'endpoint': 'on_bi_gram_get', 'methods': ['GET']},
+            {'url': '/bi-grams-siblings/<string:tag>', 'endpoint': 'on_get_bi_grams_siblings', 'methods': ['GET']},
+            {'url': '/tag-info/<string:tag>', 'endpoint': 'on_get_tag_page', 'methods': ['GET']}
         ]
 
         self._rules = []

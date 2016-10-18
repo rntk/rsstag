@@ -168,6 +168,16 @@ h3 {
     display: inline-block;    
     border-bottom: 1px solid $my_green;
 }
+.tag_info_title {
+    display: inline;
+    margin-right: 1em;
+}
+.tag_info_block {
+    border: 1px solid $my_gray;
+    @include vendor-prefix(border-radius, 0.5em);
+    margin: 1em 0;
+    padding: 0.5em;
+}
 .cloud {
     display: inline;
     width: 100%;
