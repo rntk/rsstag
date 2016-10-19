@@ -38,7 +38,6 @@ class RSSTagApplication(object):
     count_showed_numbers = 4
     db = None
     need_cookie_update = False
-    first_letters = None
     d2v = None
     allow_not_logged = (
         'on_root_get',
@@ -614,13 +613,9 @@ class RSSTagApplication(object):
         page_number = self.user['page']
         letter = self.user['letter']
         tmp_letters = self.letters.get(self.user['sid'])
-        if tmp_letters:
-            self.first_letters = getSortedDictByAlphabet(tmp_letters['letters'])
-        else:
-            self.first_letters = OrderedDict()
         if not page_number:
             page_number = 1
-        if letter and letter in self.first_letters:
+        if tmp_letters and letter and letter in tmp_letters['letters']:
             back_link = self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_startwith_get', params={'letter': letter})
         else:
             back_link = self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number})
@@ -757,11 +752,6 @@ class RSSTagApplication(object):
     def on_bi_gram_get(self, quoted_tag=None):
         page = self.template_env.get_template('posts.html')
         page_number = self.user['page']
-        tmp_letters = self.db.letters.find_one({'owner': self.user['sid']})
-        if tmp_letters:
-            self.first_letters = getSortedDictByAlphabet(tmp_letters['letters'])
-        else:
-            self.first_letters = OrderedDict()
         if not page_number:
             page_number = 1
         back_link = self.routes.getUrlByEndpoint(endpoint='on_group_by_bi_grams_get', params={'page_number': page_number})
@@ -968,30 +958,6 @@ class RSSTagApplication(object):
         self.response = Response(json.dumps(result), mimetype='application/json')
         self.response.status_code = code
 
-    def fillFirstLetters(self):
-        tmp_letters = self.db.letters.find_one({'owner': self.user['sid']})
-        if tmp_letters:
-            self.first_letters = getSortedDictByAlphabet(tmp_letters['letters'])
-        else:
-            self.first_letters = OrderedDict()
-
-    def getLetters(self):
-        letters = []
-        if self.user['settings']['only_unread']:
-            for s_let in self.first_letters:
-                if self.first_letters[s_let]['unread_count'] > 0:
-                    letters.append({
-                        'letter': self.first_letters[s_let]['letter'],
-                        'local_url': self.first_letters[s_let]['local_url']
-                    })
-        else:
-            for s_let in self.first_letters:
-                letters.append({
-                    'letter': self.first_letters[s_let]['letter'],
-                    'local_url': self.first_letters[s_let]['local_url']
-                })
-        return letters
-
     def calcPagerData(self, p_number, page_count, items_per_page, endpoint):
         pages_map = {}
         page_count = round(page_count)
@@ -1054,27 +1020,8 @@ class RSSTagApplication(object):
             self.on_error(NotFound())
 
     def on_group_by_tags_get(self, page_number):
-        self.response = None
-        page = self.template_env.get_template('group-by-tag.html')
-        query = {'owner': self.user['sid']}
-        if self.user['settings']['only_unread']:
-            if self.user['settings']['hot_tags']:
-                sort_data = [('temperature', DESCENDING), ('unread_count', DESCENDING)]
-            else:
-                sort_data = [('unread_count', DESCENDING)]
-            query['unread_count'] = {'$gt': 0}
-        else:
-            if self.user['settings']['hot_tags']:
-                sort_data = [('temperature', DESCENDING), ('posts_count', DESCENDING)]
-            else:
-                sort_data = [('posts_count', DESCENDING)]
-        try:
-            cursor = self.db.tags.find(query).sort(sort_data)
-            tags_count = cursor.count()
-        except Exception as e:
-            cursor = None
-            logging.error('Can`t get tags. Cause: %s', e)
-        if cursor:
+        tags_count = self.tags.count(self.user['sid'], self.user['settings']['only_unread'])
+        if tags_count:
             page_count = self.getPageCount(tags_count, self.user['settings']['tags_on_page'])
             if page_number <= 0:
                 p_number = 1
@@ -1091,29 +1038,34 @@ class RSSTagApplication(object):
             if p_number < 0:
                 p_number = 1
             new_cookie_page_value = p_number + 1
-            if not self.response:
-                pages_map, start_tags_range, end_tags_range = self.calcPagerData(
-                    p_number,
-                    page_count,
-                    self.user['settings']['tags_on_page'],
-                    'on_group_by_tags_get'
-                )
-                if end_tags_range > tags_count:
-                    end_tags_range = tags_count
-                sorted_tags = []
-                if self.user['settings']['only_unread']:
-                    field = 'unread_count'
-                else:
-                    field = 'posts_count'
-                for t in cursor[start_tags_range:end_tags_range]:
+            pages_map, start_tags_range, end_tags_range = self.calcPagerData(
+                p_number,
+                page_count,
+                self.user['settings']['tags_on_page'],
+                'on_group_by_tags_get'
+            )
+            sorted_tags = []
+            tags = self.tags.get_all(
+                self.user['sid'],
+                self.user['settings']['only_unread'],
+                self.user['settings']['hot_tags'],
+                start_tags_range,
+                self.user['settings']['tags_on_page']
+            )
+            if tags is not None:
+                for t in tags:
                     sorted_tags.append({
                         'tag': t['tag'],
                         'url': t['local_url'],
                         'words': t['words'],
-                        'count': t[field]
+                        'count': t['unread_count'] if self.user['settings']['only_unread'] else t['posts_count']
                     })
-                self.fillFirstLetters()
-                letters = self.getLetters()
+                db_letters = self.letters.get(self.user['sid'], make_sort=True)
+                if db_letters:
+                    letters = self.letters.to_list(db_letters, self.user['settings']['only_unread'])
+                else:
+                    letters = []
+                page = self.template_env.get_template('group-by-tag.html')
                 self.response = Response(
                     page.render(
                         tags=sorted_tags,
@@ -1131,15 +1083,14 @@ class RSSTagApplication(object):
                     ),
                     mimetype='text/html'
                 )
-                self.db.users.update_one(
-                    {'sid': self.user['sid']},
-                    {'$set': {'page': new_cookie_page_value, 'letter': ''}}
-                )
             else:
-                if not self.response:
-                    self.on_error(NotFound())
+                self.on_error(InternalServerError())
+            self.db.users.update_one(
+                {'sid': self.user['sid']},
+                {'$set': {'page': new_cookie_page_value, 'letter': ''}}
+            )
         else:
-            raise InternalServerError()
+            self.on_error(InternalServerError())
 
     def on_group_by_tags_startwith_get(self, letter=None):
         self.response = None
@@ -1147,9 +1098,9 @@ class RSSTagApplication(object):
         if not page_number:
             page_number = 1
         let = unquote_plus(letter)
-        self.fillFirstLetters()
-        if let and (let in self.first_letters):
-            letters = self.getLetters()
+        db_letters = self.letters.get(self.user['sid'])
+        if let and (let in db_letters['letters']):
+            letters = self.letters.to_list(self.user['settings']['only_unread'])
             page = self.template_env.get_template('group-by-tag.html')
             tags = []
             if self.user['settings']['only_unread']:
