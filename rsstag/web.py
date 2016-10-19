@@ -613,7 +613,7 @@ class RSSTagApplication(object):
     def on_tag_get(self, quoted_tag=None):
         page_number = self.user['page']
         letter = self.user['letter']
-        tmp_letters = self.letteres.get(self.user['sid'])
+        tmp_letters = self.letters.get(self.user['sid'])
         if tmp_letters:
             self.first_letters = getSortedDictByAlphabet(tmp_letters['letters'])
         else:
@@ -1556,38 +1556,24 @@ class RSSTagApplication(object):
     def on_post_tags_search(self):
         s_request = unquote_plus(self.request.form.get('req'))
         if s_request:
-            if self.user['settings']['only_unread']:
-                field_name = 'unread_count'
-            else:
-                field_name = 'posts_count'
-            try:
-                tags_cur = self.db.tags.find(
-                    {
-                        'owner': self.user['sid'],
-                        field_name: {'$gt': 0},
-                        #'read': not self.user['settings']['only_unread'],
-                        'tag': {'$regex': '^{}.*'.format(s_request), '$options': 'i'}
-                    },
-                    {
-                        'tag': True,
-                        'local_url': True,
-                        field_name: True,
-                        '_id': False
-                    },
-                    limit=50
-                )
+            search_result = self.tags.get_by_regexp(
+                self.user['sid'],
+                '^{}.*'.format(s_request),
+                self.user['settings']['only_unread']
+            )
+            if search_result is not None:
                 code = 200
                 result = {'data': []}
-                for tag in tags_cur:
+                for tag in search_result:
                     result['data'].append({
                         'tag': tag['tag'],
-                        'cnt': tag[field_name],
+                        'unread': tag['unread_count'],
+                        'all': tag['posts_count'],
                         'url': tag['local_url']
                     })
-            except Exception as e:
+            else:
                 code = 500
-                result = {'error': 'Database error'}
-                logging.error('Can`t search tag %s. Info: %s', s_request, e)
+                result = {'error': 'Database trouble'}
         else:
             code = 400
             result = {'error': 'Request can`t be empty'}

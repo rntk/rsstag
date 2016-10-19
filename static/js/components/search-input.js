@@ -72,7 +72,7 @@ export default class SearchInput extends React.Component{
             suggestions = this.state.suggestions.map(sugg => {
                 return(
                     <p className="search_result_item" key={sugg.tag}>
-                        <a href={sugg.url}>{sugg.tag} ({sugg.cnt})</a>
+                        <a href={sugg.url}>{sugg.tag} ({sugg.unread} / {sugg.all})</a>
                     </p>
                 );
             });

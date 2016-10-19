@@ -28,3 +28,26 @@ class RssTagTags:
             result = None
 
         return result
+
+    def get_by_regexp(self, owner: str, regexp: str, only_unread: Optional[bool]=None, projection: dict={}) -> Optional[list]:
+        if only_unread:
+            field_name = 'unread_count'
+        else:
+            field_name = 'posts_count'
+        query = {
+            'owner': owner,
+            'tag': {'$regex': regexp, '$options': 'i'},
+            field_name: {'$gt': 0},
+        }
+        limit = 50
+        try:
+            if projection:
+                cursor = self.db.tags.find(query, projection=projection, limit=limit)
+            else:
+                cursor = self.db.tags.find(query, limit=limit)
+            result = list(cursor)
+        except Exception as e:
+            self.log.error('Can`t search by regexp %s. User %s. Info: e', regexp, owner, e)
+            result = None
+
+        return result
