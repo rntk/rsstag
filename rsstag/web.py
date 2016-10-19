@@ -1185,104 +1185,72 @@ class RSSTagApplication(object):
             self.response = redirect(self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number}))
 
     def on_get_tag_similar(self, tag=''):
-        code = 200
+        tags_set = set()
         all_tags = []
-        result = None
-        if tag:
-            tags_set = set()
-            if self.d2v:
-                try:
-                    siblings = self.d2v.similar_by_word(tag, topn=30)
-                except Exception as e:
-                    logging.error('In %s not found tag %s', self.config['settings']['model'], tag)
-                    siblings = []
+        if self.d2v:
+            try:
+                siblings = self.d2v.similar_by_word(tag, topn=30)
                 for sibling in siblings:
                     tags_set.add(sibling[0])
+            except Exception as e:
+                logging.warning('In %s not found tag %s', self.config['settings']['model'], tag)
 
-        if result is None:
-            if tags_set:
-                if self.user['settings']['only_unread']:
-                    field = 'unread_count'
-                else:
-                    field = 'posts_count'
-                query = {
-                    'owner': self.user['sid'],
-                    'tag': {'$in': list(tags_set)},
-                    field: {'$gt': 0}
-                }
-                if self.user['settings']['only_unread']:
-                    query['read'] = False
-                try:
-                    cur = self.db.tags.find(query, projection={'_id': False})
-                except Exception as e:
-                    logging.error('Can`t fetch tags siblings for %s. Info: %s', tag, e)
-                    cur = []
-
-                all_tags = []
-                for tag in cur:
+        if tags_set:
+            db_tags = self.tags.get_by_tags(self.user['sid'], list(tags_set), self.user['settings']['only_unread'])
+            if db_tags is not None:
+                for tag in db_tags:
                     all_tags.append({
                         'tag': tag['tag'],
                         'url': tag['local_url'],
                         'words': tag['words'],
-                        'count': tag[field]
+                        'count': tag['unread_count'] if self.user['settings']['only_unread'] else tag['posts_count']
                     })
-
+                code = 200
+                result = {'data': all_tags}
+            else:
+                code = 500
+                result = {'error': 'Database trouble'}
+        else:
+            code = 200
             result = {'data': all_tags}
 
         self.response = Response(json.dumps(result), mimetype='application/json')
         self.response.status_code = code
 
     def on_get_tag_siblings(self, tag=''):
-        code = 200
         all_tags = []
-        result = None
-        if tag:
-            query = {
-                'owner': self.user['sid'],
-                'tags': tag
-            }
-            if self.user['settings']['only_unread']:
-                query['read'] = False
-            try:
-                cur = self.db.posts.find(query, projection=['tags'])
-            except Exception as e:
-                logging.error('Can`t get tag siblings %s. Info: %s', tag, e)
-                result = {'error': 'Database error'}
-                code = 500
-                cur = []
+        if self.user['settings']['only_unread']:
+            only_unread = self.user['settings']['only_unread']
+        else:
+            only_unread = None
+        posts = self.posts.get_by_tags(self.user['sid'], [tag], only_unread, {'tags': True})
+        if posts is not None:
             tags_set = set()
-            for tags in cur:
-                for tag in tags['tags']:
+            for post in posts:
+                for tag in post['tags']:
                     tags_set.add(tag)
 
-        if result is None:
             if tags_set:
-                if self.user['settings']['only_unread']:
-                    field = 'unread_count'
+                db_tags = self.tags.get_by_tags(self.user['sid'], list(tags_set), self.user['settings']['only_unread'])
+                if db_tags is not None:
+                    for tag in db_tags:
+                        all_tags.append({
+                            'tag': tag['tag'],
+                            'url': tag['local_url'],
+                            'words': tag['words'],
+                            'count': tag['unread_count'] if self.user['settings']['only_unread'] else tag['posts_count']
+                        })
+                    code = 200
+                    result = {'data': all_tags}
                 else:
-                    field = 'posts_count'
-                query = {
-                    'owner': self.user['sid'],
-                    'tag': {'$in': list(tags_set)},
-                    field: {'$gt': 0}
-                }
-                if self.user['settings']['only_unread']:
-                    query['read'] = False
-                try:
-                    cur = self.db.tags.find(query, projection={'_id': False})
-                except Exception as e:
-                    logging.error('Can`t fetch tags siblings for %s. Info: %s', tag, e)
-                    cur = []
-
-                all_tags = []
-                for tag in cur:
-                    all_tags.append({
-                        'tag': tag['tag'],
-                        'url': tag['local_url'],
-                        'words': tag['words'],
-                        'count': tag[field]
-                    })
-            result = {'data': all_tags}
+                    code = 500
+                    result = {'error': 'Database trouble'}
+            else:
+                code = 200
+                result = {'data': all_tags}
+        else:
+            code = 500
+            result = {'error': 'Database trouble'}
 
         self.response = Response(json.dumps(result), mimetype='application/json')
         self.response.status_code = code
