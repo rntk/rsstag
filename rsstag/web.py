@@ -1393,46 +1393,42 @@ class RSSTagApplication(object):
         self.response.status_code = code
 
     def on_posts_content_post(self):
-        code = 200
         try:
             wanted_posts = json.loads(self.request.get_data(as_text=True))
-            if isinstance(wanted_posts, list) and wanted_posts:
-                result = None
-            else:
+            if not (isinstance(wanted_posts, list) and wanted_posts):
                 raise Exception('Empty list of ids for post content')
         except Exception as e:
             logging.warning('Send bad posts ids for posts content. Cause: %s', e)
             wanted_posts = []
             result = {'error': 'Bad posts ids'}
             code = 400
-        if result is None:
-            try:
-                #posts = self.db.posts.find({'owner': self.user['sid'], 'pid': {'$in': wanted_posts}}, limit=round(self.user['settings']['posts_on_page']))
-                posts = self.db.posts.find(
-                    {
-                        'owner': self.user['sid'],
-                        'pid': {'$in': wanted_posts}
-                    },
-                    projection = ['pid', 'content', 'attachments']
-                )
-            except Exception as e:
-                logging.warning('Can`t get posts content. Cause: %s', e)
-                wanted_posts = []
-                result = {'error': 'Database error'}
+        if wanted_posts:
+            projection = {
+                'pid': True,
+                'content': True,
+                'attachments': True
+            }
+            posts = self.posts.get_by_pids(self.user['sid'], wanted_posts, projection)
+            if posts:
+                posts_content = []
+                for post in posts:
+                    attachments = ''
+                    if post['attachments']:
+                        for href in post['attachments']:
+                            attachments += '<a href="{0}">{0}</a><br />'.format(href)
+                    content = gzip.decompress(post['content']['content']).decode('utf-8', 'replace')
+                    if attachments:
+                        content += '<p>Attachments:<br />{0}<p>'.format(attachments)
+                    posts_content.append({'pos': post['pid'], 'content': content})
+                result = {'data': posts_content}
+                code = 200
+            elif posts is None:
                 code = 500
+                result = {'error': 'Database trouble'}
+            else:
+                code = 404
+                result = {'error': 'Not found'}
 
-        if result is None:
-            posts_content = []
-            for post in posts:
-                attachments = ''
-                if post['attachments']:
-                    for href in post['attachments']:
-                        attachments += '<a href="{0}">{0}</a><br />'.format(href)
-                content = gzip.decompress(post['content']['content']).decode('utf-8', 'replace')
-                if attachments:
-                    content += '<p>Attachments:<br />{0}<p>'.format(attachments)
-                posts_content.append({'pos': post['pid'], 'content': content})
-            result = {'data': posts_content}
         self.response = Response(json.dumps(result), mimetype='application/json')
         self.response.status_code = code
 

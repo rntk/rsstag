@@ -129,3 +129,21 @@ class RssTagPosts:
             result = None
 
         return result
+
+
+    def get_by_pids(self, owner: str, pids: list, projection: dict = {}) -> Optional[list]:
+        query = {
+            'owner': owner,
+            'pid': {'$in': pids}
+        }
+        try:
+            if projection:
+                cursor = self.db.posts.find(query, projection=projection)
+            else:
+                cursor = self.db.posts.find(query)
+            result = list(cursor)
+        except Exception as e:
+            self.log.error('Can`t get post by pid %s. User %s. Info: %s', pids, owner, e)
+            result = None
+
+        return result
