@@ -11,7 +11,10 @@ class RssTagUtils {
                     response.json().then(data => {
                         ES.trigger(ES.END_TASK, 'ajax');
                         resolve(data);
-                    })
+                    }).catch(err => {
+                        ES.trigger(ES.END_TASK, 'ajax');
+                        reject(err);
+                    });
                 }).catch(err => {
                     ES.trigger(ES.END_TASK, 'ajax');
                     reject(err);
