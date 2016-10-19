@@ -68,7 +68,7 @@ export default class SettingsMenu extends React.Component{
                         <input id="posts_on_page" name="posts_on_page" type="text" value={this.state.settings.posts_on_page} onChange={this.changeIntSettings} />
                     </div>
                     <div id="tags_per_page">
-                        <label htmlFor="tags_on_page">posts per page</label><br />
+                        <label htmlFor="tags_on_page">tags per page</label><br />
                         <input id="tags_on_page" name="tags_on_page" type="text" value={this.state.settings.tags_on_page} onChange={this.changeIntSettings} />
                     </div>
                     <div>

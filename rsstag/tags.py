@@ -48,29 +48,11 @@ class RssTagTags:
 
         return result
 
-    def get_by_regexp(self, owner: str, regexp: str, only_unread: Optional[bool]=None, projection: dict={}) -> Optional[list]:
-        query = {
-            'owner': owner,
-            'tag': {'$regex': regexp, '$options': 'i'}
-        }
-        if only_unread:
-            query['unread_count'] = {'$gt': 0}
-        limit = 50
-        try:
-            if projection:
-                cursor = self.db.tags.find(query, projection=projection, limit=limit)
-            else:
-                cursor = self.db.tags.find(query, limit=limit)
-            result = list(cursor)
-        except Exception as e:
-            self.log.error('Can`t search by regexp %s. User %s. Info: e', regexp, owner, e)
-            result = None
-
-        return result
-
-    def get_all(self, owner: str, only_unread: Optional[bool]=None,
-                hot_tags: bool=False, offset: int=0, limit: int=0, projection: dict={}) -> Optional[list]:
+    def get_all(self, owner: str, only_unread: Optional[bool]=None, hot_tags: bool=False,
+                opts: dict=[], projection: dict={}) -> Optional[list]:
         query = {'owner': owner}
+        if 'regexp' in opts:
+            query['tag'] = {'$regex': opts['regexp'], '$options': 'i'}
         sort_data = []
         if hot_tags:
             sort_data.append(('temperature', DESCENDING))
@@ -79,9 +61,11 @@ class RssTagTags:
             query['unread_count'] = {'$gt': 0}
         else:
             sort_data.append(('posts_count', DESCENDING))
-        params = {'skip': offset}
-        if limit > 0:
-            params['limit'] = limit
+        params = {}
+        if 'offset' in opts:
+            params['skip'] = opts['offset']
+        if 'limit' in opts:
+            params['limit'] = opts['limit']
         if projection:
             params['projection'] = projection
         try:
@@ -93,8 +77,10 @@ class RssTagTags:
 
         return result
 
-    def count(self, owner: str, only_unread: Optional[bool]=None) -> Optional[int]:
+    def count(self, owner: str, only_unread: Optional[bool]=None, regexp: str='') -> Optional[int]:
         query = {'owner': owner}
+        if regexp:
+            query['tag'] = {'$regex': regexp, '$options': 'i'}
         if only_unread:
             query['unread_count'] = {'$gt': 0}
         try:
