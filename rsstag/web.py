@@ -19,6 +19,8 @@ from rsstag.routes import RSSTagRoutes
 from rsstag.utils import getSortedDictByAlphabet, load_config
 from rsstag import TASK_NOT_IN_PROCESSING
 from gensim.models.doc2vec import Doc2Vec
+from rsstag.posts import RssTagPosts
+from rsstag.feeds import RssTagFeeds
 
 class RSSTagApplication(object):
     request = None
@@ -77,22 +79,15 @@ class RSSTagApplication(object):
         self.user_ttl = int(self.config['settings']['user_ttl'])
         cl = MongoClient(self.config['settings']['db_host'], int(self.config['settings']['db_port']))
         self.db = cl.rss
-        self.prepareDB()
+        self.posts = RssTagPosts(self.db)
+        self.posts.prepare()
+        self.feeds = RssTagFeeds(self.db)
+        self.feeds.prepare()
         self.routes = RSSTagRoutes(self.config['settings']['host_name'])
         self.updateEndpoints()
 
     def prepareDB(self):
         try:
-            self.db.posts.create_index('owner')
-            self.db.posts.create_index('category_id')
-            self.db.posts.create_index('feed_id')
-            self.db.posts.create_index('read')
-            self.db.posts.create_index('tags')
-            self.db.posts.create_index('pid')
-            #self.db.posts.create_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
-            self.db.feeds.create_index('owner')
-            self.db.feeds.create_index('feed_id')
-            #self.db.feeds.create_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
             self.db.letters.create_index('owner', unique=True)
             #self.db.letters.create_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
             self.db.users.create_index('sid')
@@ -514,54 +509,57 @@ class RSSTagApplication(object):
         if not page_number:
             page_number = 1
         by_feed = {}
-        for f in self.db.feeds.find({'owner': self.user['sid']}):
-            by_feed[f['feed_id']] = f
-        if self.user['settings']['only_unread']:
-            match = {'owner': self.user['sid'], 'read':False}
+        db_feeds = self.feeds.get_all(self.user['sid'])
+        if db_feeds is not None:
+            for f in db_feeds:
+                by_feed[f['feed_id']] = f
+            grouped = self.posts.get_grouped_stat(self.user['sid'], self.user['settings']['only_unread'])
+            if grouped is not None:
+                by_category = {self.feeds.all_feeds: {
+                    'unread_count': 0,
+                    'title': self.feeds.all_feeds,
+                    'url': self.routes.getUrlByEndpoint(
+                        endpoint='on_category_get',
+                        params={'quoted_category': self.feeds.all_feeds}
+                    ),
+                    'feeds': []
+                }}
+                for g in grouped:
+                    if g['count'] > 0:
+                        if g['category_id'] not in by_category:
+                            by_category[g['category_id']] = {
+                                'unread_count': 0,
+                                'title': by_feed[g['_id']]['category_title'],
+                                'url': by_feed[g['_id']]['category_local_url'], 'feeds': []
+                            }
+                        by_category[g['category_id']]['unread_count'] += g['count']
+                        by_category[self.feeds.all_feeds]['unread_count'] += g['count']
+                        by_category[g['category_id']]['feeds'].append({
+                            'unread_count': g['count'],
+                            'url': by_feed[g['_id']]['local_url'],
+                            'title': by_feed[g['_id']]['title']
+                        })
+                if len(by_category) > 1:
+                    data = getSortedDictByAlphabet(by_category)
+                    if self.no_category_name in data:
+                        data.move_to_end(self.no_category_name)
+                else:
+                    data = OrderedDict()
+                page = self.template_env.get_template('group-by-category.html')
+                self.response = Response(
+                    page.render(
+                        data=data,
+                        group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_get',
+                                                                   params={'page_number': page_number}),
+                        user_settings=self.user['settings'],
+                        provider=self.user['provider'],
+                    ),
+                    mimetype='text/html'
+                )
+            else:
+                self.on_error(InternalServerError())
         else:
-            match = {'owner': self.user['sid']}
-        grouped = self.db.posts.aggregate([
-            {'$match': match},
-            {'$group': {'_id': '$feed_id', 'category_id': {'$first': '$category_id'}, 'count': {'$sum': 1}}}
-        ])
-        all_feeds = 'All'
-        by_category = {all_feeds: {
-            'unread_count' : 0,
-            'title': all_feeds,
-            'url': self.routes.getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': all_feeds}),
-            'feeds' : []
-        }}
-        for g in grouped:
-            if g['count'] > 0:
-                if g['category_id'] not in by_category:
-                    by_category[g['category_id']] = {
-                        'unread_count' : 0,
-                        'title': by_feed[g['_id']]['category_title'],
-                        'url': by_feed[g['_id']]['category_local_url'], 'feeds' : []
-                    }
-                by_category[g['category_id']]['unread_count'] += g['count']
-                by_category[all_feeds]['unread_count'] += g['count']
-                by_category[g['category_id']]['feeds'].append({
-                    'unread_count': g['count'],
-                    'url': by_feed[g['_id']]['local_url'],
-                    'title': by_feed[g['_id']]['title']
-                })
-        if len(by_category) > 1:
-            data = getSortedDictByAlphabet(by_category)
-            if self.no_category_name in data:
-                data.move_to_end(self.no_category_name)
-        else:
-            data = OrderedDict()
-        page = self.template_env.get_template('group-by-category.html')
-        self.response = Response(
-            page.render(
-                data=data,
-                group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number}),
-                user_settings=self.user['settings'],
-                provider=self.user['provider'],
-            ),
-            mimetype='text/html'
-        )
+            self.on_error(InternalServerError())
 
     def on_category_get(self, quoted_category=None):
         page = self.template_env.get_template('posts.html')
@@ -569,64 +567,42 @@ class RSSTagApplication(object):
             cat = unquote_plus(quoted_category)
         else:
             cat = ''
-        all_feeds = 'All'
-        if cat == all_feeds:
-            cat_cursor = self.db.feeds.find({'owner': self.user['sid']})
-        else:
-            cat_cursor = self.db.feeds.find({'owner': self.user['sid'], 'category_id': cat})
-        if cat_cursor.count() > 0:
+        db_feeds = self.feeds.get_by_category(self.user['sid'], cat)
+        if db_feeds:
             by_feed = {}
-            cat_id = ''
-            for f in cat_cursor:
+            for f in db_feeds:
                 by_feed[f['feed_id']] = f
-                cat_id = f['category_id']
             projection = {'_id': False, 'content.content': False}
-            if self.user['settings']['only_unread']:
-                if cat == all_feeds:
-                    cursor = self.db.posts\
-                        .find({'owner': self.user['sid'], 'read': False}, projection=projection)\
-                        .sort([('feed_id', DESCENDING), ('unix_date', DESCENDING)])
-                else:
-                    cursor = self.db.posts.find(
-                        {
-                            'owner': self.user['sid'],
-                            'read': False,
-                            'category_id': cat_id
-                        },
-                        projection = projection
-                    ).sort([('feed_id', DESCENDING), ('unix_date', DESCENDING)])
+            if cat != self.feeds.all_feeds:
+                db_posts = self.posts.get_by_category(self.user['sid'], self.user['settings']['only_unread'], cat, projection)
             else:
-                if cat == all_feeds:
-                    cursor = self.db.posts\
-                        .find({'owner': self.user['sid']}, projection=projection)\
-                        .sort('unix_date', DESCENDING)
-                else:
-                    cursor = self.db.posts\
-                        .find({'owner': self.user['sid'], 'category_id': cat_id}, projection=projection)\
-                        .sort('unix_date', DESCENDING)
-            posts = []
-            for post in cursor:
-                posts.append({
-                    'post': post,
-                    'pos': post['pid'],
-                    'category_title': by_feed[post['feed_id']]['category_title'],
-                    'feed_title': by_feed[post['feed_id']]['title'],
-                    'favicon': by_feed[post['feed_id']]['favicon']
-                })
-            self.response = Response(
-                page.render(
-                    posts=posts,
-                    tag=cat,
-                    back_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
-                    group='category',
-                    words=[],
-                    user_settings=self.user['settings'],
-                    provider=self.user['provider']
-                    # next_tag=self.routes.getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': next_cat}),
-                    # prev_tag=self.routes.getUrlByEndpoint(endpoint='on_category_get', params={'quoted_category': prev_cat})),
-                ),
-                mimetype='text/html'
-            )
+                db_posts = self.posts.get_all(self.user['sid'], projection)
+            if db_posts is not None:
+                posts = []
+                for post in db_posts:
+                    posts.append({
+                        'post': post,
+                        'pos': post['pid'],
+                        'category_title': by_feed[post['feed_id']]['category_title'],
+                        'feed_title': by_feed[post['feed_id']]['title'],
+                        'favicon': by_feed[post['feed_id']]['favicon']
+                    })
+                self.response = Response(
+                    page.render(
+                        posts=posts,
+                        tag=cat,
+                        back_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
+                        group='category',
+                        words=[],
+                        user_settings=self.user['settings'],
+                        provider=self.user['provider']
+                    ),
+                    mimetype='text/html'
+                )
+            else:
+                self.on_error(InternalServerError())
+        elif db_feeds is None:
+            self.on_error(InternalServerError())
         else:
             self.on_error(NotFound())
 
