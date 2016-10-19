@@ -1,6 +1,6 @@
 ﻿import os
 import json
-from urllib.parse import unquote_plus, quote_plus, urlencode, unquote, quote
+from urllib.parse import unquote_plus, urlencode, unquote
 from http import client
 import html
 import time
@@ -29,7 +29,6 @@ class RSSTagApplication(object):
     user = {}
     config = None
     config_path = None
-    workers_pool = []
     providers = []
     user_ttl = 0
     count_showed_numbers = 4
@@ -44,8 +43,7 @@ class RSSTagApplication(object):
         'on_select_provider_post',
         'on_select_provider_get',
         'on_ready_get',
-        'on_refresh_get_post',
-        'on_favicon_get'
+        'on_refresh_get_post'
     )
     no_category_name = 'NotCategorized'
 
@@ -99,7 +97,7 @@ class RSSTagApplication(object):
             #self.db.letters.create_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
             self.db.users.create_index('sid')
             #self.db.users.create_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
-            #self.db.users.update_many({'in_queue': True}, {'$set': {'in_queue': False, 'ready_flag': True}})
+            #self.db.users.update_many({'in_queue': True}, {'$set': {'in_queue': False, 'ready': True}})
             self.db.tags.create_index('owner')
             self.db.tags.create_index('tag')
             self.db.tags.create_index('unread_count')
@@ -120,9 +118,6 @@ class RSSTagApplication(object):
             logging.warning('Indexes not created. May be already exists.')
 
     def close(self):
-        if self.workers_pool:
-            for p in self.workers_pool:
-                p.terminate()
         logging.info('Goodbye!')
 
     def updateEndpoints(self):
@@ -156,7 +151,7 @@ class RSSTagApplication(object):
                     self.db.users.update_one(
                         {'sid': self.user['sid']},
                         {'$set': {
-                            'ready_flag': False,
+                            'ready': False,
                             'provider': self.user['provider'],
                             'token': self.user['token'],
                             'message': 'Click on "Refresh posts" to start downloading data',
@@ -178,7 +173,7 @@ class RSSTagApplication(object):
             self.user['letter'] = ''
             self.user['page'] = '1'
             self.user['settings'] = settings
-            self.user['ready_flag'] = False
+            self.user['ready'] = False
             self.user['message'] = 'Click on "Refresh posts" to start downloading data'
             self.user['in_queue'] = False
             self.user['createdAt'] = datetime.utcnow()
@@ -206,7 +201,7 @@ class RSSTagApplication(object):
         try:
             handler, values = adapter.match()
             logging.info('%s', handler)
-            if self.user and self.user['ready_flag']:
+            if self.user and self.user['ready']:
                 self.endpoints[handler](**values)
             else:
                 if handler in self.allow_not_logged:
@@ -281,6 +276,7 @@ class RSSTagApplication(object):
             self.response = Response(page.render(err=['Unknown provider']), mimetype='text/html')
 
     def on_post_speech(self):
+        code = 200
         try:
             post_id = int(self.request.form.get('post_id'))
         except Exception as e:
@@ -294,11 +290,16 @@ class RSSTagApplication(object):
                     result = {'result': 'ok', 'data': '/static/speech/{}'.format(speech_file)}
                 else:
                     result = {'result': 'error', 'reason': 'can`t get speech file'}
+                    code = 503
             else:
                 result = {'result': 'error', 'reason': 'post not found'}
+                code = 404
         else:
             result = {'result': 'error', 'reason': 'no post id'}
+            code = 400
+
         self.response = Response(json.dumps(result), mimetype='application/json')
+        self.response.status_code = code
 
     def on_login_get(self, err=None):
         provider = self.request.cookies.get('provider')
@@ -371,34 +372,34 @@ class RSSTagApplication(object):
 
     def on_refresh_get_post(self):
         if self.user:
-            if not self.user['in_queue']:
-                self.db.download_queue.insert_one(
-                    {'user': self.user['_id'], 'processing': TASK_NOT_IN_PROCESSING, 'host': self.request.environ['HTTP_HOST']}
-                )
-                self.db.users.update_one(
-                    {'sid': self.user['sid']},
-                    {'$set': {'ready_flag': False, 'in_queue': True, 'message': 'Downloading data, please wait'}}
-                )
-            else:
-                self.db.users.update_one(
-                    {'sid': self.user['sid']}, {'$set': {'message': 'You already in queue, please wait'}}
-                )
+            try:
+                if not self.user['in_queue']:
+                    self.db.download_queue.insert_one(
+                        {'user': self.user['_id'], 'processing': TASK_NOT_IN_PROCESSING, 'host': self.request.environ['HTTP_HOST']}
+                    )
+                    self.db.users.update_one(
+                        {'sid': self.user['sid']},
+                        {'$set': {'ready': False, 'in_queue': True, 'message': 'Downloading data, please wait'}}
+                    )
+                else:
+                    self.db.users.update_one(
+                        {'sid': self.user['sid']}, {'$set': {'message': 'You already in queue, please wait'}}
+                    )
+            except Exception as e:
+                logging.error('Can`t create refresh task for user %s. Info: %s', self.user['_id'], e)
             self.response = redirect(self.routes.getUrlByEndpoint(endpoint='on_root_get'))
         else:
             self.response = redirect(self.routes.getUrlByEndpoint(endpoint='on_root_get'))
 
     def on_ready_get(self):
-        result = {}
         if self.user:
-            if self.user['ready_flag']:
-                result = {'status': 'ready', 'reason': 'Ready'}
-            else:
-                result = {'status': 'not ready', 'reason': 'Not ready'}
-            result['message'] = self.user['message']
+            result = {
+                'ready': self.user['ready'],
+                'message': self.user['message']
+            }
         else:
             result = {
-                'status': 'not logged',
-                'reason': 'Not logged',
+                'ready': False,
                 'message': 'Click on "Select provider" to start work'
             }
         self.response = Response(json.dumps(result), mimetype='text/html')
@@ -445,7 +446,6 @@ class RSSTagApplication(object):
             else:
                 result = {'error': 'Not logged'}
                 code = 401
-            self.response = Response(json.dumps(result), mimetype='application/json')
         else:
             result = {'error': 'Something wrong with settings'}
             code = 400
@@ -467,17 +467,22 @@ class RSSTagApplication(object):
         only_unread = True
         if self.user and 'provider' in self.user:
             match = {'owner': self.user['sid']}
-            cursor = self.db.posts.aggregate([
-                {'$match': match},
-                {'$group': {'_id': '$read', 'counter': {'$sum': 1}}}
-            ])
             posts = {'unread': 0, 'read': 0}
-            if cursor and cursor.alive:
+            try:
+                cursor = self.db.posts.aggregate([
+                    {'$match': match},
+                    {'$group': {'_id': '$read', 'counter': {'$sum': 1}}}
+                ])
                 for result in cursor:
                     if result['_id']:
                         posts['read'] = result['counter']
                     else:
                         posts['unread'] = result['counter']
+            except Exception as e:
+                logging.error('Can`t get read/unread counter for user %s,. Info: %s', self.user['_id'], e)
+                err = 'Can`t get read/unread counters'
+                posts = {'unread': 0, 'read': 0}
+
             page = self.template_env.get_template('root-logged.html')
             self.response = Response(
                 page.render(
