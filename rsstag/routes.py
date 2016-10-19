@@ -29,7 +29,6 @@ class RSSTagRoutes:
             {'url': '/post-links/<int:post_id>', 'endpoint': 'on_post_links_get', 'methods': ['GET']},
             {'url': '/ready', 'endpoint': 'on_ready_get', 'methods': ['GET']},
             {'url': '/settings', 'endpoint': 'on_settings_post', 'methods': ['POST']},
-            {'url': '/all-tags', 'endpoint': 'on_get_all_tags', 'methods': ['GET']},
             {
                 'url': '/posts/with/tags/<string:s_tags>',
                 'endpoint': 'on_get_posts_with_tags',

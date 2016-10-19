@@ -105,7 +105,27 @@ class RssTagPosts:
                 cursor = self.db.posts.find(query).sort(sort)
             result = list(cursor)
         except Exception as e:
-            self.log.error('Can`t get posts by category %s, user %s. Info: %s', category, owner, e)
+            self.log.error('Can`t get posts by category %s, user %s. Info: %s', feed_id, owner, e)
+            result = None
+
+        return result
+
+    def get_by_pid(self, owner: str, pid: int, projection: dict={}) -> Optional[dict]:
+        query = {
+            'owner': owner,
+            'pid': pid
+        }
+        try:
+            if projection:
+                post = self.db.posts.find_one(query, projection=projection)
+            else:
+                post = self.db.posts.find_one(query)
+            if post:
+                result = post
+            else:
+                result = {}
+        except Exception as e:
+            self.log.error('Can`t get post by pid %s. User %s. Info: %s', pid, owner, e)
             result = None
 
         return result

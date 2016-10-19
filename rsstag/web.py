@@ -1437,65 +1437,43 @@ class RSSTagApplication(object):
         self.response.status_code = code
 
     def on_post_links_get(self, post_id: int) -> None:
-        code = 200
-        result = None
-        try:
-            current_post = self.db.posts.find_one(
-                {'owner': self.user['sid'], 'pid': post_id},
-                projection=['tags', 'feed_id', 'url']
-            )
-            if not current_post:
-                result = {'error': 'Post not found'}
-                code = 404
-        except Exception as e:
-            logging.error('Can`t find post by id %s. Info: %s', post_id, e)
-            result = {'error': 'Database error'}
-            code = 500
-        if result is None:
-            try:
-                feed = self.db.feeds.find_one({'feed_id': current_post['feed_id'], 'owner': self.user['sid']})
-                if not feed:
-                    result = {'error': 'Feed not found'}
-                    code = 500
-            except Exception as e:
-                logging.error('Can`t find feed. Post %s, feed id %s. Info: %s', post_id, current_post['feed_id'], e)
-                result = {'error': 'Database error'}
-                code = 500
-
-        if result is None:
-            result = {
-                'data': {
-                    'c_url': feed['category_local_url'],
-                    'c_title': feed['category_title'],
-                    'f_url': feed['local_url'],
-                    'f_title': feed['title'],
-                    'p_url': current_post['url'],
-                    'tags': []
+        projection = {
+            'tags': True,
+            'feed_id': True,
+            'url': True
+        }
+        current_post = self.posts.get_by_pid(self.user['sid'], post_id, projection)
+        if current_post:
+            feed = self.feeds.get_by_feed_id(self.user['sid'], current_post['feed_id'])
+            if feed:
+                code = 200
+                result = {
+                    'data': {
+                        'c_url': feed['category_local_url'],
+                        'c_title': feed['category_title'],
+                        'f_url': feed['local_url'],
+                        'f_title': feed['title'],
+                        'p_url': current_post['url'],
+                        'tags': []
+                    }
                 }
-            }
-            for t in current_post['tags']:
-                result['data']['tags'].append({
-                    #'url': self.routes.getUrlByEndpoint(endpoint='on_tag_get', params={'quoted_tag': t}),
-                    'url': self.routes.getUrlByEndpoint(endpoint='on_get_tag_page', params={'tag': t}),
-                    'tag': t
-                })
+                for t in current_post['tags']:
+                    result['data']['tags'].append({
+                        'url': self.routes.getUrlByEndpoint(endpoint='on_get_tag_page', params={'tag': t}),
+                        'tag': t
+                    })
+            else:
+                code = 500
+                result = {'error': 'Server trouble'}
+        elif current_post is None:
+            code = 500
+            result = {'error': 'Database trouble'}
+        else:
+            code = 404
+            result = {'error': 'Not found'}
+
         self.response = Response(json.dumps(result), mimetype='application/json')
         self.response.status_code = code
-
-    def on_get_all_tags(self):
-        err = []
-        result = []
-        if self.user['settings']['only_unread']:
-            all_tags = self.db.tags.find({'owner': self.user['sid'], 'unread_count': {'$gt': 0}})
-        else:
-            all_tags = self.db.tags.find({'owner': self.user['sid']})
-        for tag in all_tags:
-            result.append({'t': tag['tag'], 'l': '/tag/{0}'.format(tag['local_url'])})
-        if not err:
-            self.response = Response(json.dumps(result), mimetype='application/json')
-        else:
-            self.response = Response('{{"result": "error", "data":"{0}"}}'.format(''.join(err)), mimetype='application/json')
-            self.response.status_code = 404
 
     def on_get_posts_with_tags(self, s_tags):
         if s_tags:
