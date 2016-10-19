@@ -21,6 +21,8 @@ from rsstag import TASK_NOT_IN_PROCESSING
 from gensim.models.doc2vec import Doc2Vec
 from rsstag.posts import RssTagPosts
 from rsstag.feeds import RssTagFeeds
+from rsstag.tags import RssTagTags
+from rsstag.letters import RssTagLetters
 
 class RSSTagApplication(object):
     request = None
@@ -83,21 +85,18 @@ class RSSTagApplication(object):
         self.posts.prepare()
         self.feeds = RssTagFeeds(self.db)
         self.feeds.prepare()
+        self.tags = RssTagTags(self.db)
+        self.tags.prepare()
+        self.letters = RssTagLetters(self.db)
+        self.letters.prepare()
         self.routes = RSSTagRoutes(self.config['settings']['host_name'])
         self.updateEndpoints()
 
     def prepareDB(self):
         try:
-            self.db.letters.create_index('owner', unique=True)
-            #self.db.letters.create_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
             self.db.users.create_index('sid')
             #self.db.users.create_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
             #self.db.users.update_many({'in_queue': True}, {'$set': {'in_queue': False, 'ready': True}})
-            self.db.tags.create_index('owner')
-            self.db.tags.create_index('tag')
-            self.db.tags.create_index('unread_count')
-            self.db.tags.create_index('posts_count')
-            self.db.tags.create_index('processing')
             self.db.bi_grams.create_index('owner')
             self.db.bi_grams.create_index('tag')
             self.db.bi_grams.create_index('tags')
@@ -513,7 +512,11 @@ class RSSTagApplication(object):
         if db_feeds is not None:
             for f in db_feeds:
                 by_feed[f['feed_id']] = f
-            grouped = self.posts.get_grouped_stat(self.user['sid'], self.user['settings']['only_unread'])
+            if self.user['settings']['only_unread']:
+                only_unread = self.user['settings']['only_unread']
+            else:
+                only_unread = None
+            grouped = self.posts.get_grouped_stat(self.user['sid'], only_unread)
             if grouped is not None:
                 by_category = {self.feeds.all_feeds: {
                     'unread_count': 0,
@@ -562,21 +565,21 @@ class RSSTagApplication(object):
             self.on_error(InternalServerError())
 
     def on_category_get(self, quoted_category=None):
-        page = self.template_env.get_template('posts.html')
-        if quoted_category:
-            cat = unquote_plus(quoted_category)
-        else:
-            cat = ''
+        cat = unquote_plus(quoted_category)
         db_feeds = self.feeds.get_by_category(self.user['sid'], cat)
         if db_feeds:
             by_feed = {}
             for f in db_feeds:
                 by_feed[f['feed_id']] = f
             projection = {'_id': False, 'content.content': False}
-            if cat != self.feeds.all_feeds:
-                db_posts = self.posts.get_by_category(self.user['sid'], self.user['settings']['only_unread'], cat, projection)
+            if self.user['settings']['only_unread']:
+                only_unread = self.user['settings']['only_unread']
             else:
-                db_posts = self.posts.get_all(self.user['sid'], projection)
+                only_unread = None
+            if cat != self.feeds.all_feeds:
+                db_posts = self.posts.get_by_category(self.user['sid'], only_unread, cat, projection)
+            else:
+                db_posts = self.posts.get_all(self.user['sid'], only_unread, projection)
             if db_posts is not None:
                 posts = []
                 for post in db_posts:
@@ -587,6 +590,7 @@ class RSSTagApplication(object):
                         'feed_title': by_feed[post['feed_id']]['title'],
                         'favicon': by_feed[post['feed_id']]['favicon']
                     })
+                page = self.template_env.get_template('posts.html')
                 self.response = Response(
                     page.render(
                         posts=posts,
@@ -607,10 +611,9 @@ class RSSTagApplication(object):
             self.on_error(NotFound())
 
     def on_tag_get(self, quoted_tag=None):
-        page = self.template_env.get_template('posts.html')
         page_number = self.user['page']
         letter = self.user['letter']
-        tmp_letters = self.db.letters.find_one({'owner': self.user['sid']})
+        tmp_letters = self.letteres.get(self.user['sid'])
         if tmp_letters:
             self.first_letters = getSortedDictByAlphabet(tmp_letters['letters'])
         else:
@@ -622,36 +625,30 @@ class RSSTagApplication(object):
         else:
             back_link = self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number})
         tag = unquote(quoted_tag)
-        current_tag = self.db.tags.find_one({'owner': self.user['sid'], 'tag': tag})
+        current_tag = self.tags.get_by_tag(self.user['sid'], tag)
         if current_tag:
             projection = {'_id': False, 'content.content': False}
-            posts = []
             if self.user['settings']['only_unread']:
-                cursor = self.db.posts.find(
-                    {
-                        'owner': self.user['sid'],
-                        'read': False,
-                        'tags': {'$all': [tag]}
-                    },
-                    projection=projection
-                ).sort([('feed_id', DESCENDING), ('unix_date', DESCENDING)])
+                only_unread = self.user['settings']['only_unread']
             else:
-                cursor = self.db.posts\
-                    .find({'owner': self.user['sid'], 'tags': {'$all': [tag]}}, projection=projection)\
-                    .sort([('feed_id', DESCENDING), ('unix_date', DESCENDING)])
+                only_unread = None
+            db_posts = self.posts.get_by_tags(self.user['sid'], [tag], only_unread, projection)
+            posts = []
             by_feed = {}
-            for post in cursor:
+            for post in db_posts:
                 if post['feed_id'] not in by_feed:
-                    by_feed[post['feed_id']] = self.db.feeds.find_one(
-                        {'owner': self.user['sid'], 'feed_id': post['feed_id']}
-                    )
-                posts.append({
-                    'post': post,
-                    'pos': post['pid'],
-                    'category_title': by_feed[post['feed_id']]['category_title'],
-                    'feed_title': by_feed[post['feed_id']]['title'],
-                    'favicon': by_feed[post['feed_id']]['favicon']
-                })
+                    feed = self.feeds.get_by_feed_id(self.user['sid'], post['feed_id'])
+                    if feed:
+                        by_feed[post['feed_id']] = feed
+                if post['feed_id']in by_feed:
+                    posts.append({
+                        'post': post,
+                        'pos': post['pid'],
+                        'category_title': by_feed[post['feed_id']]['category_title'],
+                        'feed_title': by_feed[post['feed_id']]['title'],
+                        'favicon': by_feed[post['feed_id']]['favicon']
+                    })
+            page = self.template_env.get_template('posts.html')
             self.response = Response(
                 page.render(
                     posts=posts,
@@ -664,12 +661,13 @@ class RSSTagApplication(object):
                 ),
                 mimetype='text/html'
             )
+        elif current_tag is None:
+            self.on_error(InternalServerError())
         else:
             self.on_error(NotFound())
 
     def on_group_by_bi_grams_get(self, page_number):
         self.response = None
-        page = self.template_env.get_template('group-by-tag.html')
         query = {'owner': self.user['sid']}
         if self.user['settings']['only_unread']:
             if self.user['settings']['hot_tags']:
@@ -728,6 +726,7 @@ class RSSTagApplication(object):
                     })
                 self.fillFirstLetters()
                 letters = self.getLetters()
+                page = self.template_env.get_template('group-by-tag.html')
                 self.response = Response(
                     page.render(
                         tags=sorted_tags,
@@ -813,40 +812,47 @@ class RSSTagApplication(object):
             self.on_error(NotFound())
 
     def on_feed_get(self, quoted_feed=None):
-        page = self.template_env.get_template('posts.html')
         feed = unquote_plus(quoted_feed)
-        current_feed = self.db.feeds.find_one({'owner': self.user['sid'], 'feed_id': feed})
+        current_feed = self.feeds.get_by_feed_id(self.user['sid'], feed)
         projection = {'_id': False, 'content.content': False}
-        if feed:
+        if current_feed is not None:
             if self.user['settings']['only_unread']:
-                cursor = self.db.posts\
-                    .find({'owner': self.user['sid'], 'read': False, 'feed_id': current_feed['feed_id']}, projection=projection)\
-                    .sort('unix_date', DESCENDING)
+                only_unread = self.user['settings']['only_unread'];
             else:
-                cursor = self.db.posts\
-                    .find({'owner': self.user['sid'], 'feed_id': current_feed['feed_id']}, projection=projection)\
-                    .sort('unix_date', DESCENDING)
-            posts = []
-            for post in cursor:
-                posts.append({
-                    'post': post,
-                    'category_title': current_feed['category_title'],
-                    'pos': post['pid'],
-                    'feed_title': current_feed['title'],
-                    'favicon': current_feed['favicon']
-                })
-            self.response = Response(
-                page.render(
-                    posts=posts,
-                    tag=current_feed['title'],
-                    back_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
-                    group='feed',
-                    words=[],
-                    user_settings=self.user['settings'],
-                    provider=self.user['provider']
-                ),
-                mimetype='text/html'
+                only_unread = None
+            db_posts = self.posts.get_by_feed_id(
+                self.user['sid'],
+                current_feed['feed_id'],
+                only_unread,
+                projection
             )
+            if db_posts is not None:
+                posts = []
+                for post in db_posts:
+                    posts.append({
+                        'post': post,
+                        'category_title': current_feed['category_title'],
+                        'pos': post['pid'],
+                        'feed_title': current_feed['title'],
+                        'favicon': current_feed['favicon']
+                    })
+                page = self.template_env.get_template('posts.html')
+                self.response = Response(
+                    page.render(
+                        posts=posts,
+                        tag=current_feed['title'],
+                        back_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
+                        group='feed',
+                        words=[],
+                        user_settings=self.user['settings'],
+                        provider=self.user['provider']
+                    ),
+                    mimetype='text/html'
+                )
+            else:
+                self.on_error(InternalServerError())
+        elif current_feed is None:
+            self.on_error(InternalServerError())
         else:
             self.on_error(NotFound())
 
@@ -1024,15 +1030,10 @@ class RSSTagApplication(object):
         return (pages_map, start_tags_range, end_tags_range)
 
     def on_get_tag_page(self, tag=''):
-        page = self.template_env.get_template('tag-info.html')
-        query = {'owner': self.user['sid'], 'tag': tag}
-        try:
-            tag_data = self.db.tags.find_one(query, projection={'_id': False})
-        except Exception as e:
-            logging.error('Can`t get tag for tag info page. Cause: %s', e)
-            raise InternalServerError()
-
-        if tag_data:
+        tag_data = self.tags.get_by_tag(self.user['sid'], tag)
+        if tag_data is not None:
+            del tag_data['_id']
+            page = self.template_env.get_template('tag-info.html')
             self.response = Response(
                 page.render(
                     tag=tag_data,
@@ -1047,14 +1048,14 @@ class RSSTagApplication(object):
                 ),
                 mimetype='text/html'
             )
+        elif tag_data is None:
+            self.on_error(InternalServerError())
         else:
             self.on_error(NotFound())
-
 
     def on_group_by_tags_get(self, page_number):
         self.response = None
         page = self.template_env.get_template('group-by-tag.html')
-        sort_data = []
         query = {'owner': self.user['sid']}
         if self.user['settings']['only_unread']:
             if self.user['settings']['hot_tags']:
