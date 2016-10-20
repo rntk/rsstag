@@ -262,26 +262,28 @@ class RSSTagApplication(object):
             self.response = Response(page.render(err=['Unknown provider']), mimetype='text/html')
 
     def on_post_speech(self):
-        code = 200
         try:
             post_id = int(self.request.form.get('post_id'))
         except Exception as e:
             post_id = None
         if post_id:
-            post = self.db.posts.find_one({'owner': self.user['sid'], 'pid': post_id})
+            post = self.posts.get_by_pid(self.user['sid'], post_id)
             if post:
                 title = html.unescape(post['content']['title'])
                 speech_file = self.getSpeech(title)
                 if speech_file:
-                    result = {'result': 'ok', 'data': '/static/speech/{}'.format(speech_file)}
+                    result = {'data': '/static/speech/{}'.format(speech_file)}
                 else:
-                    result = {'result': 'error', 'reason': 'can`t get speech file'}
+                    result = {'error': 'Can`t get speech file'}
                     code = 503
+            elif post is None:
+                result = {'error': 'Database trouble'}
+                code = 500
             else:
-                result = {'result': 'error', 'reason': 'post not found'}
+                result = {'error': 'Post not found'}
                 code = 404
         else:
-            result = {'result': 'error', 'reason': 'no post id'}
+            result = {'error': 'No post id'}
             code = 400
 
         self.response = Response(json.dumps(result), mimetype='application/json')
@@ -452,23 +454,11 @@ class RSSTagApplication(object):
             err = []
         only_unread = True
         if self.user and 'provider' in self.user:
-            match = {'owner': self.user['sid']}
-            posts = {'unread': 0, 'read': 0}
-            try:
-                cursor = self.db.posts.aggregate([
-                    {'$match': match},
-                    {'$group': {'_id': '$read', 'counter': {'$sum': 1}}}
-                ])
-                for result in cursor:
-                    if result['_id']:
-                        posts['read'] = result['counter']
-                    else:
-                        posts['unread'] = result['counter']
-            except Exception as e:
-                logging.error('Can`t get read/unread counter for user %s,. Info: %s', self.user['_id'], e)
-                err = 'Can`t get read/unread counters'
+            stat = self.posts.get_stat(self.user['sid'])
+            if stat:
+                posts = stat
+            else:
                 posts = {'unread': 0, 'read': 0}
-
             page = self.template_env.get_template('root-logged.html')
             self.response = Response(
                 page.render(

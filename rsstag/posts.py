@@ -181,3 +181,22 @@ class RssTagPosts:
             result = None
 
         return result
+
+    def get_stat(self, owner: str) -> Optional[dict]:
+        query = {'$match': {'owner': owner}}
+        try:
+            result = {'unread': 0, 'read': 0}
+            cursor = self.db.posts.aggregate([
+                query,
+                {'$group': {'_id': '$read', 'counter': {'$sum': 1}}}
+            ])
+            for dt in cursor:
+                if dt['_id']:
+                    result['read'] = dt['counter']
+                else:
+                    result['unread'] = dt['counter']
+        except Exception as e:
+            self.log.error('Can`t get posts stat. User %s. Info: %s', owner, e)
+            result = None
+
+        return result
