@@ -54,14 +54,20 @@ class RssTagBiGrams:
 
 
     def change_unread(self, owner: str, tags: dict, readed: bool) -> Optional[bool]:
-        find_query = {'owner': owner}
         updates = []
         result = False
-        inc_query = {'unread_count': 0}
         for tag in tags:
-            find_query['tag'] = tag
-            inc_query['unread_count'] = -tags[tag] if readed else tags[tag]
-            updates.append(UpdateOne(find_query, {'$inc': inc_query}))
+            updates.append(UpdateOne(
+                {
+                    'owner': owner,
+                    'tag': tag
+                },
+                {
+                    '$inc': {
+                        'unread_count': -tags[tag] if readed else tags[tag]
+                    }
+                }
+            ))
         if updates:
             try:
                 bulk_result = self.db.bi_grams.bulk_write(updates, ordered=False)
