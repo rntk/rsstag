@@ -166,6 +166,7 @@ class BazquxProvider:
                         'favorite': False,
                         'attachments': attachments_list,
                         'tags': [],
+                        'bi-grams': [],
                         'pid': pid,
                         'owner': user['sid'],
                         'processing': POST_NOT_IN_PROCESSING
