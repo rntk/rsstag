@@ -1514,7 +1514,8 @@ class RSSTagApplication(object):
                         'tag': tag['tag'],
                         'unread': tag['unread_count'],
                         'all': tag['posts_count'],
-                        'url': tag['local_url']
+                        'url': tag['local_url'],
+                        'info_url': self.routes.getUrlByEndpoint('on_get_tag_page', {'tag': tag['tag']})
                     })
             else:
                 code = 500
