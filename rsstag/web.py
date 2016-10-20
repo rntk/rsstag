@@ -752,7 +752,6 @@ class RSSTagApplication(object):
             self.on_error(NotFound())
 
     def on_read_posts_post(self):
-        code = 200
         try:
             data = json.loads(self.request.get_data(as_text=True))
             if (data['ids'] and isinstance(data['ids'], list)):
@@ -760,106 +759,66 @@ class RSSTagApplication(object):
             else:
                 raise Exception('Bad ids for posts status');
             readed = bool(data['readed'])
-            result = None
         except Exception as e:
             logging.warning('Send wrond data for read posts. Cause: %s', e)
             post_ids = None
             result = {'error': 'Bad ids or status'}
             code = 400
 
-        if result is None:
-            #st = time.time()
-            tmp_letters = self.db.letters.find_one({'owner': self.user['sid']})
-            if tmp_letters:
-                first_letters = tmp_letters['letters']
-            else:
-                first_letters = {}
+        if post_ids:
             tags = {}
             bi_grams = {}
+            letters = {}
             for_insert = []
-            if (self.user['provider'] == 'bazqux') or (self.user['provider'] == 'inoreader'):
-                current_data = self.db.posts.find(
-                    {
-                        'owner': self.user['sid'],
-                        'read': not readed,
-                        'pid': {'$in': post_ids}
-                    },
-                    projection=['id', 'tags', 'bi-grams']
-                )
-                for d in current_data:
-                    for_insert.append({
-                        'user': self.user['_id'],
-                        'id': d['id'],
-                        'status': readed,
-                        'processing': TASK_NOT_IN_PROCESSING
-                    })
-                    for t in d['tags']:
-                        if t not in tags:
-                            tags[t] = 0
-                        tags[t] += 1
-                    for bi_g in d['bi-grams']:
-                        if bi_g not in bi_grams:
-                            bi_grams[bi_g] = 0
-                        bi_grams[bi_g] += 1
-
+            db_posts = self.posts.get_by_pids(
+                self.user['sid'],
+                post_ids,
+                {'id': True, 'tags': True, 'bi-grams': True, 'read': True}
+            )
+            if db_posts is not None:
+                for d in db_posts:
+                    if d['read'] != readed:
+                        for_insert.append({
+                            'user': self.user['_id'],
+                            'id': d['id'],
+                            'status': readed,
+                            'processing': TASK_NOT_IN_PROCESSING
+                        })
+                        for t in d['tags']:
+                            if t not in tags:
+                                tags[t] = 0
+                            tags[t] += 1
+                            if t[0] not in letters:
+                                letters[t[0]] = 0
+                            letters[t[0]] += 1
+                        for bi_g in d['bi-grams']:
+                            if bi_g not in bi_grams:
+                                bi_grams[bi_g] = 0
+                            bi_grams[bi_g] += 1
+            else:
+                code = 500
+                result = {'error': 'Database error'}
             if for_insert:
                 try:
                     self.db.mark_queue.insert_many(for_insert)
+                    changed = self.posts.change_status(self.user['sid'], post_ids, readed)
+                    if changed and tags:
+                        changed = self.tags.change_unread(self.user['sid'], tags, readed)
+                    if changed and bi_grams:
+                        changed = self.bi_grams.change_unread(self.user['sid'], bi_grams, readed)
+                    if changed and letters:
+                        changed = self.letters.change_unread(self.user['sid'], letters, readed)
+                    if changed:
+                        code = 200
+                        result = {'data': 'ok'}
+                    else:
+                        code = 500
+                        result = {'error': 'Database error'}
                 except Exception as e:
                     result = {'error': 'Database queue error'}
                     logging.error('Can`t push in mark queue: %s', e)
                     code = 500
 
-        if result is None:
-            if tags:
-                bulk = self.db.tags.initialize_unordered_bulk_op()
-                if readed:
-                    for t in tags:
-                        bulk.find({'owner': self.user['sid'], 'tag': t})\
-                            .update_one({'$inc': {'unread_count': -tags[t]}})
-                        first_letters[t[0]]['unread_count'] -= tags[t]
-                else:
-                    for t in tags:
-                        bulk.find({'owner': self.user['sid'], 'tag': t})\
-                            .update_one({'$inc': {'unread_count': tags[t]}})
-                        first_letters[t[0]]['unread_count'] += tags[t]
-                try:
-                    bulk.execute()
-                except Exception as e:
-                    result = {'error': 'Database error'}
-                    logging.error('Bulk failed in on_read_posts_post: %s', e)
-                    code = 500
-
-            if bi_grams:
-                bulk = self.db.bi_grams.initialize_unordered_bulk_op()
-                if readed:
-                    for t in bi_grams:
-                        bulk.find({'owner': self.user['sid'], 'tag': t})\
-                            .update_one({'$inc': {'unread_count': -bi_grams[t]}})
-                else:
-                    for t in bi_grams:
-                        bulk.find({'owner': self.user['sid'], 'tag': t})\
-                            .update_one({'$inc': {'unread_count': bi_grams[t]}})
-                try:
-                    bulk.execute()
-                except Exception as e:
-                    result = {'error': 'Database error'}
-                    logging.error('Bi-grams bulk failed in on_read_posts_post: %s', e)
-                    code = 500
-
-            try:
-                self.db.posts.update_many(
-                    {'owner': self.user['sid'], 'read': not readed, 'pid': {'$in': post_ids}},
-                    {'$set': {'read': readed}}
-                )
-                self.db.letters.update_one({'owner': self.user['sid']}, {'$set': {'letters': first_letters}})
-                result = {'data': 'ok'}
-            except Exception as e:
-                result = {'error': 'Database error'}
-                logging.error('Can`t mark posts or on_read_posts_post: %s', e)
-                code = 500
-
-            #logging.info('%s', time.time() - st)
         self.response = Response(json.dumps(result), mimetype='application/json')
         self.response.status_code = code
 

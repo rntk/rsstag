@@ -39,3 +39,20 @@ class RssTagLetters:
             letters_list = list(letters['letters'].values())
 
         return letters_list
+
+    def change_unread(self, owner: str, letters: dict, readed: bool) -> Optional[bool]:
+        find_query = {'owner': owner}
+        inc_query = {}
+        result = False
+        for letter in letters:
+            key = 'letters.{}.unread_count'.format(letter)
+            inc_query[key] = -letters[letter] if readed else letters[letter]
+        if find_query:
+            try:
+                update_result = self.db.letters.update_one(find_query, {'$inc': inc_query})
+                result = (update_result.matched_count > 0)
+            except Exception as e:
+                self.log.error('Can`t change letters unread. User %s. Info: %s', owner, e)
+                result = None
+
+        return result

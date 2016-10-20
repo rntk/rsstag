@@ -167,3 +167,17 @@ class RssTagPosts:
             result = None
 
         return result
+
+    def change_status(self, owner: str, pids: list, readed: bool) -> Optional[bool]:
+        query = {
+            'owner': owner,
+            'pid': {'$in': pids}
+        }
+        try:
+            update_result = self.db.posts.update_many(query, {'$set': {'read': readed}})
+            result = (update_result.matched_count > 0)
+        except Exception as e:
+            self.log.error('Can`t set read status for posts. User %s. Info: %s', owner, e)
+            result = None
+
+        return result

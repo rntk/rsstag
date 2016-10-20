@@ -1,6 +1,6 @@
 import logging
 from typing import Optional
-from pymongo import MongoClient, DESCENDING
+from pymongo import MongoClient, DESCENDING, UpdateOne
 
 class RssTagTags:
     indexes = ['owner', 'tag', 'unread_count', 'posts_count', 'processing']
@@ -88,5 +88,24 @@ class RssTagTags:
         except Exception as e:
             self.log.error('Can`t get tags number for user %s. Info: e', owner, e)
             result = None
+
+        return result
+
+    def change_unread(self, owner: str, tags: dict, readed: bool) -> Optional[bool]:
+        find_query = {'owner': owner}
+        updates = []
+        result = False
+        inc_query = {'unread_count': 0}
+        for tag in tags:
+            find_query['tag'] = tag
+            inc_query['unread_count'] = -tags[tag] if readed else tags[tag]
+            updates.append(UpdateOne(find_query, {'$inc': inc_query}))
+        if updates:
+            try:
+                bulk_result = self.db.tags.bulk_write(updates, ordered=False)
+                result = (bulk_result.matched_count > 0)
+            except Exception as e:
+                result = None
+                self.log.error('Can`t change unread_count for tags. User %s. info: %s', owner, e)
 
         return result
