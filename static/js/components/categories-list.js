@@ -10,7 +10,7 @@ export default class CategoriesList extends React.Component{
     }
 
     changeFeedsState(cat_name) {
-        let state = Object.assign({}, this.state);console.log(state, this.state);
+        let state = Object.assign({}, this.state);
 
         if (cat_name in state.cats) {
             state.cats[cat_name].showed = !state.cats[cat_name].showed;
