@@ -672,23 +672,23 @@ class RSSTagApplication(object):
                             'feed_title': by_feed[post['feed_id']]['title'],
                             'favicon': by_feed[post['feed_id']]['favicon']
                         })
-                        page = self.template_env.get_template('posts.html')
-                        if self.request.referrer:
-                            back_link = self.request.referrer
-                        else:
-                            back_link = '/'
-                        self.response = Response(
-                            page.render(
-                                posts=posts,
-                                tag=bi_gram,
-                                back_link=back_link,
-                                group='tag',
-                                words=current_bi_gram['words'],
-                                user_settings=self.user['settings'],
-                                provider=self.user['provider']
-                            ),
-                            mimetype='text/html'
-                        )
+                page = self.template_env.get_template('posts.html')
+                if self.request.referrer:
+                    back_link = self.request.referrer
+                else:
+                    back_link = '/'
+                self.response = Response(
+                    page.render(
+                        posts=posts,
+                        tag=bi_gram,
+                        back_link=back_link,
+                        group='tag',
+                        words=current_bi_gram['words'],
+                        user_settings=self.user['settings'],
+                        provider=self.user['provider']
+                    ),
+                    mimetype='text/html'
+                )
             else:
                 self.on_error(InternalServerError())
         elif current_bi_gram is None:
