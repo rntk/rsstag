@@ -657,143 +657,52 @@ class RSSTagApplication(object):
         else:
             self.on_error(NotFound())
 
-    def on_group_by_bi_grams_get(self, page_number):
-        self.response = None
-        query = {'owner': self.user['sid']}
-        if self.user['settings']['only_unread']:
-            if self.user['settings']['hot_tags']:
-                sort_data = [('temperature', DESCENDING), ('unread_count', DESCENDING)]
-            else:
-                sort_data = [('unread_count', DESCENDING)]
-            query['unread_count'] = {'$gt': 0}
-        else:
-            if self.user['settings']['hot_tags']:
-                sort_data = [('temperature', DESCENDING), ('posts_count', DESCENDING)]
-            else:
-                sort_data = [('posts_count', DESCENDING)]
-        try:
-            cursor = self.db.bi_grams.find(query).sort(sort_data)
-            tags_count = cursor.count()
-        except Exception as e:
-            cursor = None
-            logging.error('Can`t get tags. Cause: %s', e)
-        if cursor:
-            page_count = self.getPageCount(tags_count, self.user['settings']['tags_on_page'])
-            if page_number <= 0:
-                p_number = 1
-                self.user['page'] = p_number
-            elif page_number > page_count:
-                p_number = page_count
-                self.response = redirect(
-                    self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': p_number})
-                )
-                self.user['page'] = p_number
-            else:
-                p_number = page_number
-            p_number -= 1
-            if p_number < 0:
-                p_number = 1
-            new_cookie_page_value = p_number + 1
-            if not self.response:
-                pages_map, start_tags_range, end_tags_range = self.calcPagerData(
-                    p_number,
-                    page_count,
-                    self.user['settings']['tags_on_page'],
-                    'on_group_by_bi_grams_get'
-                )
-                if end_tags_range > tags_count:
-                    end_tags_range = tags_count
-                sorted_tags = []
-                if self.user['settings']['only_unread']:
-                    field = 'unread_count'
-                else:
-                    field = 'posts_count'
-                for t in cursor[start_tags_range:end_tags_range]:
-                    sorted_tags.append({
-                        'tag': t['tag'],
-                        'url': t['local_url'],
-                        'words': t['words'],
-                        'count': t[field]
-                    })
-                self.fillFirstLetters()
-                letters = self.getLetters()
-                page = self.template_env.get_template('group-by-tag.html')
-                self.response = Response(
-                    page.render(
-                        tags=sorted_tags,
-                        sort_by_title='tags',
-                        sort_by_link=self.routes.getUrlByEndpoint(
-                            endpoint='on_group_by_tags_get',
-                            params={'page_number': new_cookie_page_value}
-                        ),
-                        group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
-                        pages_map=pages_map,
-                        current_page=new_cookie_page_value,
-                        letters=letters,
-                        user_settings=self.user['settings'],
-                        provider=self.user['provider']
-                    ),
-                    mimetype='text/html'
-                )
-                self.db.users.update_one(
-                    {'sid': self.user['sid']},
-                    {'$set': {'page': new_cookie_page_value, 'letter': ''}}
-                )
-            else:
-                if not self.response:
-                    self.on_error(NotFound())
-        else:
-            raise InternalServerError()
-
-    def on_bi_gram_get(self, quoted_tag=None):
-        page = self.template_env.get_template('posts.html')
-        page_number = self.user['page']
-        if not page_number:
-            page_number = 1
-        back_link = self.routes.getUrlByEndpoint(endpoint='on_group_by_bi_grams_get', params={'page_number': page_number})
-        tag = unquote(quoted_tag)
-        current_tag = self.db.bi_grams.find_one({'owner': self.user['sid'], 'tag': tag})
-        if current_tag:
+    def on_bi_gram_get(self, bi_gram=''):
+        current_bi_gram = self.bi_grams.get_by_bi_gram(self.user['sid'], bi_gram)
+        if current_bi_gram:
             projection = {'_id': False, 'content.content': False}
-            posts = []
             if self.user['settings']['only_unread']:
-                cursor = self.db.posts.find(
-                    {
-                        'owner': self.user['sid'],
-                        'read': False,
-                        'bi-grams': {'$all': [tag]}
-                    },
-                    projection=projection
-                ).sort([('feed_id', DESCENDING), ('unix_date', DESCENDING)])
+                only_unread = self.user['settings']['only_unread']
             else:
-                cursor = self.db.posts\
-                    .find({'owner': self.user['sid'], 'bi-grams': {'$all': [tag]}}, projection=projection)\
-                    .sort([('feed_id', DESCENDING), ('unix_date', DESCENDING)])
-            by_feed = {}
-            for post in cursor:
-                if post['feed_id'] not in by_feed:
-                    by_feed[post['feed_id']] = self.db.feeds.find_one(
-                        {'owner': self.user['sid'], 'feed_id': post['feed_id']}
-                    )
-                posts.append({
-                    'post': post,
-                    'pos': post['pid'],
-                    'category_title': by_feed[post['feed_id']]['category_title'],
-                    'feed_title': by_feed[post['feed_id']]['title'],
-                    'favicon': by_feed[post['feed_id']]['favicon']
-                })
-            self.response = Response(
-                page.render(
-                    posts=posts,
-                    tag=tag,
-                    back_link=back_link,
-                    group='tag',
-                    words=current_tag['words'],
-                    user_settings=self.user['settings'],
-                    provider=self.user['provider']
-                ),
-                mimetype='text/html'
-            )
+                only_unread = None
+            db_posts = self.posts.get_by_bi_grams(self.user['sid'], [bi_gram], only_unread, projection)
+            if db_posts is not None:
+                posts = []
+                by_feed = {}
+                for post in db_posts:
+                    if post['feed_id'] not in by_feed:
+                        feed = self.feeds.get_by_feed_id(self.user['sid'], post['feed_id'])
+                        if feed:
+                            by_feed[post['feed_id']] = feed
+                    if post['feed_id'] in by_feed:
+                        posts.append({
+                            'post': post,
+                            'pos': post['pid'],
+                            'category_title': by_feed[post['feed_id']]['category_title'],
+                            'feed_title': by_feed[post['feed_id']]['title'],
+                            'favicon': by_feed[post['feed_id']]['favicon']
+                        })
+                        page = self.template_env.get_template('posts.html')
+                        if self.request.referrer:
+                            back_link = self.request.referrer
+                        else:
+                            back_link = '/'
+                        self.response = Response(
+                            page.render(
+                                posts=posts,
+                                tag=bi_gram,
+                                back_link=back_link,
+                                group='tag',
+                                words=current_bi_gram['words'],
+                                user_settings=self.user['settings'],
+                                provider=self.user['provider']
+                            ),
+                            mimetype='text/html'
+                        )
+            else:
+                self.on_error(InternalServerError())
+        elif current_bi_gram is None:
+            self.on_error(InternalServerError())
         else:
             self.on_error(NotFound())
 
@@ -1255,76 +1164,6 @@ class RSSTagApplication(object):
         else:
             code = 500
             result = {'error': 'Database trouble'}
-
-        self.response = Response(json.dumps(result), mimetype='application/json')
-        self.response.status_code = code
-
-    def on_get_bi_grams_siblings(self, tag=''):
-        code = 200
-        all_tags = []
-        result = None
-        if tag:
-            q_tags = tag.split()
-            tags_set = set()
-            if self.d2v:
-                try:
-                    siblings = self.d2v.most_similar(positive=q_tags, topn=20)
-                except Exception as e:
-                    logging.error('In %s not found tag %s', self.config['settings']['model'], tag)
-                    siblings = []
-                for i, sibling_i in enumerate(siblings):
-                    for j, sibling_j in enumerate(siblings):
-                        if (i != j):
-                            tags_set.add(sibling_i[0] + ' ' + sibling_j[0])
-
-            if not siblings:
-                query = {
-                    'owner': self.user['sid'],
-                    'bi-grams': q_tags
-                }
-                if self.user['settings']['only_unread']:
-                    query['read'] = False
-                try:
-                    cur = self.db.posts.find(query, projection=['tags'])
-                except Exception as e:
-                    logging.error('Can`t get tag siblings %s. Info: %s', tag, e)
-                    result = {'error': 'Database error'}
-                    code = 500
-                    cur = []
-                tags_set = set()
-                for tags in cur:
-                    for tag in tags['tags']:
-                        tags_set.add(tag)
-
-        if result is None:
-            if tags_set:
-                if self.user['settings']['only_unread']:
-                    field = 'unread_count'
-                else:
-                    field = 'posts_count'
-                query = {
-                    'owner': self.user['sid'],
-                    'tag': {'$in': list(tags_set)},
-                    field: {'$gt': 0}
-                }
-                if self.user['settings']['only_unread']:
-                    query['read'] = False
-                try:
-                    cur = self.db.bi_grams.find(query, projection={'_id': False})
-                except Exception as e:
-                    logging.error('Can`t fetch tags siblings for %s. Info: %s', tag, e)
-                    cur = []
-
-                all_tags = []
-                for tag in cur:
-                    all_tags.append({
-                        'tag': tag['tag'],
-                        'url': tag['local_url'],
-                        'words': tag['words'],
-                        'count': tag[field]
-                    })
-
-            result = {'data': all_tags}
 
         self.response = Response(json.dumps(result), mimetype='application/json')
         self.response.status_code = code

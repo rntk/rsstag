@@ -18,13 +18,13 @@ class RssTagTags:
     def get_by_tag(self, owner: str, tag: str) -> Optional[dict]:
         query = {'owner': owner, 'tag': tag}
         try:
-            tag = self.db.tags.find_one(query)
-            if tag:
-                result = tag
+            db_tag = self.db.tags.find_one(query)
+            if db_tag:
+                result = db_tag
             else:
                 result = {}
         except Exception as e:
-            self.log.error('Can`t get tagby tag %s. User %s. Info: %s', tag, owner, e)
+            self.log.error('Can`t get tag %s. User %s. Info: %s', tag, owner, e)
             result = None
 
         return result

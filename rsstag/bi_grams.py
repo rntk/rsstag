@@ -15,6 +15,20 @@ class RssTagBiGrams:
             except Exception as e:
                 self.log.warning('Can`t create index %s. May be already exists. Info: %s', e)
 
+    def get_by_bi_gram(self, owner: str, bi_gram: str) -> Optional[dict]:
+        query = {'owner': owner, 'tag': bi_gram}
+        try:
+            db_bi_gram = self.db.bi_grams.find_one(query)
+            if db_bi_gram:
+                result = db_bi_gram
+            else:
+                result = {}
+        except Exception as e:
+            self.log.error('Can`t get bi-gram %s. User %s. Info: %s', bi_gram, owner, e)
+            result = None
+
+        return result
+
     def get_by_tags(self, owner: str, tags: list, only_unread: Optional[bool]=None, projection: dict={}) -> Optional[list]:
         query = {
             'owner': owner,

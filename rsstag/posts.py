@@ -75,12 +75,32 @@ class RssTagPosts:
         }
         if only_unread is not None:
             query['read'] = not only_unread
+        sort_data = [('feed_id', DESCENDING), ('unix_date', DESCENDING)]
         try:
             if projection:
-                cursor = self.db.posts.find(query, projection=projection)\
-                                .sort([('feed_id', DESCENDING), ('unix_date', DESCENDING)])
+                cursor = self.db.posts.find(query, projection=projection).sort(sort_data)
             else:
-                cursor = self.db.posts.find(query).sort([('feed_id', DESCENDING), ('unix_date', DESCENDING)])
+                cursor = self.db.posts.find(query).sort(sort_data)
+            result = list(cursor)
+        except Exception as e:
+            self.log.error('Can`t get posts by tags %s. User %s. Info: %s', tags, owner, e)
+            result = None
+
+        return result
+
+    def get_by_bi_grams(self, owner: str, tags: list, only_unread: Optional[bool]=None, projection: dict={}) -> Optional[list]:
+        query = {
+            'owner': owner,
+            'bi-grams': {'$all': tags}
+        }
+        if only_unread is not None:
+            query['read'] = not only_unread
+        sort_data = [('feed_id', DESCENDING), ('unix_date', DESCENDING)]
+        try:
+            if projection:
+                cursor = self.db.posts.find(query, projection=projection).sort(sort_data)
+            else:
+                cursor = self.db.posts.find(query).sort(sort_data)
             result = list(cursor)
         except Exception as e:
             self.log.error('Can`t get posts by tags %s. User %s. Info: %s', tags, owner, e)

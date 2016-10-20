@@ -40,9 +40,7 @@ class RSSTagRoutes:
             {'url': '/tags-search', 'endpoint': 'on_post_tags_search', 'methods': ['POST']},
             {'url': '/speech', 'endpoint': 'on_post_speech', 'methods': ['POST']},
 
-            {'url': '/group/bi-gram/<int:page_number>', 'endpoint': 'on_group_by_bi_grams_get', 'methods': ['GET']},
-            {'url': '/bi-gram/<string:quoted_tag>', 'endpoint': 'on_bi_gram_get', 'methods': ['GET']},
-            {'url': '/bi-grams-siblings/<string:tag>', 'endpoint': 'on_get_bi_grams_siblings', 'methods': ['GET']},
+            {'url': '/bi-gram/<string:bi_gram>', 'endpoint': 'on_bi_gram_get', 'methods': ['GET']},
             {'url': '/tag-info/<string:tag>', 'endpoint': 'on_get_tag_page', 'methods': ['GET']}
         ]
 
