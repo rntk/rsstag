@@ -23,6 +23,7 @@ from rsstag.posts import RssTagPosts
 from rsstag.feeds import RssTagFeeds
 from rsstag.tags import RssTagTags
 from rsstag.letters import RssTagLetters
+from rsstag.bi_grams import RssTagBiGrams
 
 class RSSTagApplication(object):
     request = None
@@ -88,25 +89,17 @@ class RSSTagApplication(object):
         self.tags.prepare()
         self.letters = RssTagLetters(self.db)
         self.letters.prepare()
+        self.bi_grams = RssTagBiGrams(self.db)
+        self.bi_grams.prepare()
         self.routes = RSSTagRoutes(self.config['settings']['host_name'])
         self.updateEndpoints()
 
     def prepareDB(self):
         try:
             self.db.users.create_index('sid')
-            #self.db.users.create_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
-            #self.db.users.update_many({'in_queue': True}, {'$set': {'in_queue': False, 'ready': True}})
-            self.db.bi_grams.create_index('owner')
-            self.db.bi_grams.create_index('tag')
-            self.db.bi_grams.create_index('tags')
-            self.db.bi_grams.create_index('unread_count')
-            self.db.bi_grams.create_index('posts_count')
-            #self.db.tags.create_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
             self.db.download_queue.create_index('processing')
-            #self.db.download_queue.create_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
             self.db.mark_queue.create_index('processing')
             self.db.words.create_index('word')
-            #self.db.mark_queue.create_index([('createdAt', 1)], expireAfterSeconds=self.user_ttl)
         except Exception as e:
             logging.warning('Indexes not created. May be already exists.')
 
@@ -1247,36 +1240,21 @@ class RSSTagApplication(object):
         self.response.status_code = code
 
     def on_get_tag_bi_grams(self, tag=''):
-        code = 200
-        result = []
-        if tag:
-            if self.user['settings']['only_unread']:
-                field = 'unread_count'
-            else:
-                field = 'posts_count'
-            query = {
-                'owner': self.user['sid'],
-                'tags': {'$all': [tag]},
-                field: {'$gt': 0}
-            }
-            if self.user['settings']['only_unread']:
-                query['read'] = False
-            try:
-                cur = self.db.bi_grams.find(query, projection={'_id': False}).sort([('unread_count', DESCENDING)])
-            except Exception as e:
-                logging.error('Can`t fetch tags siblings for %s. Info: %s', tag, e)
-                cur = []
-
-            all_tags = []
-            for tag in cur:
-                all_tags.append({
+        bi_grams = self.bi_grams.get_by_tags(self.user['sid'], [tag], self.user['settings']['only_unread'])
+        if bi_grams is not None:
+            all_bi_grams = []
+            for tag in bi_grams:
+                all_bi_grams.append({
                     'tag': tag['tag'],
                     'url': tag['local_url'],
                     'words': tag['words'],
-                    'count': tag[field]
+                    'count': tag['unread_count'] if self.user['settings']['only_unread'] else tag['posts_count']
                 })
-
-            result = {'data': all_tags}
+            code = 200
+            result = {'data': all_bi_grams}
+        else:
+            code = 500
+            result = {'error': 'Database trouble'}
 
         self.response = Response(json.dumps(result), mimetype='application/json')
         self.response.status_code = code

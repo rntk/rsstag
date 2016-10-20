@@ -29,7 +29,7 @@ class RssTagTags:
 
         return result
 
-    def get_by_tags(self, owner: str, tags: list, only_unread: Optional[bool]=None, projection: dict={}) -> Optional[dict]:
+    def get_by_tags(self, owner: str, tags: list, only_unread: Optional[bool]=None, projection: dict={}) -> Optional[list]:
         query = {
             'owner': owner,
             'tag': {'$in': tags}
