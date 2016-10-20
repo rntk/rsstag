@@ -97,7 +97,7 @@ class RSSTagWorker:
                     key + '.letter': letter,
                     key + '.local_url': routes.getUrlByEndpoint(
                         endpoint='on_group_by_tags_startwith_get',
-                        params={'letter': letter}
+                        params={'letter': letter, 'page_number': 1}
                     )
                 }},
             ))
@@ -147,7 +147,7 @@ class RSSTagWorker:
                         'temperature': 0,
                         'local_url': routes.getUrlByEndpoint(
                             endpoint='on_bi_gram_get',
-                            params={'quoted_tag': bi_gram}
+                            params={'bi_gram': bi_gram}
                         ),
                         'tags': list(bi_value),
                         'processing': TAG_NOT_IN_PROCESSING
