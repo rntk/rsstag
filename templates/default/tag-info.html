@@ -29,8 +29,10 @@
         <h3><a href="{{tag['local_url']}}">{{tag['tag']}}</a> ({{tag['unread_count']}} / {{tag['posts_count']}})&nbsp;</h3>
         {{','.join(tag['words'])}}
     </div>
-    <h3 class="group_title tag_info_title">Similar tags</h3><span id="load_similar"></span>
-    <div id="similar_tags" class="tag_info_block"></div>
+    <h3 class="group_title tag_info_title">Similar tags by Doc2Vec</h3><span id="load_similar_d2v"></span>
+    <div id="similar_d2v_tags" class="tag_info_block"></div>
+    <h3 class="group_title tag_info_title">Similar tags by Word2Vec</h3><span id="load_similar_w2v"></span>
+    <div id="similar_w2v_tags" class="tag_info_block"></div>
     <h3 class="group_title tag_info_title">Siblings tags</h3><span id="load_siblings"></span>
     <div id="siblings_tags" class="tag_info_block"></div>
     <h3 class="group_title tag_info_title">Bi-grams</h3><span id="load_bi_grams"></span>

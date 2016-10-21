@@ -35,9 +35,9 @@ class D2VLearn:
         for i, tagged_text in enumerate(self._tagged_texts):
             tagged_docs.append(TaggedDocument(tagged_text[0].split(), [tagged_text[1]]))
 
-        if os.path.exists(self._config['settings']['model']):
-            model = Doc2Vec.load(self._config['settings']['model'])
+        if os.path.exists(self._config['settings']['d2v_model']):
+            model = Doc2Vec.load(self._config['settings']['d2v_model'])
             model.train(tagged_docs)
         else:
             model = Doc2Vec(tagged_docs, iter=30, sample=1e-5, workers=os.cpu_count())
-        model.save(self._config['settings']['model'])
+        model.save(self._config['settings']['d2v_model'])

@@ -19,6 +19,7 @@ from rsstag.routes import RSSTagRoutes
 from rsstag.utils import getSortedDictByAlphabet, load_config
 from rsstag import TASK_NOT_IN_PROCESSING
 from gensim.models.doc2vec import Doc2Vec
+from gensim.models.word2vec import Word2Vec
 from rsstag.posts import RssTagPosts
 from rsstag.feeds import RssTagFeeds
 from rsstag.tags import RssTagTags
@@ -40,6 +41,8 @@ class RSSTagApplication(object):
     db = None
     need_cookie_update = False
     d2v = None
+    w2v = None
+    models = {'d2v': 'd2v', 'w2v': 'w2v'}
     allow_not_logged = (
         'on_root_get',
         'on_login_get',
@@ -55,8 +58,10 @@ class RSSTagApplication(object):
         self.config = load_config(config_path)
         if self.config['settings']['no_category_name']:
             self.no_category_name = self.config['settings']['no_category_name']
-        if os.path.exists(self.config['settings']['model']):
-            self.d2v = Doc2Vec.load(self.config['settings']['model'])
+        if os.path.exists(self.config['settings']['d2v_model']):
+            self.d2v = Doc2Vec.load(self.config['settings']['d2v_model'])
+        if os.path.exists(self.config['settings']['w2v_model']):
+            self.w2v = Word2Vec.load(self.config['settings']['w2v_model'])
 
         try:
             logging.basicConfig(
@@ -1026,35 +1031,47 @@ class RSSTagApplication(object):
         else:
             self.on_error(NotFound())
 
-    def on_get_tag_similar(self, tag=''):
+    def on_get_tag_similar(self, model='', tag=''):
         tags_set = set()
         all_tags = []
-        if self.d2v:
-            try:
-                siblings = self.d2v.similar_by_word(tag, topn=30)
-                for sibling in siblings:
-                    tags_set.add(sibling[0])
-            except Exception as e:
-                logging.warning('In %s not found tag %s', self.config['settings']['model'], tag)
+        if model in self.models:
+            if (model == self.models['d2v']) and self.d2v:
+                try:
+                    siblings = self.d2v.similar_by_word(tag, topn=30)
+                    for sibling in siblings:
+                        tags_set.add(sibling[0])
+                except Exception as e:
+                    logging.warning('In %s not found tag %s', self.config['settings']['d2v_model'], tag)
+            elif (model == self.models['w2v']) and self.w2v:
+                try:
+                    siblings = self.w2v.similar_by_word(tag, topn=30)
+                    for sibling in siblings:
+                        tags_set.add(sibling[0])
+                except Exception as e:
+                    logging.warning('In %s not found tag %s', self.config['settings']['w2v_model'], tag)
 
-        if tags_set:
-            db_tags = self.tags.get_by_tags(self.user['sid'], list(tags_set), self.user['settings']['only_unread'])
-            if db_tags is not None:
-                for tag in db_tags:
-                    all_tags.append({
-                        'tag': tag['tag'],
-                        'url': tag['local_url'],
-                        'words': tag['words'],
-                        'count': tag['unread_count'] if self.user['settings']['only_unread'] else tag['posts_count']
-                    })
+            if tags_set:
+                db_tags = self.tags.get_by_tags(self.user['sid'], list(tags_set), self.user['settings']['only_unread'])
+                if db_tags is not None:
+                    for tag in db_tags:
+                        all_tags.append({
+                            'tag': tag['tag'],
+                            'url': tag['local_url'],
+                            'words': tag['words'],
+                            'count': tag['unread_count'] if self.user['settings']['only_unread'] else tag['posts_count']
+                        })
+                    code = 200
+                    result = {'data': all_tags}
+                else:
+                    code = 500
+                    result = {'error': 'Database trouble'}
+
+            else:
                 code = 200
                 result = {'data': all_tags}
-            else:
-                code = 500
-                result = {'error': 'Database trouble'}
         else:
-            code = 200
-            result = {'data': all_tags}
+            code = 404
+            result = {'error': 'Unknown model'}
 
         self.response = Response(json.dumps(result), mimetype='application/json')
         self.response.status_code = code

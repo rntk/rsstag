@@ -92,17 +92,29 @@ window.onload = () => {
     } else if (/\/tag-info\/.*/.test(path)) {
         let tag = window.initial_tag;
 
-        const similar_evsys = new EventsSystem();
-        const similar_storage = new TagsStorage(similar_evsys, '/tag-similar');
+        const similar_d2v_evsys = new EventsSystem();
+        const similar_d2v_storage = new TagsStorage(similar_d2v_evsys, '/tag-similar/d2v');
         ReactDOM.render(
-            <TagsList ES={similar_evsys} />,
-            document.getElementById('similar_tags')
+            <TagsList ES={similar_d2v_evsys} />,
+            document.getElementById('similar_d2v_tags')
         );
         ReactDOM.render(
-            <TagButton ES={similar_evsys} title="Load similar" tag={tag} />,
-            document.getElementById('load_similar')
+            <TagButton ES={similar_d2v_evsys} title="Load similar" tag={tag} />,
+            document.getElementById('load_similar_d2v')
         );
-        similar_storage.start();
+        similar_d2v_storage.start();
+
+        const similar_w2v_evsys = new EventsSystem();
+        const similar_w2v_storage = new TagsStorage(similar_w2v_evsys, '/tag-similar/w2v');
+        ReactDOM.render(
+            <TagsList ES={similar_w2v_evsys} />,
+            document.getElementById('similar_w2v_tags')
+        );
+        ReactDOM.render(
+            <TagButton ES={similar_w2v_evsys} title="Load similar" tag={tag} />,
+            document.getElementById('load_similar_w2v')
+        );
+        similar_w2v_storage.start();
 
         const siblings_evsys = new EventsSystem();
         const siblings_storage = new TagsStorage(siblings_evsys, '/tag-siblings');
