@@ -70,28 +70,29 @@ class WordNetAffectRuRomVer2:
         search_keys = self._get_search_keys(word, self._grams_n)
         current_node = self._search_index
         for key in search_keys:
-            if key not in current_node:
-                current_node[key] = {self._ids_key: set()}
-            current_node[key][self._ids_key].add(word_id)
-            current_node = current_node[key]
+            if key != self._ids_key:
+                if key not in current_node:
+                    current_node[key] = {self._ids_key: set()}
+                current_node[key][self._ids_key].add(word_id)
+                current_node = current_node[key]
 
     def _get_search_keys(self, word: str, n: int=3):
         return textwrap.wrap(word, n)
 
     def search_affects_by_word(self, word: str) -> List[str]:
         affects = set()
-        if word != self._ids_key:
-            search_keys = self._get_search_keys(word, self._grams_n)
-            last_ids = set()
-            current_node = self._search_index
-            for key in search_keys:
+        search_keys = self._get_search_keys(word, self._grams_n)
+        last_ids = set()
+        current_node = self._search_index
+        for key in search_keys:
+            if key != self._ids_key:
                 if key in current_node:
                     last_ids = current_node[key][self._ids_key]
                     current_node = current_node[key]
                 else:
                     break
-            for _id in last_ids:
-                affects.add(self._all_by_id[_id]['affect'])
+        for _id in last_ids:
+            affects.add(self._all_by_id[_id]['affect'])
 
         return list(affects)
 
