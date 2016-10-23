@@ -356,7 +356,7 @@ class RSSTagWorker:
                         try:
                             db.feeds.insert_many(feeds)
                             db.posts.insert_many(posts)
-                            db.users.update_one({'sid': task['user']['sid']}, {'$set': {'ready_flag': True, 'in_queue': False}})
+                            db.users.update_one({'sid': task['user']['sid']}, {'$set': {'ready': True, 'in_queue': False}})
                             task_done = True
                         except Exception as e:
                             task_done = False
