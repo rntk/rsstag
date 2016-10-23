@@ -1,4 +1,4 @@
-'''RSSTag downloaders'''
+"""RSSTag downloaders"""
 import json
 import time
 import gzip
@@ -15,7 +15,7 @@ from rsstag.routes import RSSTagRoutes
 import aiohttp
 
 class BazquxProvider:
-    '''rss downloader from bazqux.com'''
+    """rss downloader from bazqux.com"""
 
     def __init__(self, config: dict):
         self._config = config

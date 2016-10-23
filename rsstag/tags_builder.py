@@ -1,11 +1,11 @@
-'''Build tags from text. Support languages: english, russian'''
+"""Build tags from text. Support languages: english, russian"""
 import re
 from typing import List, Dict
 import pymorphy2
 from nltk.stem import PorterStemmer
 
 class TagsBuilder:
-    '''Build tags from text. Support languages: english, russian'''
+    """Build tags from text. Support languages: english, russian"""
     def __init__(self, text_clean_re: str) -> None:
         self._text = ''
         self._prepared_text = ''
@@ -21,7 +21,7 @@ class TagsBuilder:
         self.cyrillic = pymorphy2.MorphAnalyzer()
 
     def purge(self) -> None:
-        '''Clear state'''
+        """Clear state"""
         self._text = ''
         self._tags = set()
         self._words = {}
@@ -30,7 +30,7 @@ class TagsBuilder:
         self._bi_grams_words = {}
 
     def text2words(self, text: str) -> List[str]:
-        '''Make words list from text'''
+        """Make words list from text"""
         text = self.clear_html_esc.sub(' ', text)
         text = self.text_clearing.sub(' ', text)
         text = text.strip().lower()
@@ -39,7 +39,7 @@ class TagsBuilder:
         return words
 
     def process_word(self, current_word: str) -> str:
-        '''Make tag/token from gven word'''
+        """Make tag/token from gven word"""
         current_word = current_word.strip().lower()
         word_length = len(current_word)
         tag = ''
@@ -63,23 +63,23 @@ class TagsBuilder:
         return tag
 
     def get_tags(self) -> List[str]:
-        '''Get builded tags'''
+        """Get builded tags"""
         return list(self._tags)
 
     def get_words(self) -> Dict[str, set]:
-        '''Get words grouped by tag'''
+        """Get words grouped by tag"""
         return self._words
 
     def get_bi_grams(self) -> dict:
-        '''Get bi-grams'''
+        """Get bi-grams"""
         return self._bi_grams
 
     def get_bi_grams_words(self) -> dict:
-        '''Return words for bi-grams'''
+        """Return words for bi-grams"""
         return self._bi_grams_words
 
     def build_tags(self, text: str) -> None:
-        '''Build tags and words from text'''
+        """Build tags and words from text"""
         self._text = text
         words = self.text2words(text)
         for current_word in words:
@@ -109,11 +109,11 @@ class TagsBuilder:
                     prev_tag = current_tag
 
     def get_prepared_text(self) -> str:
-        '''Get text prepared for Doc2Vec'''
+        """Get text prepared for Doc2Vec"""
         return self._prepared_text
 
     def prepare_text(self, text: str) -> None:
-        '''Prepare text for Doc2vec'''
+        """Prepare text for Doc2vec"""
         self._text = text
         words = self.text2words(text)
         self._prepared_text = ''

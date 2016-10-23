@@ -1,10 +1,10 @@
-'''Utility functions'''
+"""Utility functions"""
 from typing import Optional
 from configparser import ConfigParser
 from _collections import OrderedDict
 
 def getSortedDictByAlphabet(dct, sort_type=None):
-    '''Sort dict'''
+    """Sort dict"""
     if not sort_type or sort_type == 'k':
         sorted_keys = sorted(dct.keys())
     elif sort_type == 'c':
@@ -16,7 +16,7 @@ def getSortedDictByAlphabet(dct, sort_type=None):
     return sorted_dct
 
 def load_config(config_path: str) -> Optional[dict]:
-    '''Load and parse config file'''
+    """Load and parse config file"""
     c = ConfigParser()
     c.read(config_path, encoding='utf-8')
     result = c

@@ -1,9 +1,9 @@
-'''Routes for rsstag'''
+"""Routes for rsstag"""
 from typing import List, Optional
 from werkzeug.routing import Map, Rule
 
 class RSSTagRoutes:
-    '''Routes list and mapping for rsstag'''
+    """Routes list and mapping for rsstag"""
     def __init__(self, host: str) -> None:
         self._host = host
         self._routes = [
@@ -50,14 +50,14 @@ class RSSTagRoutes:
         self._werkzeug_routes = Map(self._rules)
 
     def get_routes(self) -> List[dict]:
-        '''Get routes list'''
+        """Get routes list"""
         return self._routes
 
     def get_werkzeug_routes(self) -> object:
-        '''Get werkzeug generated routes'''
+        """Get werkzeug generated routes"""
         return self._werkzeug_routes;
 
-    '''def getUrlByEndpoint(self, endpoint=None, params=None, full_url=False):
+    """def getUrlByEndpoint(self, endpoint=None, params=None, full_url=False):
         url = None
         if endpoint:
             if not params:
@@ -67,10 +67,10 @@ class RSSTagRoutes:
                 url = all_urls.build(endpoint, params, force_external=full_url)
             else:
                 url = next(self.routes.iter_rules(endpoint=endpoint))
-        return url'''
+        return url"""
 
     def getUrlByEndpoint(self, endpoint: str, params: dict = None, full_url: bool = False) -> Optional[str]:
-        '''Return url by endpoint'''
+        """Return url by endpoint"""
         url = None
         if endpoint:
             url = next(self._werkzeug_routes.iter_rules(endpoint=endpoint))

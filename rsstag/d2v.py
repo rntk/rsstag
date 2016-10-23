@@ -39,5 +39,5 @@ class D2VLearn:
             model = Doc2Vec.load(self._config['settings']['d2v_model'])
             model.train(tagged_docs)
         else:
-            model = Doc2Vec(tagged_docs, iter=30, sample=1e-5, workers=os.cpu_count())
+            model = Doc2Vec(tagged_docs, iter=30, sample=1e-5, min_count=2, workers=os.cpu_count())
         model.save(self._config['settings']['d2v_model'])

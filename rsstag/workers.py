@@ -1,4 +1,4 @@
-'''RSSTag workers'''
+"""RSSTag workers"""
 import logging
 import time
 import gzip
@@ -15,7 +15,7 @@ from rsstag import TASK_NOOP, TASK_DOWNLOAD, TASK_MARK, TASK_TAGS, TASK_WORDS
 from rsstag import POST_NOT_IN_PROCESSING, TASK_NOT_IN_PROCESSING, TAG_NOT_IN_PROCESSING
 
 class RSSTagWorker:
-    '''Rsstag workers handler'''
+    """Rsstag workers handler"""
     def __init__(self, config_path):
         self._config = load_config(config_path)
         self._workers_pool = []
@@ -26,7 +26,7 @@ class RSSTagWorker:
         )
 
     def start(self):
-        '''Start worker'''
+        """Start worker"""
         for i in range(int(self._config['settings']['workers_count'])):
             self._workers_pool.append(Process(target=self.worker))
             self._workers_pool[-1].start()
@@ -239,8 +239,8 @@ class RSSTagWorker:
                     user = db.users.find_one({'_id': user_id})
                     if not user:
                         task['type'] = TASK_NOOP
-                '''elif 'owner' in data:
-                    user_id = data['owner']'''
+                """elif 'owner' in data:
+                    user_id = data['owner']"""
             except Exception as e:
                 user = None
                 logging.error(
@@ -336,7 +336,7 @@ class RSSTagWorker:
         return result
 
     def worker(self):
-        '''Worker for bazqux.com'''
+        """Worker for bazqux.com"""
         cl = MongoClient(self._config['settings']['db_host'], int(self._config['settings']['db_port']))
         db = cl.rss
 
