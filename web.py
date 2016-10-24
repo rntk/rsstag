@@ -19,7 +19,8 @@ if __name__ == '__main__':
                 int(app.config['settings']['port']),
                 app.setResponse,
                 static_files=static_files,
-                threaded=True
+                #threaded=True,
+                processes=2
             )
         except Exception as e:
             logging.error(e)

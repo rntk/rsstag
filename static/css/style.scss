@@ -4,6 +4,7 @@ $my_gray: #c6c6c6;
 $my_green: #7be15f;
 $selected_color: #dde5ff;
 $max_z_index: 999;
+$progressbar_color: #008ec9;
 
 @mixin vendor-prefix($name, $argument) {
   -webkit-#{$name}: #{$argument};
@@ -495,7 +496,7 @@ h3 {
     top: 0;
     left: 0;
     right: 0;
-    height: 1%;
+    height: 0.1%;
     width: 100%;
     margin: 0;
     padding: 0;
@@ -506,9 +507,10 @@ h3 {
     height: 100%;
     margin: 0;
     padding: 0;
-    background-color: maroon;
+    background-color: $progressbar_color;
     @include vendor-prefix(transition, width 1s);
     @include vendor-prefix(opacity, 0.5);
+    @include vendor-prefix(box-shadow, 0 0 3px 2px $progressbar_color);
 }
 
 @media all and (max-width: 800px) {

@@ -500,7 +500,7 @@ h3.post_title {
   top: 0;
   left: 0;
   right: 0;
-  height: 1%;
+  height: 0.1%;
   width: 100%;
   margin: 0;
   padding: 0;
@@ -511,7 +511,7 @@ h3.post_title {
   height: 100%;
   margin: 0;
   padding: 0;
-  background-color: maroon;
+  background-color: #008ec9;
   -webkit-transition: width 1s;
   -ms-transition: width 1s;
   -moz-transition: width 1s;
@@ -521,7 +521,12 @@ h3.post_title {
   -ms-opacity: 0.5;
   -moz-opacity: 0.5;
   -o-opacity: 0.5;
-  opacity: 0.5; }
+  opacity: 0.5;
+  -webkit-box-shadow: 0 0 3px 2px #008ec9;
+  -ms-box-shadow: 0 0 3px 2px #008ec9;
+  -moz-box-shadow: 0 0 3px 2px #008ec9;
+  -o-box-shadow: 0 0 3px 2px #008ec9;
+  box-shadow: 0 0 3px 2px #008ec9; }
 
 @media all and (max-width: 800px) {
   .screen_middle {
