@@ -1,8 +1,9 @@
 """Build tags from text. Support languages: english, russian"""
 import re
-from typing import List, Dict
+from typing import List, Dict, Set
 import pymorphy2
 from nltk.stem import PorterStemmer
+from nltk.corpus import stopwords
 
 class TagsBuilder:
     """Build tags from text. Support languages: english, russian"""
@@ -19,6 +20,7 @@ class TagsBuilder:
         self.clear_html_esc = re.compile(r'&[#a-zA-Z0-9]*?;')
         self.latin = PorterStemmer()
         self.cyrillic = pymorphy2.MorphAnalyzer()
+        self._stopwords = None
 
     def purge(self) -> None:
         """Clear state"""
@@ -112,15 +114,21 @@ class TagsBuilder:
         """Get text prepared for Doc2Vec"""
         return self._prepared_text
 
-    def prepare_text(self, text: str) -> None:
+    def prepare_text(self, text: str, ignore_stopwords: bool=False) -> None:
         """Prepare text for Doc2vec"""
         self._text = text
         words = self.text2words(text)
         self._prepared_text = ''
         tags = []
-        for current_word in words:
-            tag = self.process_word(current_word)
-            if tag:
-                tags.append(tag)
-
+        self._stopwords = set(stopwords.words('english') + stopwords.words('russian'))
+        if ignore_stopwords:
+            for current_word in words:
+                tag = self.process_word(current_word)
+                if tag and tag not in self._stopwords:
+                    tags.append(tag)
+        else:
+            for current_word in words:
+                tag = self.process_word(current_word)
+                if tag:
+                    tags.append(tag)
         self._prepared_text = ' '.join(tags)
