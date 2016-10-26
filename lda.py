@@ -14,7 +14,7 @@ class LDATopics:
         self.db = cl.rss
         self._texts = []
         self._n_features = 200
-        self._n_topics = 50
+        self._n_topics = 500
 
     def print_top_words(self, model, feature_names, n_top_words):
         all_topics = set()
@@ -45,10 +45,12 @@ class LDATopics:
             self._texts.append(builder.get_prepared_text())
 
     def learn(self):
-        vectorizer = TfidfVectorizer(max_df=150, min_df=2, max_features=self._n_features)
+        vectorizer = TfidfVectorizer(max_df=7000, min_df=2000, max_features=self._n_features)
         #vectorizer = CountVectorizer(max_df=0.9, min_df=2, max_features=self._n_features)
-        #vectors = vectorizer.fit_transform(open('lda_data.txt', 'r'))
-        vectors = vectorizer.fit_transform(self._texts)
+        vectors = vectorizer.fit_transform(open('lda_data.txt', 'r'))
+        print(vectorizer.get_feature_names())
+        exit()
+        #vectors = vectorizer.fit_transform(self._texts)
         lda = LatentDirichletAllocation(
             n_topics=self._n_topics,
             max_iter=5,
@@ -62,7 +64,7 @@ class LDATopics:
 
 if __name__ == '__main__':
     lda = LDATopics('./rsscloud.conf')
-    lda.fetch_texts()
+    #lda.fetch_texts()
     """f = open('lda_data_stop.txt', 'w')
     f.write('\n'.join(lda._texts))
     f.close()"""

@@ -39,5 +39,5 @@ class W2VLearn:
             model = Word2Vec.load(self._config['settings']['w2v_model'])
             model.train(words)
         else:
-            model = Word2Vec(words, iter=30, sample=1e-5, workers=os.cpu_count())
+            model = Word2Vec(words, window=15, iter=30, sample=1e-5, workers=os.cpu_count())
         model.save(self._config['settings']['w2v_model'])
