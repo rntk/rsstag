@@ -1,10 +1,13 @@
 """Utility functions"""
 import os
-from typing import Optional
+from typing import Optional, Tuple
 from configparser import ConfigParser
 from _collections import OrderedDict
 from pymongo import MongoClient
+from http.client import HTTPSConnection
+import json
 import csv
+from urllib.parse import quote
 
 def getSortedDictByAlphabet(dct, sort_type=None):
     """Sort dict"""
@@ -84,3 +87,30 @@ def geo_csv_to_base(db: MongoClient, csv_dir: str, lang: str='ru', delimiter: st
     if inserts:
         db.cities.insert_many(inserts)
     f.close()
+
+def get_coords_yandex(country:str, city: str='', lang: str='ru_RU', key: str='', raw: bool=False) -> list:
+    host = 'geocode-maps.yandex.ru'
+    con = HTTPSConnection(host)
+    req = country
+    if city:
+        req += ',+{}'.format(city)
+    req_url = '/1.x/?format=json&lang=' + lang
+    if key:
+        req_url += '&key=' + key
+    req_url += '&geocode=' + quote(req)
+    con.request('GET', req_url)
+    resp = con.getresponse()
+    if (resp.status == 200):
+        raw_json = resp.read()
+        if raw:
+            result = json.loads(raw_json.decode('utf-8'))
+        else:
+            data = json.loads(raw_json.decode('utf-8'))
+            if len(data['response']['GeoObjectCollection']['featureMember']) > 0:
+                result = data['response']['GeoObjectCollection']['featureMember'][0]['GeoObject']['Point']['pos'].split()
+            else:
+                raise Exception('Not found. Country {}. City {}'.format(country, city))
+    else:
+        raise Exception('HTTP status {}'.format(resp.status, resp.reason))
+
+    return result
