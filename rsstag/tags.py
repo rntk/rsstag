@@ -115,3 +115,42 @@ class RssTagTags:
                 self.log.error('Can`t change unread_count for tags. User %s. info: %s', owner, e)
 
         return result
+
+    def get_city_tags(self, owner: str, only_unread: bool=None, projection: dict=None) -> Optional[dict]:
+        query = {
+            'owner': owner,
+            'city': {'$exists': True}
+        }
+        if only_unread:
+            query['unread_count'] = {'$gt': 0}
+        try:
+            if projection:
+                cursor = self.db.tags.find(query, projection=projection)
+            else:
+                cursor = self.db.tags.find(query)
+            result = list(cursor)
+        except Exception as e:
+            self.log.error('Can`t get city tags. User %s. Info: %s', owner, e)
+            result = None
+
+        return result
+
+
+    def get_country_tags(self, owner: str, only_unread: bool=None, projection: dict=None) -> Optional[dict]:
+        query = {
+            'owner': owner,
+            'country': {'$exists': True}
+        }
+        if only_unread:
+            query['unread_count'] = {'$gt': 0}
+        try:
+            if projection:
+                cursor = self.db.tags.find(query, projection=projection)
+            else:
+                cursor = self.db.tags.find(query)
+            result = list(cursor)
+        except Exception as e:
+            self.log.error('Can`t get country tags. User %s. Info: %s', owner, e)
+            result = None
+
+        return result

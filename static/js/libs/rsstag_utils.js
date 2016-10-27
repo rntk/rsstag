@@ -27,6 +27,32 @@ class RssTagUtils {
     randInt(min, max) {
         return (Math.random() * (max - min)) + min;
     };
+
+    waitFor(test_func, timeout, check_interval) {
+        let start_time = new Date().getTime(),
+            interval_handler = 0,
+            prom = new Promise((resolve, reject) => {
+                interval_handler = setInterval(
+                    () => {
+                        if (test_func()) {
+                            clearInterval(interval_handler);
+                            resolve();
+                        }
+                        if (timeout) {
+                            let dt = new Date().getTime();
+
+                            if ((dt - start_time) >= timeout) {
+                                clearInterval(interval_handler);
+                                reject();
+                            }
+                        }
+                    },
+                    (check_interval)? check_interval: 1000
+                );
+            });
+
+        return prom;
+    }
 };
 
 const rsstag_utils = new RssTagUtils();

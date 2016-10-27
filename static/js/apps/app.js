@@ -19,6 +19,10 @@ import BiGramsStorage from '../storages/bi-grams-storage.js';
 import TagButton from '../components/tag-button.js';
 import ProgressBarStorage from '../storages/progressbar-storage.js';
 import ProgressBar from '../components/progressbar.js';
+import GeoTagsStorage from '../storages/geo-tags-storage.js';
+import GeoMapTools from '../components/geomap-tools.js';
+import RssTagYMap from '../libs/rsstag_ymap.js';
+import rsstag_utils from '../libs/rsstag_utils.js';
 
 window.onload = () => {
     if (window.EVSYS === undefined) {
@@ -139,5 +143,22 @@ window.onload = () => {
             document.getElementById('load_bi_grams')
         );
         bi_grams_storage.start();
+    } else if (/^\/map$/.test(path)) {
+
+        let prom = rsstag_utils.waitFor(() => {
+            return (ymaps && ymaps.Map);
+        });
+        window.EVSYS.trigger(window.EVSYS.START_TASK, 'ajax');
+        prom.then(() => {
+            const geo_tags_storage = new GeoTagsStorage(window.EVSYS);
+            const map_handler = new RssTagYMap('map', window.EVSYS);
+            ReactDOM.render(
+                <GeoMapTools ES={window.EVSYS} ymap={ymap}/>,
+                document.getElementById('map_tools')
+            );
+            map_storage.start();
+            map_handler.start();
+            window.EVSYS.trigger(window.EVSYS.END_TASK, 'ajax');
+        });
     }
 }

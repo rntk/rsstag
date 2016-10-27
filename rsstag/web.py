@@ -1309,3 +1309,24 @@ class RSSTagApplication(object):
 
         self.response = Response(json.dumps(result), mimetype='application/json')
         self.response.status_code = code
+
+    def on_get_map(self):
+        projection = {'_id': False}
+        cities = self.tags.get_city_tags(self.user['sid'], self.user['settings']['only_unread'], projection);
+        countries = self.tags.get_country_tags(self.user['sid'], self.user['settings']['only_unread'], projection);
+        if cities is None:
+            cities = []
+        if countries is None:
+            countries = []
+        page = self.template_env.get_template('map.html')
+        self.response = Response(
+            page.render(
+                support=self.config['settings']['support'],
+                version=self.config['settings']['version'],
+                user_settings=self.user['settings'],
+                provider=self.user['provider'],
+                cities=cities,
+                countries=countries
+            ),
+            mimetype='text/html'
+        )

@@ -68,9 +68,17 @@ h3.post_title {
 .hide {
   display: none; }
 
-.page {
+.page, .geomap {
   width: 80%;
   margin: 1.5em auto 3em auto; }
+
+.geomap, #map {
+  width: 90%;
+  height: 600px;
+  max-height: 100%; }
+
+#map {
+  width: 100%; }
 
 .post {
   padding: 0.2em 0.7em 0.7em 0.7em;
@@ -535,7 +543,7 @@ h3.post_title {
     margin-top: 3em; }
   .tag_title, .group_title {
     margin-top: 3em; }
-  .page {
+  .page, .geomap {
     margin-bottom: 3em;
     width: 98%; }
   .global_tools_button {
