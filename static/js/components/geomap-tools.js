@@ -50,11 +50,11 @@ export default class GeoMap extends React.Component{
             <div>
                 <label htmlFor="countries_checkbox">
                     <input type="checkbox" checked={this.state.show_countries} id="countries_checkbox" onChange={this.changeVisibilityState} />
-                    Показать страны ({this.state.countries.size})
+                    Show countries ({this.state.countries.size})
                 </label>
                 <label htmlFor="cities_checkbox">
                     <input type="checkbox" checked={this.state.show_cities} id="cities_checkbox" onChange={this.changeVisibilityState} />
-                    Показать города ({this.state.cities.size})
+                    Show cities ({this.state.cities.size})
                 </label>
             </div>
         );
