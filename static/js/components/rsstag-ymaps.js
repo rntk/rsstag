@@ -19,7 +19,11 @@ export default class RssTagYMap {
                 this.geo_cities = new ymaps.GeoObjectCollection();
                 for (let tag of state.cities) {
                     this.geo_cities.add(new ymaps.Placemark([tag[1].city.co[1], tag[1].city.co[0]], {
-                        hintContent: tag[1].tag
+                        hintContent: `${tag[1].tag} (${tag[1].unread_count} / ${tag[1].posts_count})`,
+                        balloonContentHeader: `${tag[1].tag} (${tag[1].unread_count} / ${tag[1].posts_count})`,
+                        balloonContentBody:
+                            `<a href="/tag-info/${tag[1].tag}">Tag info</a><br />` +
+                            `<a href="${tag[1].local_url}">Posts with tag</a><br />`
                     }));
                 }
             }
@@ -37,7 +41,11 @@ export default class RssTagYMap {
                 this.geo_countries = new ymaps.GeoObjectCollection();
                 for (let tag of state.countries) {
                     this.geo_countries.add(new ymaps.Placemark([tag[1].country.co[1], tag[1].country.co[0]], {
-                        hintContent: tag[1].tag
+                        hintContent: `${tag[1].tag} (${tag[1].unread_count} / ${tag[1].posts_count})`,
+                        balloonContentHeader: `${tag[1].tag} (${tag[1].unread_count} / ${tag[1].posts_count})`,
+                        balloonContentBody:
+                            `<a href="/tag-info/${tag[1].tag}">Tag info</a><br />` +
+                            `<a href="${tag[1].local_url}">Posts with tag</a><br />`
                     }));
                 }
             }

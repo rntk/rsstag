@@ -7,7 +7,7 @@ export default class GeoTagsStorage {
         this.state = {
             countries: new Map(),
             cities: new Map(),
-            show_countries: true,
+            show_countries: false,
             show_cities: false
         }
     }

@@ -149,12 +149,12 @@ window.onload = () => {
 
         window.EVSYS.trigger(window.EVSYS.START_TASK, 'ajax');
         prom.then(() => {
+            map_handler.start();
             const geo_tags_storage = new GeoTagsStorage(window.EVSYS);
             ReactDOM.render(
                 <GeoMapTools ES={window.EVSYS} />,
                 document.getElementById('map_tools')
             );
-            map_handler.start();
             geo_tags_storage.start();
             window.EVSYS.trigger(window.EVSYS.END_TASK, 'ajax');
         });

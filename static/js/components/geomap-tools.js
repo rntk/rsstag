@@ -7,7 +7,7 @@ export default class GeoMap extends React.Component{
         this.state = {
             cities: new Map(),
             countries: new Map(),
-            show_countries: true,
+            show_countries: false,
             show_cities: false
         };
         this.updateTools = this.updateTools.bind(this);
