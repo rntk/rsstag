@@ -8,6 +8,7 @@ from http.client import HTTPSConnection
 import json
 import csv
 from urllib.parse import quote
+from html import unescape
 
 def getSortedDictByAlphabet(dct, sort_type=None):
     """Sort dict"""
@@ -45,8 +46,8 @@ def geo_csv_to_base(db: MongoClient, csv_dir: str, lang: str='ru', delimiter: st
     next(csv_reader)
     for row in csv_reader:
         countries[row[0]] = {
-            'id': row[0],
-            't': row[pos]
+            'id': row[0].strip(),
+            't': unescape(row[pos].strip())
         }
     f.close()
     '''f = open('{}{}_regions.csv'.format(os.path.abspath(csv_dir), os.sep), 'r')
@@ -56,9 +57,9 @@ def geo_csv_to_base(db: MongoClient, csv_dir: str, lang: str='ru', delimiter: st
     next(csv_reader)
     for row in csv_reader:
         regions[row[0]] = {
-            'id': row[0],
-            'c_id': row[1],
-            't': row[pos]
+            'id': row[0].strip(),
+            'c_id': row[1].strip(),
+            't': unescape(row[pos].strip())
         }
     f.close()'''
     f = open('{}{}_cities.csv'.format(os.path.abspath(csv_dir), os.sep), 'r')
@@ -75,13 +76,13 @@ def geo_csv_to_base(db: MongoClient, csv_dir: str, lang: str='ru', delimiter: st
             inserts = []
             counter = 0
         inserts.append({
-            'id': row[0],
-            't': row[title_pos],
-            'i': True if row[2] == 't' else False,
-            'c': countries[row[1]],
-            'a': row[area_pos],
-            'r_id': row[3],
-            'r_n': row[region_pos]
+            'id': row[0].strip(),
+            't': unescape(row[title_pos].strip()),
+            'i': True if row[2].strip() == 't' else False,
+            'c': countries[row[1].strip()],
+            'a': unescape(row[area_pos].strip()),
+            'r_id': row[3].strip(),
+            'r_n': unescape(row[region_pos].strip())
         })
         counter += 1
     if inserts:
