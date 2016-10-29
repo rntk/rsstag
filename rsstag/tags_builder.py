@@ -36,14 +36,14 @@ class TagsBuilder:
         """Make words list from text"""
         text = self.clear_html_esc.sub(' ', text)
         text = self.text_clearing.sub(' ', text)
-        text = text.strip().lower()
+        text = text.strip().casefold()
         words = text.split()
 
         return words
 
     def process_word(self, current_word: str) -> str:
         """Make tag/token from gven word"""
-        current_word = current_word.strip().lower()
+        current_word = current_word.strip().casefold()
         word_length = len(current_word)
         tag = ''
         if self.only_cyrillic.match(current_word):
