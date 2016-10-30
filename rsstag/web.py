@@ -768,7 +768,7 @@ class RSSTagApplication(object):
             db_posts = self.posts.get_by_pids(
                 self.user['sid'],
                 post_ids,
-                {'id': True, 'tags': True, 'bi-grams': True, 'read': True}
+                {'id': True, 'tags': True, 'bi_grams': True, 'read': True}
             )
             if db_posts is not None:
                 for d in db_posts:
@@ -786,7 +786,7 @@ class RSSTagApplication(object):
                             if t[0] not in letters:
                                 letters[t[0]] = 0
                             letters[t[0]] += 1
-                        for bi_g in d['bi-grams']:
+                        for bi_g in d['bi_grams']:
                             if bi_g not in bi_grams:
                                 bi_grams[bi_g] = 0
                             bi_grams[bi_g] += 1

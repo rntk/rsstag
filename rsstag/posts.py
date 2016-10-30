@@ -91,7 +91,7 @@ class RssTagPosts:
     def get_by_bi_grams(self, owner: str, tags: list, only_unread: Optional[bool]=None, projection: dict={}) -> Optional[list]:
         query = {
             'owner': owner,
-            'bi-grams': {'$all': tags}
+            'bi_grams': {'$all': tags}
         }
         if only_unread is not None:
             query['read'] = not only_unread

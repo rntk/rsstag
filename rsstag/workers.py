@@ -161,7 +161,7 @@ class RSSTagWorker:
         if tags_updates:
             try:
                 db.bi_grams.bulk_write(tags_updates, ordered=False)
-                db.posts.update({'_id': post['_id']}, {'$set': {'bi-grams': list(bi_grams.keys())}})
+                db.posts.update({'_id': post['_id']}, {'$set': {'bi_grams': list(bi_grams.keys())}})
                 result = True
             except Exception as e:
                 result = False
