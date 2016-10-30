@@ -181,14 +181,14 @@ class RssTagGeoCatalog:
 
         return result
 
-    def get_city(self, country_name: str, important: Optional[bool]=None) -> Optional[list]:
+    def get_city_by_name(self, city_name: str, important: Optional[bool]=None) -> Optional[list]:
         query = {
-            't': country_name.capitalize()
+            't': city_name.capitalize()
         }
         if important is not None:
             query['i'] = important
         try:
-            cur = self.db.aggregate(
+            cur = self._db.cities.aggregate([
                 {'$match': query},
                 {'$lookup': {
                     'from': 'countries',
@@ -196,10 +196,10 @@ class RssTagGeoCatalog:
                     'foreignField': 'id',
                     'as': 'c'
                 }}
-            )
+            ])
             result = list(cur)
         except Exception as e:
             result = None
-            self._log.error('Can`t get country info for %s. Info: %s', country_name, e)
+            self._log.error('Can`t get country info for %s. Info: %s', city_name, e)
 
         return result

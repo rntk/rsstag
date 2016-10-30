@@ -1,6 +1,7 @@
 import logging
 from rsstag.utils import get_coords_yandex, load_config
 from rsstag.tags import RssTagTags
+from rsstag.geo_catalog import RssTagGeoCatalog
 from pymongo import MongoClient
 
 
@@ -51,6 +52,39 @@ def make_tags_geo(db: MongoClient, key: str):
         else:
             logging.error('Country coords not maked. User: %s. Cities: %s', owner, tags_cities)
 
+def match_tag_to_geo(db: MongoClient):
+    geo_cat = RssTagGeoCatalog(db)
+    for tag in db.tags.find({}):
+        tag_name = tag['tag'].capitalize()
+        country = geo_cat.get_country_by_name(tag_name)
+        geo_info = {}
+        geo_type = ''
+        countries_number = 0
+        cities_number = 0
+        if country:
+            del country['_id']
+            geo_info = country
+            geo_type = 'country'
+            countries_number += 1
+        else:
+            city = geo_cat.get_city_by_name(tag_name, important=True)
+            if city:
+                city = city[0]
+                del city['_id']
+                if ('c' in city) and city['c']:
+                    city['c'] = city['c'][0]
+                    if '_id' in city['c']:
+                        del city['c']['_id']
+                geo_info = city
+                geo_type = 'city'
+                cities_number += 1
+        if geo_info:
+            try:
+                db.tags.update_one({'tag': tag['tag'], 'owner': tag['owner']}, {'$set': {geo_type: geo_info}})
+            except Exception as e:
+                logging.error('Can`t update geo info for tag %s. User: %s. Info: %s', tag['tag'], tag['owner'], e)
+    logging.info('Was found %s countries and %s cities', countries_number, cities_number)
+
 if __name__ == '__main__':
     config = load_config('./rsscloud.conf')
     logging.basicConfig(
@@ -60,4 +94,5 @@ if __name__ == '__main__':
     )
     cl = MongoClient(config['settings']['db_host'], int(config['settings']['db_port']))
     db = cl.rss
+    match_tag_to_geo(db)
     make_tags_geo(db, config['yandex']['geocode_key'])
