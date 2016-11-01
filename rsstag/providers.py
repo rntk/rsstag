@@ -4,6 +4,7 @@ import time
 import gzip
 import logging
 import asyncio
+from typing import Optional
 from hashlib import md5
 from datetime import date, datetime
 from random import randint
@@ -201,5 +202,24 @@ class BazquxProvider:
                 break
             time.sleep(randint(2, 7))
             connection.close()
+
+        return result
+
+    def get_token(self, login: str, password: str) -> Optional[str]:
+        connection = client.HTTPSConnection(self.config['bazqux']['api_host'])
+        headers = {'Content-type': 'application/x-www-form-urlencoded'}
+        data = urlencode({'Email': login, 'Passwd': password})
+        try:
+            connection.request('POST', '/accounts/ClientLogin', data, headers)
+            resp = connection.getresponse().read().splitlines()
+            if resp and resp[0].decode('utf-8').split('=')[0] != 'Error':
+                token = resp[-1].decode('utf-8').split('=')[-1]
+                result = token
+            else:
+                result = ''
+                logging.error('Wrong Login or Password')
+        except Exception as e:
+            result = None
+            logging.error('Can`t get token from bazqux server. Info: %', e)
 
         return result
