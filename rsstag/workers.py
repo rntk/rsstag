@@ -13,6 +13,7 @@ from rsstag.utils import load_config
 from rsstag.routes import RSSTagRoutes
 from rsstag import TASK_NOOP, TASK_DOWNLOAD, TASK_MARK, TASK_TAGS, TASK_WORDS
 from rsstag import POST_NOT_IN_PROCESSING, TASK_NOT_IN_PROCESSING, TAG_NOT_IN_PROCESSING
+from rsstag.users import RssTagUsers
 
 class RSSTagWorker:
     """Rsstag workers handler"""
@@ -171,7 +172,7 @@ class RSSTagWorker:
 
         return result
 
-    def get_task(self, db: MongoClient) -> dict:
+    def get_task(self, db: MongoClient, users: RssTagUsers) -> dict:
         task = {
             'type': TASK_NOOP,
             'user': None,
@@ -236,7 +237,7 @@ class RSSTagWorker:
                 user_id = None
                 if 'user' in data:
                     user_id = data['user']
-                    user = db.users.find_one({'_id': user_id})
+                    user = users.get_by_id(user_id)
                     if not user:
                         task['type'] = TASK_NOOP
                 """elif 'owner' in data:
@@ -343,8 +344,9 @@ class RSSTagWorker:
         provider = BazquxProvider(self._config)
         builder = TagsBuilder(self._config['settings']['replacement'])
         cleaner = HTMLCleaner()
+        users = RssTagUsers(db)
         while True:
-            task = self.get_task(db)
+            task = self.get_task(db, users)
             if task['type'] == TASK_NOOP:
                 time.sleep(randint(3, 8))
                 continue
@@ -356,7 +358,7 @@ class RSSTagWorker:
                         try:
                             db.feeds.insert_many(feeds)
                             db.posts.insert_many(posts)
-                            db.users.update_one({'sid': task['user']['sid']}, {'$set': {'ready': True, 'in_queue': False}})
+                            users.update_by_sid(task['user']['sid'], {'ready': True, 'in_queue': False})
                             task_done = True
                         except Exception as e:
                             task_done = False

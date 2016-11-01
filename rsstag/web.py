@@ -7,24 +7,24 @@ import time
 import gzip
 import logging
 from collections import OrderedDict
-from datetime import datetime
-from random import randint
-from hashlib import md5, sha256
+from hashlib import md5
 from werkzeug.wrappers import Response, Request
 from werkzeug.exceptions import HTTPException, NotFound, InternalServerError
 from werkzeug.utils import redirect
 from jinja2 import Environment, PackageLoader
-from pymongo import MongoClient, DESCENDING
-from rsstag.routes import RSSTagRoutes
-from rsstag.utils import getSortedDictByAlphabet, load_config
-from rsstag import TASK_NOT_IN_PROCESSING
+from pymongo import MongoClient
 from gensim.models.doc2vec import Doc2Vec
 from gensim.models.word2vec import Word2Vec
+from rsstag import TASK_NOT_IN_PROCESSING
+from rsstag.routes import RSSTagRoutes
+from rsstag.utils import getSortedDictByAlphabet, load_config
 from rsstag.posts import RssTagPosts
 from rsstag.feeds import RssTagFeeds
 from rsstag.tags import RssTagTags
 from rsstag.letters import RssTagLetters
 from rsstag.bi_grams import RssTagBiGrams
+from rsstag.users import RssTagUsers
+from rsstag.providers import BazquxProvider
 
 class RSSTagApplication(object):
     request = None
@@ -38,7 +38,6 @@ class RSSTagApplication(object):
     providers = []
     user_ttl = 0
     count_showed_numbers = 4
-    db = None
     need_cookie_update = False
     d2v = None
     w2v = None
@@ -96,12 +95,13 @@ class RSSTagApplication(object):
         self.letters.prepare()
         self.bi_grams = RssTagBiGrams(self.db)
         self.bi_grams.prepare()
+        self.users = RssTagUsers(self.db)
+        self.users.prepare()
         self.routes = RSSTagRoutes(self.config['settings']['host_name'])
         self.updateEndpoints()
 
     def prepareDB(self):
         try:
-            self.db.users.create_index('sid')
             self.db.download_queue.create_index('processing')
             self.db.mark_queue.create_index('processing')
             self.db.words.create_index('word')
@@ -120,7 +120,7 @@ class RSSTagApplication(object):
         if user is None:
             sid = self.request.cookies.get('sid')
             if sid:
-                self.user = self.db.users.find_one({'sid': sid})
+                self.user = self.users.get_by_sid(sid)
             else:
                 self.user = None
         else:
@@ -133,48 +133,10 @@ class RSSTagApplication(object):
             self.need_cookie_update = False
             return False
 
-    def createNewSession(self, login, password):
+    def createNewSession(self, login: str, password: str, token: str, provider: str):
         self.need_cookie_update = True
-        if self.user and 'sid' in self.user:
-            user = self.db.users.find_one({'sid': self.user['sid']})
-            if user:
-                try:
-                    self.db.users.update_one(
-                        {'sid': self.user['sid']},
-                        {'$set': {
-                            'ready': False,
-                            'provider': self.user['provider'],
-                            'token': self.user['token'],
-                            'message': 'Click on "Refresh posts" to start downloading data',
-                            'in_queue': False,
-                            'createdAt': datetime.utcnow()
-                        }}
-                    )
-                except Exception as e:
-                    self.user = None
-                    logging.error('Can`t create new session: %s', e)
-        else:
-            settings = {
-                'only_unread': True,
-                'tags_on_page': 100,
-                'posts_on_page': 30,
-                'hot_tags' : False
-            }
-            self.user['sid'] = sha256(os.urandom(randint(80, 200))).hexdigest()
-            self.user['letter'] = ''
-            self.user['page'] = '1'
-            self.user['settings'] = settings
-            self.user['ready'] = False
-            self.user['message'] = 'Click on "Refresh posts" to start downloading data'
-            self.user['in_queue'] = False
-            self.user['createdAt'] = datetime.utcnow()
-            self.user['lp'] = sha256((login + password).encode('utf-8')).hexdigest()
-            try:
-                self.db.users.insert_one(self.user)
-            except Exception as e:
-                self.user = None
-                logging.error('Can`t create new session: %s', e)
-        self.user = self.db.users.find_one({'sid': self.user['sid']})
+        sid = self.users.create_user(login, password, token, provider)
+        self.user = self.users.get_by_sid(sid)
 
     def getPageCount(self, items_count, items_on_page_count):
         page_count = divmod(items_count, items_on_page_count)
@@ -321,39 +283,26 @@ class RSSTagApplication(object):
         password = self.request.form.get('password')
         err = []
         if login and password:
-            try:
-                lp_hash = sha256((login + password).encode('utf-8')).hexdigest()
-                user = self.db.users.find_one({'lp': lp_hash})
-            except Exception as e:
-                logging.error('Can`t find user by hash. %s', e)
-                err.append('Can`t login. Try later.')
+            user = self.users.get_by_login_password(login, password)
             if user:
                 self.prepareSession(user)
                 self.response = redirect(self.routes.getUrlByEndpoint(endpoint='on_root_get'))
                 return ''
-            elif not err:
+            elif user is not None:
                 if self.user:
                     self.user['provider'] = self.request.cookies.get('provider')
                 else:
                     self.user = {'provider': self.request.cookies.get('provider')}
                 if (self.user['provider'] == 'bazqux') or (self.user['provider'] == 'inoreader'):
-                    connection = client.HTTPSConnection(self.config[self.user['provider']]['api_host'])
-                    headers = {'Content-type': 'application/x-www-form-urlencoded'}
-                    data = urlencode({'Email': login, 'Passwd': password})
-                    try:
-                        connection.request('POST', '/accounts/ClientLogin', data, headers)
-                    except Exception as e:
-                        err.append('Can`t request to server. {0}'.format(e))
-                    if not err:
-                        resp = connection.getresponse().read().splitlines()
-                        if resp and resp[0].decode('utf-8').split('=')[0] != 'Error':
-                            token = resp[-1].decode('utf-8').split('=')[-1]
-                            self.user['token'] = token
-                            self.createNewSession(login, password)
-                            if not self.user:
-                                err.append('Can`t create session, try later')
-                        else:
-                            err.append('Wrong Login or Password')
+                    provider = BazquxProvider(self.config)
+                    token = provider.get_token(login, password)
+                    if token:
+                        self.user['token'] = token
+                        self.createNewSession(login, password, token, self.user['provider'])
+                    elif token == '':
+                        err.append('Wrong login or password')
+                    else:
+                        err.append('Cant` create session. Try later')
         else:
             err.append('Login or Password can`t be empty')
         if not err:
@@ -370,14 +319,17 @@ class RSSTagApplication(object):
                     self.db.download_queue.insert_one(
                         {'user': self.user['_id'], 'processing': TASK_NOT_IN_PROCESSING, 'host': self.request.environ['HTTP_HOST']}
                     )
-                    self.db.users.update_one(
-                        {'sid': self.user['sid']},
-                        {'$set': {'ready': False, 'in_queue': True, 'message': 'Downloading data, please wait'}}
+                    updated = self.users.update_by_sid(
+                        self.user['sid'],
+                        {'ready': False, 'in_queue': True, 'message': 'Downloading data, please wait'}
                     )
                 else:
-                    self.db.users.update_one(
-                        {'sid': self.user['sid']}, {'$set': {'message': 'You already in queue, please wait'}}
+                    updated = self.users.update_by_sid(
+                        self.user['sid'],
+                        {'message': 'You already in queue, please wait'}
                     )
+                if not updated:
+                    logging.error('Cant update data of user %s while create "posts update" task', self.user['_id'])
             except Exception as e:
                 logging.error('Can`t create refresh task for user %s. Info: %s', self.user['_id'], e)
             self.response = redirect(self.routes.getUrlByEndpoint(endpoint='on_root_get'))
@@ -405,37 +357,21 @@ class RSSTagApplication(object):
             settings = {}
         if settings:
             if self.user:
-                changed = False
-                result = {'data': 'ok'}
-                code = 200
-                try:
-                    for k, v in settings.items():
-                        if (k in self.user['settings']) and (self.user['settings'][k] != v):
-                            old_value = self.user['settings'][k]
-                            if isinstance(old_value, int):
-                                self.user['settings'][k] = int(v)
-                            elif isinstance(old_value, float):
-                                self.user['settings'][k] = float(v)
-                            elif isinstance(old_value, bool):
-                                self.user['settings'][k] = bool(v)
-                            else:
-                                raise ValueError('bad settings value')
-                            changed = True
-                except Exception as e:
-                    changed = False
-                    logging.warning('Wrong settings value. Cause: %s', e)
-                    result = {'error': 'Bad settings'}
-                    code = 400
-                if changed:
-                    try:
-                        self.db.users.update_one(
-                            {'sid': self.user['sid']},
-                            {'$set': {'settings': self.user['settings']}}
-                        )
-                    except Exception as e:
-                        logging.error('Can`t save settings in db. Cause: %s', e)
+                settings = self.users.get_validated_settings(settings)
+                if settings:
+                    updated = self.users.update_settings(self.user['sid'], settings)
+                    if updated:
+                        result = {'data': 'ok'}
+                        code = 200
+                    elif updated is None:
                         result = {'error': 'Server in trouble'}
                         code = 500
+                    else:
+                        result = {'error': 'User not found'}
+                        code = 404
+                else:
+                    result = {'error': 'Something wrong with settings'}
+                    code = 400
             else:
                 result = {'error': 'Not logged'}
                 code = 401
@@ -707,7 +643,7 @@ class RSSTagApplication(object):
         projection = {'_id': False, 'content.content': False}
         if current_feed is not None:
             if self.user['settings']['only_unread']:
-                only_unread = self.user['settings']['only_unread'];
+                only_unread = self.user['settings']['only_unread']
             else:
                 only_unread = None
             db_posts = self.posts.get_by_feed_id(
@@ -749,10 +685,10 @@ class RSSTagApplication(object):
     def on_read_posts_post(self):
         try:
             data = json.loads(self.request.get_data(as_text=True))
-            if (data['ids'] and isinstance(data['ids'], list)):
+            if data['ids'] and isinstance(data['ids'], list):
                 post_ids = data['ids']
             else:
-                raise Exception('Bad ids for posts status');
+                raise Exception('Bad ids for posts status')
             readed = bool(data['readed'])
         except Exception as e:
             logging.warning('Send wrond data for read posts. Cause: %s', e)
@@ -946,9 +882,9 @@ class RSSTagApplication(object):
                 )
             else:
                 self.on_error(InternalServerError())
-            self.db.users.update_one(
-                {'sid': self.user['sid']},
-                {'$set': {'page': new_cookie_page_value, 'letter': ''}}
+            self.users.update_by_sid(
+                self.user['sid'],
+                {'page': new_cookie_page_value, 'letter': ''}
             )
         else:
             self.on_error(InternalServerError())
@@ -1023,7 +959,7 @@ class RSSTagApplication(object):
                     )
                 else:
                     self.on_error(InternalServerError())
-                self.db.users.update_one({'sid': self.user['sid']}, {'$set': {'letter': letter}})
+                self.users.update_by_sid(self.user['sid'], {'letter': letter})
             else:
                 self.on_error(InternalServerError())
         elif db_letters is None:
@@ -1312,8 +1248,8 @@ class RSSTagApplication(object):
 
     def on_get_map(self):
         projection = {'_id': False}
-        cities = self.tags.get_city_tags(self.user['sid'], self.user['settings']['only_unread'], projection);
-        countries = self.tags.get_country_tags(self.user['sid'], self.user['settings']['only_unread'], projection);
+        cities = self.tags.get_city_tags(self.user['sid'], self.user['settings']['only_unread'], projection)
+        countries = self.tags.get_country_tags(self.user['sid'], self.user['settings']['only_unread'], projection)
         if cities is None:
             cities = []
         if countries is None:
