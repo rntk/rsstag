@@ -46,9 +46,8 @@ def rss2vw1(db):
         bldr.prepare_text(text)
         text = bldr.get_prepared_text()
         ft.write('post_{0} post{0}|rss {1}\n'.format(post['pid'], text))"""
-        label = 'post_{}'.format(post['pid'])
         features = ' '.join(tag for tag in post['tags'] if tag not in stops)
-        vw_str = '{0} {0}|rss {1}\n'.format(label, features)
+        vw_str = '{0} 1 0 \'post_{0}|rss {1}\n'.format(post['pid'], features)
         f.write(vw_str)
     f.close()
     ft.close()
