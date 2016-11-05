@@ -29,6 +29,9 @@ export default class EventsSystem {
         this.MAP_UPDATED = 'map_updated';
         this.CHANGE_MAP_OBJECTS_VISIBILITY = 'change_map_objects_visibility';
 
+        this.TAGS_NET_UPDATED = 'tags_net_updated';
+        this.LOAD_TAG_NET = 'load_tag_net';
+
         this._events = {};
     }
 

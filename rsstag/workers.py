@@ -216,7 +216,7 @@ class RSSTagWorker:
                 data = None
                 logging.error('Worker can`t get data from posts: %s', e)
 
-        if task['type'] == TASK_NOOP:
+        """if task['type'] == TASK_NOOP:
             try:
                 data = db.tags.find_one_and_update(
                     {
@@ -229,7 +229,7 @@ class RSSTagWorker:
                     task['type'] = TASK_WORDS
             except Exception as e:
                 data = None
-                logging.error('Worker can`t get data from words queue: %s', e)
+                logging.error('Worker can`t get data from words queue: %s', e)"""
 
         user = None
         if data:

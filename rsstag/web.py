@@ -6,7 +6,7 @@ import html
 import time
 import gzip
 import logging
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from hashlib import md5
 from werkzeug.wrappers import Response, Request
 from werkzeug.exceptions import HTTPException, NotFound, InternalServerError
@@ -17,7 +17,7 @@ from gensim.models.doc2vec import Doc2Vec
 from gensim.models.word2vec import Word2Vec
 from rsstag import TASK_NOT_IN_PROCESSING
 from rsstag.routes import RSSTagRoutes
-from rsstag.utils import getSortedDictByAlphabet, load_config
+from rsstag.utils import getSortedDictByAlphabet, load_config, to_dot_format
 from rsstag.posts import RssTagPosts
 from rsstag.feeds import RssTagFeeds
 from rsstag.tags import RssTagTags
@@ -1263,6 +1263,61 @@ class RSSTagApplication(object):
                 provider=self.user['provider'],
                 cities=cities,
                 countries=countries
+            ),
+            mimetype='text/html'
+        )
+
+    def on_get_tag_net(self, tag=''):
+        all_tags = []
+        edges = defaultdict(lambda: set())
+        if self.user['settings']['only_unread']:
+            only_unread = self.user['settings']['only_unread']
+        else:
+            only_unread = None
+        posts = self.posts.get_by_tags(self.user['sid'], [tag], only_unread, {'tags': True})
+        if posts is not None:
+            tags_set = set()
+            for post in posts:
+                for tag in post['tags']:
+                    tags_set.add(tag)
+                    for tg in post['tags']:
+                        edges[tag].add(tg)
+
+            if tags_set:
+                db_tags = self.tags.get_by_tags(self.user['sid'], list(tags_set), self.user['settings']['only_unread'])
+                if db_tags is not None:
+                    for tag in db_tags:
+                        edges[tag['tag']].remove(tag['tag'])
+                        all_tags.append({
+                            'tag': tag['tag'],
+                            'url': tag['local_url'],
+                            'words': tag['words'],
+                            'count': tag['unread_count'] if self.user['settings']['only_unread'] else tag['posts_count'],
+                            'edges': list(edges[tag['tag']])[:5]
+                        })
+                    code = 200
+                    result = {'data': all_tags}
+                else:
+                    code = 500
+                    result = {'error': 'Database trouble'}
+            else:
+                code = 200
+                result = {'data': all_tags}
+        else:
+            code = 500
+            result = {'error': 'Database trouble'}
+
+        self.response = Response(json.dumps(result), mimetype='application/json')
+        self.response.status_code = code
+
+    def on_get_tag_net_page(self):
+        page = self.template_env.get_template('tags-net.html')
+        self.response = Response(
+            page.render(
+                support=self.config['settings']['support'],
+                version=self.config['settings']['version'],
+                user_settings=self.user['settings'],
+                provider=self.user['provider']
             ),
             mimetype='text/html'
         )

@@ -1,14 +1,11 @@
 """Utility functions"""
-import os
-from typing import Optional, Tuple
+from typing import Optional, List
 from configparser import ConfigParser
-from _collections import OrderedDict
-from pymongo import MongoClient
+from collections import OrderedDict, defaultdict
 from http.client import HTTPSConnection
 import json
-import csv
+from hashlib import md5
 from urllib.parse import quote
-from html import unescape
 
 def getSortedDictByAlphabet(dct, sort_type=None):
     """Sort dict"""
@@ -56,3 +53,27 @@ def get_coords_yandex(country:str, city: str='', lang: str='ru_RU', key: str='',
         raise Exception('HTTP status {}'.format(resp.status, resp.reason))
 
     return result
+
+def to_dot_format(tags: List[dict], posts: List[dict]) -> str:
+    all_tags = defaultdict(lambda: set())
+    for post in posts:
+        for tag in post['tags']:
+            tag = md5(tag.encode('utf-8')).hexdigest()
+            if tag[0].isnumeric():
+                tag = '_' + tag
+            for t in post['tags']:
+                t = md5(t.encode('utf-8')).hexdigest()
+                if t[0].isnumeric():
+                    t = '_' + t
+                all_tags[tag].add(t)
+    subgraphs = []
+    i = 0
+    for tag, edges in all_tags.items():
+        edges.remove(tag)
+        subgraphs.append('{} -- {{{}}}'.format(tag, ' '.join(edges)))
+        i += 1
+
+    result = 'all_tags {{ {} }}'.format(';'.join(subgraphs))
+    return result
+    #return 'graph dinetwork {1 -- 2 [color=red]; subgraph {2 -- 3; 3 -- 4; 4 -- {1 2}}}'
+

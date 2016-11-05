@@ -23,6 +23,8 @@ import GeoTagsStorage from '../storages/geo-tags-storage.js';
 import GeoMapTools from '../components/geomap-tools.js';
 import RssTagYMap from '../components/rsstag-ymaps.js';
 import rsstag_utils from '../libs/rsstag_utils.js';
+import TagsNetStorage from '../storages/tags-net-storage.js';
+import TagsNet from '../components/tags-net.js';
 
 window.onload = () => {
     if (window.EVSYS === undefined) {
@@ -158,5 +160,12 @@ window.onload = () => {
             geo_tags_storage.start();
             window.EVSYS.trigger(window.EVSYS.END_TASK, 'ajax');
         });
+    } else if (/^\/tag-net$/.test(path)) {
+        let tag_hash = decodeURIComponent(document.location.hash);
+        let ES = window.EVSYS;
+        let tags_net = new TagsNet('tags_net', ES);
+        let tags_net_storage = new TagsNetStorage(ES, (tag_hash)? tag_hash.substr(1): '');
+        tags_net.start();
+        tags_net_storage.start();
     }
 }
