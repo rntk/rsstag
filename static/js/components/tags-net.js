@@ -45,6 +45,7 @@ export default class TagsNet {
             pos = this._network.getPositions([tag_id]);
 
         this._positions.set(tag_id, pos[tag_id]);
+        this.selectTag(event);
     }
 
     getNetData(state) {
