@@ -33,16 +33,31 @@ export default class TagNetTools extends React.Component{
 
     render() {
         let tools = <span></span>;
-        if (this.state && this.state.tags.has(this.state.selected_tag)) {
-            let tag = this.state.tags.get(this.state.selected_tag);
+        if (this.state) {
+            let stat,
+                control,
+                showed_tags = 0;
 
-            tools = (<div>
-                <span>Tag: {tag.tag}</span>
-                <label htmlFor="hidden">
-                    <input type="checkbox" checked={tag.hidden} id="hidden" onChange={this.changeTagSettings} />
-                    Hide tag
-                </label>
-            </div>);
+            for (let tag_data of this.state.tags) {
+                if (!tag_data[1].hidden) {
+                    showed_tags++;
+                }
+            }
+            stat = <span> {showed_tags} / {this.state.tags.size}</span>;
+            if (this.state.tags.has(this.state.selected_tag)) {
+                let tag = this.state.tags.get(this.state.selected_tag);
+
+                tools = (<div>
+                    <span>Tag: {tag.tag}</span>
+                    <label htmlFor="hidden">
+                        <input type="checkbox" checked={tag.hidden} id="hidden" onChange={this.changeTagSettings} />
+                        Hide tag
+                    </label>
+                    {stat}
+                </div>);
+            } else {
+                tools = stat;
+            }
         }
 
         return(tools);

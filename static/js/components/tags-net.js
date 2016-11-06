@@ -46,8 +46,8 @@ export default class TagsNet {
             to = point.y + y_delta;
             coords.y = (Math.random() * (to - from)) + from;
         } else {
-            coords.x = Math.random() * 2000;
-            coords.y = Math.random() * 2000;
+            coords.x = Math.random() * 5000;
+            coords.y = Math.random() * 5000;
         }
         return coords;
     }
@@ -76,17 +76,51 @@ export default class TagsNet {
     }
 
     selectTag(event) {
-        if (event.nodes[0] !== this._state.selected_tag) {
+        if (event.nodes.length && (event.nodes[0] !== this._state.selected_tag)) {
             this.ES.trigger(this.ES.NET_TAG_SELECTED, event.nodes[0]);
         }
     }
 
-    moveTag(event) {
-        let tag_id = event.nodes[0],
-            pos = this._network.getPositions([tag_id]);
+    moveDependedNodes(delta, tag_id) {
+        if (this._state.tags.has(tag_id)) {
+            const distance = 100;
+            let tag = this._state.tags.get(tag_id),
+                root_pos = this._positions.get(tag_id);
 
-        this._positions.set(tag_id, pos[tag_id]);
-        this.selectTag(event);
+            for (let edge of tag.edges) {
+                let old_pos = this._positions.get(edge),
+                    new_pos = {},
+                    move = false;
+
+                new_pos.x = delta.x + old_pos.x;
+                new_pos.y = delta.y + old_pos.y;
+                move = (Math.abs(root_pos.x - new_pos.x) < Math.abs(root_pos.x - old_pos.x)) ||
+                    (Math.abs(root_pos.y - new_pos.y) < Math.abs(root_pos.y - old_pos.y));
+                if (move) {
+                    this._positions.set(edge, new_pos);
+                    this._network.moveNode(edge, new_pos.x + distance, new_pos.y + distance);
+                }
+            }
+            //this.updateNet(this._state);
+        }
+    }
+
+    moveTag(event) {
+        if (event.nodes.length) {
+            let tag_id,
+                pos,
+                old_pos,
+                delta = {};
+
+            tag_id = event.nodes[0];
+            pos = this._network.getPositions([tag_id]);
+            old_pos = this._positions.get(tag_id);
+            delta.x = pos[tag_id].x - old_pos.x;
+            delta.y = pos[tag_id].y - old_pos.y;
+            this._positions.set(tag_id, pos[tag_id]);
+            this.moveDependedNodes(delta, tag_id);
+            this.selectTag(event);
+        }
     }
 
     getNetData(state) {
@@ -166,6 +200,10 @@ export default class TagsNet {
                     },
                     edges: {
                         selectionWidth: width => {return width * 4;}
+                    },
+                    interaction: {
+                        hideEdgesOnDrag: true
+                        //hideNodesOnDrag: true
                     }
                 };
             if (this._network) {
