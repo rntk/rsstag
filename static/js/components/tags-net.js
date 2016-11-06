@@ -10,8 +10,19 @@ export default class TagsNet {
         this.loadTagNet = this.loadTagNet.bind(this);
     }
 
+    getRandomColorHEX() {
+        let symbols = '0123456789abcdef',
+            len = symbols.length - 1,
+            color = '#';
+
+        for (let i = 0; i < 6; i++) {
+            color += symbols.charAt(Math.random() * len);
+        }
+
+        return color;
+    }
+
     loadTagNet(event) {
-    console.log(event);
         if (event && event.nodes && event.nodes.length) {
             this.ES.trigger(this.ES.LOAD_TAG_NET, event.nodes[0]);
         }
@@ -19,19 +30,32 @@ export default class TagsNet {
 
     getNetData(state) {
         let nodes = [],
-            edges = [];
+            edges = [],
+            color;
 
         for (let tag_data of state.tags) {
             let tag = tag_data[1];
-            nodes.push({
-                id: tag.tag,
-                label: tag.tag
-            });
-            for (let edge of tag.edges) {
-                edges.push({
-                    from: tag.tag,
-                    to: edge
+            if (!tag.hidden) {
+                color = this.getRandomColorHEX();
+                nodes.push({
+                    id: tag.tag,
+                    label: tag.tag,
+                    physics: true,
+                    group: tag.group,
+                    color: {
+                        border: color
+                    }
                 });
+                for (let edge of tag.edges) {
+                    edges.push({
+                        from: tag.tag,
+                        to: edge,
+                        color: {
+                            color: color,
+                            highlight: '#ff0000'
+                        }
+                    });
+                }
             }
         }
 
@@ -56,6 +80,9 @@ export default class TagsNet {
                     },
                     layout: {
                         improvedLayout: false
+                    },
+                    edges: {
+                        selectionWidth: width => {return width*4;}
                     }
                 };
             if (this._network) {

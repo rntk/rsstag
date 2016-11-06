@@ -14,7 +14,7 @@ export default class TagsNetStorage {
         this.fetchTagsNet = this.fetchTagsNet.bind(this);
     }
 
-    mergeTags(old_state, data) {
+    mergeTags(old_state, data, group) {
         let tags = new Map(old_state.tags);
 
         data.forEach(el => {
@@ -26,9 +26,13 @@ export default class TagsNetStorage {
                     old_tag.edges.add(edge);
                 });
                 delete new_tag.edges;
+                if (old_tag.tag === group) {
+                    old_tag.group = group;
+                }
                 old_tag = Object.assign(old_tag, new_tag);
                 tags.set(new_tag.tag, old_tag);
             } else {
+                new_tag.group = group;
                 new_tag.edges = new Set(new_tag.edges);
                 tags.set(new_tag.tag, new_tag);
             }
@@ -47,7 +51,7 @@ export default class TagsNetStorage {
             }
         ).then(data => {
             if (data.data) {
-                this.setState(this.mergeTags(this.getState(), data.data));
+                this.setState(this.mergeTags(this.getState(), data.data, tag));
             } else {
                 this.errorMessage('Error. Try later');
             }
