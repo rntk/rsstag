@@ -26,11 +26,31 @@ export default class TagsNetStorage {
         }
     }
 
+    needHideEdge(edges) {
+        let need_hide = true;
+
+        for (let edge of edges) {
+            let tag = this._state.tags.get(edge);
+            if (!tag.hidden) {
+                need_hide = false;
+                break;
+            }
+        }
+        return need_hide;
+    }
+
     changeTagSettings(tag) {
         let state = this.getState();
 
         if (state.tags.has(tag.tag)) {
             state.tags.set(tag.tag, tag);
+            for (let edge of tag.edges) {
+                let tmp_tag = state.tags.get(edge);
+                if (this.needHideEdge(tmp_tag.edges)) {
+                    tmp_tag.hidden = tag.hidden;
+                    state.tags.set(edge, tmp_tag);
+                }
+            }
             this.setState(state);
         }
     }
@@ -64,23 +84,25 @@ export default class TagsNetStorage {
     }
 
     fetchTagsNet(tag) {
-        rsstag_utils.fetchJSON(
-            this.urls.get_tag_net + '/' + encodeURIComponent(tag),
-            {
-                method: 'GET',
-                credentials: 'include',
-                headers: {'Content-Type': 'application/json'}
-            }
-        ).then(data => {
-            if (data.data) {
-                this.setState(this.mergeTags(this.getState(), data.data, tag));
-            } else {
+        if (tag) {
+            rsstag_utils.fetchJSON(
+                this.urls.get_tag_net + '/' + encodeURIComponent(tag),
+                {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: {'Content-Type': 'application/json'}
+                }
+            ).then(data => {
+                if (data.data) {
+                    this.setState(this.mergeTags(this.getState(), data.data, tag));
+                } else {
+                    this.errorMessage('Error. Try later');
+                }
+            }).catch(err => {
+                console.log(err);
                 this.errorMessage('Error. Try later');
-            }
-        }).catch(err => {
-            console.log(err);
-            this.errorMessage('Error. Try later');
-        })
+            });
+        }
     }
 
     getState() {

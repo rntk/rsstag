@@ -18,14 +18,55 @@ export default class TagsNet {
 
     getRandomColorHEX() {
         let symbols = '0123456789abcdef',
+            inverted_symbols = 'fedcba9876543210',
             len = symbols.length - 1,
-            color = '#';
+            color = '#',
+            inverted_color = '#';
 
         for (let i = 0; i < 6; i++) {
-            color += symbols.charAt(Math.random() * len);
+            let indx = Math.random() * len;
+            color += symbols.charAt(indx);
+            inverted_color += inverted_symbols.charAt(indx);
         }
 
-        return color;
+        return {color: color, inverted_color: inverted_color};
+    }
+
+    getRandomCoords(point) {
+        let coords = {x: 0, y: 0},
+            x_delta = 200,
+            y_delta = 200;
+
+        if (point !== undefined) {
+            let from = point.x - x_delta,
+                to = point.x + x_delta;
+
+            coords.x = (Math.random() * (to - from)) + from;
+            from = point.y - y_delta;
+            to = point.y + y_delta;
+            coords.y = (Math.random() * (to - from)) + from;
+        } else {
+            coords.x = Math.random() * 2000;
+            coords.y = Math.random() * 2000;
+        }
+        return coords;
+    }
+
+    initCoords(state) {
+        for (let tag_item of state.tags) {
+            let tag = tag_item[1];
+
+            if (!this._positions.has(tag.tag)) {
+                let pos = this.getRandomCoords();
+
+                this._positions.set(tag.tag, pos);
+                for (let edge of tag.edges) {
+                    if (!this._positions.has(edge)) {
+                        this._positions.set(edge, this.getRandomCoords(pos));
+                    }
+                }
+            }
+        }
     }
 
     loadTagNet(event) {
@@ -50,8 +91,7 @@ export default class TagsNet {
 
     getNetData(state) {
         let nodes = [],
-            edges = [],
-            color;
+            edges = [];
 
         for (let tag_data of state.tags) {
             let tag = tag_data[1];
@@ -59,22 +99,30 @@ export default class TagsNet {
                 if (!this._colors.has(tag.tag)) {
                     this._colors.set(tag.tag, this.getRandomColorHEX());
                 }
-                color = this._colors.get(tag.tag);
+                let {color, inverted_color} = this._colors.get(tag.tag);
                 let node = {
                     id: tag.tag,
                     label: tag.tag,
+                    title: tag.tag,
                     physics: true,
                     group: tag.group,
+                    shape: 'dot',
+                    shadow: {
+                        enabled: true,
+                        size: 3
+                    },
                     color: {
-                        border: color
-                    }
+                        border: color,
+                        background: color
+                    },
                 }
-                if (this._positions.has(tag.tag)) {
-                    let pos = this._positions.get(tag.tag);
+                if (!this._positions.has(tag.tag)) {
+                    this._positions.set(tag.tag, this.getRandomCoords());
+                }
+                let pos = this._positions.get(tag.tag);
 
-                    node.x = pos.x;
-                    node.y = pos.y;
-                }
+                node.x = pos.x;
+                node.y = pos.y;
                 nodes.push(node);
                 for (let edge of tag.edges) {
                     if (!state.tags.get(edge).hidden) {
@@ -96,6 +144,7 @@ export default class TagsNet {
 
     updateNet(state) {
         if (this._state.selected_tag === state.selected_tag) {
+            this.initCoords(state);
             let {nodes, edges} = this.getNetData(state);
             this.renderNet(nodes, edges);
         }
