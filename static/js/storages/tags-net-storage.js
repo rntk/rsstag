@@ -26,14 +26,17 @@ export default class TagsNetStorage {
         }
     }
 
-    needHideEdge(edges) {
+    needHideEdge(edges, root) {
         let need_hide = true;
 
         for (let edge of edges) {
-            let tag = this._state.tags.get(edge);
-            if (!tag.hidden) {
-                need_hide = false;
-                break;
+            if (edge !== root) {
+                let tag = this._state.tags.get(edge);
+
+                if (!tag.hidden) {
+                    need_hide = false;
+                    break;
+                }
             }
         }
         return need_hide;
@@ -46,7 +49,7 @@ export default class TagsNetStorage {
             state.tags.set(tag.tag, tag);
             for (let edge of tag.edges) {
                 let tmp_tag = state.tags.get(edge);
-                if (this.needHideEdge(tmp_tag.edges)) {
+                if (!tag.hidden || this.needHideEdge(tmp_tag.edges, tag.tag)) {
                     tmp_tag.hidden = tag.hidden;
                     state.tags.set(edge, tmp_tag);
                 }

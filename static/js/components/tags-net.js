@@ -76,7 +76,7 @@ export default class TagsNet {
     }
 
     selectTag(event) {
-        if (event && event.nodes && event.nodes.length) {
+        if (event.nodes[0] !== this._state.selected_tag) {
             this.ES.trigger(this.ES.NET_TAG_SELECTED, event.nodes[0]);
         }
     }
@@ -165,7 +165,7 @@ export default class TagsNet {
                         improvedLayout: false
                     },
                     edges: {
-                        selectionWidth: width => {return width*4;}
+                        selectionWidth: width => {return width * 4;}
                     }
                 };
             if (this._network) {
