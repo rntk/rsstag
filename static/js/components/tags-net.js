@@ -3,11 +3,17 @@ export default class TagsNet {
         this.ES = event_system;
         this._state = {
             tags: new Map(),
+            main_tag: '',
+            selected_tag: ''
         }
         this._container = document.getElementById(container_id);
         this._network = null;
+        this._colors = new Map();
+        this._positions = new Map();
         this.updateNet = this.updateNet.bind(this);
         this.loadTagNet = this.loadTagNet.bind(this);
+        this.selectTag = this.selectTag.bind(this);
+        this.moveTag = this.moveTag.bind(this);
     }
 
     getRandomColorHEX() {
@@ -28,6 +34,19 @@ export default class TagsNet {
         }
     }
 
+    selectTag(event) {
+        if (event && event.nodes && event.nodes.length) {
+            this.ES.trigger(this.ES.NET_TAG_SELECTED, event.nodes[0]);
+        }
+    }
+
+    moveTag(event) {
+        let tag_id = event.nodes[0],
+            pos = this._network.getPositions([tag_id]);
+
+        this._positions.set(tag_id, pos[tag_id]);
+    }
+
     getNetData(state) {
         let nodes = [],
             edges = [],
@@ -36,8 +55,11 @@ export default class TagsNet {
         for (let tag_data of state.tags) {
             let tag = tag_data[1];
             if (!tag.hidden) {
-                color = this.getRandomColorHEX();
-                nodes.push({
+                if (!this._colors.has(tag.tag)) {
+                    this._colors.set(tag.tag, this.getRandomColorHEX());
+                }
+                color = this._colors.get(tag.tag);
+                let node = {
                     id: tag.tag,
                     label: tag.tag,
                     physics: true,
@@ -45,16 +67,25 @@ export default class TagsNet {
                     color: {
                         border: color
                     }
-                });
+                }
+                if (this._positions.has(tag.tag)) {
+                    let pos = this._positions.get(tag.tag);
+
+                    node.x = pos.x;
+                    node.y = pos.y;
+                }
+                nodes.push(node);
                 for (let edge of tag.edges) {
-                    edges.push({
-                        from: tag.tag,
-                        to: edge,
-                        color: {
-                            color: color,
-                            highlight: '#ff0000'
-                        }
-                    });
+                    if (!state.tags.get(edge).hidden) {
+                        edges.push({
+                            from: tag.tag,
+                            to: edge,
+                            color: {
+                                color: color,
+                                highlight: '#ff0000'
+                            }
+                        });
+                    }
                 }
             }
         }
@@ -63,9 +94,11 @@ export default class TagsNet {
     }
 
     updateNet(state) {
+        if (this._state.selected_tag === state.selected_tag) {
+            let {nodes, edges} = this.getNetData(state);
+            this.renderNet(nodes, edges);
+        }
         this._state = state;
-        let {nodes, edges} = this.getNetData(this._state);
-        this.renderNet(nodes, edges);
     }
 
     renderNet(nodes, edges) {
@@ -91,6 +124,8 @@ export default class TagsNet {
             } else {
                 this._network = new vis.Network(this._container, data, options);
                 this._network.on('doubleClick', this.loadTagNet);
+                this._network.on('selectNode', this.selectTag);
+                this._network.on('dragEnd', this.moveTag);
             }
         } else {
             alert('Not data');

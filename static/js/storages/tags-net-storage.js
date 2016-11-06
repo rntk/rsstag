@@ -6,12 +6,33 @@ export default class TagsNetStorage {
         this.ES = event_system;
         this._state = {
             tags: new Map(),
-            main_tag: main_tag
+            main_tag: main_tag,
+            selected_tag: ''
         };
         this.urls = {
             get_tag_net: '/api/tag-net'
         }
         this.fetchTagsNet = this.fetchTagsNet.bind(this);
+        this.selectTag = this.selectTag.bind(this);
+        this.changeTagSettings = this.changeTagSettings.bind(this);
+    }
+
+    selectTag(tag_id) {
+        let state = this.getState();
+
+        if (state.tags.has(tag_id)) {
+            state.selected_tag = tag_id;
+            this.setState(state);
+        }
+    }
+
+    changeTagSettings(tag) {
+        let state = this.getState();
+
+        if (state.tags.has(tag.tag)) {
+            state.tags.set(tag.tag, tag);
+            this.setState(state);
+        }
     }
 
     mergeTags(old_state, data, group) {
@@ -33,6 +54,7 @@ export default class TagsNetStorage {
                 tags.set(new_tag.tag, old_tag);
             } else {
                 new_tag.group = group;
+                new_tag.hidden = false;
                 new_tag.edges = new Set(new_tag.edges);
                 tags.set(new_tag.tag, new_tag);
             }
@@ -72,6 +94,8 @@ export default class TagsNetStorage {
 
     bindEvents() {
         this.ES.bind(this.ES.LOAD_TAG_NET, this.fetchTagsNet);
+        this.ES.bind(this.ES.NET_TAG_SELECTED, this.selectTag);
+        this.ES.bind(this.ES.NET_TAG_CHANGE, this.changeTagSettings);
     }
 
     errorMessage(msg) {

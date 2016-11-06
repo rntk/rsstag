@@ -31,6 +31,8 @@ export default class EventsSystem {
 
         this.TAGS_NET_UPDATED = 'tags_net_updated';
         this.LOAD_TAG_NET = 'load_tag_net';
+        this.NET_TAG_CHANGE = 'net_tag_change';
+        this.NET_TAG_SELECTED = 'net_tag_selected';
 
         this._events = {};
     }

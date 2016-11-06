@@ -25,6 +25,7 @@ import RssTagYMap from '../components/rsstag-ymaps.js';
 import rsstag_utils from '../libs/rsstag_utils.js';
 import TagsNetStorage from '../storages/tags-net-storage.js';
 import TagsNet from '../components/tags-net.js';
+import TagNetTools from '../components/tag-net-tools.js';
 
 window.onload = () => {
     if (window.EVSYS === undefined) {
@@ -165,6 +166,10 @@ window.onload = () => {
         let ES = window.EVSYS;
         let tags_net = new TagsNet('tags_net', ES);
         let tags_net_storage = new TagsNetStorage(ES, (tag_hash)? tag_hash.substr(1): '');
+        ReactDOM.render(
+            <TagNetTools ES={ES} />,
+            document.getElementById('tags_net_tools')
+        );
         tags_net.start();
         tags_net_storage.start();
     }
