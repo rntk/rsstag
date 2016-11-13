@@ -15,7 +15,7 @@ class RssTagFeeds:
             try:
                 self.db.feeds.create_index(index)
             except Exception as e:
-                self.log.warning('Can`t create index %s. May be already exists. Info: %s', e)
+                self.log.warning('Can`t create index %s. May be already exists. Info: %s', index, e)
 
     def get_by_category(self, owner: str, category: str, projection: dict={}) -> Optional[list]:
         query = {'owner': owner}

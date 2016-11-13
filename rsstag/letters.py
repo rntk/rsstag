@@ -14,7 +14,7 @@ class RssTagLetters:
             try:
                 self.db.letters.create_index(index)
             except Exception as e:
-                self.log.warning('Can`t create index %s. May be already exists. Info: %s', e)
+                self.log.warning('Can`t create index %s. May be already exists. Info: %s', index, e)
 
     def get(self, owner: str, make_sort: bool=False) -> Optional[dict]:
         query = {'owner': owner}

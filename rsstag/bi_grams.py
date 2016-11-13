@@ -13,7 +13,7 @@ class RssTagBiGrams:
             try:
                 self.db.bi_grams.create_index(index)
             except Exception as e:
-                self.log.warning('Can`t create index %s. May be already exists. Info: %s', e)
+                self.log.warning('Can`t create index %s. May be already exists. Info: %s', index, e)
 
     def get_by_bi_gram(self, owner: str, bi_gram: str) -> Optional[dict]:
         query = {'owner': owner, 'tag': bi_gram}
