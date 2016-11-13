@@ -11,7 +11,7 @@ class RssTagBiGrams:
     def prepare(self) -> None:
         for index in self.indexes:
             try:
-                self.db.posts.create_index(index)
+                self.db.bi_grams.create_index(index)
             except Exception as e:
                 self.log.warning('Can`t create index %s. May be already exists. Info: %s', e)
 

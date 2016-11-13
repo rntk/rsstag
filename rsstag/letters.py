@@ -12,7 +12,7 @@ class RssTagLetters:
     def prepare(self) -> None:
         for index in self.indexes:
             try:
-                self.db.posts.create_index(index)
+                self.db.letters.create_index(index)
             except Exception as e:
                 self.log.warning('Can`t create index %s. May be already exists. Info: %s', e)
 
