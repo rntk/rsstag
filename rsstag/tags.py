@@ -1,30 +1,30 @@
 import logging
-from typing import Optional
+from typing import Optional, List
 from pymongo import MongoClient, DESCENDING, UpdateOne
 
 class RssTagTags:
     indexes = ['owner', 'tag', 'unread_count', 'posts_count', 'processing']
     def __init__(self, db: MongoClient) -> None:
-        self.db = db
-        self.log = logging.getLogger('tags')
+        self._db = db
+        self._log = logging.getLogger('tags')
 
     def prepare(self) -> None:
         for index in self.indexes:
             try:
-                self.db.tags.create_index(index)
+                self._db.tags.create_index(index)
             except Exception as e:
-                self.log.warning('Can`t create index %s. May be already exists. Info: %s', index, e)
+                self._log.warning('Can`t create index %s. May be already exists. Info: %s', index, e)
 
     def get_by_tag(self, owner: str, tag: str) -> Optional[dict]:
         query = {'owner': owner, 'tag': tag}
         try:
-            db_tag = self.db.tags.find_one(query)
+            db_tag = self._db.tags.find_one(query)
             if db_tag:
                 result = db_tag
             else:
                 result = {}
         except Exception as e:
-            self.log.error('Can`t get tag %s. User %s. Info: %s', tag, owner, e)
+            self._log.error('Can`t get tag %s. User %s. Info: %s', tag, owner, e)
             result = None
 
         return result
@@ -38,12 +38,12 @@ class RssTagTags:
             query['unread_count'] = {'$gt': 0}
         try:
             if projection:
-                cursor = self.db.tags.find(query, projection=projection)
+                cursor = self._db.tags.find(query, projection=projection)
             else:
-                cursor = self.db.tags.find(query)
+                cursor = self._db.tags.find(query)
             result = list(cursor)
         except Exception as e:
-            self.log.error('Can`t get tagby tag %s. User %s. Info: %s', tags, owner, e)
+            self._log.error('Can`t get tagby tag %s. User %s. Info: %s', tags, owner, e)
             result = None
 
         return result
@@ -69,24 +69,26 @@ class RssTagTags:
         if projection:
             params['projection'] = projection
         try:
-            cursor = self.db.tags.find(query, **params).sort(sort_data)
+            cursor = self._db.tags.find(query, **params).sort(sort_data)
             result = list(cursor)
         except Exception as e:
-            self.log.error('Can`t get all tags user %s. Info: %s', owner, e)
+            self._log.error('Can`t get all tags user %s. Info: %s', owner, e)
             result = None
 
         return result
 
-    def count(self, owner: str, only_unread: Optional[bool]=None, regexp: str='') -> Optional[int]:
+    def count(self, owner: str, only_unread: Optional[bool]=None, regexp: str='', sentiments: List[str]=[]) -> Optional[int]:
         query = {'owner': owner}
         if regexp:
             query['tag'] = {'$regex': regexp, '$options': 'i'}
         if only_unread:
             query['unread_count'] = {'$gt': 0}
+        if sentiments:
+            query['$and'] = [{'sentiment': {'$exists': True}}, {'sentiment': {'$all': sentiments}}]
         try:
-            result = self.db.tags.count(query)
+            result = self._db.tags.count(query)
         except Exception as e:
-            self.log.error('Can`t get tags number for user %s. Info: e', owner, e)
+            self._log.error('Can`t get tags number for user %s. Info: e', owner, e)
             result = None
 
         return result
@@ -108,11 +110,11 @@ class RssTagTags:
             ))
         if updates:
             try:
-                bulk_result = self.db.tags.bulk_write(updates, ordered=False)
+                bulk_result = self._db.tags.bulk_write(updates, ordered=False)
                 result = (bulk_result.matched_count > 0)
             except Exception as e:
                 result = None
-                self.log.error('Can`t change unread_count for tags. User %s. info: %s', owner, e)
+                self._log.error('Can`t change unread_count for tags. User %s. info: %s', owner, e)
 
         return result
 
@@ -125,12 +127,12 @@ class RssTagTags:
             query['unread_count'] = {'$gt': 0}
         try:
             if projection:
-                cursor = self.db.tags.find(query, projection=projection)
+                cursor = self._db.tags.find(query, projection=projection)
             else:
-                cursor = self.db.tags.find(query)
+                cursor = self._db.tags.find(query)
             result = list(cursor)
         except Exception as e:
-            self.log.error('Can`t get city tags. User %s. Info: %s', owner, e)
+            self._log.error('Can`t get city tags. User %s. Info: %s', owner, e)
             result = None
 
         return result
@@ -145,12 +147,67 @@ class RssTagTags:
             query['unread_count'] = {'$gt': 0}
         try:
             if projection:
-                cursor = self.db.tags.find(query, projection=projection)
+                cursor = self._db.tags.find(query, projection=projection)
             else:
-                cursor = self.db.tags.find(query)
+                cursor = self._db.tags.find(query)
             result = list(cursor)
         except Exception as e:
-            self.log.error('Can`t get country tags. User %s. Info: %s', owner, e)
+            self._log.error('Can`t get country tags. User %s. Info: %s', owner, e)
+            result = None
+
+        return result
+
+    def get_sentiments(self, owner: str, only_unread: bool) -> Optional[tuple]:
+        query = {
+            'owner': owner,
+            'sentiment': {'$exists': True}
+        }
+        if only_unread:
+            query['unread_count'] = {'$gt': 0}
+        try:
+            cur = self._db.tags.aggregate([
+                {'$match': query},
+                {'$group': {'_id': '$sentiment', 'counter': {'$sum': 1}}}
+            ])
+            sentiments = set()
+            for sents in cur:
+                for sent in sents['_id']:
+                    sentiments.add(sent)
+            result = tuple(sentiments)
+        except Exception as e:
+            self._log.error('Can`t get tags sentiments. User %s. Info: %s', owner, e)
+            result = None
+
+        return result
+
+    def get_by_sentiment(self, owner: str, sentiments: List[str], only_unread: Optional[bool] = None, hot_tags: bool = False,
+                opts: dict = [], projection: dict = {}) -> Optional[list]:
+        query = {
+            'owner': owner,
+            '$and': [{'sentiment': {'$exists': True}}, {'sentiment': {'$all': sentiments}}]
+        }
+        if 'regexp' in opts:
+            query['tag'] = {'$regex': opts['regexp'], '$options': 'i'}
+        sort_data = []
+        if hot_tags:
+            sort_data.append(('temperature', DESCENDING))
+        if only_unread:
+            sort_data.append(('unread_count', DESCENDING))
+            query['unread_count'] = {'$gt': 0}
+        else:
+            sort_data.append(('posts_count', DESCENDING))
+        params = {}
+        if 'offset' in opts:
+            params['skip'] = opts['offset']
+        if 'limit' in opts:
+            params['limit'] = opts['limit']
+        if projection:
+            params['projection'] = projection
+        try:
+            cursor = self._db.tags.find(query, **params).sort(sort_data)
+            result = list(cursor)
+        except Exception as e:
+            self._log.error('Can`t get tags by sentiments user %s. Info: %s', owner, e)
             result = None
 
         return result
