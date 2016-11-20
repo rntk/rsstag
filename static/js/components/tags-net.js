@@ -9,6 +9,12 @@ export default class TagsNet {
         this._container = document.getElementById(container_id);
         this._network = null;
         this._colors = new Map();
+        this._sentiment_colors = new Map([
+            ['negative', {color: '#ff0000', inverted_color: '#000000'}],
+            ['positive', {color: '#00ff00', inverted_color: '#000000'}],
+            ['positive/negative', {color: '#e79545', inverted_color: '#000000'}],
+            ['neutral', {color: '#aaaaaa', inverted_color: '#000000'}]
+        ]);
         this._positions = new Map();
         this.updateNet = this.updateNet.bind(this);
         this.loadTagNet = this.loadTagNet.bind(this);
@@ -23,13 +29,14 @@ export default class TagsNet {
             color = '#',
             inverted_color = '#';
 
-        for (let i = 0; i < 6; i++) {
+        /*for (let i = 0; i < 6; i++) {
             let indx = Math.random() * len;
             color += symbols.charAt(indx);
             inverted_color += inverted_symbols.charAt(indx);
         }
 
-        return {color: color, inverted_color: inverted_color};
+        return {color: color, inverted_color: inverted_color};*/
+        return {color: '#0000ff', inverted_color: '#ffffff'};
     }
 
     getRandomCoords(point) {
@@ -127,11 +134,16 @@ export default class TagsNet {
         let nodes = [],
             edges = [];
 
+
         for (let tag_data of state.tags) {
             let tag = tag_data[1];
             if (!tag.hidden) {
                 if (!this._colors.has(tag.tag)) {
-                    this._colors.set(tag.tag, this.getRandomColorHEX());
+                    if (tag.sentiment && tag.sentiment.length) {
+                        this._colors.set(tag.tag, this._sentiment_colors.get(tag.sentiment[0]));
+                    } else {
+                        this._colors.set(tag.tag, this.getRandomColorHEX());
+                    }
                 }
                 let {color, inverted_color} = this._colors.get(tag.tag);
                 let node = {

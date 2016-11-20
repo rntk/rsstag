@@ -195,6 +195,15 @@ h3.post_title {
   cursor: pointer;
   max-width: 100%; }
 
+.negative {
+  border: 1px solid red; }
+
+.positive {
+  border: 1px solid green; }
+
+.positive_negative {
+  border: 1px solid orange; }
+
 .cloud_item_group {
   padding: 0.5em;
   margin: 0.5em;

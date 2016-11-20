@@ -5,6 +5,10 @@ $my_green: #7be15f;
 $selected_color: #dde5ff;
 $max_z_index: 999;
 $progressbar_color: #008ec9;
+$positive: green;
+$negative: red;
+$neutral: grey;
+$positive_negative: orange;
 
 @mixin vendor-prefix($name, $argument) {
   -webkit-#{$name}: #{$argument};
@@ -201,6 +205,15 @@ h3 {
     @include vendor-prefix(border-radius, 0.5em);
     cursor: pointer;
     max-width: 100%;
+}
+.negative {
+    border: 1px solid $negative;
+}
+.positive {
+    border: 1px solid $positive;
+}
+.positive_negative {
+    border: 1px solid $positive_negative;
 }
 .cloud_item_group {
     padding: 0.5em;

@@ -11,7 +11,9 @@ def make_tags_sentiment(db) -> int:
         sentiment = ru_sent.get_sentiment(tag['tag'])
         if sentiment:
             i += 1
-            db.tags.update_many({'tag': tag['tag']}, {'$set': {'sentiment': list(sentiment)}})
+            lst = list(sentiment)
+            sorted(lst)
+            db.tags.update_many({'tag': tag['tag']}, {'$set': {'sentiment': lst}})
 
     return i
 

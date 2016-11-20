@@ -9,13 +9,18 @@ export default class TagItem extends React.Component{
 
     render() {
         let style= {
-            display: 'inline-block'
-        };
+                display: 'inline-block'
+            },
+            sentiment = '';
+
+        if (this.state.tag.sentiment && this.state.tag.sentiment.length) {
+            sentiment = this.state.tag.sentiment[0].replace('/', '_');
+        }
 
         return (
             <div style={style}>
                 <a name={this.state.tag.tag}></a>
-                <li className="cloud_item">
+                <li className={'cloud_item ' + sentiment}>
                     <a href={this.state.tag.url} className="cloud_item_title">
                         {this.state.tag.tag}
                     </a> ({this.state.tag.count})<br />

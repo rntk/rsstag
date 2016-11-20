@@ -867,7 +867,8 @@ class RSSTagApplication(object):
                         'tag': t['tag'],
                         'url': t['local_url'],
                         'words': t['words'],
-                        'count': t['unread_count'] if self.user['settings']['only_unread'] else t['posts_count']
+                        'count': t['unread_count'] if self.user['settings']['only_unread'] else t['posts_count'],
+                        'sentiment': t['sentiment'] if 'sentiment' in t else []
                     })
                 db_letters = self.letters.get(self.user['sid'], make_sort=True)
                 if db_letters:
@@ -948,7 +949,8 @@ class RSSTagApplication(object):
                         'tag': t['tag'],
                         'url': t['local_url'],
                         'words': t['words'],
-                        'count': t['unread_count'] if self.user['settings']['only_unread'] else t['posts_count']
+                        'count': t['unread_count'] if self.user['settings']['only_unread'] else t['posts_count'],
+                        'sentiment': t['sentiment'] if 'sentiment' in t else []
                     })
                 db_letters = self.letters.get(self.user['sid'], make_sort=True)
                 if db_letters:
@@ -1026,7 +1028,8 @@ class RSSTagApplication(object):
                             'tag': t['tag'],
                             'url': t['local_url'],
                             'words': t['words'],
-                            'count': t['unread_count'] if self.user['settings']['only_unread'] else t['posts_count']
+                            'count': t['unread_count'] if self.user['settings']['only_unread'] else t['posts_count'],
+                            'sentiment': t['sentiment'] if 'sentiment' in t else []
                         })
                     if db_letters:
                         letters = self.letters.to_list(db_letters, self.user['settings']['only_unread'])
@@ -1087,7 +1090,8 @@ class RSSTagApplication(object):
                             'tag': tag['tag'],
                             'url': tag['local_url'],
                             'words': tag['words'],
-                            'count': tag['unread_count'] if self.user['settings']['only_unread'] else tag['posts_count']
+                            'count': tag['unread_count'] if self.user['settings']['only_unread'] else tag['posts_count'],
+                            'sentiment': tag['sentiment'] if 'sentiment' in tag else []
                         })
                     code = 200
                     result = {'data': all_tags}
@@ -1126,7 +1130,8 @@ class RSSTagApplication(object):
                             'tag': tag['tag'],
                             'url': tag['local_url'],
                             'words': tag['words'],
-                            'count': tag['unread_count'] if self.user['settings']['only_unread'] else tag['posts_count']
+                            'count': tag['unread_count'] if self.user['settings']['only_unread'] else tag['posts_count'],
+                            'sentiment': tag['sentiment'] if 'sentiment' in tag else []
                         })
                     code = 200
                     result = {'data': all_tags}
@@ -1152,7 +1157,8 @@ class RSSTagApplication(object):
                     'tag': tag['tag'],
                     'url': tag['local_url'],
                     'words': tag['words'],
-                    'count': tag['unread_count'] if self.user['settings']['only_unread'] else tag['posts_count']
+                    'count': tag['unread_count'] if self.user['settings']['only_unread'] else tag['posts_count'],
+                    'sentiment': tag['sentiment'] if 'sentiment' in tag else []
                 })
             code = 200
             result = {'data': all_bi_grams}
@@ -1386,7 +1392,8 @@ class RSSTagApplication(object):
                             'url': tag['local_url'],
                             'words': tag['words'],
                             'count': tag['unread_count'] if self.user['settings']['only_unread'] else tag['posts_count'],
-                            'edges': list(edges[tag['tag']])[:5]
+                            'edges': list(edges[tag['tag']])[:5],
+                            'sentiment': tag['sentiment'] if 'sentiment' in tag else []
                         })
                     code = 200
                     result = {'data': all_tags}
