@@ -62,7 +62,7 @@ class RuSentiLex:
     def get_sentiment(self, word: str) -> List[str]:
         return list(self._sentiments[word])
 
-class WordNetAffectRuRomVer:
+class WordNetAffectRuRom:
     """
     Class for work with WordNet-Affect data from http://lilu.fcim.utm.md/resourcesRoRuWNA_ru.html
     """

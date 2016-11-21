@@ -1,5 +1,5 @@
 import unittest
-from rsstag.sentiment import WordNetAffectRuRomVer
+from rsstag.sentiment import WordNetAffectRuRom
 """
 TODO: pass tests without files (inject part of data in tests)
 """
@@ -9,7 +9,7 @@ class TestWordNet(unittest.TestCase):
         self._dir = './data/wordnet/lilu.fcim.utm.md'
 
     def test_wna_en(self):
-        wna = WordNetAffectRuRomVer('en', 4)
+        wna = WordNetAffectRuRom('en', 4)
         wna.load_dicts_from_dir(self._dir)
         words_affects = {
             'avaricious': ['anger'],
@@ -32,7 +32,7 @@ class TestWordNet(unittest.TestCase):
             self.assertEqual(words_affects[word], for_test, msg='Fail on word: {}'.format(word))
 
     def test_wna_ru(self):
-        wna = WordNetAffectRuRomVer('ru')
+        wna = WordNetAffectRuRom('ru')
         wna.load_dicts_from_dir(self._dir)
         words_affects = {
             'алчный': ['anger'],
@@ -55,7 +55,7 @@ class TestWordNet(unittest.TestCase):
             self.assertEqual(words_affects[word], for_test, msg='Fail on word: {}'.format(word))
 
     def test_wna_rom(self):
-        wna = WordNetAffectRuRomVer('rom')
+        wna = WordNetAffectRuRom('rom')
         wna.load_dicts_from_dir(self._dir)
         words_affects = {
             'avar': ['anger'],
@@ -78,7 +78,7 @@ class TestWordNet(unittest.TestCase):
             self.assertEqual(words_affects[word], for_test, msg='Fail on word: {}'.format(word))
 
     def test_add_word(self):
-        wna = WordNetAffectRuRomVer('en', 2)
+        wna = WordNetAffectRuRom('en', 2)
         wna._add_word_in_index('envy', 'id_1')
         expect = {
             'en': {
@@ -102,7 +102,7 @@ class TestWordNet(unittest.TestCase):
         self.assertEqual(wna._search_index, expect)
 
     def test_search(self):
-        wna = WordNetAffectRuRomVer('en', 2)
+        wna = WordNetAffectRuRom('en', 2)
         data = [
             "v#01221816	cause to feel resentment or indignation	 pique offend	уязвлять задевать раздражать распалять	atinge leza	A cauza indignare sau resentiment",
             "v#01229968	treat cruelly	 torment rag tantalize bedevil crucify dun frustrate	мучить издеваться досаждать донимать допекать изводить терзать изнурять	chinui tortura	A produce sau a îndura suferinţe fizice sau morale intense.",
