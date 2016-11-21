@@ -1,14 +1,33 @@
 import logging
 from rsstag.utils import load_config
-from rsstag.sentiment import RuSentiLex
+from rsstag.sentiment import RuSentiLex, WordNetAffectRuRom, SentimentConverter
 from pymongo import MongoClient
 
 def make_tags_sentiment(db) -> int:
-    ru_sent = RuSentiLex('./data/rusentilex.txt')
+    f = open('./data/rusentilex.txt', 'r', encoding='utf-8')
+    strings = f.read().splitlines()
+    ru_sent = RuSentiLex(strings)
     all_tags = db.tags.find({}, {'tag': True})
     i = 0
+    wna_dir = './data/wordnet/lilu.fcim.utm.md'
+    wn_en = WordNetAffectRuRom('en', 4)
+    wn_en.load_dicts_from_dir(wna_dir)
+    wn_ru = WordNetAffectRuRom('ru', 4)
+    wn_ru.load_dicts_from_dir(wna_dir)
+    conv = SentimentConverter()
     for tag in all_tags:
-        sentiment = ru_sent.sentiment_by_lemma(tag['tag'])
+        sentiment = ru_sent.get_sentiment(tag['tag'])
+        if not sentiment:
+            affects = wn_en.get_affects_by_word(tag['tag'])
+            if not affects:
+                affects = wn_en.search_affects_by_word(tag['tag'])
+            if not affects:
+                affects = wn_ru.get_affects_by_word(tag['tag'])
+            if not affects:
+                affects = wn_ru.search_affects_by_word(tag['tag'])
+            if affects:
+                sentiment = conv.convert_sentiment(affects)
+
         if sentiment:
             i += 1
             sentiment = sorted(sentiment)
