@@ -1,11 +1,16 @@
 import unittest
-from rsstag.WordNetAffectRuRomVer2 import WordNetAffectRuRomVer2
-
+from rsstag.sentiment import WordNetAffectRuRomVer
+"""
+TODO: pass tests without files (inject part of data in tests)
+"""
 class TestWordNet(unittest.TestCase):
 
+    def setUp(self):
+        self._dir = './data/wordnet/lilu.fcim.utm.md'
+
     def test_wna_en(self):
-        wna = WordNetAffectRuRomVer2('en', 4)
-        wna.load_dicts_from_dir('./wna')
+        wna = WordNetAffectRuRomVer('en', 4)
+        wna.load_dicts_from_dir(self._dir)
         words_affects = {
             'avaricious': ['anger'],
             'envy': ['anger'],
@@ -27,8 +32,8 @@ class TestWordNet(unittest.TestCase):
             self.assertEqual(words_affects[word], for_test, msg='Fail on word: {}'.format(word))
 
     def test_wna_ru(self):
-        wna = WordNetAffectRuRomVer2('ru')
-        wna.load_dicts_from_dir('./wna')
+        wna = WordNetAffectRuRomVer('ru')
+        wna.load_dicts_from_dir(self._dir)
         words_affects = {
             'алчный': ['anger'],
             'ожесточённый': ['anger'],
@@ -50,8 +55,8 @@ class TestWordNet(unittest.TestCase):
             self.assertEqual(words_affects[word], for_test, msg='Fail on word: {}'.format(word))
 
     def test_wna_rom(self):
-        wna = WordNetAffectRuRomVer2('rom')
-        wna.load_dicts_from_dir('./wna')
+        wna = WordNetAffectRuRomVer('rom')
+        wna.load_dicts_from_dir(self._dir)
         words_affects = {
             'avar': ['anger'],
             'mînios': ['anger'],
@@ -73,7 +78,7 @@ class TestWordNet(unittest.TestCase):
             self.assertEqual(words_affects[word], for_test, msg='Fail on word: {}'.format(word))
 
     def test_add_word(self):
-        wna = WordNetAffectRuRomVer2('en', 2)
+        wna = WordNetAffectRuRomVer('en', 2)
         wna._add_word_in_index('envy', 'id_1')
         expect = {
             'en': {
@@ -97,7 +102,7 @@ class TestWordNet(unittest.TestCase):
         self.assertEqual(wna._search_index, expect)
 
     def test_search(self):
-        wna = WordNetAffectRuRomVer2('en', 2)
+        wna = WordNetAffectRuRomVer('en', 2)
         data = [
             "v#01221816	cause to feel resentment or indignation	 pique offend	уязвлять задевать раздражать распалять	atinge leza	A cauza indignare sau resentiment",
             "v#01229968	treat cruelly	 torment rag tantalize bedevil crucify dun frustrate	мучить издеваться досаждать донимать допекать изводить терзать изнурять	chinui tortura	A produce sau a îndura suferinţe fizice sau morale intense.",
@@ -117,7 +122,6 @@ class TestWordNet(unittest.TestCase):
         self.assertEqual(wna.search_affects_by_word('brood'), [affect])
         self.assertEqual(wna.search_affects_by_word('har'), [affect])
         self.assertEqual(wna.search_affects_by_word('joy'), [])
-
 
 if __name__ == '__main__':
     unittest.main()
