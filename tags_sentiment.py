@@ -19,12 +19,12 @@ def make_tags_sentiment(db) -> int:
         sentiment = ru_sent.get_sentiment(tag['tag'])
         if not sentiment:
             affects = wn_en.get_affects_by_word(tag['tag'])
-            if not affects:
-                affects = wn_en.search_affects_by_word(tag['tag'])
+            '''if not affects:
+                affects = wn_en.search_affects_by_word(tag['tag'])'''
             if not affects:
                 affects = wn_ru.get_affects_by_word(tag['tag'])
-            if not affects:
-                affects = wn_ru.search_affects_by_word(tag['tag'])
+            '''if not affects:
+                affects = wn_ru.search_affects_by_word(tag['tag'])'''
             if affects:
                 sentiment = conv.convert_sentiment(affects)
 
