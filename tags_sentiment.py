@@ -8,12 +8,11 @@ def make_tags_sentiment(db) -> int:
     all_tags = db.tags.find({}, {'tag': True})
     i = 0
     for tag in all_tags:
-        sentiment = ru_sent.get_sentiment(tag['tag'])
+        sentiment = ru_sent.sentiment_by_lemma(tag['tag'])
         if sentiment:
             i += 1
-            lst = list(sentiment)
-            sorted(lst)
-            db.tags.update_many({'tag': tag['tag']}, {'$set': {'sentiment': lst}})
+            sentiment = sorted(sentiment)
+            db.tags.update_many({'tag': tag['tag']}, {'$set': {'sentiment': sentiment}})
 
     return i
 
