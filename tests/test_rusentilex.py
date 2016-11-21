@@ -1,7 +1,7 @@
 import unittest
 from rsstag.sentiment import RuSentiLex
 
-class TestHTMLCleaner(unittest.TestCase):
+class TestRuSentiLex(unittest.TestCase):
     def test_sentiment_by_lemma(self):
         strings = [
             'абортивный, Adj, абортивный, negative, fact',

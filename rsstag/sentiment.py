@@ -1,8 +1,29 @@
 """
 Determine words sentiment
 """
+import os
+import logging
+import textwrap
 from collections import defaultdict
-from typing import List
+from typing import List, Iterable
+
+class SentimentConverter:
+    """
+    Map different sentiment/affects label to "standart" labels (positive, negative, neutral, positive/negative)
+    """
+    def __init__(self):
+        self._map = {
+            'anger': 'negative',
+            'disgust': 'negative',
+            'fear': 'negative',
+            'joy': 'positive',
+            'sadness': 'negative',
+            'surprise': 'positive'
+        }
+
+    def convert_sentiment(self, sentiments: Iterable[str]) -> List[str]:
+        return [self._map[sentiment] for sentiment in sentiments if sentiment in self._map]
+
 
 class RuSentiLex:
     """
