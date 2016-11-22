@@ -111,6 +111,19 @@ class WordNetLabinform:
         self._senses = {}
         self._relations = {}
         self._synsets = {}
+        Relations = namedtuple('Relations', [
+            'derivational', 'part_holonym', 'hypernym', 'hyponym',
+            'antonym', 'part_meronym', 'instance_hypernym', 'instance_hyponym'
+        ])
+        '''relations = (
+            'derivational', 'part holonym', 'hypernym', 'hyponym',
+            'antonym', 'part meronym', 'instance hypernym', 'instance hyponym'
+        )'''
+        self._relation_names = Relations(
+            derivational='derivational', part_holonym='part holonym', hypernym='hypernym',
+            hyponym='hyponym', antonym='antonym', part_meronym='part meronym',
+            instance_hypernym='instance hypernym', instance_hyponym='instance hyponym'
+        )
         self.build_vocab(self._dir)
 
     def _load_file(self, name: str, directory: str, handler) -> dict:
@@ -130,32 +143,29 @@ class WordNetLabinform:
         handler = LabinformRelationHandler()
         self._relations = self._load_file(self._files.relation, directory, handler)
         for synset_id in self._relations:
-            self._relations[synset_id]['childs'] = tuple(sorted(list(self._relations[synset_id]['childs'])))
-            self._relations[synset_id]['parents'] = tuple(sorted(list(self._relations[synset_id]['parents'])))
+            self._relations[synset_id]['childs'] = tuple(sorted(self._relations[synset_id]['childs'], key=lambda el: el[0]))
+            self._relations[synset_id]['parents'] = tuple(sorted(self._relations[synset_id]['parents'], key=lambda el: el[0]))
         del handler
 
         handler = LabinformSynsetHandler()
         self._synsets = self._load_file(self._files.synset, directory, handler)
         for synset_id in self._synsets:
-            self._synsets[synset_id] = tuple(sorted(list(self._synsets[synset_id])))
+            self._synsets[synset_id] = tuple(sorted(self._synsets[synset_id]))
         del handler
 
-    def get_hypernyms(self, word: str, chain: set=set()) -> List[str]:
+    def get_parents(self, word: str, chain: set=set()) -> List[str]:
         hypernyms = []
         if word in self._senses:
             synset_id = self._senses[word]['synset_id']
-            print(self._relations[synset_id])
-            exit()
-            parents_ids = self._relations[synset_id]['childs']
-            if parents_ids:
-                p_id = parents_ids[0][0]
-                try:
-                    syn_word = self._synsets[p_id][0]
-                    if syn_word not in chain:
-                        chain.add(syn_word)
-                        hypernyms.append(syn_word)
-                        hypernyms += self.get_hypernyms(syn_word, chain)
-                except:
-                    pass
+            if self._relations[synset_id]['parents']:
+                for _id, rel in self._relations[synset_id]['parents']:
+                    if rel == self._relation_names.hypernym and _id not in chain:
+                        chain.add(_id)
+                        for syn_word in self._synsets[_id]:
+                            if syn_word not in chain:
+                                chain.add(syn_word)
+                                hypernyms.append(syn_word)
+                                hypernyms += self.get_parents(syn_word, chain)
+
 
         return hypernyms
