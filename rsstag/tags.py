@@ -211,3 +211,21 @@ class RssTagTags:
             result = None
 
         return result
+
+    def add_groups(self, owner: str, tags_groups: dict) -> Optional[bool]:
+        updates = []
+        result = False
+        for tag, groups in tags_groups.items():
+            updates.append(UpdateOne(
+                {'owner': owner, 'tag': tag},
+                {'$set': {'groups': list(groups)}}
+            ))
+        if updates:
+            try:
+                self._db.tags.bulk_write(updates) #add check bulk write results
+                result = True
+            except Exception as e:
+                self._log.error('Can`t update tags gruops user %s. Info: %s', owner, e)
+                result = None
+
+        return result
