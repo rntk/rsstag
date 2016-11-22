@@ -1,4 +1,5 @@
 import logging
+from collections import defaultdict
 from typing import Optional, List
 from pymongo import MongoClient, DESCENDING, UpdateOne
 
@@ -77,7 +78,7 @@ class RssTagTags:
 
         return result
 
-    def count(self, owner: str, only_unread: Optional[bool]=None, regexp: str='', sentiments: List[str]=[]) -> Optional[int]:
+    def count(self, owner: str, only_unread: Optional[bool]=None, regexp: str='', sentiments: List[str]=[], groups: List[str]=[]) -> Optional[int]:
         query = {'owner': owner}
         if regexp:
             query['tag'] = {'$regex': regexp, '$options': 'i'}
@@ -85,6 +86,8 @@ class RssTagTags:
             query['unread_count'] = {'$gt': 0}
         if sentiments:
             query['$and'] = [{'sentiment': {'$exists': True}}, {'sentiment': {'$all': sentiments}}]
+        if groups:
+            query['$and'] = [{'groups': {'$exists': True}}, {'groups': {'$all': groups}}]
         try:
             result = self._db.tags.count(query)
         except Exception as e:
@@ -212,6 +215,38 @@ class RssTagTags:
 
         return result
 
+    def get_by_group(self, owner: str, groups: List[str], only_unread: Optional[bool] = None, hot_tags: bool = False,
+                opts: dict = [], projection: dict = {}) -> Optional[list]:
+        query = {
+            'owner': owner,
+            '$and': [{'groups': {'$exists': True}}, {'groups': {'$all': groups}}]
+        }
+        if 'regexp' in opts:
+            query['tag'] = {'$regex': opts['regexp'], '$options': 'i'}
+        sort_data = []
+        if hot_tags:
+            sort_data.append(('temperature', DESCENDING))
+        if only_unread:
+            sort_data.append(('unread_count', DESCENDING))
+            query['unread_count'] = {'$gt': 0}
+        else:
+            sort_data.append(('posts_count', DESCENDING))
+        params = {}
+        if 'offset' in opts:
+            params['skip'] = opts['offset']
+        if 'limit' in opts:
+            params['limit'] = opts['limit']
+        if projection:
+            params['projection'] = projection
+        try:
+            cursor = self._db.tags.find(query, **params).sort(sort_data)
+            result = list(cursor)
+        except Exception as e:
+            self._log.error('Can`t get tags by group user %s. Info: %s', owner, e)
+            result = None
+
+        return result
+
     def add_groups(self, owner: str, tags_groups: dict) -> Optional[bool]:
         updates = []
         result = False
@@ -225,7 +260,30 @@ class RssTagTags:
                 self._db.tags.bulk_write(updates) #add check bulk write results
                 result = True
             except Exception as e:
-                self._log.error('Can`t update tags gruops user %s. Info: %s', owner, e)
+                self._log.error('Can`t update tags gruops, user %s. Info: %s', owner, e)
                 result = None
+
+        return result
+
+    def get_groups(self, owner: str, only_unread: bool=False) -> Optional[dict]:
+        query = {
+            'owner': owner,
+            'groups': {'$exists': True}
+        }
+        if only_unread:
+            query['unread_count'] = {'$gt': 0}
+        try:
+            aggr = self._db.tags.aggregate([
+                {'$match': query},
+                {'$group': {'_id': '$groups', 'counter': {'$sum': 1}}}
+            ])
+            groups = defaultdict(lambda: 0)
+            for agg in aggr:
+                for group in agg['_id']:
+                    groups[group] += 1
+            result = groups
+        except Exception as e:
+            self._log.error('Can`t get tags groups, user %s. Info: %s', owner, e)
+            result = None
 
         return result

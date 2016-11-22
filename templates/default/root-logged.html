@@ -24,6 +24,7 @@
     {% endfor %}
     <div class="root_item"><a href="/group/category">Posts grouped by category</a></div>
     <div class="root_item"><a href="/group/tag/1">Posts grouped by tag</a></div>
+    <div class="root_item"><a href="/groups/1">Tags groups</a></div>
     <div class="root_item"><a href="/map">News on map</a></div>
     {% for sent in sentiments %}
         <div class="root_item"><a href="/tags/sentiment/{{sent|replace('/', '|')}}/1">Tags - {{sent}}</a></div>

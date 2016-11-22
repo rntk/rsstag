@@ -12,8 +12,9 @@ def make_groups(db, config):
     groups = learn.make_groups(top_n, koef)
     tag_groups = defaultdict(lambda: [])
     for group, tags in groups.items():
-        for tag in tags:
-            tag_groups[tag].append(group)
+        if len(tags) > 3:
+            for tag in tags:
+                tag_groups[tag].append(group)
     if tag_groups:
         tags_h = RssTagTags(db)
         user = db.users.find_one({})

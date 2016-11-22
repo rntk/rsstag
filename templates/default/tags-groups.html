@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Tags net</title>
+<script type="text/javascript" src="/static/vis-dist/vis.min.js"></script>
+<link rel="stylesheet" href="/static/vis-dist/vis.min.css" />
+{% include 'head-data.html' %}
+</head>
+<body>
+{% import 'main-menu.html' as menu with context %}
+<noscript>
+    <h1>Please enable javascript in your browser</h1>
+</noscript>
+<div id="global_tools">
+    {% include "logo.html" %}
+    <div class="panel right_half">
+        <div id="tags_net_tools" class="global_tools_button"></div>
+        {{ menu.settings_menu() }}
+    </div>
+</div>
+<div class="page">
+    <ul>
+    {% for group in groups %}
+        <li class="cloud_item">
+            <a href="/tags/group/{{group[0]}}/1">{{group[0]}} ({{group[1]}})</a>
+        </li>
+    {% endfor %}
+    </ul>
+</div>
+<div id="global_tools_bottom">
+    <ul id="paginator">
+        {% if pages_map['start'] %}
+            {% for number in pages_map['start'] %}
+                {% if number['p'] == current_page %}
+                    <li class="current_page">{{number['p']}}</li>
+                {% else %}
+                    <li><a href="{{number['url']}}">{{number['p']}}</a></li>
+                {% endif %}
+            {% endfor %}
+            {% if pages_map['middle'] %}
+                <li>....</li>
+            {% endif %}
+        {% endif %}
+        {% if pages_map['middle'] %}
+            {% for number in pages_map['middle'] %}
+                {% if number['p'] == current_page %}
+                    <li class="current_page">{{number['p']}}</li>
+                {% else %}
+                    <li><a href="{{number['url']}}">{{number['p']}}</a></li>
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+        {% if pages_map['end'] %}
+            <li>....</li>
+            {% for number in pages_map['end'] %}
+                {% if number['p'] == current_page %}
+                    <li class="current_page">{{number['p']}}</li>
+                {% else %}
+                    <li><a href="{{number['url']}}">{{number['p']}}</a></li>
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+    </ul>
+</div>
+<div id="loading"><img src="/static/img/g_load.gif" /></div>
+<div id="status" ><span></span></div>
+
+<div id="progressbar"></div></body>
+</html>

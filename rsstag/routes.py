@@ -46,7 +46,10 @@ class RSSTagRoutes:
             {'url': '/api/tag-net/<string:tag>', 'endpoint': 'on_get_tag_net', 'methods': ['GET']},
             {'url': '/tag-net', 'endpoint': 'on_get_tag_net_page', 'methods': ['GET']},
 
-            {'url': '/tags/sentiment/<string:sentiment>/<int:page_number>', 'endpoint': 'on_group_by_tags_sentiment', 'methods': ['GET']}
+            {'url': '/tags/sentiment/<string:sentiment>/<int:page_number>', 'endpoint': 'on_group_by_tags_sentiment', 'methods': ['GET']},
+
+            {'url': '/groups/<int:page_number>', 'endpoint': 'on_get_groups', 'methods': ['GET']},
+            {'url': '/tags/group/<string:group>/<int:page_number>', 'endpoint': 'on_group_by_tags_group', 'methods': ['GET']}
         ]
 
         self._rules = []
