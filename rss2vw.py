@@ -10,23 +10,27 @@ def rss2vw(db):
     clnr = HTMLCleaner()
     cur = db.posts.find({})
     bldr = TagsBuilder('[^\w\d ]')
-    f = open('rss_features.txt', 'w')
-    ft = open('rss_texts.txt', 'w')
+    texts = []
+    features = []
     for post in cur:
         freqs = defaultdict(lambda: 0)
         clnr.purge()
         bldr.purge()
         text = post['content']['title'] + ' ' + gzip.decompress(post['content']['content']).decode('utf-8', 'replace')
-        bldr.prepare_text(text)
+        clnr.feed(text)
+        bldr.prepare_text(' '.join(clnr.get_content()), ignore_stopwords=True)
         text = bldr.get_prepared_text()
-        ft.write('post_{} |rss:1 {}\n'.format(post['pid'], text))
-        label = 'post_{}'.format(post['pid'])
+        label = 'p_{}'.format(post['pid'])
+        texts.append('{} |rss {}'.format(label, text))
         for word in text.split():
             freqs[word] += 1
         if freqs:
-            features = ' '.join('{}:{}'.format(word, freq) for word, freq in freqs.items())
-            vw_str = '{} |rss:1 {}\n'.format(label, features)
-            f.write(vw_str)
+            features.append('{} |rss {}'.format(label, ' '.join('{}:{}'.format(word, freq) for word, freq in freqs.items())))
+
+    f = open('rss_features.vw', 'w')
+    ft = open('rss_texts.vw', 'w')
+    ft.write('\n'.join(texts))
+    f.write('\n'.join(features))
     f.close()
     ft.close()
 
@@ -56,5 +60,6 @@ if __name__ == '__main__':
     config = load_config('./rsscloud.conf')
     cl = MongoClient(config['settings']['db_host'], int(config['settings']['db_port']))
     db = cl.rss
-    rss2vw1(db)
+    rss2vw(db)
+    #rss2vw1(db)
 
