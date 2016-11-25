@@ -181,6 +181,7 @@ class BazquxProvider:
         data_id = data['id']
         headers = self.get_headers(user)
         read_tag = 'user/-/state/com.google/read'
+        result = False
         if status:
             data = urlencode({'i': data_id, 'a': read_tag})
         else:
@@ -200,13 +201,15 @@ class BazquxProvider:
             if resp_data and (resp_data.decode('utf-8').lower() == 'ok'):
                 result = True
                 break
+            else:
+                logging.warning('Can`t mark. Resp: %s', resp_data)
             time.sleep(randint(2, 7))
             connection.close()
 
         return result
 
     def get_token(self, login: str, password: str) -> Optional[str]:
-        connection = client.HTTPSConnection(self.config['bazqux']['api_host'])
+        connection = client.HTTPSConnection(self._config['bazqux']['api_host'])
         headers = {'Content-type': 'application/x-www-form-urlencoded'}
         data = urlencode({'Email': login, 'Passwd': password})
         try:
