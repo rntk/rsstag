@@ -334,6 +334,7 @@ class RSSTagWorker:
                 break
             else:
                 time.sleep(randint(3,10))
+
         return result
 
     def worker(self):
