@@ -14,7 +14,7 @@ class RssTagGeoCatalog:
         self._log = logging.getLogger('geo_catalog')
         self._langs = ('ru', 'ua', 'be', 'en', 'es', 'pt', 'de', 'fr', 'it', 'pl', 'ja', 'lt', 'lv', 'cz')
         self._bulk_size = 500
-        self._collections = ['countries', 'regions', 'cities']
+        self._collections = ('countries', 'regions', 'cities')
 
     def get_languages(self) -> Tuple:
         return self._langs
