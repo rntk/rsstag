@@ -4,8 +4,17 @@ Determine words sentiment
 import os
 import logging
 import textwrap
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 from typing import List, Iterable
+
+SentimentsList = namedtuple('SentimentsList', ['positive', 'negative', 'neutral', 'positive_negative'])
+
+SENTIMENT = SentimentsList(
+    positive='positive',
+    negative='negative',
+    neutral='neutral',
+    positive_negative='positive/negative'
+)
 
 class SentimentConverter:
     """
@@ -13,12 +22,12 @@ class SentimentConverter:
     """
     def __init__(self):
         self._map = {
-            'anger': 'negative',
-            'disgust': 'negative',
-            'fear': 'negative',
-            'joy': 'positive',
-            'sadness': 'negative',
-            'surprise': 'positive'
+            'anger': SENTIMENT.negative,
+            'disgust': SENTIMENT.negative,
+            'fear': SENTIMENT.negative,
+            'joy': SENTIMENT.positive,
+            'sadness': SENTIMENT.negative,
+            'surprise': SENTIMENT.positive
         }
 
     def convert_sentiment(self, sentiments: Iterable[str]) -> List[str]:
@@ -29,7 +38,7 @@ class RuSentiLex:
     """
     Wrapper for determine russian words sentiment. Use dictionary from http://www.labinform.ru/pub/rusentilex/index.htm
     """
-    def __init__(self, strings: List[str], splitter:str=',', comment_symbol: str='!') -> None:
+    def __init__(self, strings: List[str]=[], splitter: str=',', comment_symbol: str='!') -> None:
         self._sentiments = defaultdict(lambda: set())
         self._splitter = splitter
         self._comment_symbol = comment_symbol
@@ -61,6 +70,22 @@ class RuSentiLex:
 
     def get_sentiment(self, word: str) -> List[str]:
         return list(self._sentiments[word])
+
+    def sentiment_validation(self, strings: List[str], splitter: str, comment_symbol: str) -> List[str]:
+        wrong = []
+        if strings:
+            for s in strings:
+                if s.strip() == '':
+                    continue
+                if s[0] == comment_symbol:
+                    continue
+                data = s.split(splitter)
+                if data:
+                    sentiment = data[self._positions['sentiment']].strip()
+                    if sentiment not in SENTIMENT:
+                        wrong.append(s)
+
+        return wrong
 
 class WordNetAffectRuRom:
     """
