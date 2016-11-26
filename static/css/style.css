@@ -39,6 +39,19 @@ h3.post_title {
   text-decoration: none;
   font: 14pt Arial, sans-serif; }
 
+.post_tag_letter_block {
+  display: inline-block;
+  margin: 0 0.4em; }
+
+.post_tag_link {
+  display: inline-block;
+  margin: 0 0.2em; }
+
+.post_tag_letter {
+  color: gray;
+  font-size: 18pt;
+  font-variant: small-caps; }
+
 .tag_title, .group_title {
   font-weight: lighter;
   color: #bcbcbc;

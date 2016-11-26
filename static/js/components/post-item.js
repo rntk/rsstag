@@ -39,16 +39,31 @@ export default class PostsItem extends React.Component{
                 post = this.state.post,
                 read_button_class = (post.post.read)? 'read': 'unread';
             if (post.links) {
-                let tags = post.links.tags.map(tag => {
-                    return(
-                        <a href={tag.url} key={tag.tag} style={{margin: '0 0.2em'}}> {tag.tag}</a>
-                    );
+                let tags = [],
+                    grouped_links = {};
+
+                post.links.tags.forEach(tag => {
+                    let letter = tag.tag.charAt(0);
+
+                    if (!(letter in grouped_links)) {
+                        grouped_links[letter] = [];
+                    }
+                    grouped_links[letter].push(<a href={tag.url} key={tag.tag} className="post_tag_link"> {tag.tag}</a>)
                 });
+                for (let letter in grouped_links) {
+                    tags.push(
+                        <div key={post.pos + letter} className="post_tag_letter_block">
+                            <span className="post_tag_letter">{letter}</span>
+                            {grouped_links[letter]}
+                        </div>
+                    )
+                }
                 links = (
                     <div>
                         <a href={post.links.c_url}>{post.links.c_title}</a>&nbsp;| &nbsp;
                         <a href={post.links.f_url}>{post.links.f_title}</a>&nbsp;| &nbsp;
-                        <a href={post.links.p_url}>To site</a><br />{tags}
+                        <a href={post.links.p_url}>To site</a><br />
+                        {tags}
                     </div>
                 );
             }
