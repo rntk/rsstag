@@ -8,6 +8,10 @@ from pymongo import MongoClient
 def make_tags_geo(db: MongoClient, key: str):
     tags = RssTagTags(db)
     users_cur = db.users.find({})
+    langs_map = {
+        'ru': 'ru_RU',
+        'en': 'en_US'
+    }
     for user in users_cur:
         owner = user['sid']
         tags_cities = tags.get_city_tags(owner)
@@ -15,7 +19,7 @@ def make_tags_geo(db: MongoClient, key: str):
             tag_coord = []
             for tag in tags_cities:
                 try:
-                    tag_coord = get_coords_yandex(tag['city']['c']['t'], tag['city']['t'], key=key)
+                    tag_coord = get_coords_yandex(tag['city']['c']['t'], tag['city']['t'], key=key, lang=langs_map[tag['city']['l']])
                     if tag_coord and len(tag_coord) > 1:
                         db.tags.update_one(
                             {'tag': tag['tag'], 'owner': owner},
@@ -39,7 +43,7 @@ def make_tags_geo(db: MongoClient, key: str):
             tag_coord = []
             for tag in tags_countries:
                 try:
-                    tag_coord = get_coords_yandex(tag['country']['t'], key=key)
+                    tag_coord = get_coords_yandex(tag['country']['t'], key=key, lang=langs_map[tag['country']['l']])
                     if tag_coord and len(tag_coord) > 1:
                         db.tags.update_one(
                             {'tag': tag['tag'], 'owner': owner},
