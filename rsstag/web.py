@@ -85,7 +85,7 @@ class RSSTagApplication(object):
         self.providers = self.config['settings']['providers'].split(',')
         self.user_ttl = int(self.config['settings']['user_ttl'])
         cl = MongoClient(self.config['settings']['db_host'], int(self.config['settings']['db_port']))
-        self.db = cl.rss
+        self.db = cl[self.config['settings']['db_name']]
         self.posts = RssTagPosts(self.db)
         self.posts.prepare()
         self.feeds = RssTagFeeds(self.db)

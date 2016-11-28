@@ -11,7 +11,7 @@ class LDATopics:
     def __init__(self, config_path: str) -> None:
         self._config = load_config(config_path)
         cl = MongoClient(self._config['settings']['db_host'], int(self._config['settings']['db_port']))
-        self.db = cl.rss
+        self.db = cl[self._config['settings']['db_name']]
         self._texts = []
         self._n_features = 200
         self._n_topics = 500

@@ -30,7 +30,7 @@ if __name__ == '__main__':
         config_path = sys.argv[1]
     config = load_config(config_path)
     cl = MongoClient(config['settings']['db_host'], int(config['settings']['db_port']))
-    db = cl.rss
+    db = cl[config['settings']['db_name']]
     texts = fetch_texts(db, config)
     f = open('all_posts.txt', 'w')
     f.write('\n'.join(texts))

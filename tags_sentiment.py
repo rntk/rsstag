@@ -46,6 +46,6 @@ if __name__ == '__main__':
         level=getattr(logging, config['settings']['log_level'].upper())
     )
     cl = MongoClient(config['settings']['db_host'], int(config['settings']['db_port']))
-    db = cl.rss
+    db = cl[config['settings']['db_name']]
     i, wrong = make_tags_sentiment(db)
     logging.info('Sentiment was found for %s tags.\nWrong: \n%s', i, '\n'.join(wrong))

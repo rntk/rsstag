@@ -340,7 +340,7 @@ class RSSTagWorker:
     def worker(self):
         """Worker for bazqux.com"""
         cl = MongoClient(self._config['settings']['db_host'], int(self._config['settings']['db_port']))
-        db = cl.rss
+        db = cl[self._config['settings']['db_name']]
 
         provider = BazquxProvider(self._config)
         builder = TagsBuilder(self._config['settings']['replacement'])
