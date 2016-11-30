@@ -69,6 +69,9 @@ class RssTagPosts:
         return result
 
     def get_by_tags(self, owner: str, tags: list, only_unread: Optional[bool]=None, projection: dict={}) -> Optional[list]:
+        """
+        TODO: may be need change condition from 'tags': {'$all': tags} to 'tags': {'$elemMAtch': {'$in': tags}}
+        """
         query = {
             'owner': owner,
             'tags': {'$all': tags}
@@ -224,8 +227,7 @@ class RssTagPosts:
     def get_by_clusters(self, owner: str, clusters: list, only_unread: Optional[bool]=None, projection: dict={}) -> Optional[list]:
         query = {
             'owner': owner,
-            'clusters': {'$exists': True},
-            'clusters': {'$all': clusters}
+            'clusters': {'$exists': True, '$elemMatch': {'$in': clusters}}
         }
         if only_unread is not None:
             query['read'] = not only_unread
