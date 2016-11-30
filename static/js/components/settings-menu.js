@@ -83,6 +83,12 @@ export default class SettingsMenu extends React.Component{
                             hot tags
                         </label>
                     </div>
+                    <div>
+                        <label htmlFor="similar_posts">
+                            <input id="similar_posts" name="similar_posts" type="checkbox" checked={this.state.settings.similar_posts} onChange={this.changeBoolSettings} />
+                            similar posts
+                        </label>
+                    </div>
                     <button id="save_settings" onClick={this.saveSettings}>Save</button>
                 </div>
                 </div>
