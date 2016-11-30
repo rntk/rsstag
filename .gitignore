@@ -12,3 +12,4 @@ jquery*
 *.model
 node_modules
 bundle.js
+.ipynb_checkpoints
