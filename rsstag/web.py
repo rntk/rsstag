@@ -509,23 +509,30 @@ class RSSTagApplication(object):
             else:
                 db_posts = self.posts.get_all(self.user['sid'], only_unread, projection)
             if db_posts is not None:
-                clusters = self.posts.get_clusters(db_posts)
-                if clusters:
-                    cl_posts = self.posts.get_by_clusters(self.user['sid'], list(clusters), only_unread)
-                    if cl_posts:
-                        db_posts.extend(cl_posts)
+                if self.user['settings']['similar_posts']:
+                    clusters = self.posts.get_clusters(db_posts)
+                    if clusters:
+                        cl_posts = self.posts.get_by_clusters(self.user['sid'], list(clusters), only_unread, projection)
+                        if cl_posts:
+                            for post in cl_posts:
+                                if post['feed_id'] not in by_feed:
+                                    feed = self.feeds.get_by_feed_id(self.user['sid'], post['feed_id'])
+                                    if feed:
+                                        by_feed[post['feed_id']] = feed
+                            db_posts.extend(cl_posts)
                 posts = []
                 pids = set()
                 for post in db_posts:
                     if post['pid'] not in pids:
                         pids.add(post['pid'])
-                        posts.append({
-                            'post': post,
-                            'pos': post['pid'],
-                            'category_title': by_feed[post['feed_id']]['category_title'],
-                            'feed_title': by_feed[post['feed_id']]['title'],
-                            'favicon': by_feed[post['feed_id']]['favicon']
-                        })
+                        if post['feed_id'] in by_feed:
+                            posts.append({
+                                'post': post,
+                                'pos': post['pid'],
+                                'category_title': by_feed[post['feed_id']]['category_title'],
+                                'feed_title': by_feed[post['feed_id']]['title'],
+                                'favicon': by_feed[post['feed_id']]['favicon']
+                            })
                 page = self.template_env.get_template('posts.html')
                 self.response = Response(
                     page.render(
@@ -569,11 +576,12 @@ class RSSTagApplication(object):
                 only_unread = None
             db_posts = self.posts.get_by_tags(self.user['sid'], [tag], only_unread, projection)
             if db_posts is not None:
-                clusters = self.posts.get_clusters(db_posts)
-                if clusters:
-                    cl_posts = self.posts.get_by_clusters(self.user['sid'], list(clusters), only_unread)
-                    if cl_posts:
-                        db_posts.extend(cl_posts)
+                if self.user['settings']['similar_posts']:
+                    clusters = self.posts.get_clusters(db_posts)
+                    if clusters:
+                        cl_posts = self.posts.get_by_clusters(self.user['sid'], list(clusters), only_unread, projection)
+                        if cl_posts:
+                            db_posts.extend(cl_posts)
                 posts = []
                 by_feed = {}
                 pids = set()
@@ -622,21 +630,30 @@ class RSSTagApplication(object):
                 only_unread = None
             db_posts = self.posts.get_by_bi_grams(self.user['sid'], [bi_gram], only_unread, projection)
             if db_posts is not None:
+                if self.user['settings']['similar_posts']:
+                    clusters = self.posts.get_clusters(db_posts)
+                    if clusters:
+                        cl_posts = self.posts.get_by_clusters(self.user['sid'], list(clusters), only_unread, projection)
+                        if cl_posts:
+                            db_posts.extend(cl_posts)
                 posts = []
                 by_feed = {}
+                pids = set()
                 for post in db_posts:
-                    if post['feed_id'] not in by_feed:
-                        feed = self.feeds.get_by_feed_id(self.user['sid'], post['feed_id'])
-                        if feed:
-                            by_feed[post['feed_id']] = feed
-                    if post['feed_id'] in by_feed:
-                        posts.append({
-                            'post': post,
-                            'pos': post['pid'],
-                            'category_title': by_feed[post['feed_id']]['category_title'],
-                            'feed_title': by_feed[post['feed_id']]['title'],
-                            'favicon': by_feed[post['feed_id']]['favicon']
-                        })
+                    if post['pid'] not in pids:
+                        pids.add(post['pid'])
+                        if post['feed_id'] not in by_feed:
+                            feed = self.feeds.get_by_feed_id(self.user['sid'], post['feed_id'])
+                            if feed:
+                                by_feed[post['feed_id']] = feed
+                        if post['feed_id'] in by_feed:
+                            posts.append({
+                                'post': post,
+                                'pos': post['pid'],
+                                'category_title': by_feed[post['feed_id']]['category_title'],
+                                'feed_title': by_feed[post['feed_id']]['title'],
+                                'favicon': by_feed[post['feed_id']]['favicon']
+                            })
                 page = self.template_env.get_template('posts.html')
                 if self.request.referrer:
                     back_link = self.request.referrer
@@ -678,14 +695,23 @@ class RSSTagApplication(object):
             )
             if db_posts is not None:
                 posts = []
+                if self.user['settings']['similar_posts']:
+                    clusters = self.posts.get_clusters(db_posts)
+                    if clusters:
+                        cl_posts = self.posts.get_by_clusters(self.user['sid'], list(clusters), only_unread, projection)
+                        if cl_posts:
+                            db_posts.extend(cl_posts)
+                pids = set()
                 for post in db_posts:
-                    posts.append({
-                        'post': post,
-                        'category_title': current_feed['category_title'],
-                        'pos': post['pid'],
-                        'feed_title': current_feed['title'],
-                        'favicon': current_feed['favicon']
-                    })
+                    if post['pid'] not in pids:
+                        pids.add(post['pid'])
+                        posts.append({
+                            'post': post,
+                            'category_title': current_feed['category_title'],
+                            'pos': post['pid'],
+                            'feed_title': current_feed['title'],
+                            'favicon': current_feed['favicon']
+                        })
                 page = self.template_env.get_template('posts.html')
                 self.response = Response(
                     page.render(
