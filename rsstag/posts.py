@@ -1,19 +1,19 @@
 import logging
 from typing import Optional
-from pymongo import MongoClient, DESCENDING
+from pymongo import MongoClient, DESCENDING, UpdateMany
 
 class RssTagPosts:
     indexes = ['owner', 'category_id', 'feed_id', 'read', 'tags', 'pid']
     def __init__(self, db: MongoClient) -> None:
-        self.db = db
-        self.log = logging.getLogger('posts')
+        self._db = db
+        self._log = logging.getLogger('posts')
 
     def prepare(self) -> None:
         for index in self.indexes:
             try:
-                self.db.posts.create_index(index)
+                self._db.posts.create_index(index)
             except Exception as e:
-                self.log.warning('Can`t create index %s. May be already exists. Info: %s', index, e)
+                self._log.warning('Can`t create index %s. May be already exists. Info: %s', index, e)
 
     def get_by_category(self, owner: str, only_unread: Optional[bool]=None, category: str='', projection: dict= {}) -> Optional[list]:
         query = {'owner': owner}
@@ -26,12 +26,12 @@ class RssTagPosts:
             else:
                 sort = [('unix_date', DESCENDING)]
             if projection:
-                cursor = self.db.posts.find(query, projection=projection).sort(sort)
+                cursor = self._db.posts.find(query, projection=projection).sort(sort)
             else:
-                cursor = self.db.posts.find(query).sort(sort)
+                cursor = self._db.posts.find(query).sort(sort)
             result = list(cursor)
         except Exception as e:
-            self.log.error('Can`t get posts by category %s, user %s. Info: %s', category, owner, e)
+            self._log.error('Can`t get posts by category %s, user %s. Info: %s', category, owner, e)
             result = None
 
         return result
@@ -42,12 +42,12 @@ class RssTagPosts:
             if only_unread is not None:
                 query['read'] = not only_unread
             if projection:
-                cursor = self.db.posts.find(query, projection=projection)
+                cursor = self._db.posts.find(query, projection=projection)
             else:
-                cursor = self.db.posts.find(query)
+                cursor = self._db.posts.find(query)
             result = list(cursor)
         except Exception as e:
-            self.log.error('Can`t get posts for user %s. Info: %s', owner, e)
+            self._log.error('Can`t get posts for user %s. Info: %s', owner, e)
             result = None
 
         return result
@@ -57,13 +57,13 @@ class RssTagPosts:
         if only_unread is not None:
             query['read'] = not only_unread
         try:
-            grouped = self.db.posts.aggregate([
+            grouped = self._db.posts.aggregate([
                 {'$match': query},
                 {'$group': {'_id': '$feed_id', 'category_id': {'$first': '$category_id'}, 'count': {'$sum': 1}}}
             ])
             result = list(grouped)
         except Exception as e:
-            self.log.error('Can`t get gtouped stat for user %s. Info: %s', owner, e)
+            self._log.error('Can`t get gtouped stat for user %s. Info: %s', owner, e)
             result = None
 
         return result
@@ -78,12 +78,12 @@ class RssTagPosts:
         sort_data = [('feed_id', DESCENDING), ('unix_date', DESCENDING)]
         try:
             if projection:
-                cursor = self.db.posts.find(query, projection=projection).sort(sort_data)
+                cursor = self._db.posts.find(query, projection=projection).sort(sort_data)
             else:
-                cursor = self.db.posts.find(query).sort(sort_data)
+                cursor = self._db.posts.find(query).sort(sort_data)
             result = list(cursor)
         except Exception as e:
-            self.log.error('Can`t get posts by tags %s. User %s. Info: %s', tags, owner, e)
+            self._log.error('Can`t get posts by tags %s. User %s. Info: %s', tags, owner, e)
             result = None
 
         return result
@@ -98,12 +98,12 @@ class RssTagPosts:
         sort_data = [('feed_id', DESCENDING), ('unix_date', DESCENDING)]
         try:
             if projection:
-                cursor = self.db.posts.find(query, projection=projection).sort(sort_data)
+                cursor = self._db.posts.find(query, projection=projection).sort(sort_data)
             else:
-                cursor = self.db.posts.find(query).sort(sort_data)
+                cursor = self._db.posts.find(query).sort(sort_data)
             result = list(cursor)
         except Exception as e:
-            self.log.error('Can`t get posts by tags %s. User %s. Info: %s', tags, owner, e)
+            self._log.error('Can`t get posts by tags %s. User %s. Info: %s', tags, owner, e)
             result = None
 
         return result
@@ -120,12 +120,12 @@ class RssTagPosts:
             else:
                 sort = [('unix_date', DESCENDING)]
             if projection:
-                cursor = self.db.posts.find(query, projection=projection).sort(sort)
+                cursor = self._db.posts.find(query, projection=projection).sort(sort)
             else:
-                cursor = self.db.posts.find(query).sort(sort)
+                cursor = self._db.posts.find(query).sort(sort)
             result = list(cursor)
         except Exception as e:
-            self.log.error('Can`t get posts by category %s, user %s. Info: %s', feed_id, owner, e)
+            self._log.error('Can`t get posts by category %s, user %s. Info: %s', feed_id, owner, e)
             result = None
 
         return result
@@ -137,15 +137,15 @@ class RssTagPosts:
         }
         try:
             if projection:
-                post = self.db.posts.find_one(query, projection=projection)
+                post = self._db.posts.find_one(query, projection=projection)
             else:
-                post = self.db.posts.find_one(query)
+                post = self._db.posts.find_one(query)
             if post:
                 result = post
             else:
                 result = {}
         except Exception as e:
-            self.log.error('Can`t get post by pid %s. User %s. Info: %s', pid, owner, e)
+            self._log.error('Can`t get post by pid %s. User %s. Info: %s', pid, owner, e)
             result = None
 
         return result
@@ -158,12 +158,12 @@ class RssTagPosts:
         }
         try:
             if projection:
-                cursor = self.db.posts.find(query, projection=projection)
+                cursor = self._db.posts.find(query, projection=projection)
             else:
-                cursor = self.db.posts.find(query)
+                cursor = self._db.posts.find(query)
             result = list(cursor)
         except Exception as e:
-            self.log.error('Can`t get post by pid %s. User %s. Info: %s', pids, owner, e)
+            self._log.error('Can`t get post by pid %s. User %s. Info: %s', pids, owner, e)
             result = None
 
         return result
@@ -174,10 +174,10 @@ class RssTagPosts:
             'pid': {'$in': pids}
         }
         try:
-            update_result = self.db.posts.update_many(query, {'$set': {'read': readed}})
+            update_result = self._db.posts.update_many(query, {'$set': {'read': readed}})
             result = (update_result.matched_count > 0)
         except Exception as e:
-            self.log.error('Can`t set read status for posts. User %s. Info: %s', owner, e)
+            self._log.error('Can`t set read status for posts. User %s. Info: %s', owner, e)
             result = None
 
         return result
@@ -186,7 +186,7 @@ class RssTagPosts:
         query = {'$match': {'owner': owner}}
         try:
             result = {'unread': 0, 'read': 0}
-            cursor = self.db.posts.aggregate([
+            cursor = self._db.posts.aggregate([
                 query,
                 {'$group': {'_id': '$read', 'counter': {'$sum': 1}}}
             ])
@@ -196,7 +196,27 @@ class RssTagPosts:
                 else:
                     result['unread'] = dt['counter']
         except Exception as e:
-            self.log.error('Can`t get posts stat. User %s. Info: %s', owner, e)
+            self._log.error('Can`t get posts stat. User %s. Info: %s', owner, e)
             result = None
+
+        return result
+
+    def set_clusters(self, owner: str, similars: dict) -> Optional[bool]:
+        result = False
+        updates = [
+            UpdateMany(
+                {'owner': owner, 'pid': {'$in': list(ids)}},
+                {'$addToSet': {'clusters': cluster}}
+            )
+            for cluster, ids in similars.items()
+        ]
+
+        if updates:
+            try:
+                self._db.posts.bulk_write(updates)
+                result = True
+            except Exception as e:
+                self._log.error('Can`t set posts clusters. User %s. Info: %s', owner, e)
+                result = None
 
         return result
