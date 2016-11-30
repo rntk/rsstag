@@ -1,5 +1,5 @@
 import logging
-from typing import Optional
+from typing import Optional, List
 from pymongo import MongoClient, DESCENDING, UpdateMany
 
 class RssTagPosts:
@@ -218,5 +218,35 @@ class RssTagPosts:
             except Exception as e:
                 self._log.error('Can`t set posts clusters. User %s. Info: %s', owner, e)
                 result = None
+
+        return result
+
+    def get_by_clusters(self, owner: str, clusters: list, only_unread: Optional[bool]=None, projection: dict={}) -> Optional[list]:
+        query = {
+            'owner': owner,
+            'clusters': {'$exists': True},
+            'clusters': {'$all': clusters}
+        }
+        if only_unread is not None:
+            query['read'] = not only_unread
+        sort_data = [('feed_id', DESCENDING), ('unix_date', DESCENDING)]
+        try:
+            if projection:
+                cursor = self._db.posts.find(query, projection=projection).sort(sort_data)
+            else:
+                cursor = self._db.posts.find(query).sort(sort_data)
+            result = list(cursor)
+        except Exception as e:
+            self._log.error('Can`t get posts by clusters %s. User %s. Info: %s', clusters, owner, e)
+            result = None
+
+        return result
+
+    def get_clusters(self, posts: List[dict]) -> set:
+        result = set()
+        field = 'clusters'
+        for post in posts:
+            if (field in post) and post[field]:
+                result.update(post[field])
 
         return result
