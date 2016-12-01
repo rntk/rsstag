@@ -17,7 +17,7 @@ from gensim.models.doc2vec import Doc2Vec
 from gensim.models.word2vec import Word2Vec
 from rsstag import TASK_NOT_IN_PROCESSING
 from rsstag.routes import RSSTagRoutes
-from rsstag.utils import getSortedDictByAlphabet, load_config, to_dot_format
+from rsstag.utils import getSortedDictByAlphabet, load_config
 from rsstag.posts import RssTagPosts
 from rsstag.feeds import RssTagFeeds
 from rsstag.tags import RssTagTags
@@ -747,9 +747,9 @@ class RSSTagApplication(object):
             code = 400
 
         if post_ids:
-            tags = {}
-            bi_grams = {}
-            letters = {}
+            tags = defaultdict(int)
+            bi_grams = defaultdict(int)
+            letters = defaultdict(int)
             for_insert = []
             db_posts = self.posts.get_by_pids(
                 self.user['sid'],
@@ -766,15 +766,9 @@ class RSSTagApplication(object):
                             'processing': TASK_NOT_IN_PROCESSING
                         })
                         for t in d['tags']:
-                            if t not in tags:
-                                tags[t] = 0
                             tags[t] += 1
-                            if t[0] not in letters:
-                                letters[t[0]] = 0
                             letters[t[0]] += 1
                         for bi_g in d['bi_grams']:
-                            if bi_g not in bi_grams:
-                                bi_grams[bi_g] = 0
                             bi_grams[bi_g] += 1
             else:
                 code = 500
@@ -1497,7 +1491,7 @@ class RSSTagApplication(object):
 
     def on_get_tag_net(self, tag=''):
         all_tags = []
-        edges = defaultdict(lambda: set())
+        edges = defaultdict(set)
         if self.user['settings']['only_unread']:
             only_unread = self.user['settings']['only_unread']
         else:

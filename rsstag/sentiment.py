@@ -39,7 +39,7 @@ class RuSentiLex:
     Wrapper for determine russian words sentiment. Use dictionary from http://www.labinform.ru/pub/rusentilex/index.htm
     """
     def __init__(self, strings: List[str]=[], splitter: str=',', comment_symbol: str='!') -> None:
-        self._sentiments = defaultdict(lambda: set())
+        self._sentiments = defaultdict(set)
         self._splitter = splitter
         self._comment_symbol = comment_symbol
         self._positions = {
@@ -107,7 +107,7 @@ class WordNetAffectRuRom:
             raise Exception('Not support langugage "{}"'.format(lang))
         self._grams_n = grams_n
         self._by_affect = {}
-        self._by_word = {}
+        self._by_word = defaultdict(set)
         self._all_by_id = {}
         self._search_index = {}
         self.log = logging.getLogger('WordNetAffectRuRomVer2')
@@ -144,8 +144,6 @@ class WordNetAffectRuRom:
                 }
                 self._by_affect[affect].add(info[0])
                 for word in words_list:
-                    if word not in self._by_word:
-                        self._by_word[word] = set()
                     self._by_word[word].add(info[0])
                 self._add_word_in_index(word, info[0])
 

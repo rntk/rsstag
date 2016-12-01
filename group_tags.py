@@ -10,7 +10,7 @@ def make_groups(db, config):
     koef = 0.6
     top_n = 10
     groups = learn.make_groups(top_n, koef)
-    tag_groups = defaultdict(lambda: [])
+    tag_groups = defaultdict(list)
     for group, tags in groups.items():
         if len(tags) > 3:
             for tag in tags:

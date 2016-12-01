@@ -55,7 +55,7 @@ def get_coords_yandex(country:str, city: str='', lang: str='ru_RU', key: str='',
     return result
 
 def to_dot_format(tags: List[dict], posts: List[dict]) -> str:
-    all_tags = defaultdict(lambda: set())
+    all_tags = defaultdict(set)
     for post in posts:
         for tag in post['tags']:
             tag = md5(tag.encode('utf-8')).hexdigest()

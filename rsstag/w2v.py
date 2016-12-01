@@ -45,7 +45,7 @@ class W2VLearn:
         self._model.save(self._config['settings']['w2v_model'])
 
     def make_groups(self, top_n: int=10, koef: float=0.3):
-        groups = defaultdict(lambda: set())
+        groups = defaultdict(set)
         if self._model:
             tags_cur = self._db.tags.find({}, {'tag': True})
             for tag in tags_cur:
@@ -61,7 +61,7 @@ class W2VLearn:
 
     def reduce_groups(self, groups: dict, top_n: int=10, koef: float=0.3) -> dict:
         reduced = {}
-        new_groups = defaultdict(lambda: set())
+        new_groups = defaultdict(set)
         if self._model:
             for tag, tags in groups.items():
                 try:

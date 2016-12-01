@@ -277,7 +277,7 @@ class RssTagTags:
                 {'$match': query},
                 {'$group': {'_id': '$groups', 'counter': {'$sum': 1}}}
             ])
-            groups = defaultdict(lambda: 0)
+            groups = defaultdict(int)
             for agg in aggr:
                 for group in agg['_id']:
                     groups[group] += 1

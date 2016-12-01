@@ -1,5 +1,6 @@
 """Build tags from text. Support languages: english, russian"""
 import re
+from collections import defaultdict
 from typing import List, Dict, Set
 import pymorphy2
 from nltk.stem import PorterStemmer
@@ -26,10 +27,10 @@ class TagsBuilder:
         """Clear state"""
         self._text = ''
         self._tags = set()
-        self._words = {}
+        self._words = defaultdict(set)
         self._prepared_text = ''
         self._bi_grams = {}
-        self._bi_grams_words = {}
+        self._bi_grams_words = defaultdict(set)
 
     def text2words(self, text: str) -> List[str]:
         """Make words list from text"""
@@ -88,8 +89,6 @@ class TagsBuilder:
             tag = self.process_word(current_word)
             if tag:
                 self._tags.add(tag)
-                if tag not in self._words:
-                    self._words[tag] = set()
                 self._words[tag].add(current_word)
 
     def build_bi_grams(self, text: str) -> dict:
@@ -103,8 +102,6 @@ class TagsBuilder:
                     bi_gram = prev_tag + ' ' + current_tag
                     if bi_gram not in self._bi_grams:
                         self._bi_grams[bi_gram] = set([prev_tag, current_tag])
-                    if bi_gram not in self._bi_grams_words:
-                        self._bi_grams_words[bi_gram] = set()
                     self._bi_grams_words[bi_gram].add(prev_word)
                     self._bi_grams_words[bi_gram].add(current_word)
                     prev_word = current_word
