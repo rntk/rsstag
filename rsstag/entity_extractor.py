@@ -5,13 +5,16 @@ from rsstag.html_cleaner import HTMLCleaner
 import pymorphy2
 import nltk
 
-class EntityExtractor:
+class RssTagEntityExtractor:
+    """
+    Simple NER. Word is entity if istitle() == True
+    """
     def __init__(self):
         self._html_cleaner = HTMLCleaner()
         self._stemmer_ru = pymorphy2.MorphAnalyzer()
         self._stemmer_en = nltk.stem.PorterStemmer()
-        self._only_cyrillic = re.compile('[А-яЁё-]')
-        self._only_latin = re.compile('[A-z-]')
+        self._only_cyrillic = re.compile('[А-яЁё_-]')
+        self._only_latin = re.compile('[A-z-_]')
         self._delimiter = ' '
         self._stopwords = set(nltk.corpus.stopwords.words('english') + nltk.corpus.stopwords.words('russian'))
 
