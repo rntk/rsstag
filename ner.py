@@ -2,11 +2,13 @@ import sys
 import os
 import gzip
 from typing import List
+from collections import defaultdict
 from multiprocessing import Pool
 from rsstag.utils import load_config
 from rsstag.posts import RssTagPosts
 from rsstag.html_cleaner import HTMLCleaner
 from rsstag.entity_extractor import RssTagEntityExtractor
+from rsstag.tags import RssTagTags
 from pymongo import MongoClient
 from polyglot.text import Text
 
@@ -60,6 +62,16 @@ def all_by_polyglot(pids: List[int], texts: List[str]) -> list:
 
     return all_entities
 
+def clean_entities_rsstag(all_entities: List[tuple]) -> dict:
+    result = defaultdict(int)
+    for _, entities in all_entities:
+        for entity in entities:
+            for word in entity:
+                if len(word) > 1:
+                    result[word] += 1
+
+    return result
+
 if __name__ == '__main__':
     config_path = 'rsscloud.conf'
     if len(sys.argv) > 1:
@@ -76,6 +88,9 @@ if __name__ == '__main__':
     #all_entities = all_by_polyglot(pids, texts)
 
     all_entities = all_by_rsstag(pids, texts)
-    f = open('ent0.txt', 'w')
+    cl_ent = clean_entities_rsstag(all_entities)
+    tags = RssTagTags(db)
+    tags.add_entities(user['sid'], cl_ent)
+    '''f = open('ent0.txt', 'w')
     f.write('\n'.join('{} {}'.format(pid, '{}'.format(entities)) for pid, entities in all_entities))
-    f.close()
+    f.close()'''

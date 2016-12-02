@@ -1,6 +1,6 @@
 import logging
 from collections import defaultdict
-from typing import Optional, List
+from typing import Optional, List, Iterable
 from pymongo import MongoClient, DESCENDING, UpdateOne
 
 class RssTagTags:
@@ -284,6 +284,23 @@ class RssTagTags:
             result = groups
         except Exception as e:
             self._log.error('Can`t get tags groups, user %s. Info: %s', owner, e)
+            result = None
+
+        return result
+
+    def add_entities(self, owner: str, entities: dict) -> Optional[bool]:
+        updates = [
+            UpdateOne(
+                {'owner': owner, 'tag': entity},
+                {'$inc': {'temperature': number}}
+            )
+            for entity, number in entities.items()
+        ]
+        try:
+            self._db.tags.bulk_write(updates)#add bulk write result checking
+            result = True
+        except Exception as e:
+            self._log.error('Can`t add entities, user %s. Info: %s', owner, e)
             result = None
 
         return result
