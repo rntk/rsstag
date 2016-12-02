@@ -12,13 +12,14 @@ class RssTagEntityExtractor:
     """
     def __init__(self):
         self._html_cleaner = HTMLCleaner()
-        self._stemmer_ru = pymorphy2.MorphAnalyzer()
+        self._lemmer_ru = pymorphy2.MorphAnalyzer()
+        self._stemmer_ru = nltk.stem.snowball.RussianStemmer()
         self._stemmer_en = nltk.stem.PorterStemmer()
-        self._only_cyrillic = re.compile('[А-яЁё_-]')
-        self._only_latin = re.compile('[A-z-_]')
+        self._only_cyrillic = re.compile('^[А-яЁё_-]*$')
+        self._only_latin = re.compile('^[A-z_-]*$')
         self._delimiter = ' '
         self._stopwords = set(nltk.corpus.stopwords.words('english') + nltk.corpus.stopwords.words('russian'))
-        self._word_stat = defaultdict(lambda: {'u': 0, 'l': 0})
+        self._words_stat = defaultdict(lambda: {'u': 0, 'l': 0})
 
     def find_geo_entities(self, entities: List[str]) -> List[str]:
         pass
@@ -63,7 +64,7 @@ class RssTagEntityExtractor:
                 new_word = ''
                 if len(word) > 2:
                     if self._only_cyrillic.match(word):
-                        morphy = self._stemmer_ru.parse(word)
+                        morphy = self._lemmer_ru.parse(word)
                         if morphy:
                             if (morphy[0].tag.POS == 'NOUN') and (morphy[0].tag.number == 'sing'):
                                 new_word = morphy[0].normal_form
@@ -80,6 +81,40 @@ class RssTagEntityExtractor:
 
         return new_entities
 
+    def clean_entity(self, entity: List[str]) -> List[str]:
+        new_entity = []
+        for word in entity:
+            add_entity = True
+            if len(word) > 1:
+                if self._only_cyrillic.match(word):
+                    s_word = self._stemmer_ru.stem(word)
+                elif self._only_latin.match(word):
+                    s_word = self._stemmer_en.stem(word)
+                else:
+                    s_word = word
+                if s_word in self._words_stat:
+                    add_entity = self._words_stat[s_word]['l'] > 1
+
+            if add_entity:
+                new_entity.append(word)
+
+        return new_entity
+
+    def add_to_stat(self, word: str):
+        if self._only_cyrillic.match(word):
+            s_word = self._stemmer_ru.stem(word)
+        elif self._only_latin.match(word):
+            s_word = self._stemmer_en.stem(word)
+        else:
+            s_word = word
+
+        print(word, s_word)
+        if s_word.istitle():
+            letter_case = 'u'
+        else:
+            letter_case = 'l'
+        self._words_stat[word.casefold()][letter_case] += 1
+
     def extract_entities(self, text: str) -> List[str]:
         entities = []
         entity = []
@@ -89,6 +124,7 @@ class RssTagEntityExtractor:
             if word.casefold() in self._stopwords:
                 continue
 
+            self.add_to_stat(word)
             if word.istitle():
                 if len(word) == 1:
                     initial = word
@@ -113,6 +149,4 @@ class RssTagEntityExtractor:
             else:
                 entities.append(entity[:-1])
 
-        entities = self.treat_entities(entities)
-
-        return entities
+        return self.treat_entities(entities)
