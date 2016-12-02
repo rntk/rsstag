@@ -21,12 +21,14 @@ def get_entities_polyglot(pid_text: str) -> list:
 
     return (pid_text[0], entities)
 
-def all_by_rsstag(pids: List[int], texts: List[str]):
+def all_by_rsstag(texts: List[str]) -> List[list]:
     ent_ex = RssTagEntityExtractor()
     all_entities = []
     for i, text in enumerate(texts):
         entities = ent_ex.extract_entities(text)
-        all_entities.append((pids[i], entities))
+        all_entities.append(entities)
+
+    all_entities = ent_ex.treat_entities(all_entities)
 
     return all_entities
 
@@ -62,9 +64,9 @@ def all_by_polyglot(pids: List[int], texts: List[str]) -> list:
 
     return all_entities
 
-def clean_entities_rsstag(all_entities: List[tuple]) -> dict:
+def count_entities_rsstag(all_entities: List[list]) -> dict:
     result = defaultdict(int)
-    for _, entities in all_entities:
+    for entities in all_entities:
         for entity in entities:
             for word in entity:
                 if len(word) > 1:
@@ -88,9 +90,9 @@ if __name__ == '__main__':
     #all_entities = all_by_polyglot(pids, texts)
 
     all_entities = all_by_rsstag(pids, texts)
-    cl_ent = clean_entities_rsstag(all_entities)
+    count_ent = count_entities_rsstag(all_entities)
     tags = RssTagTags(db)
-    tags.add_entities(user['sid'], cl_ent)
+    tags.add_entities(user['sid'], count_ent, replace=True)
     '''f = open('ent0.txt', 'w')
     f.write('\n'.join('{} {}'.format(pid, '{}'.format(entities)) for pid, entities in all_entities))
     f.close()'''

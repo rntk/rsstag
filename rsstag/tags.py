@@ -288,11 +288,15 @@ class RssTagTags:
 
         return result
 
-    def add_entities(self, owner: str, entities: dict) -> Optional[bool]:
+    def add_entities(self, owner: str, entities: dict, replace: bool=False) -> Optional[bool]:
+        if replace:
+            operator = '$set'
+        else:
+            operator = '$inc'
         updates = [
             UpdateOne(
                 {'owner': owner, 'tag': entity},
-                {'$inc': {'temperature': number}}
+                {operator: {'temperature': number}}
             )
             for entity, number in entities.items()
         ]

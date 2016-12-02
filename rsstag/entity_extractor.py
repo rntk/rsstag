@@ -1,6 +1,7 @@
 from typing import List, Iterator
 import re
 import unicodedata
+from collections import defaultdict
 from rsstag.html_cleaner import HTMLCleaner
 import pymorphy2
 import nltk
@@ -17,6 +18,7 @@ class RssTagEntityExtractor:
         self._only_latin = re.compile('[A-z-_]')
         self._delimiter = ' '
         self._stopwords = set(nltk.corpus.stopwords.words('english') + nltk.corpus.stopwords.words('russian'))
+        self._word_stat = defaultdict(lambda: {'u': 0, 'l': 0})
 
     def find_geo_entities(self, entities: List[str]) -> List[str]:
         pass
