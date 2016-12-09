@@ -31,7 +31,7 @@ export default class LettersList extends React.Component{
                 return(
                     <span key={letter.letter}>
                         <a href={letter.local_url} className="letter">{letter.letter}</a>
-                        {splitter? <br />: ''}
+                        {splitter? <br />: ' '}
                     </span>
                 );
             });
