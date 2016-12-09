@@ -108,7 +108,7 @@ class RssTagEntityExtractor:
         else:
             s_word = word
 
-        print(word, s_word)
+        #print(word, s_word)
         if s_word.istitle():
             letter_case = 'u'
         else:

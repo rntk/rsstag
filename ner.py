@@ -27,7 +27,7 @@ def all_by_rsstag(texts: List[str]) -> List[list]:
     for i, text in enumerate(texts):
         entities = ent_ex.extract_entities(text)
         all_entities.append(entities)
-    print(ent_ex._words_stat)
+    #print(ent_ex._words_stat)
     for t_i, entities in enumerate(all_entities):
         for e_i, entity in enumerate(entities):
             cl_entity = ent_ex.clean_entity(entity)
@@ -89,14 +89,14 @@ if __name__ == '__main__':
     pids, texts = get_texts(db, user['sid'], config)
     '''f = open('all_posts.txt', 'r')
     texts = f.read().splitlines()
-    pids = list(range(len(texts)))'''
-
+    pids = list(range(len(texts)))
+    f.close()'''
     #all_entities = all_by_polyglot(pids, texts)
 
     all_entities = all_by_rsstag(texts)
     count_ent = count_entities_rsstag(all_entities)
-    #tags = RssTagTags(db)
-    #tags.add_entities(user['sid'], count_ent, replace=True)
-    f = open('ent00.txt', 'w')
+    tags = RssTagTags(db)
+    tags.add_entities(user['sid'], count_ent, replace=True)
+    '''f = open('ent00.txt', 'w')
     f.write('\n'.join('{} {}'.format(pid, '{}'.format(entities)) for pid, entities in enumerate(all_entities)))
-    f.close()
+    f.close()'''
