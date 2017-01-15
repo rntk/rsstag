@@ -1,7 +1,7 @@
 """Build tags from text. Support languages: english, russian"""
 import re
 from collections import defaultdict
-from typing import List, Dict, Set
+from typing import List, Dict
 import pymorphy2
 from nltk.stem import PorterStemmer
 from nltk.corpus import stopwords
@@ -9,12 +9,13 @@ from nltk.corpus import stopwords
 class TagsBuilder:
     """Build tags from text. Support languages: english, russian"""
     def __init__(self, text_clean_re: str) -> None:
-        self._text = ''
+        self.purge()
+        '''self._text = ''
         self._prepared_text = ''
         self._tags = set()
         self._words = {}
         self._bi_grams = {}
-        self._bi_grams_words = {}
+        self._bi_grams_words = defaultdict(set)'''
         self.text_clearing = re.compile(text_clean_re)
         self.only_cyrillic = re.compile(r'^[а-яА-ЯёЁ]*$')
         self.only_latin = re.compile(r'^[a-zA-Z]*$')
@@ -106,6 +107,29 @@ class TagsBuilder:
                     self._bi_grams_words[bi_gram].add(current_word)
                     prev_word = current_word
                     prev_tag = current_tag
+
+    def build_tags_and_bi_grams(self, text: str) -> None:
+        """Build tags and words from text"""
+        self._text = text
+        words = self.text2words(text)
+        if words:
+            prev_word = words[0]
+            prev_tag = self.process_word(prev_word)
+            for current_word in words[1:]:
+                if prev_tag:
+                    self._tags.add(prev_tag)
+                    self._words[prev_tag].add(prev_word)
+                current_tag = self.process_word(current_word)
+                if current_tag:
+                    bi_gram = prev_tag + ' ' + current_tag
+                    if bi_gram not in self._bi_grams:
+                        self._bi_grams[bi_gram] = set([prev_tag, current_tag])
+                    self._bi_grams_words[bi_gram].add(prev_word)
+                    self._bi_grams_words[bi_gram].add(current_word)
+                    prev_word = current_word
+                    prev_tag = current_tag
+            self._tags.add(prev_tag)
+            self._words[prev_tag].add(prev_word)
 
     def get_prepared_text(self) -> str:
         """Get text prepared for Doc2Vec"""

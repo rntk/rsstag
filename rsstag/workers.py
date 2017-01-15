@@ -56,11 +56,14 @@ class RSSTagWorker:
         strings = cleaner.get_content()
         text = ' '.join(strings)
         builder.purge()
-        builder.build_tags(text)
+        builder.build_tags_and_bi_grams(text)
         tags = builder.get_tags()
         words = builder.get_words()
+        bi_grams = builder.get_bi_grams()
+        bi_words = builder.get_bi_grams_words()
         result = False
         tags_updates = []
+        bi_grams_updates = []
         first_letters = set()
         routes = RSSTagRoutes(self._config['settings']['host_name'])
         if tags == []:
@@ -88,6 +91,28 @@ class RSSTagWorker:
                 upsert=True
             ))
             first_letters.add(tag[0])
+
+        for bi_gram, bi_value in bi_grams.items():
+            bi_grams_updates.append(UpdateOne(
+                {'owner': post['owner'], 'tag':bi_gram},
+                {
+                    '$set': {
+                        'read': False,
+                        'tag': bi_gram,
+                        'owner': post['owner'],
+                        'temperature': 0,
+                        'local_url': routes.getUrlByEndpoint(
+                            endpoint='on_bi_gram_get',
+                            params={'bi_gram': bi_gram}
+                        ),
+                        'tags': list(bi_value),
+                        'processing': TAG_NOT_IN_PROCESSING
+                    },
+                    '$inc': {'posts_count': 1, 'unread_count': 1},
+                    '$addToSet': {'words': {'$each': list(bi_words[bi_gram])}}
+                },
+                upsert=True
+            ))
 
         letters_updates = []
         for letter in first_letters:
@@ -119,55 +144,14 @@ class RSSTagWorker:
                 result = False
                 logging.error('Can`t make tags for post %s. Info: %s', post['_id'], e)
 
-        #logging.info('Processed %s', post['_id'])
-
-        return result
-
-    def make_bi_grams(self, db: MongoClient, post: dict, builder: TagsBuilder, cleaner: HTMLCleaner) -> bool:
-        content = gzip.decompress(post['content']['content'])
-        text = post['content']['title'] + ' '+ content.decode('utf-8')
-        cleaner.purge()
-        cleaner.feed(text)
-        strings = cleaner.get_content()
-        text = ' '.join(strings)
-        builder.purge()
-        builder.build_bi_grams(text)
-        bi_grams = builder.get_bi_grams()
-        words = builder.get_bi_grams_words()
-        result = False
-        tags_updates = []
-        routes = RSSTagRoutes(self._config['settings']['host_name'])
-        for bi_gram, bi_value in bi_grams.items():
-            tags_updates.append(UpdateOne(
-                {'owner': post['owner'], 'tag':bi_gram},
-                {
-                    '$set': {
-                        'read': False,
-                        'tag': bi_gram,
-                        'owner': post['owner'],
-                        'temperature': 0,
-                        'local_url': routes.getUrlByEndpoint(
-                            endpoint='on_bi_gram_get',
-                            params={'bi_gram': bi_gram}
-                        ),
-                        'tags': list(bi_value),
-                        'processing': TAG_NOT_IN_PROCESSING
-                    },
-                    '$inc': {'posts_count': 1, 'unread_count': 1},
-                    '$addToSet': {'words': {'$each': list(words[bi_gram])}}
-                },
-                upsert=True
-            ))
-
-        if tags_updates:
+        if bi_grams_updates:
             try:
-                db.bi_grams.bulk_write(tags_updates, ordered=False)
+                db.bi_grams.bulk_write(bi_grams_updates, ordered=False)
                 db.posts.update({'_id': post['_id']}, {'$set': {'bi_grams': list(bi_grams.keys())}})
                 result = True
             except Exception as e:
                 result = False
-                logging.error('Can`t make tags for post %s. Info: %s', post['_id'], e)
-
+                logging.error('Can`t make bi-grams for post %s. Info: %s', post['_id'], e)
         #logging.info('Processed %s', post['_id'])
 
         return result
@@ -368,7 +352,7 @@ class RSSTagWorker:
                 task_done = provider.mark(task['data'], task['user'])
 
             elif task['type'] == TASK_TAGS:
-                task_done = (self.make_tags(db, task['data'], builder, cleaner) and self.make_bi_grams(db, task['data'], builder, cleaner))
+                task_done = self.make_tags(db, task['data'], builder, cleaner)
             elif task['type'] == TASK_WORDS:
                 task_done = self.process_words(db, task['data'])
 
