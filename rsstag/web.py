@@ -15,7 +15,7 @@ from jinja2 import Environment, PackageLoader
 from pymongo import MongoClient
 from gensim.models.doc2vec import Doc2Vec
 from gensim.models.word2vec import Word2Vec
-from rsstag import TASK_NOT_IN_PROCESSING
+from rsstag import TASK_DOWNLOAD, TASK_MARK, TASK_NOT_IN_PROCESSING
 from rsstag.routes import RSSTagRoutes
 from rsstag.utils import getSortedDictByAlphabet, load_config
 from rsstag.posts import RssTagPosts
@@ -103,8 +103,6 @@ class RSSTagApplication(object):
 
     def prepareDB(self):
         try:
-            self.db.download_queue.create_index('processing')
-            self.db.mark_queue.create_index('processing')
             self.db.words.create_index('word')
         except Exception as e:
             logging.warning('Indexes not created. May be already exists.')
@@ -317,13 +315,16 @@ class RSSTagApplication(object):
         if self.user:
             try:
                 if not self.user['in_queue']:
-                    self.db.download_queue.insert_one(
-                        {'user': self.user['_id'], 'processing': TASK_NOT_IN_PROCESSING, 'host': self.request.environ['HTTP_HOST']}
-                    )
-                    updated = self.users.update_by_sid(
-                        self.user['sid'],
-                        {'ready': False, 'in_queue': True, 'message': 'Downloading data, please wait'}
-                    )
+                    added = self.tasks.add_task({
+                        'type': TASK_DOWNLOAD,
+                        'user': self.user['_id'],
+                        'host': self.request.environ['HTTP_HOST']
+                    })
+                    if added:
+                        updated = self.users.update_by_sid(
+                            self.user['sid'],
+                            {'ready': False, 'in_queue': True, 'message': 'Downloading data, please wait'}
+                        )
                 else:
                     updated = self.users.update_by_sid(
                         self.user['sid'],
@@ -773,26 +774,21 @@ class RSSTagApplication(object):
             else:
                 code = 500
                 result = {'error': 'Database error'}
-            if for_insert:
-                try:
-                    self.db.mark_queue.insert_many(for_insert)
-                    changed = self.posts.change_status(self.user['sid'], post_ids, readed)
-                    if changed and tags:
-                        changed = self.tags.change_unread(self.user['sid'], tags, readed)
-                    if changed and bi_grams:
-                        changed = self.bi_grams.change_unread(self.user['sid'], bi_grams, readed)
-                    if changed and letters:
-                        changed = self.letters.change_unread(self.user['sid'], letters, readed)
-                    if changed:
-                        code = 200
-                        result = {'data': 'ok'}
-                    else:
-                        code = 500
-                        result = {'error': 'Database error'}
-                except Exception as e:
-                    result = {'error': 'Database queue error'}
-                    logging.error('Can`t push in mark queue: %s', e)
+
+            if self.tasks.add_task({'type': TASK_MARK, 'user': self.users['_id'], 'data': for_insert}):
+                changed = self.posts.change_status(self.user['sid'], post_ids, readed)
+                if changed and tags:
+                    changed = self.tags.change_unread(self.user['sid'], tags, readed)
+                if changed and bi_grams:
+                    changed = self.bi_grams.change_unread(self.user['sid'], bi_grams, readed)
+                if changed and letters:
+                    changed = self.letters.change_unread(self.user['sid'], letters, readed)
+                if changed:
+                    code = 200
+                    result = {'data': 'ok'}
+                else:
                     code = 500
+                    result = {'error': 'Database error'}
 
         self.response = Response(json.dumps(result), mimetype='application/json')
         self.response.status_code = code
