@@ -21,6 +21,9 @@ from rsstag.tags import RssTagTags
 from rsstag.posts import RssTagPosts
 from rsstag.entity_extractor import RssTagEntityExtractor
 from rsstag.sentiment import RuSentiLex, WordNetAffectRuRom, SentimentConverter
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.cluster import DBSCAN
+
 
 class RSSTagWorker:
     """Rsstag workers handler"""
@@ -204,6 +207,7 @@ class RSSTagWorker:
         posts = RssTagPosts(db)
         all_posts = posts.get_all(owner, projection={'content': True, 'pid': True})
         texts = []
+        count_ent = defaultdict(int)
         if all_posts:
             for post in all_posts:
                 text = post['content']['title'] + ' ' + gzip.decompress(post['content']['content']).decode('utf-8', 'ignore')
@@ -221,15 +225,52 @@ class RSSTagWorker:
                     if cl_entity:
                         all_entities[t_i][e_i] = cl_entity
 
-            count_ent = defaultdict(int)
             for entities in all_entities:
                 for entity in entities:
                     for word in entity:
                         if len(word) > 1:
                             count_ent[word] += 1
 
+        if count_ent:
+            logging.info('Found %s entities for user %s', len(count_ent), owner)
             tags = RssTagTags(db)
             result = tags.add_entities(owner, count_ent, replace=True)
+
+        return result
+
+    def make_clustering(self, db, owner: str, builder: TagsBuilder, cleaner: HTMLCleaner) -> Optional[bool]:
+        result = False
+        posts = RssTagPosts(db)
+        all_posts = posts.get_all(owner, projection={'content': True, 'pid': True})
+        clusters = None
+        texts_for_vec = []
+        post_pids = []
+        if all_posts:
+            for post in all_posts:
+                post_pids.append(post['pid'])
+                text = post['content']['title'] + ' ' + gzip.decompress(post['content']['content']).decode('utf-8', 'ignore')
+                cleaner.purge()
+                cleaner.feed(text)
+                strings = cleaner.get_content()
+                text = ' '.join(strings)
+                builder.purge()
+                builder.prepare_text(text, ignore_stopwords=True)
+                texts_for_vec.append(builder.get_prepared_text())
+
+        if texts_for_vec:
+            vectorizer = TfidfVectorizer()
+            dbs = DBSCAN(eps=0.9, min_samples=2, n_jobs=1)
+            dbs.fit(vectorizer.fit_transform(texts_for_vec))
+            clusters = defaultdict(set)
+            for i, cluster in enumerate(dbs.labels_):
+                clusters[int(cluster)].add(post_pids[i])
+
+            if clusters and -1 in clusters:
+                del clusters[-1]
+
+        if clusters:
+            logging.info('Posts: %s. Clusters: %s. User: %s', len(all_posts), len(clusters), owner)
+            result = posts.set_clusters(owner, clusters)
 
         return result
 
@@ -272,7 +313,7 @@ class RSSTagWorker:
             elif task['type'] == TASK_TAGS_SENTIMENT:
                 task_done = True
             elif task['type'] == TASK_CLUSTERING:
-                task_done = True
+                task_done = self.make_clustering(db, task['user']['sid'], builder, cleaner)
             elif task['type'] == TASK_TAGS_GROUP:
                 task_done = True
             elif task['type'] == TASK_W2V:
