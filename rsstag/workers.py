@@ -2,6 +2,8 @@
 import logging
 import time
 import gzip
+from _collections import defaultdict
+from typing import Optional
 from random import randint
 from multiprocessing import Process
 from rsstag.tags_builder import TagsBuilder
@@ -16,6 +18,8 @@ from rsstag.tasks import TASK_NOOP, TASK_DOWNLOAD, TASK_MARK, TASK_TAGS, TASK_WO
 from rsstag.tasks import RssTagTasks
 from rsstag.letters import RssTagLetters
 from rsstag.tags import RssTagTags
+from rsstag.posts import RssTagPosts
+from rsstag.entity_extractor import RssTagEntityExtractor
 from rsstag.sentiment import RuSentiLex, WordNetAffectRuRom, SentimentConverter
 
 class RSSTagWorker:
@@ -195,6 +199,40 @@ class RSSTagWorker:
 
         return result
 
+    def make_ner(self, db, owner: str) -> Optional[bool]:
+        result = False
+        posts = RssTagPosts(db)
+        all_posts = posts.get_all(owner, projection={'content': True, 'pid': True})
+        texts = []
+        if all_posts:
+            for post in all_posts:
+                text = post['content']['title'] + ' ' + gzip.decompress(post['content']['content']).decode('utf-8', 'ignore')
+                if text:
+                    texts.append(text)
+        if texts:
+            ent_ex = RssTagEntityExtractor()
+            all_entities = []
+            for i, text in enumerate(texts):
+                entities = ent_ex.extract_entities(text)
+                all_entities.append(entities)
+            for t_i, entities in enumerate(all_entities):
+                for e_i, entity in enumerate(entities):
+                    cl_entity = ent_ex.clean_entity(entity)
+                    if cl_entity:
+                        all_entities[t_i][e_i] = cl_entity
+
+            count_ent = defaultdict(int)
+            for entities in all_entities:
+                for entity in entities:
+                    for word in entity:
+                        if len(word) > 1:
+                            count_ent[word] += 1
+
+            tags = RssTagTags(db)
+            result = tags.add_entities(owner, count_ent, replace=True)
+
+        return result
+
     def worker(self):
         """Worker for bazqux.com"""
         cl = MongoClient(self._config['settings']['db_host'], int(self._config['settings']['db_port']))
@@ -205,7 +243,6 @@ class RSSTagWorker:
         cleaner = HTMLCleaner()
         users = RssTagUsers(db)
         tasks = RssTagTasks(db)
-        letters = RssTagLetters(db)
         while True:
             task = tasks.get_task(users)
             if task['type'] == TASK_NOOP:
@@ -231,7 +268,7 @@ class RSSTagWorker:
             elif task['type'] == TASK_LETTERS:
                 task_done = self.make_letters(db, task['user']['sid'], self._config)
             elif task['type'] == TASK_NER:
-                task_done = True
+                task_done = self.make_ner(db, task['user']['sid'])
             elif task['type'] == TASK_TAGS_SENTIMENT:
                 task_done = True
             elif task['type'] == TASK_CLUSTERING:
