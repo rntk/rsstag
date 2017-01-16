@@ -39,7 +39,7 @@ class RSSTagWorker:
             db.feeds.remove({'owner': user['sid']})
             db.tags.remove({'owner': user['sid']})
             db.bi_grams.remove({'owner': user['sid']})
-            db.letters.update({'owner': user['sid']}, {'$set': {'letters': {}}})
+            db.letters.remove({'owner': user['sid']})
             result = True
         except Exception as e:
             logging.error('Can`t clear user data %s. Info: %s', user['sid'], e)
@@ -114,44 +114,19 @@ class RSSTagWorker:
                 upsert=True
             ))
 
-        letters_updates = []
-        for letter in first_letters:
-            key = 'letters.' + letter
-            letters_updates.append(UpdateOne(
-                {'owner': post['owner']},
-                {'$set': {
-                    key + '.letter': letter,
-                    key + '.local_url': routes.getUrlByEndpoint(
-                        endpoint='on_group_by_tags_startwith_get',
-                        params={'letter': letter, 'page_number': 1}
-                    )
-                }},
-            ))
-            letters_updates.append(UpdateOne(
-                {'owner': post['owner']},
-                {'$inc': {
-                    key + '.unread_count': 1
-                }},
-            ))
-
+        post_tags = {}
         if tags_updates:
-            try:
-                db.tags.bulk_write(tags_updates, ordered=False)
-                db.letters.bulk_write(letters_updates)
-                db.posts.update({'_id': post['_id']}, {'$set': {'tags': tags}})
-                result = True
-            except Exception as e:
-                result = False
-                logging.error('Can`t make tags for post %s. Info: %s', post['_id'], e)
-
+            post_tags['tags'] = tags
         if bi_grams_updates:
-            try:
-                db.bi_grams.bulk_write(bi_grams_updates, ordered=False)
-                db.posts.update({'_id': post['_id']}, {'$set': {'bi_grams': list(bi_grams.keys())}})
-                result = True
-            except Exception as e:
-                result = False
-                logging.error('Can`t make bi-grams for post %s. Info: %s', post['_id'], e)
+            post_tags['bi_grams'] = list(bi_grams.keys())
+        try:
+            db.posts.update({'_id': post['_id']}, {'$set': post_tags})
+            db.tags.bulk_write(tags_updates, ordered=False)
+            db.bi_grams.bulk_write(bi_grams_updates, ordered=False)
+            result = True
+        except Exception as e:
+            result = False
+            logging.error('Can`t save tags/bi-grams for post %s. Info: %s', post['_id'], e)
         #logging.info('Processed %s', post['_id'])
 
         return result
