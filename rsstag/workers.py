@@ -10,10 +10,13 @@ from pymongo import MongoClient, UpdateOne
 from rsstag.providers import BazquxProvider
 from rsstag.utils import load_config
 from rsstag.routes import RSSTagRoutes
-from rsstag import TASK_NOOP, TASK_DOWNLOAD, TASK_MARK, TASK_TAGS, TASK_WORDS
-from rsstag import TAG_NOT_IN_PROCESSING
 from rsstag.users import RssTagUsers
+from rsstag.tasks import TASK_NOOP, TASK_DOWNLOAD, TASK_MARK, TASK_TAGS, TASK_WORDS, TASK_TAGS_GROUP, \
+    TAG_NOT_IN_PROCESSING, TASK_LETTERS, TASK_TAGS_SENTIMENT, TASK_W2V, TASK_NER, TASK_CLUSTERING
 from rsstag.tasks import RssTagTasks
+from rsstag.letters import RssTagLetters
+from rsstag.tags import RssTagTags
+from rsstag.sentiment import RuSentiLex, WordNetAffectRuRom, SentimentConverter
 
 class RSSTagWorker:
     """Rsstag workers handler"""
@@ -181,6 +184,17 @@ class RSSTagWorker:
 
         return result
 
+    def make_letters(self, db, owner: str, config: dict):
+        router = RSSTagRoutes(config['settings']['host_name'])
+        letters = RssTagLetters(db)
+        tags = RssTagTags(db)
+        all_tags = tags.get_all(owner, projection={'tag': True, 'unread_count': True})
+        result = False
+        if all_tags:
+            result = letters.sync_with_tags(owner, all_tags, router)
+
+        return result
+
     def worker(self):
         """Worker for bazqux.com"""
         cl = MongoClient(self._config['settings']['db_host'], int(self._config['settings']['db_port']))
@@ -191,12 +205,14 @@ class RSSTagWorker:
         cleaner = HTMLCleaner()
         users = RssTagUsers(db)
         tasks = RssTagTasks(db)
+        letters = RssTagLetters(db)
         while True:
-            task = tasks.get_task(db, users)
+            task = tasks.get_task(users)
             if task['type'] == TASK_NOOP:
                 time.sleep(randint(3, 8))
                 continue
             if task['type'] == TASK_DOWNLOAD:
+                logging.info('Start downloading for user')
                 if self.clear_user_data(db, task['user']):
                     posts, feeds = provider.download(task['user'])
                     if posts:
@@ -204,18 +220,30 @@ class RSSTagWorker:
                         try:
                             db.feeds.insert_many(feeds)
                             db.posts.insert_many(posts)
-                            users.update_by_sid(task['user']['sid'], {'ready': True, 'in_queue': False})
                             task_done = True
                         except Exception as e:
                             task_done = False
                             logging.error('Can`t save in db for user %s. Info: %s', task['user']['sid'], e)
             elif task['type'] == TASK_MARK:
                 task_done = provider.mark(task['data'], task['user'])
-
             elif task['type'] == TASK_TAGS:
                 task_done = self.make_tags(db, task['data'], builder, cleaner)
-            elif task['type'] == TASK_WORDS:
-                task_done = self.process_words(db, task['data'])
+            elif task['type'] == TASK_LETTERS:
+                task_done = self.make_letters(db, task['user']['sid'], self._config)
+            elif task['type'] == TASK_NER:
+                task_done = True
+            elif task['type'] == TASK_TAGS_SENTIMENT:
+                task_done = True
+            elif task['type'] == TASK_CLUSTERING:
+                task_done = True
+            elif task['type'] == TASK_TAGS_GROUP:
+                task_done = True
+            elif task['type'] == TASK_W2V:
+                task_done = True
+            '''elif task['type'] == TASK_WORDS:
+                task_done = self.process_words(db, task['data'])'''
 
             if task_done:
-                tasks.finish_task(db, task)
+                tasks.finish_task(task)
+                if task['type'] == TASK_TAGS_GROUP:
+                    users.update_by_sid(task['user']['sid'], {'ready': True, 'in_queue': False})

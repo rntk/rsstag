@@ -15,7 +15,7 @@ from jinja2 import Environment, PackageLoader
 from pymongo import MongoClient
 from gensim.models.doc2vec import Doc2Vec
 from gensim.models.word2vec import Word2Vec
-from rsstag import TASK_DOWNLOAD, TASK_MARK, TASK_NOT_IN_PROCESSING
+from rsstag.tasks import RssTagTasks, TASK_DOWNLOAD, TASK_MARK, TASK_NOT_IN_PROCESSING
 from rsstag.routes import RSSTagRoutes
 from rsstag.utils import getSortedDictByAlphabet, load_config
 from rsstag.posts import RssTagPosts
@@ -100,6 +100,8 @@ class RSSTagApplication(object):
         self.users.prepare()
         self.routes = RSSTagRoutes(self.config['settings']['host_name'])
         self.updateEndpoints()
+        self.tasks = RssTagTasks(self.db)
+        self.tasks.prepare()
 
     def prepareDB(self):
         try:
@@ -317,7 +319,7 @@ class RSSTagApplication(object):
                 if not self.user['in_queue']:
                     added = self.tasks.add_task({
                         'type': TASK_DOWNLOAD,
-                        'user': self.user['_id'],
+                        'user': self.user['sid'],
                         'host': self.request.environ['HTTP_HOST']
                     })
                     if added:
@@ -331,9 +333,9 @@ class RSSTagApplication(object):
                         {'message': 'You already in queue, please wait'}
                     )
                 if not updated:
-                    logging.error('Cant update data of user %s while create "posts update" task', self.user['_id'])
+                    logging.error('Cant update data of user %s while create "posts update" task', self.user['sid'])
             except Exception as e:
-                logging.error('Can`t create refresh task for user %s. Info: %s', self.user['_id'], e)
+                logging.error('Can`t create refresh task for user %s. Info: %s', self.user['sid'], e)
             self.response = redirect(self.routes.getUrlByEndpoint(endpoint='on_root_get'))
         else:
             self.response = redirect(self.routes.getUrlByEndpoint(endpoint='on_root_get'))
@@ -761,10 +763,11 @@ class RSSTagApplication(object):
                 for d in db_posts:
                     if d['read'] != readed:
                         for_insert.append({
-                            'user': self.user['_id'],
+                            'user': self.user['sid'],
                             'id': d['id'],
                             'status': readed,
-                            'processing': TASK_NOT_IN_PROCESSING
+                            'processing': TASK_NOT_IN_PROCESSING,
+                            'type': TASK_MARK,
                         })
                         for t in d['tags']:
                             tags[t] += 1
@@ -775,7 +778,7 @@ class RSSTagApplication(object):
                 code = 500
                 result = {'error': 'Database error'}
 
-            if self.tasks.add_task({'type': TASK_MARK, 'user': self.users['_id'], 'data': for_insert}):
+            if self.tasks.add_task({'type': TASK_MARK, 'user': self.user['sid'], 'data': for_insert}):
                 changed = self.posts.change_status(self.user['sid'], post_ids, readed)
                 if changed and tags:
                     changed = self.tags.change_unread(self.user['sid'], tags, readed)
@@ -1367,7 +1370,7 @@ class RSSTagApplication(object):
         self.response = Response(json.dumps(result), mimetype='application/json')
         self.response.status_code = code
 
-    def on_get_posts_with_tags(self, s_tags):
+    def on_get_posts_with_tags(self, s_tags):#TODO: delete or change or something other
         if s_tags:
             tags = s_tags.split('-')
             if tags:

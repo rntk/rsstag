@@ -11,7 +11,7 @@ from random import randint
 from urllib.parse import quote_plus, urlencode
 from http import client
 from typing import Tuple
-from rsstag import POST_NOT_IN_PROCESSING
+from rsstag.tasks import POST_NOT_IN_PROCESSING
 from rsstag.routes import RSSTagRoutes
 import aiohttp
 
