@@ -72,7 +72,11 @@ class RssTagLetters:
             letters[letter]['unread_count'] += tag['unread_count']
 
         try:
-            update_result = self._db.letters.update_one({'owner': owner}, {'$set': {'letters': letters}})
+            update_result = self._db.letters.update_one(
+                {'owner': owner},
+                {'$set': {'owner': owner, 'letters': letters}},
+                upsert=True
+            )
             result = True #needd check matched_count/modified_count
         except Exception as e:
             self._log.error('Can`t change letters unread. User %s. Info: %s', owner, e)
