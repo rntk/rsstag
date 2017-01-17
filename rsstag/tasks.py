@@ -113,6 +113,7 @@ class RssTagTasks:
                         if data:
                             self._db.tasks.update_one({'_id': user_task['_id']}, {'$set': {'processing': TASK_NOT_IN_PROCESSING}})
                         else:
+                            task['type'] = TASK_NOOP
                             if self.add_next_tasks(task['user']['sid'], user_task['type']):
                                 self._db.tasks.remove({'_id': user_task['_id']})
 
