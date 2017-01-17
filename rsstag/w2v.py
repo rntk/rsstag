@@ -1,6 +1,8 @@
 import os
 import gzip
+import logging
 from collections import defaultdict
+from typing import List
 from pymongo import MongoClient
 from rsstag.tags_builder import TagsBuilder
 from rsstag.html_cleaner import HTMLCleaner
@@ -12,12 +14,13 @@ class W2VLearn:
     def __init__(self, db, config: dict) -> None:
         self._config = config
         self._db = db
+        self._log = logging.getLogger('W2V')
         if os.path.exists(self._config['settings']['w2v_model']):
             self._model = Word2Vec.load(self._config['settings']['w2v_model'])
         else:
             self._model = None
 
-    def fetch_texts(self) -> None:
+    def fetch_texts(self) -> None:#TODO remove or change
         cursor = self._db.posts.find({})
         builder = TagsBuilder(self._config['settings']['replacement'])
         cleaner = HTMLCleaner()
@@ -41,21 +44,20 @@ class W2VLearn:
         if self._model:
             self._model.train(words)
         else:
-            self._model = Word2Vec(words, window=15, iter=30, sample=1e-5, workers=os.cpu_count())
+            self._model = Word2Vec(words, window=15, iter=30, sample=1e-5, min_count=0, workers=os.cpu_count())
         self._model.save(self._config['settings']['w2v_model'])
 
-    def make_groups(self, top_n: int=10, koef: float=0.3):
+    def make_groups(self, tags: List[str], top_n: int=10, koef: float=0.3):
         groups = defaultdict(set)
         if self._model:
-            tags_cur = self._db.tags.find({}, {'tag': True})
-            for tag in tags_cur:
+            for tag in tags:
                 try:
-                    similar_tags = self._model.similar_by_word(tag['tag'], topn=top_n)
+                    similar_tags = self._model.similar_by_word(tag, topn=top_n)
                     for sim_tag, val in similar_tags:
                         if val >= koef:
-                            groups[sim_tag].add(tag['tag'])
+                            groups[sim_tag].add(tag)
                 except Exception as e:
-                    pass
+                    self._log.warning('Error in w2v.make_groups. Info: %s', e)
 
         return groups
 
