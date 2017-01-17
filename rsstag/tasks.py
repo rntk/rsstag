@@ -28,7 +28,7 @@ class RssTagTasks:
         TASK_DOWNLOAD: [TASK_TAGS],
         TASK_TAGS: [TASK_LETTERS, TASK_TAGS_SENTIMENT, TASK_NER, TASK_CLUSTERING], #TASK_TAGS_COORDS
         TASK_NER: [TASK_W2V],
-        TASK_D2V: [TASK_TAGS_GROUP]
+        TASK_W2V: [TASK_TAGS_GROUP]
     }
     _delete_tasks = set([
         TASK_LETTERS, TASK_TAGS_SENTIMENT, TASK_NER, TASK_CLUSTERING, TASK_TAGS_COORDS, TASK_W2V, TASK_TAGS_GROUP
@@ -166,7 +166,7 @@ class RssTagTasks:
 
             if remove_task:
                 removed = self.remove_task(task['data']['_id'])
-                if removed and ((task['type'] == TASK_W2V) or (task['type'] == TASK_DOWNLOAD)):
+                if removed and ((task['type'] == TASK_W2V) or (task['type'] == TASK_DOWNLOAD) or (task['type'] == TASK_NER)):
                     self.add_next_tasks(task['user']['sid'], task['type'])
 
             result = True
