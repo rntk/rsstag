@@ -20,6 +20,7 @@ from rsstag.letters import RssTagLetters
 from rsstag.tags import RssTagTags
 from rsstag.posts import RssTagPosts
 from rsstag.entity_extractor import RssTagEntityExtractor
+from rsstag.w2v import W2VLearn
 from rsstag.sentiment import RuSentiLex, WordNetAffectRuRom, SentimentConverter
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import DBSCAN
@@ -274,6 +275,104 @@ class RSSTagWorker:
 
         return result
 
+    def make_w2v(self, db, owner: str, config: dict, builder: TagsBuilder, cleaner: HTMLCleaner) -> Optional[bool]:
+        result = False
+        posts = RssTagPosts(db)
+        all_posts = posts.get_all(owner, projection={'content': True, 'pid': True})
+        tagged_texts = []
+        if all_posts:
+            for post in all_posts:
+                text = post['content']['title'] + ' ' + gzip.decompress(post['content']['content']).decode('utf-8', 'replace')
+                cleaner.purge()
+                cleaner.feed(text)
+                strings = cleaner.get_content()
+                text = ' '.join(strings)
+                builder.purge()
+                builder.prepare_text(text)
+                tag = post['pid']
+                tagged_texts.append((builder.get_prepared_text(), tag))
+        if tagged_texts:
+            try:
+                learn = W2VLearn(db, config)
+                learn._tagged_texts = tagged_texts
+                learn.learn()
+                result = True
+            except Exception as e:
+                result = None
+                logging.error('Can`t W2V. Info: %s', e)
+
+        return result
+
+    def make_tags_groups(self, db, owner: str, config: dict) -> Optional[bool]:
+        result = False
+        tags_h = RssTagTags(db)
+        all_tags = tags_h.get_all(owner, projection={'tag': True})
+        if all_tags:
+            try:
+                learn = W2VLearn(db, config)
+                koef = 0.6
+                top_n = 10
+                groups = learn.make_groups([tag['tag'] for tag in all_tags], top_n, koef)
+                tag_groups = defaultdict(list)
+                for group, tags in groups.items():
+                    if len(tags) > 3:
+                        for tag in tags:
+                            tag_groups[tag].append(group)
+                if tag_groups:
+                    tags_h.add_groups(owner, tag_groups)
+                result = True
+            except Exception as e:
+                result = None
+                logging.error('Can`t group tags. Info: %s', e)
+
+        return result
+
+    def make_tags_sentiment(self, db, owner: str, config: dict) -> Optional[bool]:
+        """
+            TODO: may be will be need RuSentiLex and WordNetAffectRuRom caching
+        """
+        result = True
+        tags = RssTagTags(db)
+        all_tags = tags.get_all(owner, projection={'tag': True})
+        if all_tags:
+            try:
+                f = open(config['settings']['sentilex'], 'r', encoding='utf-8')
+                strings = f.read().splitlines()
+                ru_sent = RuSentiLex()
+                wrong = ru_sent.sentiment_validation(strings, ',', '!')
+                i = 0
+                if not wrong:
+                    ru_sent.load(strings, ',', '!')
+                    all_tags = db.tags.find({}, {'tag': True})
+                    wna_dir = config['settings']['lilu_wordnet']
+                    wn_en = WordNetAffectRuRom('en', 4)
+                    wn_en.load_dicts_from_dir(wna_dir)
+                    wn_ru = WordNetAffectRuRom('ru', 4)
+                    wn_ru.load_dicts_from_dir(wna_dir)
+                    conv = SentimentConverter()
+                    for tag in all_tags:
+                        sentiment = ru_sent.get_sentiment(tag['tag'])
+                        if not sentiment:
+                            affects = wn_en.get_affects_by_word(tag['tag'])
+                            '''if not affects:
+                                affects = wn_en.search_affects_by_word(tag['tag'])'''
+                            if not affects:
+                                affects = wn_ru.get_affects_by_word(tag['tag'])
+                            '''if not affects:
+                                affects = wn_ru.search_affects_by_word(tag['tag'])'''
+                            if affects:
+                                sentiment = conv.convert_sentiment(affects)
+
+                        if sentiment:
+                            i += 1
+                            sentiment = sorted(sentiment)
+                            tags.add_sentiment(owner, tag['tag'], sentiment)
+                    result = True
+            except Exception as e:
+                logging.error('Can`t make tags santiment. Info: %s', e)
+
+        return result #Always True. TODO: refactor or replace by somethin
+
     def worker(self):
         """Worker for bazqux.com"""
         cl = MongoClient(self._config['settings']['db_host'], int(self._config['settings']['db_port']))
@@ -305,22 +404,26 @@ class RSSTagWorker:
             elif task['type'] == TASK_MARK:
                 task_done = provider.mark(task['data'], task['user'])
             elif task['type'] == TASK_TAGS:
-                task_done = self.make_tags(db, task['data'], builder, cleaner)
+                if task['data']:
+                    task_done = self.make_tags(db, task['data'], builder, cleaner)
+                else:
+                    task_done = True
+                    logging.warning('Error while make tags: %s', task)
             elif task['type'] == TASK_LETTERS:
                 task_done = self.make_letters(db, task['user']['sid'], self._config)
             elif task['type'] == TASK_NER:
                 task_done = self.make_ner(db, task['user']['sid'])
             elif task['type'] == TASK_TAGS_SENTIMENT:
-                task_done = True
+                task_done = self.make_tags_sentiment(db, task['user']['sid'], self._config)
             elif task['type'] == TASK_CLUSTERING:
                 task_done = self.make_clustering(db, task['user']['sid'], builder, cleaner)
-            elif task['type'] == TASK_TAGS_GROUP:
-                task_done = True
             elif task['type'] == TASK_W2V:
-                task_done = True
+                task_done = self.make_w2v(db, task['user']['sid'], self._config, builder, cleaner)
+            elif task['type'] == TASK_TAGS_GROUP:
+                task_done = self.make_tags_groups(db, task['user']['sid'], self._config)
             '''elif task['type'] == TASK_WORDS:
                 task_done = self.process_words(db, task['data'])'''
-
+            #TODO: add tags_coords, add D2V?
             if task_done:
                 tasks.finish_task(task)
                 if task['type'] == TASK_TAGS_GROUP:
