@@ -160,6 +160,16 @@ class RssTagTags:
 
         return result
 
+    def add_sentiment(self, owner: str, tag: str, sentiment: List[str]) -> Optional[bool]:
+        try:
+            self._db.tags.update({'owner': owner, 'tag': tag}, {'$set': {'sentiment': sentiment}})#TODO: check result
+            result = True
+        except Exception as e:
+            result = None
+            self._log.error('Can`t get country tags. User %s. Info: %s', owner, e)
+
+        return result
+
     def get_sentiments(self, owner: str, only_unread: bool) -> Optional[tuple]:
         query = {
             'owner': owner,
