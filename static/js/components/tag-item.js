@@ -25,7 +25,7 @@ export default class TagItem extends React.Component{
                         {this.state.tag.tag}
                     </a> ({this.state.tag.count})<br />
                     ({this.state.tag.words.join(', ')})<br />
-                    <a href={'/tag-info/' + this.state.tag.tag} className="get_tag_siblings">...</a>
+                    {(this.props.is_bigram)? '': <a href={'/tag-info/' + this.state.tag.tag} className="get_tag_siblings">...</a>}
                 </li>
             </div>
         )

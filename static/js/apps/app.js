@@ -140,7 +140,7 @@ window.onload = () => {
         const bi_grams_evsys = new EventsSystem();
         const bi_grams_storage = new TagsStorage(bi_grams_evsys, '/tag-bi-grams');
         ReactDOM.render(
-            <TagsList ES={bi_grams_evsys} />,
+            <TagsList ES={bi_grams_evsys} is_bigram={true} />,
             document.getElementById('bi_grams')
         );
         ReactDOM.render(
