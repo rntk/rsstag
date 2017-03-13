@@ -1,5 +1,6 @@
 """Build tags from text. Support languages: english, russian"""
 import re
+import logging
 from collections import defaultdict
 from typing import List, Dict
 import pymorphy2
@@ -23,6 +24,7 @@ class TagsBuilder:
         self.latin = PorterStemmer()
         self.cyrillic = pymorphy2.MorphAnalyzer()
         self._stopwords = None
+        self._log = logging.getLogger('TagsBuilder')
 
     def purge(self) -> None:
         """Clear state"""
@@ -44,25 +46,28 @@ class TagsBuilder:
 
     def process_word(self, current_word: str) -> str:
         """Make tag/token from gven word"""
-        current_word = current_word.strip().casefold()
-        word_length = len(current_word)
         tag = ''
-        if self.only_cyrillic.match(current_word):
-            temp = self.cyrillic.parse(current_word)
-            if temp:
-                tag = temp[0].normal_form
-            else:
+        try:
+            current_word = current_word.strip().casefold()
+            word_length = len(current_word)
+            if self.only_cyrillic.match(current_word):
+                temp = self.cyrillic.parse(current_word)
+                if temp:
+                    tag = temp[0].normal_form
+                else:
+                    tag = current_word
+            elif self.only_latin.match(current_word):
+                tag = self.latin.stem(current_word)
+            elif current_word.isnumeric or word_length < 4:
                 tag = current_word
-        elif self.only_latin.match(current_word):
-            tag = self.latin.stem(current_word)
-        elif current_word.isnumeric or word_length < 4:
-            tag = current_word
-        elif word_length == 4 or word_length == 5:
-            tag = current_word[:-1]
-        elif word_length == 6:
-            tag = current_word[:-2]
-        else:
-            tag = current_word[:-3]
+            elif word_length == 4 or word_length == 5:
+                tag = current_word[:-1]
+            elif word_length == 6:
+                tag = current_word[:-2]
+            else:
+                tag = current_word[:-3]
+        except Exception as e:
+            self._log.error('Can`t add to stat word: "%s". Info: %s', current_word, e)
 
         return tag
 

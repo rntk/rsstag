@@ -1,5 +1,6 @@
 from typing import List, Iterator
 import re
+import logging
 import unicodedata
 from collections import defaultdict
 from rsstag.html_cleaner import HTMLCleaner
@@ -20,6 +21,7 @@ class RssTagEntityExtractor:
         self._delimiter = ' '
         self._stopwords = set(nltk.corpus.stopwords.words('english') + nltk.corpus.stopwords.words('russian'))
         self._words_stat = defaultdict(lambda: {'u': 0, 'l': 0})
+        self._log = logging.getLogger('RssTagEntityExtractor')
 
     def find_geo_entities(self, entities: List[str]) -> List[str]:
         pass
@@ -101,19 +103,23 @@ class RssTagEntityExtractor:
         return new_entity
 
     def add_to_stat(self, word: str):
-        if self._only_cyrillic.match(word):
-            s_word = self._stemmer_ru.stem(word)
-        elif self._only_latin.match(word):
-            s_word = self._stemmer_en.stem(word)
-        else:
-            s_word = word
+        try:
+            if self._only_cyrillic.match(word):
+                s_word = self._stemmer_ru.stem(word)
+            elif self._only_latin.match(word):
+                s_word = self._stemmer_en.stem(word)
+            else:
+                s_word = word
 
-        #print(word, s_word)
-        if s_word.istitle():
-            letter_case = 'u'
-        else:
-            letter_case = 'l'
-        self._words_stat[word.casefold()][letter_case] += 1
+            #print(word, s_word)
+            if s_word.istitle():
+                letter_case = 'u'
+            else:
+                letter_case = 'l'
+            self._words_stat[word.casefold()][letter_case] += 1
+        except Exception as e:
+            self._log.error('Can`t add to stat word: "%s". Info: %s', word, e)
+
 
     def extract_entities(self, text: str) -> List[str]:
         entities = []
