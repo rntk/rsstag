@@ -27,6 +27,28 @@ import TagsNet from '../components/tags-net.js';
 import TagNetTools from '../components/tag-net-tools.js';
 
 window.onload = () => {
+    let $tools = document.querySelector('#global_tools');
+    let $tools_bottom = document.querySelector('#global_tools_bottom');
+    let scroll_position = window.scrollY;
+    let t_out = 0;
+    window.addEventListener('scroll', e => {
+        if (t_out) {
+          clearTimeout(t_out);
+        }
+        if (scroll_position !== window.scrollY) {
+          t_out = setTimeout(() => {
+            let sc_t = window.scrollY;
+            if (scroll_position > sc_t) {
+              $tools.style.display = 'block';
+              $tools_bottom.style.display = 'block';
+            } else if (scroll_position < sc_t) {
+              $tools.style.display = 'none';
+              $tools_bottom.style.display = 'none';
+            }
+            scroll_position = window.scrollY;
+          }, 150);
+        }
+    });
     if (window.EVSYS === undefined) {
         window.EVSYS = new EventsSystem();
     }
