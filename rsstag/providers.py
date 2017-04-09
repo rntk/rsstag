@@ -226,3 +226,19 @@ class BazquxProvider:
             logging.error('Can`t get token from bazqux server. Info: %', e)
 
         return result
+
+    def is_valid_user(self, user: dict) -> Optional[bool]:
+        headers = self.get_headers(user)
+        connection = client.HTTPSConnection(self._config['bazqux']['api_host'])
+        try:
+            connection.request('GET', '/reader/ping', None, headers)
+            if connection.getresponse().read().strip() == "OK":
+                result= True
+            else:
+                result = False
+                logging.error('Unauthorized user')
+        except Exception as e:
+            result = None
+            logging.error('Can`t ping bazqux server. Info: %', e)
+
+        return result

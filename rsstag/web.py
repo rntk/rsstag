@@ -286,6 +286,24 @@ class RSSTagApplication(object):
         if login and password:
             user = self.users.get_by_login_password(login, password)
             if user:
+                provider = BazquxProvider(self.config)
+                is_valid = provider.is_valid_user(user)
+                if is_valid == False:
+                    token = provider.get_token(login, password)
+                    if token:
+                        updated = self.users.update_by_sid(user['sid'], {'token': token})
+                        if updated:
+                            user['token'] = token
+                        else:
+                            err.append('Can`t safe new token. Try later.')
+                    else:
+                        err.append('Can`t refresh token. Try later.')
+                elif is_valid == None:
+                    err.append('Can`t check token status. Try later.')
+
+            if err:
+                user = None
+            if user:
                 self.prepareSession(user)
                 self.response = redirect(self.routes.getUrlByEndpoint(endpoint='on_root_get'))
                 return ''
