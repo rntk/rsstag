@@ -9,7 +9,7 @@ export default class PostsStorage {
             group: '',
             group_title: '',
             posts: new Map(),
-            readed: false
+            readed: false,
         };
         this.urls = {
             fetch_content: '/posts-content',
@@ -21,11 +21,14 @@ export default class PostsStorage {
     normalizePosts(posts) {
         let posts_map = new Map();
 
+        if (posts && (posts.length > 0)) {
+            posts[0].current = true;
+        }
         for (let i = 0; i < posts.length; i++) {
             posts_map.set(+posts[i].pos, posts[i]);
         }
 
-        return(posts_map);
+        return posts_map;
     }
 
     fetchPosts() {
@@ -57,6 +60,33 @@ export default class PostsStorage {
         this.ES.bind(this.ES.CHANGE_POSTS_CONTENT_STATE, this.changePostsContentState.bind(this));
         this.ES.bind(this.ES.CHANGE_POSTS_STATUS, this.changePostsStatus.bind(this));
         this.ES.bind(this.ES.SHOW_POST_LINKS, this.fetchPostLinks.bind(this));
+        this.ES.bind(this.ES.SET_CURRENT_POST, this.setCurrentPost.bind(this));
+    }
+
+    setCurrentPost(post_id) {
+        let state = this.getState(),
+            id = +post_id,
+            changed = false;
+
+        if (state.posts.has(id)) {
+            for (let post of state.posts) {
+                if (post[1].current && (+post[1].pos === id)) {
+                    break;
+                } else if (post[1].current) {
+                    post[1].current = false;
+                    state.posts.set(+post[0], post[1]);
+                    changed = true;
+                } else if (post[0] === id) {
+                    post[1].current = true;
+                    state.posts.set(id, post[1]);
+                    changed = true;
+                }
+            }
+        }
+        if (changed) {
+            this.setState(state)
+        }
+
     }
 
     changePostsContentState(data) {
@@ -131,10 +161,10 @@ export default class PostsStorage {
                         this.setState(state);
                     }
                 } else {
-                    this.errorMessage('Error. Try later');
+                    this.errorMessage('Can`t fetch posts content');
                 }
             }).catch(err => {
-                this.errorMessage('Error. Try later');
+                this.errorMessage('Can`t fetch posts content.', err);
             });
         }
     }
@@ -189,10 +219,10 @@ export default class PostsStorage {
                         this.setState(state);
                     }
                 } else {
-                    this.errorMessage('Error. Try later');
+                    this.errorMessage('Can`t change posts status');
                 }
             }).catch(err => {//mutate state
-                this.errorMessage('Error. Try later');
+                this.errorMessage('Can`t change posts status.', err);
             });
         }
     }
@@ -231,13 +261,18 @@ export default class PostsStorage {
                 this.errorMessage(data.error);
             }
         }).catch(err => {
-            this.errorMessage('Error');
+            this.errorMessage('Can`t fetch posts links', err);
         });
+
         return(promise);
     }
 
-    errorMessage(msg) {
-        console.log(msg);
+    errorMessage(msg, err) {
+        if (err) {
+            console.log(msg);
+        } else {
+            console.log(msg, err);
+        }
         this.ES.trigger(this.POSTS_ERROR_MESSAGE, msg);
     }
 

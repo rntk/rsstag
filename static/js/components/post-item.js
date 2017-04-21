@@ -7,9 +7,16 @@ export default class PostsItem extends React.Component{
         this.state = {
             post: props.post
         };
+        this.need_scroll = false;
         this.clickReadButton = this.clickReadButton.bind(this);
         this.showPostLinks = this.showPostLinks.bind(this);
         this.changePostsContentState = this.changePostsContentState.bind(this);
+        this.setCurrent = this.setCurrent.bind(this);
+        this.getNode = this.getNode.bind(this);
+    }
+
+    setCurrent() {
+        this.props.ES.trigger(this.props.ES.SET_CURRENT_POST, this.state.post.pos);
     }
 
     clickReadButton() {
@@ -21,7 +28,15 @@ export default class PostsItem extends React.Component{
     }
 
     changePostsContentState() {
+        this.need_scroll = true;
         this.props.ES.trigger(this.props.ES.CHANGE_POSTS_CONTENT_STATE, {ids: [this.state.post.pos], showed: !this.state.post.showed});
+    }
+
+    componentDidUpdate() {
+        if (this.state.post.current && this.need_scroll) {
+            window.scrollTo(0, this.node.offsetTop);
+            this.need_scroll = false;
+        }
     }
 
     dangerHTML(post) {
@@ -30,7 +45,12 @@ export default class PostsItem extends React.Component{
         if (post.showed) {//TODO: add content clearing from scripts, iframes etc.
             html = {__html: post.post.content.content};
         }
-        return(html);
+
+        return html;
+    }
+
+    getNode(node) {
+        this.node = node;
     }
 
     render() {
@@ -68,7 +88,7 @@ export default class PostsItem extends React.Component{
                 );
             }
             return(
-                <div className="post" key={post.pos}><a name={'p' + post.pos}></a>
+                <div className={"post " + (this.state.post.current? "current_post": "")} key={post.pos} ref={this.getNode} onClick={this.setCurrent}><a name={'p' + post.pos}></a>
                     <h3 className="post_title">
                         <a className="post_title_link" href={post.post.url} target="_blank" dangerouslySetInnerHTML={{__html: post.post.content.title}}></a>
                     </h3>

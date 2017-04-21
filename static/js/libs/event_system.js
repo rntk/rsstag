@@ -34,6 +34,8 @@ export default class EventsSystem {
         this.NET_TAG_CHANGE = 'net_tag_change';
         this.NET_TAG_SELECTED = 'net_tag_selected';
 
+        this.SET_CURRENT_POST = 'set_current_post';
+
         this._events = {};
     }
 

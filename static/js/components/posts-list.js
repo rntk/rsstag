@@ -34,7 +34,7 @@ export default class PostsList extends React.Component{
                 let post = item[1];
 
                 posts.push(
-                    <PostItem post={post} key={post.pos} ES={this.props.ES} />
+                    <PostItem post={post} key={post.pos} ES={this.props.ES} current={this.state.current_post} />
                 );
             }
 
