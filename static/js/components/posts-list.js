@@ -16,6 +16,10 @@ export default class PostsList extends React.Component{
         this.props.ES.bind(this.props.ES.POSTS_UPDATED, this.updatePosts);
     }
 
+    componentDidUpdate() {
+        this.props.ES.trigger(this.props.ES.POSTS_RENDERED);
+    }
+
     componentWillUnmount() {
         this.props.ES.unbind(this.props.ES.POSTS_UPDATED, this.updatePosts);
     }

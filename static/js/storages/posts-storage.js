@@ -61,6 +61,18 @@ export default class PostsStorage {
         this.ES.bind(this.ES.CHANGE_POSTS_STATUS, this.changePostsStatus.bind(this));
         this.ES.bind(this.ES.SHOW_POST_LINKS, this.fetchPostLinks.bind(this));
         this.ES.bind(this.ES.SET_CURRENT_POST, this.setCurrentPost.bind(this));
+        this.ES.bind(this.ES.POSTS_RENDERED, this.processRenderedPosts.bind(this));
+    }
+
+    processRenderedPosts() {
+        let imgs = document.querySelectorAll('img');
+        if (imgs && imgs.length) {
+            for (let i = 0; i < imgs.length; i++) {
+                if (imgs[i].height) {
+                    imgs[i].removeAttribute('height');
+                }
+            }
+        }
     }
 
     setCurrentPost(post_id) {

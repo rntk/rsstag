@@ -36,6 +36,8 @@ export default class EventsSystem {
 
         this.SET_CURRENT_POST = 'set_current_post';
 
+        this.POSTS_RENDERED = 'posts_rendered';
+
         this._events = {};
     }
 
