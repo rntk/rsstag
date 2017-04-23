@@ -7,7 +7,7 @@ export default class PostsItem extends React.Component{
         this.state = {
             post: props.post
         };
-        this.need_scroll = false;
+        this.showed = false;
         this.clickReadButton = this.clickReadButton.bind(this);
         this.showPostLinks = this.showPostLinks.bind(this);
         this.changePostsContentState = this.changePostsContentState.bind(this);
@@ -28,12 +28,12 @@ export default class PostsItem extends React.Component{
     }
 
     changePostsContentState() {
-        this.need_scroll = true;
         this.props.ES.trigger(this.props.ES.CHANGE_POSTS_CONTENT_STATE, {ids: [this.state.post.pos], showed: !this.state.post.showed});
     }
 
     componentDidUpdate() {
-        if (this.state.post.current && this.need_scroll) {
+        if (this.state.post.current && (this.showed !== !!this.state.post.showed)) {
+            this.showed = this.state.post.showed;
             window.scrollTo(0, this.node.offsetTop);
             this.need_scroll = false;
         }
