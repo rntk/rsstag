@@ -38,13 +38,14 @@ class W2VLearn:
 
     def learn(self):
         words = []
+        n_epochs = 30
         for i, tagged_text in enumerate(self._tagged_texts):
             words.append(tagged_text[0].split())
 
         if self._model:
-            self._model.train(words)
+            self._model.train(words, total_examples=len(words), epochs=n_epochs)
         else:
-            self._model = Word2Vec(words, window=15, iter=30, sample=1e-5, min_count=0, workers=os.cpu_count())
+            self._model = Word2Vec(words, window=15, iter=n_epochs, sample=1e-5, min_count=0, workers=os.cpu_count())
         self._model.save(self._config['settings']['w2v_model'])
 
     def make_groups(self, tags: List[str], top_n: int=10, koef: float=0.3):
