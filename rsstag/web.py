@@ -41,6 +41,7 @@ class RSSTagApplication(object):
     need_cookie_update = False
     d2v = None
     w2v = None
+    w2v_mod_date = None
     models = {'d2v': 'd2v', 'w2v': 'w2v'}
     allow_not_logged = (
         'on_root_get',
@@ -61,6 +62,8 @@ class RSSTagApplication(object):
             self.d2v = Doc2Vec.load(self.config['settings']['d2v_model'])
         if os.path.exists(self.config['settings']['w2v_model']):
             self.w2v = Word2Vec.load(self.config['settings']['w2v_model'])
+            st = os.stat(self.config['settings']['w2v_model'])
+            self.w2v_mod_date = st.st_mtime
 
         try:
             logging.basicConfig(
@@ -1226,6 +1229,10 @@ class RSSTagApplication(object):
                 except Exception as e:
                     logging.warning('In %s not found tag %s', self.config['settings']['d2v_model'], tag)
             elif (model == self.models['w2v']) and self.w2v:
+                st = os.stat(self.config['settings']['w2v_model'])
+                if st.st_mtime != self.w2v_mod_date:
+                    self.w2v = Word2Vec.load(self.config['settings']['w2v_model'])
+                    self.w2v_mod_date = st.st_mtime
                 try:
                     siblings = self.w2v.similar_by_word(tag, topn=30)
                     for sibling in siblings:
