@@ -226,6 +226,7 @@ class RssTagTasks:
             if type != TASK_ALL:
                 query['type'] = type
             self._db.tasks.update_many(
+                query,
                 {'$set': {'processing': TASK_FREEZED}}
             )  # TODO: check result?
             result = True
@@ -241,6 +242,7 @@ class RssTagTasks:
             if type != TASK_ALL:
                 query['type'] = type
             self._db.tasks.update_many(
+                query,
                 {'$set': {'processing': TASK_NOT_IN_PROCESSING}}
             )  # TODO: check result?
             result = True
