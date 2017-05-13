@@ -4,7 +4,7 @@
 {%  include "head-data.html" %}
 </head>
 <body>
-{% import 'main-menu.html' as menu with context %}
+{% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
 <div id="global_tools">
     <div class="left_half">
         <div id="link_on_root" class="global_tools_button">
@@ -15,6 +15,7 @@
         </div>
     </div>
     <div class="right_half">
+        {{ g_status.global_status() }}
         {{ menu.settings_menu() }}
     </div>
 </div>
@@ -24,5 +25,6 @@
 <script type="text/javascript">
     var initial_cats_list = {{data|json}}
 </script>
-<div id="progressbar"></div></body>
+<div id="progressbar"></div>
+</body>
 </html>

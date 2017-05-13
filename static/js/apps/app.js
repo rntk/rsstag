@@ -25,8 +25,9 @@ import rsstag_utils from '../libs/rsstag_utils.js';
 import TagsNetStorage from '../storages/tags-net-storage.js';
 import TagsNet from '../components/tags-net.js';
 import TagNetTools from '../components/tag-net-tools.js';
+import GlobalStatus from '../components/global-status.js';
 
-window.onload = () => {
+function handleScroll() {
     let $tools = document.querySelector('#global_tools');
     let $tools_bottom = document.querySelector('#global_tools_bottom');
     let scroll_position = window.scrollY;
@@ -59,10 +60,13 @@ window.onload = () => {
           }
       });
     }
+}
+
+window.onload = () => {
     if (window.EVSYS === undefined) {
         window.EVSYS = new EventsSystem();
     }
-
+    handleScroll();
     ReactDOM.render(
         <SettingsMenu ES={window.EVSYS} />,
         document.getElementById('settings_menu')
@@ -78,9 +82,14 @@ window.onload = () => {
     progressbar_storage.start();
 
     let path = document.location.pathname;
+
+    ReactDOM.render(
+        <GlobalStatus/>,
+        document.getElementById('global_status')
+    )
     if (path === '/') {
         ;
-    } else if (path === '\/group\/category') {
+    } else if (path === '/group/category') {
         ReactDOM.render(
             <CategoriesList ES={window.EVSYS} />,
             document.getElementById('cats_list')

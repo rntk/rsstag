@@ -1,0 +1,61 @@
+﻿'use strict';
+import React from 'react';
+import rsstag_utils from '../libs/rsstag_utils.js';
+
+export default class GlobalStatus extends React.Component{
+    constructor(props) {
+        super(props);
+        this.state = {
+            msgs: [],
+            is_ok: true
+        }
+        this.timeout_handler = 0;
+    }
+
+    checkStatusAfter(timeout) {
+        if (this.timeout_handler) {
+            clearTimeout(this.timeout_handler);
+        }
+        this.timeout_handler = setTimeout(() => {
+            this.fetchStatus();
+        }, timeout);
+        //console.log('Next status fetching after: ', timeout);
+    }
+
+    fetchStatus() {
+        rsstag_utils.fetchJSON(
+            '/status',
+            {
+                method: 'GET',
+                credentials: 'include',
+                headers: {'Content-Type': 'application/json'},
+            }
+        ).then(data => {
+            if (data.data) {
+                if (data.data.msgs && data.data.msgs.length) {
+                    this.setState({
+                        is_ok: data.data.is_ok,
+                        msgs: data.data.msgs
+                    });
+                }
+            }
+        }).catch(err => {
+            console.log('Can`t fetch status.', err);
+        });
+        this.checkStatusAfter(60000);
+    }
+
+    componentDidMount() {
+        this.checkStatusAfter(1000);
+    }
+
+    render() {
+        if (this.state) {
+            if ((this.state.msgs && this.state.msgs.length) || !this.satte_is_ok) {
+                return <abbr title={'Working: ' + this.state.msgs.join(', ')} className={this.state.is_ok? '': 'error'}>{this.state.is_ok? 'W': 'E'}</abbr>;
+            }
+        }
+
+        return null;
+    }
+};

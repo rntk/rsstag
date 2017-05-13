@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import Optional
+from typing import Optional, List
 from rsstag.users import RssTagUsers
 from pymongo import MongoClient
 
@@ -174,5 +174,48 @@ class RssTagTasks:
         except Exception as e:
             result = False
             self._log.error('Can`t finish task %s, type %s. Info: %s', task['data']['_id'], task['type'], e)
+
+        return result
+
+    def get_current_tasks_titles(self, user_id: str) -> Optional[List[str]]:
+        try:
+            curr = self._db.tasks.find({
+                'user': user_id,
+                'processing': {'$ne': TASK_NOT_IN_PROCESSING},
+            })
+            task_types = set()
+            result = []
+            for task in curr:
+                if task['type'] not in task_types:
+                    task_types.add(task['type'])
+                    result.append(self.get_task_title(task['type']))
+
+        except Exception as e:
+            result = None
+            self._log.error('Can`t get user tasks state %s. Info: %s', user_id, e)
+
+        return result
+
+    def get_task_title(self, task_type: int) -> str:
+        task_titles = {
+            TASK_DOWNLOAD: 'Downloading posts from provider',
+            TASK_MARK: 'Sync posts "read" state with provider',
+            TASK_TAGS: 'Bulding posts tags',
+            TASK_WORDS: '',
+            TASK_LETTERS: 'Buildings first letters dictionary',
+            TASK_NER: 'Named entity recognition',
+            TASK_CLUSTERING: 'Posts clusterization',
+            TASK_W2V: 'Learning Word2Vec',
+            TASK_D2V: 'Learning Doc2Vec',
+            TASK_TAGS_SENTIMENT: 'Tags sentiment',
+            TASK_TAGS_GROUP: 'Tags groups searching',
+            TASK_TAGS_COORDS: 'Searching geo objects in tags'
+        }
+
+        if task_type in task_titles:
+            result = task_titles[task_type]
+        else:
+            result = ''
+            self._log.error('Unknow task type "%s"', task_type)
 
         return result

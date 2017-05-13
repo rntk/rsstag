@@ -5,7 +5,7 @@
 {% include "head-data.html" %}
 </head>
 <body>
-{% import 'main-menu.html' as menu with context %}
+{% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
 
 <div id="global_tools">
     <div class="left_half">
@@ -24,6 +24,7 @@
         <div id="posts_stat" class="global_tools_button"></div>
         <div id="read_all" class="global_tools_button"></div>
         <div id="show_all" class="global_tools_button"></div>
+        {{ g_status.global_status() }}
         {{ menu.settings_menu() }}
     </div>
 </div>

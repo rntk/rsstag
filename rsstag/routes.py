@@ -27,7 +27,7 @@ class RSSTagRoutes:
             {'url': '/read/posts', 'endpoint': 'on_read_posts_post', 'methods': ['POST']},
             {'url': '/posts-content', 'endpoint': 'on_posts_content_post', 'methods': ['POST']},
             {'url': '/post-links/<int:post_id>', 'endpoint': 'on_post_links_get', 'methods': ['GET']},
-            {'url': '/ready', 'endpoint': 'on_ready_get', 'methods': ['GET']},
+            {'url': '/status', 'endpoint': 'on_status_get', 'methods': ['GET']},
             {'url': '/settings', 'endpoint': 'on_settings_post', 'methods': ['POST']},
             {
                 'url': '/posts/with/tags/<string:s_tags>',

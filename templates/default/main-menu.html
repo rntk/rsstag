@@ -1,6 +1,6 @@
 {% macro settings_menu() -%}
     <div id="settings_menu" class="global_tools_button"></div>
-    <script type="text/javascript">
+    <script type="text/javascript" async defer>
         var rss_settings = {{ user_settings|json }};
     </script>
 {%- endmacro %}

@@ -334,6 +334,7 @@ class RSSTagApplication(object):
     def on_refresh_get_post(self):
         if self.user:
             try:
+                updated = False
                 if not self.user['in_queue']:
                     added = self.tasks.add_task({
                         'type': TASK_DOWNLOAD,
@@ -358,17 +359,18 @@ class RSSTagApplication(object):
         else:
             self.response = redirect(self.routes.getUrlByEndpoint(endpoint='on_root_get'))
 
-    def on_ready_get(self):
+    def on_status_get(self):
         if self.user:
-            result = {
-                'ready': self.user['ready'],
-                'message': self.user['message']
-            }
+            task_titles = self.tasks.get_current_tasks_titles(self.user['sid'])
+            result = {'data': {
+                'is_ok': True,
+                'msgs': task_titles
+            }}
         else:
-            result = {
-                'ready': False,
-                'message': 'Click on "Select provider" to start work'
-            }
+            result = {'data': {
+                'is_ok': False,
+                'msgs': ['Looks like you are not logged in']
+            }}
         self.response = Response(json.dumps(result), mimetype='text/html')
 
     def on_settings_post(self):

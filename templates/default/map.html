@@ -6,7 +6,7 @@
 {% include 'head-data.html' %}
 </head>
 <body>
-{% import 'main-menu.html' as menu with context %}
+{% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
 <noscript>
     <h1>Please enable javascript in your browser</h1>
 </noscript>
@@ -14,6 +14,7 @@
     {% include "logo.html" %}
     <div class="panel right_half">
         <div id="map_tools" class="global_tools_button"></div>
+        {{ g_status.global_status() }}
         {{ menu.settings_menu() }}
     </div>
 </div>
