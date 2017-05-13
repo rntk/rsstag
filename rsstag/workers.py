@@ -402,7 +402,13 @@ class RSSTagWorker:
                             task_done = False
                             logging.error('Can`t save in db for user %s. Info: %s', task['user']['sid'], e)
             elif task['type'] == TASK_MARK:
-                task_done = provider.mark(task['data'], task['user'])
+                marked = provider.mark(task['data'], task['user'])
+                if marked is None:
+                    tasks.freeze_tasks(task['user'], task['type'])
+                    users.update_by_sid(task['user']['sid'], {'retoken': True})
+                    task_done = False
+                else:
+                    task_done = marked
             elif task['type'] == TASK_TAGS:
                 if task['data']:
                     task_done = self.make_tags(db, task['data'], builder, cleaner)

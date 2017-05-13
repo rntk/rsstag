@@ -15,7 +15,7 @@ from jinja2 import Environment, PackageLoader
 from pymongo import MongoClient
 from gensim.models.doc2vec import Doc2Vec
 from gensim.models.word2vec import Word2Vec
-from rsstag.tasks import RssTagTasks, TASK_DOWNLOAD, TASK_MARK, TASK_NOT_IN_PROCESSING
+from rsstag.tasks import RssTagTasks, TASK_DOWNLOAD, TASK_MARK, TASK_NOT_IN_PROCESSING, TASK_ALL
 from rsstag.routes import RSSTagRoutes
 from rsstag.utils import getSortedDictByAlphabet, load_config
 from rsstag.posts import RssTagPosts
@@ -48,7 +48,7 @@ class RSSTagApplication(object):
         'on_login_post',
         'on_select_provider_post',
         'on_select_provider_get',
-        'on_ready_get',
+        'on_status_get',
         'on_refresh_get_post'
     )
     no_category_name = 'NotCategorized'
@@ -234,6 +234,7 @@ class RSSTagApplication(object):
             post_id = int(self.request.form.get('post_id'))
         except Exception as e:
             post_id = None
+        code = 200
         if post_id:
             post = self.posts.get_by_pid(self.user['sid'], post_id)
             if post:
@@ -291,9 +292,10 @@ class RSSTagApplication(object):
                 if is_valid == False:
                     token = provider.get_token(login, password)
                     if token:
-                        updated = self.users.update_by_sid(user['sid'], {'token': token})
+                        updated = self.users.update_by_sid(user['sid'], {'token': token, 'retoken': False})
                         if updated:
                             user['token'] = token
+                            self.tasks.unfreeze_tasks(user, TASK_ALL)
                         else:
                             err.append('Can`t safe new token. Try later.')
                     else:
@@ -361,16 +363,23 @@ class RSSTagApplication(object):
 
     def on_status_get(self):
         if self.user:
-            task_titles = self.tasks.get_current_tasks_titles(self.user['sid'])
-            result = {'data': {
-                'is_ok': True,
-                'msgs': task_titles
-            }}
+            if self.user['retoken']:
+                result = {'data': {
+                    'is_ok': False,
+                    'msgs': ['Need refresh token. Click me for relogin']
+                }}
+            else :
+                task_titles = self.tasks.get_current_tasks_titles(self.user['sid'])
+                result = {'data': {
+                    'is_ok': True,
+                    'msgs': task_titles
+                }}
         else:
             result = {'data': {
                 'is_ok': False,
                 'msgs': ['Looks like you are not logged in']
             }}
+        self.response.headers['Pragma'] = 'no-cache'
         self.response = Response(json.dumps(result), mimetype='text/html')
 
     def on_settings_post(self):

@@ -43,7 +43,8 @@ class RssTagUsers:
             'message': 'Click on "Refresh posts" to start downloading data',
             'in_queue':False,
             'created': datetime.utcnow(),
-            'lp': lp
+            'lp': lp,
+            'retoken': False
         }
         try:
             self._db.users.insert_one(user)
@@ -142,3 +143,4 @@ class RssTagUsers:
             self._log.error('Can`t updat settings for user %s. Info: %s', sid, e)
 
         return result
+

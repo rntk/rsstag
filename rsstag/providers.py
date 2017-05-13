@@ -10,7 +10,7 @@ from datetime import date, datetime
 from random import randint
 from urllib.parse import quote_plus, urlencode
 from http import client
-from typing import Tuple
+from typing import Tuple, List, Optional
 from rsstag.tasks import POST_NOT_IN_PROCESSING
 from rsstag.routes import RSSTagRoutes
 import aiohttp
@@ -63,7 +63,7 @@ class BazquxProvider:
             return (posts, data['category'])
 
 
-    def download(self, user: dict) -> None:
+    def download(self, user: dict) -> Tuple[List, List]:
         posts = []
         feeds = {}
         connection = client.HTTPSConnection(self._config[user['provider']]['api_host'])
@@ -119,7 +119,7 @@ class BazquxProvider:
             logging.info('Was loaded %s categories', len(cats_data))
             for cat_data in cats_data:
                 cat_posts, category = cat_data
-                logging.info('Fetched %s posts for category "%s"', len(cat_posts), category_name)
+                logging.info('Fetched %s posts for category "%s"', len(cat_posts), category)
                 for post in cat_posts:
                     stream_id = md5(post['origin']['streamId'].encode('utf-8')).hexdigest()
                     if stream_id not in feeds:
@@ -176,7 +176,7 @@ class BazquxProvider:
 
         return (posts, list(feeds.values()))
 
-    def mark(self, data: dict, user: dict) -> bool:
+    def mark(self, data: dict, user: dict) -> Optional[bool]:
         status = data['status']
         data_id = data['id']
         headers = self.get_headers(user)
@@ -203,6 +203,9 @@ class BazquxProvider:
                 break
             else:
                 logging.warning('Can`t mark. Resp: %s', resp_data)
+                if not self.is_valid_user(user):
+                    return None
+
             time.sleep(randint(2, 7))
             connection.close()
 

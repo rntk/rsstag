@@ -4,6 +4,7 @@ from typing import Optional, List
 from rsstag.users import RssTagUsers
 from pymongo import MongoClient
 
+TASK_ALL = -1
 TASK_NOOP = 0
 TASK_DOWNLOAD = 1
 TASK_MARK = 2
@@ -20,19 +21,20 @@ TASK_TAGS_COORDS = 12
 
 POST_NOT_IN_PROCESSING = 0
 TASK_NOT_IN_PROCESSING = 0
+TASK_FREEZED = -1
 TAG_NOT_IN_PROCESSING = 0
 
 class RssTagTasks:
     indexes = ['user', 'processing']
-    _taska_after = {
+    _tasks_after = {
         TASK_DOWNLOAD: [TASK_TAGS],
         TASK_TAGS: [TASK_LETTERS, TASK_TAGS_SENTIMENT, TASK_NER, TASK_CLUSTERING], #TASK_TAGS_COORDS
         TASK_NER: [TASK_W2V],
         TASK_W2V: [TASK_TAGS_GROUP]
     }
-    _delete_tasks = set([
+    _delete_tasks = {
         TASK_LETTERS, TASK_TAGS_SENTIMENT, TASK_NER, TASK_CLUSTERING, TASK_TAGS_COORDS, TASK_W2V, TASK_TAGS_GROUP
-    ])
+    }
     def __init__(self, db: MongoClient) -> None:
         self._db = db
         self._log = logging.getLogger('tasks')
@@ -77,8 +79,8 @@ class RssTagTasks:
 
     def add_next_tasks(self, user: str, task_type: int) -> Optional[bool]:
         result = False
-        if task_type in self._taska_after:
-            for_insert = [{'user': user, 'type': task, 'processing': TASK_NOT_IN_PROCESSING} for task in self._taska_after[task_type]]
+        if task_type in self._tasks_after:
+            for_insert = [{'user': user, 'type': task, 'processing': TASK_NOT_IN_PROCESSING} for task in self._tasks_after[task_type]]
             try:
                 self._db.tasks.insert_many(for_insert)
                 result = True
@@ -137,7 +139,6 @@ class RssTagTasks:
         return task
 
     def remove_task(self, _id: str) -> Optional[bool]:
-        result = False
         try:
             self._db.tasks.remove({'_id': _id})#TODO: check result?
             result = True
@@ -180,8 +181,7 @@ class RssTagTasks:
     def get_current_tasks_titles(self, user_id: str) -> Optional[List[str]]:
         try:
             curr = self._db.tasks.find({
-                'user': user_id,
-                'processing': {'$ne': TASK_NOT_IN_PROCESSING},
+                'user': user_id
             })
             task_types = set()
             result = []
@@ -217,5 +217,35 @@ class RssTagTasks:
         else:
             result = ''
             self._log.error('Unknow task type "%s"', task_type)
+
+        return result
+
+    def freeze_tasks(self, user: dict, type: int) -> Optional[bool]:
+        try:
+            query = {'user': user['sid']}
+            if type != TASK_ALL:
+                query['type'] = type
+            self._db.tasks.update_many(
+                {'$set': {'processing': TASK_FREEZED}}
+            )  # TODO: check result?
+            result = True
+        except Exception as e:
+            result = None
+            self._log.error('Can`t freeze tasks? user %s, type %s. Info: %s', user['sid'], type, e)
+
+        return result
+
+    def unfreeze_tasks(self, user: dict, type: int) -> Optional[bool]:
+        try:
+            query = {'user': user['sid']}
+            if type != TASK_ALL:
+                query['type'] = type
+            self._db.tasks.update_many(
+                {'$set': {'processing': TASK_NOT_IN_PROCESSING}}
+            )  # TODO: check result?
+            result = True
+        except Exception as e:
+            result = None
+            self._log.error('Can`t freeze tasks? user %s, type %s. Info: %s', user['sid'], type, e)
 
         return result

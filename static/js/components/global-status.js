@@ -32,7 +32,7 @@ export default class GlobalStatus extends React.Component{
             }
         ).then(data => {
             if (data.data) {
-                if (data.data.msgs && data.data.msgs.length) {
+                if (data.data) {
                     this.setState({
                         is_ok: data.data.is_ok,
                         msgs: data.data.msgs
@@ -51,8 +51,10 @@ export default class GlobalStatus extends React.Component{
 
     render() {
         if (this.state) {
-            if ((this.state.msgs && this.state.msgs.length) || !this.satte_is_ok) {
-                return <abbr title={'Working: ' + this.state.msgs.join(', ')} className={this.state.is_ok? '': 'error'}>{this.state.is_ok? 'W': 'E'}</abbr>;
+            if (!this.state.is_ok) {
+                return <a href="/provider" className="error" title={'ERROR: ' + this.state.msgs.join(', ')}>E</a>;
+            } else if (this.state.msgs && this.state.msgs.length) {
+                return <abbr title={'Working: ' + this.state.msgs.join(', ')}>W</abbr>;
             }
         }
 
