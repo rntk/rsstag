@@ -21,7 +21,7 @@ export default class GlobalStatus extends React.Component{
         this.timeout_handler = setTimeout(() => {
             this.fetchStatus();
         }, timeout);
-        console.log('Next status fetching after: ', timeout);
+        //console.log('Next status fetching after: ', timeout);
     }
 
     fetchStatus() {

@@ -21,7 +21,7 @@ export default class SettingsMenuButton extends React.Component{
     render() {
         return(
             <span className="main_menu_button" onClick={this.changeMenuState}>
-                <img src={this.props.src} alt="Main menu" />
+                &equiv;
             </span>
         );
     }

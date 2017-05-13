@@ -379,8 +379,8 @@ class RSSTagApplication(object):
                 'is_ok': False,
                 'msgs': ['Looks like you are not logged in']
             }}
-        self.response.headers['Pragma'] = 'no-cache'
         self.response = Response(json.dumps(result), mimetype='text/html')
+        self.response.headers['Pragma'] = 'no-cache'
 
     def on_settings_post(self):
         try:
