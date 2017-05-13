@@ -10,7 +10,9 @@ export default class GlobalStatus extends React.Component{
             is_ok: true
         }
         this.timeout_handler = 0;
+        this.immediatlyCheck = this.checkStatusAfter.bind(this, 50);
     }
+
 
     checkStatusAfter(timeout) {
         if (this.timeout_handler) {
@@ -19,7 +21,7 @@ export default class GlobalStatus extends React.Component{
         this.timeout_handler = setTimeout(() => {
             this.fetchStatus();
         }, timeout);
-        //console.log('Next status fetching after: ', timeout);
+        console.log('Next status fetching after: ', timeout);
     }
 
     fetchStatus() {
@@ -54,7 +56,9 @@ export default class GlobalStatus extends React.Component{
             if (!this.state.is_ok) {
                 return <a href="/provider" className="error" title={'ERROR: ' + this.state.msgs.join(', ')}>E</a>;
             } else if (this.state.msgs && this.state.msgs.length) {
-                return <abbr title={'Working: ' + this.state.msgs.join(', ')}>W</abbr>;
+                return <abbr title={'Working: ' + this.state.msgs.join(', ')} onClick={this.immediatlyCheck}>W</abbr>;
+            } else {//&#x21bb; or &#x27F3; refresh symbols
+                return <abbr title="No active tasks. Click to refresh" onClick={this.immediatlyCheck}>&#x27F3;</abbr>;
             }
         }
 
