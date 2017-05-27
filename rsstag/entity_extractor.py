@@ -71,7 +71,11 @@ class RssTagEntityExtractor:
                             if (morphy[0].tag.POS == 'NOUN') and (morphy[0].tag.number == 'sing'):
                                 new_word = morphy[0].normal_form
                     elif self._only_latin.match(word):
-                        new_word = self._stemmer_en.stem(word)
+                        try:
+                            new_word = self._stemmer_en.stem(word)
+                        except Exception as e:
+                            new_word = word
+                            self._log.error('Can`t treat entity word: "%s". Info: %s', word, e)
                     else:
                         new_word = word
                 else:
@@ -88,12 +92,16 @@ class RssTagEntityExtractor:
         for word in entity:
             add_entity = True
             if len(word) > 1:
-                if self._only_cyrillic.match(word):
-                    s_word = self._stemmer_ru.stem(word)
-                elif self._only_latin.match(word):
-                    s_word = self._stemmer_en.stem(word)
-                else:
+                try:
+                    if self._only_cyrillic.match(word):
+                        s_word = self._stemmer_ru.stem(word)
+                    elif self._only_latin.match(word):
+                        s_word = self._stemmer_en.stem(word)
+                    else:
+                        s_word = word
+                except Exception as e:
                     s_word = word
+                    self._log.error('Can`t clean entity word: "%s". Info: %s', word, e)
                 if s_word in self._words_stat:
                     add_entity = self._words_stat[s_word]['l'] > 1
 
