@@ -40,25 +40,30 @@ class BazquxProvider:
         url = data['url']
         async with aiohttp.ClientSession(loop=loop) as session:
             while again:
-                async with session.get(url, headers=data['headers']) as resp:
-                    if resp.status == 200:
-                        raw_json = await resp.text()
-                        try:
-                            downloaded = json.loads(raw_json)
-                        except Exception as e:
-                            logging.error('Get strange json from %s. Info: %s', url, e)
-                            downloaded = {}
-                        if 'continuation' in downloaded:
-                            again = True
-                            url = '{}&c={}'.format(data['url'], downloaded['continuation'])
-                            repetitions = 0
+                try:
+                    async with session.get(url, headers=data['headers']) as resp:
+                        if resp.status == 200:
+                            raw_json = await resp.text()
+                            try:
+                                downloaded = json.loads(raw_json)
+                            except Exception as e:
+                                logging.error('Get strange json from %s. Info: %s', url, e)
+                                downloaded = {}
+                            if 'continuation' in downloaded:
+                                again = True
+                                url = '{}&c={}'.format(data['url'], downloaded['continuation'])
+                                repetitions = 0
+                            else:
+                                again = False
+                            if 'items' in downloaded:
+                                posts = posts + downloaded['items']
                         else:
-                            again = False
-                        if 'items' in downloaded:
-                            posts = posts + downloaded['items']
-                    else:
-                        repetitions += 1
-                        again = (repetitions < max_repetitions)
+                            repetitions += 1
+                            again = (repetitions < max_repetitions)
+                except Exception as e:
+                    logging.error('Request failed %s. Repeat: %s. Error: %s', url, repetitions, e)
+                    repetitions += 1
+                    again = (repetitions < max_repetitions)
             logging.info('Loaded posts %s for category "%s"', len(posts), data['category'])
             return (posts, data['category'])
 
