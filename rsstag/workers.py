@@ -9,7 +9,7 @@ from multiprocessing import Process
 from rsstag.tags_builder import TagsBuilder
 from rsstag.html_cleaner import HTMLCleaner
 from pymongo import MongoClient, UpdateOne
-from rsstag.providers import BazquxProvider
+from rsstag.providers import BazquxProvider, TelegramProvider
 from rsstag.utils import load_config
 from rsstag.routes import RSSTagRoutes
 from rsstag.users import RssTagUsers
@@ -378,7 +378,10 @@ class RSSTagWorker:
         cl = MongoClient(self._config['settings']['db_host'], int(self._config['settings']['db_port']))
         db = cl[self._config['settings']['db_name']]
 
-        provider = BazquxProvider(self._config)
+        providers = {
+            "bazqux": BazquxProvider(self._config),
+            "telegram": TelegramProvider(self._config)
+        }
         builder = TagsBuilder(self._config['settings']['replacement'])
         cleaner = HTMLCleaner()
         users = RssTagUsers(db)
@@ -391,6 +394,7 @@ class RSSTagWorker:
             if task['type'] == TASK_DOWNLOAD:
                 logging.info('Start downloading for user')
                 if self.clear_user_data(db, task['user']):
+                    provider = providers[task["user"]["provider"]]
                     posts, feeds = provider.download(task['user'])
                     if posts:
                         logging.info('Try save data in db. Posts: %s. Feeds: %s', len(posts), len(feeds))
@@ -402,6 +406,7 @@ class RSSTagWorker:
                             task_done = False
                             logging.error('Can`t save in db for user %s. Info: %s', task['user']['sid'], e)
             elif task['type'] == TASK_MARK:
+                provider = providers[task["user"]["provider"]]
                 marked = provider.mark(task['data'], task['user'])
                 if marked is None:
                     tasks.freeze_tasks(task['user'], task['type'])

@@ -4,16 +4,21 @@ import time
 import gzip
 import logging
 import asyncio
-from typing import Optional
 from hashlib import md5
 from datetime import date, datetime
 from random import randint
 from urllib.parse import quote_plus, urlencode
 from http import client
 from typing import Tuple, List, Optional
+
 from rsstag.tasks import POST_NOT_IN_PROCESSING
 from rsstag.routes import RSSTagRoutes
+
 import aiohttp
+
+from telegram.client import Telegram
+
+NOT_CATEGORIZED = "NotCategorized"
 
 class BazquxProvider:
     """rss downloader from bazqux.com"""
@@ -23,7 +28,7 @@ class BazquxProvider:
         if self._config['settings']['no_category_name']:
             self.no_category_name = self._config['settings']['no_category_name']
         else:
-            self.no_category_name = 'NotCategorized'
+            self.no_category_name = NOT_CATEGORIZED
 
     def get_headers(self, user: dict) -> dict:
         return {
@@ -32,7 +37,7 @@ class BazquxProvider:
         }
 
 
-    async def fetch(self, data: dict, loop: object) -> Tuple[dict, str]:
+    async def fetch(self, data: dict, loop: Optional[asyncio.AbstractEventLoop]) -> Tuple[dict, str]:
         posts = []
         max_repetitions = 5
         repetitions = 0
@@ -250,3 +255,115 @@ class BazquxProvider:
             logging.error('Can`t ping bazqux server. Info: %', e)
 
         return result
+
+class TelegramProvider:
+    def __init__(self, config: dict):
+        self._config = config
+        if self._config['settings']['no_category_name']:
+            self.no_category_name = self._config['settings']['no_category_name']
+        else:
+            self.no_category_name = NOT_CATEGORIZED
+
+    def download(self, user: dict) -> Tuple[List, List]:
+        provider = user["provider"]
+        telegram_channel = user["telegram_channel"]
+        self._tlg: Telegram = Telegram(
+            api_id=self._config[provider]["app_id"],
+            api_hash=self._config[provider]["app_hash"],
+            phone=user["phone"],
+            database_encryption_key='tlg123456',
+        )
+        self._tlg.login(blocking=True)
+        channel_req = self._tlg.search_channel(telegram_channel)
+        channel_req.wait()
+        if not channel_req:
+            logging.warning("No channel: %s", telegram_channel)
+            self._tlg.stop()
+            return ([], [])
+        channel = channel_req.update
+        has_posts = True
+        from_id = 0
+        max_limit = user["telegram_limit"]
+        limit = max_limit
+        posts = []
+        feeds = {}
+        routes = RSSTagRoutes(self._config['settings']['host_name'])
+        pid = 0
+        stream_id = str(channel["id"])
+        if stream_id not in feeds:
+            feeds[stream_id] = {
+                'createdAt': datetime.utcnow(),
+                'title': channel['title'],
+                'owner': user['sid'],
+                'category_id': self.no_category_name,
+                'feed_id': stream_id,
+                'origin_feed_id': channel["id"],
+                'category_title': self.no_category_name,
+                'category_local_url': routes.getUrlByEndpoint(
+                    endpoint='on_category_get',
+                    params={'quoted_category': self.no_category_name}
+                ),
+                'local_url': routes.getUrlByEndpoint(
+                    endpoint='on_feed_get',
+                    params={'quoted_feed': stream_id}
+                ),
+                'favicon': ''
+            }
+        while has_posts and len(posts) < max_limit:
+            posts_req = self._tlg.get_chat_history(channel["id"], limit=limit, from_message_id=from_id)
+            posts_req.wait()
+            posts_data = posts_req.update
+            if (not posts_req.update) or (len(posts_data["messages"]) == 0):
+                self._tlg.stop()
+                has_posts = False
+                continue
+            logging.info("Batch loaded %s. Channel %s from %s. Posts - %s, ", telegram_channel, from_id, len(posts_data["messages"]), len(posts))
+            if len(posts_data["messages"]) > 0:
+                from_id = posts_data["messages"][-1]["id"]
+                limit -= len(posts_data["messages"])
+            for post in posts_data["messages"]:
+                p_date = date.fromtimestamp(int(post["date"])).strftime('%x')
+                pu_date = post["date"]
+
+                attachments_list = []
+                entities = []
+                post_text = ""
+                if "caption" in post["content"]:
+                    entities = post["content"]["caption"]["entities"]
+                    post_text = post['content']["caption"]["text"]
+                elif "text" in post["content"]:
+                    entities = post["content"]["text"]["entities"]
+                    post_text = post["content"]["text"]["text"]
+                for entity in entities:
+                    if "type" in entity and "url" in entity["type"]:
+                        attachments_list.append(entity["type"]["url"])
+
+                posts.append({
+                    'content': {
+                        'title': "",
+                        'content': gzip.compress(post_text.encode('utf-8', 'replace'))
+                    },
+                    'feed_id': stream_id,
+                    'category_id': self.no_category_name,
+                    'id': post['id'],
+                    'url': "https://t.me/{}/{}".format(telegram_channel.lstrip("@"), post["id"]),
+                    'date': p_date,
+                    'unix_date': pu_date,
+                    'read': False,
+                    'favorite': False,
+                    'attachments': attachments_list,
+                    'tags': [],
+                    'bi_grams': [],
+                    'pid': pid,
+                    'owner': user['sid'],
+                    'processing': POST_NOT_IN_PROCESSING
+                })
+                pid += 1
+        logging.info("Downloaded: %s - %s", telegram_channel, len(posts))
+
+        self._tlg.stop()
+
+        return (posts, list(feeds.values()))
+
+    def mark(self, data: dict, user: dict) -> Optional[bool]:
+        return True

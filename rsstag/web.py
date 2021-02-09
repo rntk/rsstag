@@ -24,7 +24,7 @@ from rsstag.tags import RssTagTags
 from rsstag.letters import RssTagLetters
 from rsstag.bi_grams import RssTagBiGrams
 from rsstag.users import RssTagUsers
-from rsstag.providers import BazquxProvider
+from rsstag.providers import BazquxProvider, TelegramProvider
 
 class RSSTagApplication(object):
     request = None
@@ -264,7 +264,7 @@ class RSSTagApplication(object):
     def on_login_get(self, err=None):
         provider = self.request.cookies.get('provider')
         if provider in self.providers:
-            if (provider == 'bazqux') or (provider == 'inoreader'):
+            if (provider == 'bazqux') or (provider == 'inoreader') or (provider == 'telegram'):
                 page = self.template_env.get_template('login.html')
                 if not err:
                     err = []
@@ -289,7 +289,7 @@ class RSSTagApplication(object):
         err = []
         if login and password:
             user = self.users.get_by_login_password(login, password)
-            if user:
+            if user and user["provider"] == "bazqux":
                 provider = BazquxProvider(self.config)
                 is_valid = provider.is_valid_user(user)
                 if is_valid == False:
@@ -327,6 +327,9 @@ class RSSTagApplication(object):
                         err.append('Wrong login or password')
                     else:
                         err.append('Cant` create session. Try later')
+                elif self.user['provider'] == 'telegram':
+                    self.createNewSession(login, password, "", self.user['provider'])
+
         else:
             err.append('Login or Password can`t be empty')
         if not err:

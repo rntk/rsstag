@@ -46,6 +46,10 @@ class RssTagUsers:
             'lp': lp,
             'retoken': False
         }
+        if provider == "telegram":
+            user["phone"] = password
+            user["telegram_channel"] = login
+            user["telegram_limit"] = 500
         try:
             self._db.users.insert_one(user)
             result = sid
