@@ -98,7 +98,7 @@ export default class PostsItem extends React.Component{
                         <b className="post_feed_title">{post.feed_title}</b> |
                         {post.post.date}{(post.post.clusters)? ' | ' + post.post.clusters.join(', '): ''}
                     </div>
-                    <div className={'post_content ' + post.showed? '': 'hide'} dangerouslySetInnerHTML={this.dangerHTML(post)}></div>
+                    <div className={'post_content ' + (post.showed? '': 'hide')} dangerouslySetInnerHTML={this.dangerHTML(post)}></div>
                     <div className="post_tools">
                         <span className="post_show_content" onClick={this.changePostsContentState}>{post.showed? 'Hide': 'Show'} post</span>
                         <span className="post_show_links" onClick={this.showPostLinks}>Show links</span>
