@@ -1,11 +1,11 @@
 import logging
 from typing import Optional, List
-from pymongo import MongoClient, DESCENDING, UpdateMany
+from pymongo import MongoClient, CursorType, DESCENDING, UpdateMany
 
 class RssTagPosts:
     indexes = ['owner', 'category_id', 'feed_id', 'read', 'tags', 'pid']
     def __init__(self, db: MongoClient) -> None:
-        self._db = db
+        self._db: MongoClient  = db
         self._log = logging.getLogger('posts')
 
     def prepare(self) -> None:
@@ -188,7 +188,7 @@ class RssTagPosts:
     def get_stat(self, owner: str) -> Optional[dict]:
         query = {'$match': {'owner': owner}}
         try:
-            result = {'unread': 0, 'read': 0}
+            result = {'unread': 0, 'read': 0, 'tags': 0}
             cursor = self._db.posts.aggregate([
                 query,
                 {'$group': {'_id': '$read', 'counter': {'$sum': 1}}}
@@ -198,6 +198,7 @@ class RssTagPosts:
                     result['read'] = dt['counter']
                 else:
                     result['unread'] = dt['counter']
+            result["tags"] = self._db.tags.count_documents({'owner': owner})
         except Exception as e:
             self._log.error('Can`t get posts stat. User %s. Info: %s', owner, e)
             result = None
