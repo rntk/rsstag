@@ -1628,3 +1628,29 @@ class RSSTagApplication(object):
             )
         else:
             self.on_error(InternalServerError())
+
+    def on_tags_dates_get(self, tag: str):
+        if tag:
+            if self.user:
+                cursor = self.posts.get_by_tags(self.user["sid"], [tag], self.user['settings']['only_unread'], {"unix_date": True})
+                if cursor:
+                    data = []
+                    for dt in cursor:
+                        data.append(dt["unix_date"])
+                    result = {'data': data}
+                    code = 200
+                elif cursor is None:
+                    result = {'error': 'Server in trouble'}
+                    code = 500
+                else:
+                    result = {'error': 'Tag not found'}
+                    code = 404
+            else:
+                result = {'error': 'Not logged'}
+                code = 401
+        else:
+            result = {'error': 'Something wrong with request'}
+            code = 400
+
+        self.response = Response(json.dumps(result), mimetype='application/json')
+        self.response.status_code = code
