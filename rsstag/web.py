@@ -1629,7 +1629,7 @@ class RSSTagApplication(object):
         else:
             self.on_error(InternalServerError())
 
-    def on_tags_dates_get(self, tag: str):
+    def on_tag_dates_get(self, tag: str):
         if tag:
             if self.user:
                 cursor = self.posts.get_by_tags(self.user["sid"], [tag], self.user['settings']['only_unread'], {"unix_date": True})

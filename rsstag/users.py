@@ -143,4 +143,3 @@ class RssTagUsers:
             self._log.error('Can`t updat settings for user %s. Info: %s', sid, e)
 
         return result
-

@@ -26,6 +26,8 @@ import TagsNetStorage from '../storages/tags-net-storage.js';
 import TagsNet from '../components/tags-net.js';
 import TagNetTools from '../components/tag-net-tools.js';
 import GlobalStatus from '../components/global-status.js';
+import TagMentionsStorage from '../storages/tag-mentions-storage.js';
+import TagMentionsChart from '../components/tag-mentions-chart.js';
 
 function handleScroll() {
     let $tools = document.querySelector('#global_tools');
@@ -189,6 +191,12 @@ window.onload = () => {
             document.getElementById('load_bi_grams')
         );
         bi_grams_storage.start();
+
+        const tag_mentionss_evsys = new EventsSystem();
+        const tag_mentions_chart = new TagMentionsChart("#mentions_chart", tag_mentionss_evsys);
+        const tag_mentions_storage = new TagMentionsStorage(tag.tag, tag_mentionss_evsys);
+        tag_mentions_chart.start();
+        tag_mentions_storage.start();
     } else if (/^\/map$/.test(path)) {
         let map_handler = new RssTagYMap('map', window.EVSYS);
         let prom = rsstag_utils.waitFor(map_handler.isReadyToStart);

@@ -51,7 +51,7 @@ class RSSTagRoutes:
             {'url': '/groups/<int:page_number>', 'endpoint': 'on_get_groups', 'methods': ['GET']},
             {'url': '/tags/group/<string:group>/<int:page_number>', 'endpoint': 'on_group_by_tags_group', 'methods': ['GET']},
 
-            {'url': '/tags-dates/<string:tag>', 'endpoint': 'on_tags_dates_get', 'methods': ['GET']}
+            {'url': '/tag-dates/<string:tag>', 'endpoint': 'on_tag_dates_get', 'methods': ['GET']}
         ]
 
         self._rules = []

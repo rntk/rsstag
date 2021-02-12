@@ -1,6 +1,6 @@
 <html>
 <head>
-<script type="text/javascript" src="https://www.chartjs.org/dist/2.9.4/Chart.min.js"></script>
+<script type="text/javascript" src="/static/js/Chart.min.js"></script>
 <link rel="stylesheet" href="/static/vis-dist/vis.min.css" />
 <title>Page of tag {{tag['tag']}}</title>
 {%  include "head-data.html" %}
@@ -53,7 +53,7 @@
     count.innerHTML = document.getElementsByTagName('li').length;
 </script-->
 <script type="text/javascript">
-    const initial_tag = {{tag|json}};
+    var initial_tag = {{tag|json}};
 </script>
 <div id="help_window">
 <ul>
@@ -61,70 +61,4 @@
 </ul>
 </div>
 <div id="progressbar"></div></body>
-<script type="text/javascript">
-(() => {
-function fetchJSON(url, opts) {
-        let req_promise = fetch(url, opts),
-            prom = new Promise((resolve, reject) => {
-                req_promise.then(response => {
-                    response.json().then(data => {
-                        resolve(data);
-                    }).catch(err => {
-                        reject(err);
-                    });
-                }).catch(err => {
-                    reject(err);
-                });
-            })
-
-        return prom;
-    }
-        //let ru = new RssTagUtils();
-    let prom = fetchJSON("/tags-dates/" + encodeURIComponent(initial_tag.tag));
-    prom.then((data) => {
-        let block = document.querySelector("#mentions_chart");
-        if (block) {
-            let mp = {};
-            let current = 0;
-            let aggr = 3600 * 24 * 1000;
-            let k = "";
-            data.data.sort();
-            for (let u of data.data) {
-                u *= 1000;
-                let d = new Date();
-                if ((current === 0) || ((current + aggr) < u)) {
-                    d.setTime(u);
-                    d.setMinutes(0);
-                    d.setMilliseconds(0);
-                    d.setSeconds(0);
-                    current = d.getTime();
-                    k = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-                }
-                if (!(k in mp)) {
-                    mp[k] = 0
-                }
-                mp[k]++;
-            }
-            let labels = [];
-            let values = [];
-            for (let k in mp) {
-                labels.push(k);
-                values.push(mp[k]);
-            }
-            //block.textContent = JSON.stringify(mp);
-            let dtset = {
-                labels: labels,
-                datasets: [{
-                    label: initial_tag.tag,
-                    data: values
-                }]
-            }
-            let ch = new Chart(block.querySelector("#mentions_chart_canvas").getContext("2d"), {
-                type: "bar",
-                data: dtset
-            });
-        }
-    });
-})();
-</script>
 </html>

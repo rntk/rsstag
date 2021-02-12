@@ -38,6 +38,8 @@ export default class EventsSystem {
 
         this.POSTS_RENDERED = 'posts_rendered';
 
+        this.TAG_MENTIONS_UPDATED = 'tag_mentions_updated';
+
         this._events = {};
     }
 
