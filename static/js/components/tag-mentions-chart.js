@@ -15,6 +15,7 @@ export default class TagMentionsChart {
         let k = "";
         let tag = data.tag;
         let dates = data.dates.slice();
+        dates.sort();
         for (let u of dates) {
             u *= 1000;
             let d = new Date();
