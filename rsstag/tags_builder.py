@@ -25,6 +25,7 @@ class TagsBuilder:
         self.cyrillic = pymorphy2.MorphAnalyzer()
         self._stopwords = None
         self._log = logging.getLogger('TagsBuilder')
+        self._window = 2
 
     def purge(self) -> None:
         """Clear state"""
@@ -97,7 +98,7 @@ class TagsBuilder:
                 self._tags.add(tag)
                 self._words[tag].add(current_word)
 
-    def build_bi_grams(self, text: str) -> dict:
+    def build_bi_grams(self, text: str) -> None:
         words = self.text2words(text)
         if words:
             prev_word = words[0]
@@ -107,7 +108,7 @@ class TagsBuilder:
                 if current_tag:
                     bi_gram = prev_tag + ' ' + current_tag
                     if bi_gram not in self._bi_grams:
-                        self._bi_grams[bi_gram] = set([prev_tag, current_tag])
+                        self._bi_grams[bi_gram] = {prev_tag, current_tag}
                     self._bi_grams_words[bi_gram].add(prev_word)
                     self._bi_grams_words[bi_gram].add(current_word)
                     prev_word = current_word
@@ -117,24 +118,36 @@ class TagsBuilder:
         """Build tags and words from text"""
         self._text = text
         words = self.text2words(text)
-        if words:
-            prev_word = words[0]
-            prev_tag = self.process_word(prev_word)
-            for current_word in words[1:]:
-                if prev_tag:
-                    self._tags.add(prev_tag)
-                    self._words[prev_tag].add(prev_word)
-                current_tag = self.process_word(current_word)
-                if current_tag:
-                    bi_gram = prev_tag + ' ' + current_tag
+        if not words:
+            return
+        post_bis = set()
+        for word_pos, word in enumerate(words):
+            tag = self.process_word(word)
+            if not tag:
+                continue
+            self._tags.add(tag)
+            self._words[tag].add(word)
+            for i in range(self._window):
+                i += 1
+                bi_words = []
+                prev_pos = word_pos - i
+                if prev_pos >= 0:
+                    bi_words.append(words[prev_pos])
+                next_pos = word_pos + i
+                if next_pos < len(words):
+                    bi_words.append(words[next_pos])
+                for bi_word in bi_words:
+                    bi_tag = self.process_word(bi_word)
+                    bi_grams_l = [tag, bi_tag]
+                    bi_grams_l.sort()
+                    bi_gram = " ".join(bi_grams_l)
+                    if bi_gram in post_bis:
+                        continue
+                    post_bis.add(bi_gram)
                     if bi_gram not in self._bi_grams:
-                        self._bi_grams[bi_gram] = set([prev_tag, current_tag])
-                    self._bi_grams_words[bi_gram].add(prev_word)
-                    self._bi_grams_words[bi_gram].add(current_word)
-                    prev_word = current_word
-                    prev_tag = current_tag
-            self._tags.add(prev_tag)
-            self._words[prev_tag].add(prev_word)
+                        self._bi_grams[bi_gram] = {tag, bi_tag}
+                    self._bi_grams_words[bi_gram].add(word)
+                    self._bi_grams_words[bi_gram].add(bi_word)
 
     def get_prepared_text(self) -> str:
         """Get text prepared for Doc2Vec"""
