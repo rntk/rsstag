@@ -9,7 +9,7 @@ from nltk.corpus import stopwords
 
 class TagsBuilder:
     """Build tags from text. Support languages: english, russian"""
-    def __init__(self, text_clean_re: str) -> None:
+    def __init__(self, text_clean_re: str="[^\w\d ]") -> None:
         self.purge()
         '''self._text = ''
         self._prepared_text = ''

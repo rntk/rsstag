@@ -28,6 +28,8 @@ import TagNetTools from '../components/tag-net-tools.js';
 import GlobalStatus from '../components/global-status.js';
 import TagMentionsStorage from '../storages/tag-mentions-storage.js';
 import TagMentionsChart from '../components/tag-mentions-chart.js';
+import WordTreeStorage from '../storages/wordtree-storage.js';
+import WordTree from '../components/wordtree.js';
 
 function handleScroll() {
     let $tools = document.querySelector('#global_tools');
@@ -197,6 +199,13 @@ window.onload = () => {
         const tag_mentions_storage = new TagMentionsStorage(tag.tag, tag_mentionss_evsys);
         tag_mentions_chart.start();
         tag_mentions_storage.start();
+
+        const wordtree_evsys = new EventsSystem();
+        const wordtree = new WordTree("#wordtree", wordtree_evsys);
+        const wordtree_storage = new WordTreeStorage(tag.tag, wordtree_evsys);
+        wordtree.start();
+        wordtree_storage.start();
+
     } else if (/^\/map$/.test(path)) {
         let map_handler = new RssTagYMap('map', window.EVSYS);
         let prom = rsstag_utils.waitFor(map_handler.isReadyToStart);

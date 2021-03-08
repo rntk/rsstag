@@ -25,6 +25,8 @@ from rsstag.letters import RssTagLetters
 from rsstag.bi_grams import RssTagBiGrams
 from rsstag.users import RssTagUsers
 from rsstag.providers import BazquxProvider, TelegramProvider
+from rsstag.tags_builder import TagsBuilder
+from rsstag.html_cleaner import HTMLCleaner
 
 class RSSTagApplication(object):
     request = None
@@ -1640,6 +1642,51 @@ class RSSTagApplication(object):
                     data = []
                     for dt in cursor:
                         data.append(dt["unix_date"])
+                    result = {'data': data}
+                    code = 200
+                elif cursor is None:
+                    result = {'error': 'Server in trouble'}
+                    code = 500
+                else:
+                    result = {'error': 'Tag not found'}
+                    code = 404
+            else:
+                result = {'error': 'Not logged'}
+                code = 401
+        else:
+            result = {'error': 'Something wrong with request'}
+            code = 400
+
+        self.response = Response(json.dumps(result), mimetype='application/json')
+        self.response.status_code = code
+
+    def on_wordtree_texts_get(self, tag: str):
+        if tag:
+            if self.user:
+                cursor = self.posts.get_by_tags(self.user["sid"], [tag], self.user['settings']['only_unread'], {"content": True})
+                if cursor:
+                    builder = TagsBuilder()
+                    cleaner = HTMLCleaner()
+                    data = []
+                    window = 10
+                    for post in cursor:
+                        text = post['content']['title'] + ' ' + \
+                               gzip.decompress(post['content']['content']).decode('utf-8', 'replace')
+                        cleaner.purge()
+                        cleaner.feed(text)
+                        strings = cleaner.get_content()
+                        text = ' '.join(strings)
+                        builder.purge()
+                        builder.prepare_text(text)
+                        text = builder.get_prepared_text()
+                        words = text.split()
+                        for i, word in enumerate(words):
+                            if word == tag:
+                                start_pos = i - window
+                                if start_pos < 0:
+                                    start_pos = 0
+                                end_pos = i + window
+                                data.append(" ".join(words[start_pos:end_pos]))
                     result = {'data': data}
                     code = 200
                 elif cursor is None:
