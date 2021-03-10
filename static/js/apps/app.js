@@ -31,6 +31,7 @@ import TagMentionsChart from '../components/tag-mentions-chart.js';
 import WordTreeStorage from '../storages/wordtree-storage.js';
 import WordTree from '../components/wordtree.js';
 import PostsWordTree from '../components/posts-wordtree.js';
+import TagContexts from '../components/tag-contexts.js';
 
 function handleScroll() {
     let $tools = document.querySelector('#global_tools');
@@ -208,6 +209,10 @@ window.onload = () => {
         const wordtree_storage = new WordTreeStorage(tag.tag, wordtree_evsys);
         wordtree.start();
         wordtree_storage.start();
+        ReactDOM.render(
+            <TagContexts ES={wordtree_evsys} tag={tag} />,
+            document.getElementById('tag_contexts')
+        );
 
     } else if (/^\/map$/.test(path)) {
         let map_handler = new RssTagYMap('map', window.EVSYS);
