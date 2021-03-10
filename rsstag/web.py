@@ -25,8 +25,6 @@ from rsstag.letters import RssTagLetters
 from rsstag.bi_grams import RssTagBiGrams
 from rsstag.users import RssTagUsers
 from rsstag.providers import BazquxProvider, TelegramProvider
-from rsstag.tags_builder import TagsBuilder
-from rsstag.html_cleaner import HTMLCleaner
 
 class RSSTagApplication(object):
     request = None
@@ -563,6 +561,7 @@ class RSSTagApplication(object):
                 posts = []
                 pids = set()
                 for post in db_posts:
+                    post["lemmas"] = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
                     if post['pid'] not in pids:
                         pids.add(post['pid'])
                         if post['feed_id'] in by_feed:
@@ -626,6 +625,7 @@ class RSSTagApplication(object):
                 by_feed = {}
                 pids = set()
                 for post in db_posts:
+                    post["lemmas"] = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
                     if post['pid'] not in pids:
                         pids.add(post['pid'])
                         if post['feed_id'] not in by_feed:
@@ -680,6 +680,7 @@ class RSSTagApplication(object):
                 by_feed = {}
                 pids = set()
                 for post in db_posts:
+                    post["lemmas"] = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
                     if post['pid'] not in pids:
                         pids.add(post['pid'])
                         if post['feed_id'] not in by_feed:
@@ -1663,22 +1664,12 @@ class RSSTagApplication(object):
     def on_wordtree_texts_get(self, tag: str):
         if tag:
             if self.user:
-                cursor = self.posts.get_by_tags(self.user["sid"], [tag], self.user['settings']['only_unread'], {"content": True})
+                cursor = self.posts.get_by_tags(self.user["sid"], [tag], self.user['settings']['only_unread'], {"lemmas": True})
                 if cursor:
-                    builder = TagsBuilder()
-                    cleaner = HTMLCleaner()
                     data = []
                     window = 10
                     for post in cursor:
-                        text = post['content']['title'] + ' ' + \
-                               gzip.decompress(post['content']['content']).decode('utf-8', 'replace')
-                        cleaner.purge()
-                        cleaner.feed(text)
-                        strings = cleaner.get_content()
-                        text = ' '.join(strings)
-                        builder.purge()
-                        builder.prepare_text(text)
-                        text = builder.get_prepared_text()
+                        text = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
                         words = text.split()
                         for i, word in enumerate(words):
                             if word == tag:

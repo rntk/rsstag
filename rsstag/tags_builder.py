@@ -42,6 +42,7 @@ class TagsBuilder:
         text = self.text_clearing.sub(' ', text)
         text = text.strip().casefold()
         words = text.split()
+        self._prepared_text = text
 
         return words
 

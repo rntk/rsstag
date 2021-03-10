@@ -3,6 +3,7 @@
 <head>
 <title>{{group}} | {{tag}}</title>
 {% include "head-data.html" %}
+    <script type="text/javascript" src="/static/js/google-charts.js"></script>
 </head>
 <body>
 {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
@@ -43,6 +44,7 @@
 </div>
 <div class="page">
     <div id="posts_page"></div>
+    <div id="posts_wordtree"></div>
 </div>
 <!--div id="show_tags"><a href="#tags">Show "level up"</a><a name="tags"></div-->
 <script type="text/javascript">

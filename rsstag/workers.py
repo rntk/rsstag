@@ -24,6 +24,7 @@ from rsstag.w2v import W2VLearn
 from rsstag.sentiment import RuSentiLex, WordNetAffectRuRom, SentimentConverter
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import DBSCAN
+from nltk.corpus import stopwords
 
 
 class RSSTagWorker:
@@ -124,8 +125,7 @@ class RSSTagWorker:
                 },
                 upsert=True
             ))
-
-        post_tags = {}
+        post_tags = {"lemmas": gzip.compress(builder.get_prepared_text().encode('utf-8', 'replace'))}
         if tags_updates:
             post_tags['tags'] = tags
         if bi_grams_updates:
@@ -239,27 +239,21 @@ class RSSTagWorker:
 
         return result
 
-    def make_clustering(self, db, owner: str, builder: TagsBuilder, cleaner: HTMLCleaner) -> Optional[bool]:
+    def make_clustering(self, db, owner: str) -> Optional[bool]:
         result = False
         posts = RssTagPosts(db)
-        all_posts = posts.get_all(owner, projection={'content': True, 'pid': True})
+        all_posts = posts.get_all(owner, projection={'lemmas': True, 'pid': True})
         clusters = None
         texts_for_vec = []
         post_pids = []
         if all_posts:
             for post in all_posts:
                 post_pids.append(post['pid'])
-                text = post['content']['title'] + ' ' + gzip.decompress(post['content']['content']).decode('utf-8', 'ignore')
-                cleaner.purge()
-                cleaner.feed(text)
-                strings = cleaner.get_content()
-                text = ' '.join(strings)
-                builder.purge()
-                builder.prepare_text(text, ignore_stopwords=True)
-                texts_for_vec.append(builder.get_prepared_text())
+                text = gzip.decompress(post["lemmas"]).decode('utf-8', 'ignore')
+                texts_for_vec.append(text)
 
         if texts_for_vec:
-            vectorizer = TfidfVectorizer()
+            vectorizer = TfidfVectorizer(stop_words=set(stopwords.words('english') + stopwords.words('russian')))
             dbs = DBSCAN(eps=0.9, min_samples=2, n_jobs=1)
             dbs.fit(vectorizer.fit_transform(texts_for_vec))
             clusters = defaultdict(set)
@@ -275,22 +269,16 @@ class RSSTagWorker:
 
         return result
 
-    def make_w2v(self, db, owner: str, config: dict, builder: TagsBuilder, cleaner: HTMLCleaner) -> Optional[bool]:
+    def make_w2v(self, db, owner: str, config: dict) -> Optional[bool]:
         result = False
         posts = RssTagPosts(db)
-        all_posts = posts.get_all(owner, projection={'content': True, 'pid': True})
+        all_posts = posts.get_all(owner, projection={'lemmas': True, 'pid': True})
         tagged_texts = []
         if all_posts:
             for post in all_posts:
-                text = post['content']['title'] + ' ' + gzip.decompress(post['content']['content']).decode('utf-8', 'replace')
-                cleaner.purge()
-                cleaner.feed(text)
-                strings = cleaner.get_content()
-                text = ' '.join(strings)
-                builder.purge()
-                builder.prepare_text(text)
+                text = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
                 tag = post['pid']
-                tagged_texts.append((builder.get_prepared_text(), tag))
+                tagged_texts.append((text, tag))
         if tagged_texts:
             try:
                 learn = W2VLearn(db, config)
@@ -427,9 +415,9 @@ class RSSTagWorker:
             elif task['type'] == TASK_TAGS_SENTIMENT:
                 task_done = self.make_tags_sentiment(db, task['user']['sid'], self._config)
             elif task['type'] == TASK_CLUSTERING:
-                task_done = self.make_clustering(db, task['user']['sid'], builder, cleaner)
+                task_done = self.make_clustering(db, task['user']['sid'])
             elif task['type'] == TASK_W2V:
-                task_done = self.make_w2v(db, task['user']['sid'], self._config, builder, cleaner)
+                task_done = self.make_w2v(db, task['user']['sid'], self._config)
             elif task['type'] == TASK_TAGS_GROUP:
                 task_done = self.make_tags_groups(db, task['user']['sid'], self._config)
             '''elif task['type'] == TASK_WORDS:

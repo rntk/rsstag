@@ -30,6 +30,7 @@ import TagMentionsStorage from '../storages/tag-mentions-storage.js';
 import TagMentionsChart from '../components/tag-mentions-chart.js';
 import WordTreeStorage from '../storages/wordtree-storage.js';
 import WordTree from '../components/wordtree.js';
+import PostsWordTree from '../components/posts-wordtree.js';
 
 function handleScroll() {
     let $tools = document.querySelector('#global_tools');
@@ -142,6 +143,8 @@ window.onload = () => {
             <PostsNumbers ES={window.EVSYS} />,
             document.getElementById('posts_stat')
         );
+        const posts_wordtree = new PostsWordTree("#posts_wordtree", window.EVSYS)
+        posts_wordtree.start();
         posts_storage.start();
     } else if (/\/tag-info\/.*/.test(path)) {
         let tag = window.initial_tag;
