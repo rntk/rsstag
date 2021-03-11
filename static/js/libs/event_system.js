@@ -40,7 +40,9 @@ export default class EventsSystem {
 
         this.TAG_MENTIONS_UPDATED = 'tag_mentions_updated';
 
-        this.WORDTREE_TEXTS_UPDATED = "wordtree_texts_updated"
+        this.WORDTREE_TEXTS_UPDATED = "wordtree_texts_updated";
+
+        this.BIGRAMS_MENTIONS_UPDATED = "bigrams_mentions_updated";
 
         this._events = {};
     }

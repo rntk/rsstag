@@ -32,6 +32,8 @@ import WordTreeStorage from '../storages/wordtree-storage.js';
 import WordTree from '../components/wordtree.js';
 import PostsWordTree from '../components/posts-wordtree.js';
 import TagContexts from '../components/tag-contexts.js';
+import BiGramsMentionsStorage from '../storages/bigrams-mentions-storage.js';
+import BiGramsMentionsChart from '../components/bigrams-mentions-chart.js';
 
 function handleScroll() {
     let $tools = document.querySelector('#global_tools');
@@ -203,6 +205,12 @@ window.onload = () => {
         const tag_mentions_storage = new TagMentionsStorage(tag.tag, tag_mentionss_evsys);
         tag_mentions_chart.start();
         tag_mentions_storage.start();
+
+        const bigrams_mentions_evsys = new EventsSystem();
+        const bigrams_mentions_chart = new BiGramsMentionsChart("#bigrams_mentions_chart", bigrams_mentions_evsys);
+        const bigrams_mentions_storage = new BiGramsMentionsStorage(tag.tag, bigrams_mentions_evsys);
+        bigrams_mentions_chart.start();
+        bigrams_mentions_storage.start();
 
         const wordtree_evsys = new EventsSystem();
         const wordtree = new WordTree("#wordtree", wordtree_evsys);

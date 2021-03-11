@@ -1661,6 +1661,40 @@ class RSSTagApplication(object):
         self.response = Response(json.dumps(result), mimetype='application/json')
         self.response.status_code = code
 
+    def on_bigrams_dates_get(self, tag: str):
+        if tag:
+            if self.user:
+                cursor = self.posts.get_by_tags(self.user["sid"], [tag], self.user['settings']['only_unread'], {"unix_date": True, "bi_grams": True})
+                if cursor:
+                    data = {}
+                    for dt in cursor:
+                        d = int(dt["unix_date"])
+                        for bi in dt["bi_grams"]:
+                            if tag not in bi:
+                                continue
+                            if bi not in data:
+                                data[bi] = {}
+                            if d not in data[bi]:
+                                data[bi][d] = 0
+                            data[bi][d] += 1
+                    result = {'data': data}
+                    code = 200
+                elif cursor is None:
+                    result = {'error': 'Server in trouble'}
+                    code = 500
+                else:
+                    result = {'error': 'Tag not found'}
+                    code = 404
+            else:
+                result = {'error': 'Not logged'}
+                code = 401
+        else:
+            result = {'error': 'Something wrong with request'}
+            code = 400
+
+        self.response = Response(json.dumps(result), mimetype='application/json')
+        self.response.status_code = code
+
     def on_wordtree_texts_get(self, tag: str):
         if tag:
             if self.user:

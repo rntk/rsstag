@@ -2,6 +2,7 @@
 <head>
 <script type="text/javascript" src="/static/js/Chart.min.js"></script>
 <script type="text/javascript" src="/static/js/google-charts.js"></script>
+<script type="text/javascript" src="/static/js/d3.v6.min.js"></script>
 <link rel="stylesheet" href="/static/vis-dist/vis.min.css" />
 <title>Page of tag {{tag['tag']}}</title>
 {%  include "head-data.html" %}
@@ -41,9 +42,12 @@
     <div id="siblings_tags" class="tag_info_block"></div>
     <h3 class="group_title tag_info_title">Bi-grams</h3><span id="load_bi_grams"></span>
     <div id="bi_grams" class="tag_info_block"></div>
-    <h3 class="group_title tag_info_title">Mentions chart</h3>
+    <h3 class="group_title tag_info_title">Tag Mentions chart</h3>
     <div id="mentions_chart" class="tag_info_block">
         <canvas id="mentions_chart_canvas"></canvas>
+    </div>
+    <h3 class="group_title tag_info_title">Bi-grams Mentions chart</h3>
+    <div id="bigrams_mentions_chart" class="tag_info_block">
     </div>
     <h3 class="group_title wordtree_title">WordTree</h3>
     <div id="wordtree_block" class="tag_info_block">
