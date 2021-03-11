@@ -42,7 +42,6 @@ class TagsBuilder:
         text = self.text_clearing.sub(' ', text)
         text = text.strip().casefold()
         words = text.split()
-        self._prepared_text = text
 
         return words
 
@@ -122,10 +121,12 @@ class TagsBuilder:
         if not words:
             return
         post_bis = set()
+        lemmas = []
         for word_pos, word in enumerate(words):
             tag = self.process_word(word)
             if not tag:
                 continue
+            lemmas.append(tag)
             self._tags.add(tag)
             self._words[tag].add(word)
             for i in range(self._window):
@@ -149,6 +150,7 @@ class TagsBuilder:
                         self._bi_grams[bi_gram] = {tag, bi_tag}
                     self._bi_grams_words[bi_gram].add(word)
                     self._bi_grams_words[bi_gram].add(bi_word)
+        self._prepared_text = " ".join(lemmas)
 
     def get_prepared_text(self) -> str:
         """Get text prepared for Doc2Vec"""
