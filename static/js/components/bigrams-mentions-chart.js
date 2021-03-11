@@ -9,43 +9,84 @@ export default class BiGramsMentionsChart {
     }
 
     updateMentions(data) {
-        let dates = new Set();
-        let bigrams = {};
+        let skip_bi = new Set();
+        let sums = new Set();
         for (let bi in data.bigrams) {
-            if (!(bi in bigrams)) {
-                bigrams[bi] = {};
+            let sum = 0;
+            for (let d in data.bigrams[bi]) {
+                sum += Number.parseInt(data.bigrams[bi][d]);
+            }
+            sums.add(sum);
+        }
+        sums = Array.from(sums);
+        sums.sort();
+        let sum_pos = Math.max(sums.length - 20, 0);
+        let min_n = sums[sum_pos];
+        for (let bi in data.bigrams) {
+            let sum = 0;
+            for (let d in data.bigrams[bi]) {
+                sum += data.bigrams[bi][d];
+            }
+            if (sum < min_n) {
+                skip_bi.add(bi);
+            }
+        }
+        let dates = new Set();
+        for (let bi in data.bigrams) {
+            if (skip_bi.has(bi)) {
+                continue;
             }
             for (let d in data.bigrams[bi]) {
-                bigrams[bi][d] = data.bigrams[bi][d];
                 dates.add(d);
             }
         }
         dates = Array.from(dates);
         dates.sort();
-        let values = [];
-        for (let bi in bigrams) {
-            let v = [];
-            let sm = 0;
-            for (let d of dates) {
-                if (!(d in bigrams[bi])) {
-                    bigrams[bi][d] = 0;
-                }
-                v.push(bigrams[bi][d]);
-                sm += bigrams[bi][d];
+        let dates_aggr = {};
+        let current = 0;
+        let aggr = 3600 * 24 * 1000;
+        for (let u of dates) {
+            u *= 1000;
+            let d = new Date();
+            if ((current === 0) || ((current + aggr) < u)) {
+                d.setTime(u);
+                d.setMinutes(0);
+                d.setMilliseconds(0);
+                d.setSeconds(0);
+                current = Number.parseInt(d.getTime() / 1000);
             }
-            if (sm < 5) {
-                continue;
+            if (!(current in dates_aggr)) {
+                dates_aggr[current] = new Set();
             }
-            values.push({
-                label: bi,
-                data: v
-            });
+            dates_aggr[current].add(Number.parseInt(u / 1000));
         }
-
-        this.renderChart(dates, values);
+        let series = [];
+        for (let d in dates_aggr) {
+            let itm = {};
+            for (let bi in data.bigrams) {
+                if (skip_bi.has(bi)) {
+                    continue;
+                }
+                if (!(bi in itm)) {
+                    itm[bi] = 0;
+                }
+                for (let dd of dates_aggr[d]) {
+                    let v = 0;
+                    if (dd in data.bigrams[bi]) {
+                        v = Number.parseInt(data.bigrams[bi][dd]) + 10;
+                    }
+                    itm[bi] += Math.random() * 10;
+                }
+            }
+            let td = new Date();
+            td.setTime(d * 1000);
+            itm.rsstag_date = td;
+            series.push(itm);
+        }
+        this.renderChart(series);
     }
 
-    renderChart(labels, values) {
+    renderChart(series_data) {
         let margin = ({top: 0, right: 20, bottom: 30, left: 20});
         let height = 500;
         let width = 1200;
@@ -55,26 +96,20 @@ export default class BiGramsMentionsChart {
                 .call(g => {return g.select(".domain").remove();});
         };
         let bigrams = [];
-        for (let bi of values) {
-            bigrams.push(bi.label);
-        }
-        let series_data = [];
-        for (let i = 0; i < labels.length; i++) {
-            let itm = {rsstag_date: Number.parseInt(labels[i])};
-            for (let bi of values) {
-                itm[bi.label] = bi.data[i];
+        for (let d in series_data[0]) {
+            if (d === "rsstag_date") {
+                continue;
             }
-            series_data.push(itm);
+            bigrams.push(d);
         }
         let series = d3.stack()
             .keys(bigrams)
             .offset(d3.stackOffsetWiggle)
             .order(d3.stackOrderInsideOut)
             (series_data);
-        console.log(series_data);
         let color = d3.scaleOrdinal()
             .domain(bigrams)
-            .range(d3.schemeCategory10);
+            .range(bigrams.map(() => d3.interpolateCubehelixDefault(Math.random())));
 
         let y = d3.scaleLinear()
             .domain([d3.min(series, d => d3.min(d, d => d[0])), d3.max(series, d => d3.max(d, d => d[1]))])
@@ -100,8 +135,23 @@ export default class BiGramsMentionsChart {
         svg.append("g").call(xAxis);
 
         let chart = svg.node();
+        let legend = document.createElement("div");
+        legend.innerHTML = this.renderLegend(color);
+        this._container.appendChild(legend);
         this._container.appendChild(chart);
     }
+
+    renderLegend(color) {
+        let html = "";
+        for (let bi of color.domain()) {
+            html += `
+                <div style="margin: 0 0.5em; display: inline-block; vertical-align: middle;">
+                <div style="margin: 0 0.3em; display: inline-block; height: 1em; width: 1em; vertical-align: middle; background-color: ${color(bi)};"></div>${bi}</div>`;
+        }
+
+        return html;
+    }
+
 
     bindEvents() {
         this.ES.bind(this.ES.BIGRAMS_MENTIONS_UPDATED, this.updateMentions);
