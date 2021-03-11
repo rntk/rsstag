@@ -1,5 +1,7 @@
 'use strict';
 
+import {stopwords} from "../libs/stopwords";
+
 export default class BiGramsMentionsChart {
     constructor(container_id, event_system) {
         this.ES = event_system;
@@ -20,9 +22,15 @@ export default class BiGramsMentionsChart {
         }
         sums = Array.from(sums);
         sums.sort();
+        let stopw = stopwords();
         let sum_pos = Math.max(sums.length - 20, 0);
         let min_n = sums[sum_pos];
         for (let bi in data.bigrams) {
+            let bis = bi.split(" ");
+            if (stopw.has(bis[0]) || stopw.has(bis[1])) {
+                skip_bi.add(bi);
+                continue;
+            }
             let sum = 0;
             for (let d in data.bigrams[bi]) {
                 sum += data.bigrams[bi][d];
@@ -73,9 +81,9 @@ export default class BiGramsMentionsChart {
                 for (let dd of dates_aggr[d]) {
                     let v = 0;
                     if (dd in data.bigrams[bi]) {
-                        v = Number.parseInt(data.bigrams[bi][dd]) + 10;
+                        v = Number.parseInt(data.bigrams[bi][dd]);
                     }
-                    itm[bi] += Math.random() * 10;
+                    itm[bi] += v;
                 }
             }
             let td = new Date();
@@ -88,7 +96,7 @@ export default class BiGramsMentionsChart {
 
     renderChart(series_data) {
         let margin = ({top: 0, right: 20, bottom: 30, left: 20});
-        let height = 500;
+        let height = 900;
         let width = 1200;
         let xAxis = g => {
             g.attr("transform", `translate(0,${height - margin.bottom})`)
