@@ -25,6 +25,7 @@ from rsstag.letters import RssTagLetters
 from rsstag.bi_grams import RssTagBiGrams
 from rsstag.users import RssTagUsers
 from rsstag.providers import BazquxProvider, TelegramProvider
+from rsstag.lda import LDA
 
 class RSSTagApplication(object):
     request = None
@@ -1714,6 +1715,51 @@ class RSSTagApplication(object):
                                 data.append(" ".join(words[start_pos:end_pos]))
                     result = {'data': data}
                     code = 200
+                elif cursor is None:
+                    result = {'error': 'Server in trouble'}
+                    code = 500
+                else:
+                    result = {'error': 'Tag not found'}
+                    code = 404
+            else:
+                result = {'error': 'Not logged'}
+                code = 401
+        else:
+            result = {'error': 'Something wrong with request'}
+            code = 400
+
+        self.response = Response(json.dumps(result), mimetype='application/json')
+        self.response.status_code = code
+
+    def on_tag_topics_get(self, tag: str):
+        if tag:
+            if self.user:
+                cursor = self.posts.get_by_tags(self.user["sid"], [tag], self.user['settings']['only_unread'], {"lemmas": True})
+                if cursor:
+                    texts = [gzip.decompress(post["lemmas"]).decode('utf-8', 'replace') for post in cursor]
+                    lda = LDA()
+                    topics = lda.topics(texts, top_k=5)
+                    if tag in topics:
+                        topics.remove(tag)
+                    tags = self.tags.get_by_tags(self.user['sid'], topics, self.user['settings']['only_unread'])
+                    if tags:
+                        all_tags = []
+                        for tag in tags:
+                            all_tags.append({
+                                'tag': tag['tag'],
+                                'url': tag['local_url'],
+                                'words': tag['words'],
+                                'count': tag['unread_count'] if self.user['settings']['only_unread'] else tag[
+                                    'posts_count'],
+                                'sentiment': tag['sentiment'] if 'sentiment' in tag else [],
+                                'temp': tag['temperature']
+                            })
+                            all_tags.sort(key=lambda t: t["temp"], reverse=True)
+                        result = {'data': all_tags}
+                        code = 200
+                    else:
+                        result = {'error': 'Tags not found'}
+                        code = 404
                 elif cursor is None:
                     result = {'error': 'Server in trouble'}
                     code = 500

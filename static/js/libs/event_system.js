@@ -39,6 +39,7 @@ export default class EventsSystem {
         this.POSTS_RENDERED = 'posts_rendered';
 
         this.TAG_MENTIONS_UPDATED = 'tag_mentions_updated';
+        this.TAG_TOPICS_UPDATED = 'tag_topics_updated';
 
         this.WORDTREE_TEXTS_UPDATED = "wordtree_texts_updated";
 

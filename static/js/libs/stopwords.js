@@ -26,6 +26,5 @@ export function stopwords() {
     for (let w of _stopwords) {
         s.add(w);
     }
-    
     return s
 }

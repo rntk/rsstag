@@ -200,6 +200,18 @@ window.onload = () => {
         );
         bi_grams_storage.start();
 
+        const tag_topics_evsys = new EventsSystem();
+        const tag_topics_storage = new TagsStorage(tag_topics_evsys, '/tag-topics');
+        ReactDOM.render(
+            <TagsList ES={tag_topics_evsys} />,
+            document.getElementById('tag_topics')
+        );
+        ReactDOM.render(
+            <TagButton ES={tag_topics_evsys} title="Load topics" tag={tag} />,
+            document.getElementById('load_topics')
+        );
+        tag_topics_storage.start();
+
         const tag_mentionss_evsys = new EventsSystem();
         const tag_mentions_chart = new TagMentionsChart("#mentions_chart", tag_mentionss_evsys);
         const tag_mentions_storage = new TagMentionsStorage(tag.tag, tag_mentionss_evsys);
