@@ -23,8 +23,11 @@ export default class BiGramsMentionsChart {
         sums = Array.from(sums);
         sums.sort();
         let stopw = stopwords();
-        let sum_pos = Math.max(sums.length - 20, 0);
+        let sum_pos = Math.max(sums.length - 5, 0);
         let min_n = sums[sum_pos];
+        if (min_n === 1) {
+            min_n++;
+        }
         for (let bi in data.bigrams) {
             let bis = bi.split(" ");
             if (stopw.has(bis[0]) || stopw.has(bis[1])) {
@@ -95,58 +98,70 @@ export default class BiGramsMentionsChart {
     }
 
     renderChart(series_data) {
-        let margin = ({top: 0, right: 20, bottom: 30, left: 20});
-        let height = 900;
-        let width = 1200;
-        let xAxis = g => {
-            g.attr("transform", `translate(0,${height - margin.bottom})`)
-                .call(d3.axisBottom(x).ticks(width / 80).tickSizeOuter(0))
-                .call(g => {return g.select(".domain").remove();});
-        };
-        let bigrams = [];
-        for (let d in series_data[0]) {
-            if (d === "rsstag_date") {
-                continue;
+        let labels = [];
+        let bi_points = {};
+        for (let p of series_data) {
+            let d = p.rsstag_date;
+            let l = `${d.getFullYear()}-${this.prettyDate(d.getMonth())}-${this.prettyDate(d.getDate())}`;
+            labels.push(l);
+            for (let bi in p) {
+                if (bi === "rsstag_date") {
+                    continue;
+                }
+                if (!(bi in bi_points)) {
+                    bi_points[bi] = [];
+                }
+                bi_points[bi].push(p[bi]);
             }
-            bigrams.push(d);
         }
-        let series = d3.stack()
-            .keys(bigrams)
-            .offset(d3.stackOffsetWiggle)
-            .order(d3.stackOrderInsideOut)
-            (series_data);
-        let color = d3.scaleOrdinal()
-            .domain(bigrams)
-            .range(bigrams.map(() => d3.interpolateCubehelixDefault(Math.random())));
+        let datasets = [];
+        for (let bi in bi_points) {
+            let sum = bi_points[bi].reduce((acc, v) => acc + v);
+            datasets.push({
+                label: `${bi} (${sum})`,
+                backgroundColor: d3.interpolateCubehelixDefault(Math.random()),
+                data: bi_points[bi]
+            });
+        }
+        let dtset = {
+            labels: labels,
+            datasets: datasets
+        };
+        let ctx = this._container.querySelector("canvas")
+        if (!ctx) {
+            return;
+        }
+        let ch = new Chart(ctx.getContext("2d"), {
+            type: "bar",
+            data: dtset,
+            options: {
+                tooltips: {
+                    mode: 'index',
+                    intersect: false
+                },
+                responsive: true,
+                scales: {
+                    xAxes: [{
+                        stacked: true,
+                    }],
+                    yAxes: [{
+                        stacked: true
+                    }]
+                }
+            }
+        });
+    }
 
-        let y = d3.scaleLinear()
-            .domain([d3.min(series, d => d3.min(d, d => d[0])), d3.max(series, d => d3.max(d, d => d[1]))])
-            .range([height - margin.bottom, margin.top]);
-        let x = d3.scaleUtc()
-            .domain(d3.extent(series_data, d => d.rsstag_date))
-            .range([margin.left, width - margin.right]);
-        let area = d3.area()
-            .x(d => x(d.data.rsstag_date))
-            .y0(d => y(d[0]))
-            .y1(d => y(d[1]));
-        const svg = d3.create("svg").attr("viewBox", [0, 0, width, height]);
+    prettyDate(n) {
+        if (n === 0) {
+            n = 1;
+        }
+        let zero = "";
+        if (n < 10) {
+            zero = "0";
+        }
 
-        svg.append("g")
-            .selectAll("path")
-            .data(series)
-            .join("path")
-            .attr("fill", ({key}) => color(key))
-            .attr("d", area)
-            .append("title")
-            .text(({key}) => key);
-
-        svg.append("g").call(xAxis);
-
-        let chart = svg.node();
-        let legend = document.createElement("div");
-        legend.innerHTML = this.renderLegend(color);
-        this._container.appendChild(legend);
-        this._container.appendChild(chart);
+        return zero + n;
     }
 
     renderLegend(color) {
