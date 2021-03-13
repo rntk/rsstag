@@ -4,14 +4,22 @@ export default class PostsWordTree {
     constructor(container_id, event_system) {
         this.ES = event_system;
         this._container = document.querySelector(container_id);
+        this._renderred = false;
 
         this.updateWordTree = this.updateWordTree.bind(this);
     }
 
     updateWordTree(data) {
-        if (data.group === "category") {
+        if ((data.group === "category") || (data.group === "feed")) {
             return;
         }
+        if (this._renderred) {
+            return;
+        }
+        if (!data.posts) {
+            return;
+        }
+        this._renderred = true;
         google.charts.load('current', {packages:['wordtree']});
         google.charts.setOnLoadCallback(() => {
             let tags = data.group_title.split(" ");
