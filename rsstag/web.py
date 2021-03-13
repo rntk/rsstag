@@ -745,6 +745,7 @@ class RSSTagApplication(object):
                             db_posts.extend(cl_posts)
                 pids = set()
                 for post in db_posts:
+                    post["lemmas"] = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
                     if post['pid'] not in pids:
                         pids.add(post['pid'])
                         posts.append({
