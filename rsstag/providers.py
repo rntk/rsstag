@@ -198,11 +198,12 @@ class BazquxProvider:
             data = urlencode({'i': data_id, 'r': read_tag})
         max_repetitions = 10
         for i in range(max_repetitions):
-            connection = client.HTTPSConnection(self._config[user['provider']]['api_host'])
             try:
+                connection = client.HTTPSConnection(self._config[user['provider']]['api_host'])
                 connection.request('POST', '/reader/api/0/edit-tag?output=json', data, headers)
                 resp = connection.getresponse()
                 resp_data = resp.read()
+                connection.close()
             except Exception as e:
                 result = False
                 resp_data = None
@@ -217,7 +218,6 @@ class BazquxProvider:
                     return None
 
             time.sleep(randint(2, 7))
-            connection.close()
 
         return result
 
@@ -242,17 +242,18 @@ class BazquxProvider:
 
     def is_valid_user(self, user: dict) -> Optional[bool]:
         headers = self.get_headers(user)
-        connection = client.HTTPSConnection(self._config['bazqux']['api_host'])
         try:
+            connection = client.HTTPSConnection(self._config['bazqux']['api_host'])
             connection.request('GET', '/reader/ping', None, headers)
             if connection.getresponse().read().strip() == "OK":
                 result= True
             else:
                 result = False
                 logging.error('Unauthorized user')
+            connection.close()
         except Exception as e:
             result = None
-            logging.error('Can`t ping bazqux server. Info: %', e)
+            logging.error('Can`t ping bazqux server. Info: %s', e)
 
         return result
 
