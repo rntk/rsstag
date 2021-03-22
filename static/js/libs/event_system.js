@@ -45,6 +45,8 @@ export default class EventsSystem {
 
         this.BIGRAMS_MENTIONS_UPDATED = "bigrams_mentions_updated";
 
+        this.TOPICS_TEXTS_UPDATED = "topics_texts_updated";
+
         this._events = {};
     }
 

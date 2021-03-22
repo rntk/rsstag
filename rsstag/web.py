@@ -1776,3 +1776,31 @@ class RSSTagApplication(object):
 
         self.response = Response(json.dumps(result), mimetype='application/json')
         self.response.status_code = code
+
+    def on_topics_texts_get(self, tag: str):
+        if tag:
+            if self.user:
+                cursor = self.posts.get_by_tags(self.user["sid"], [tag], self.user['settings']['only_unread'], {"lemmas": True})
+                if cursor:
+                    texts = [gzip.decompress(post["lemmas"]).decode('utf-8', 'replace') for post in cursor]
+                    lda = LDA()
+                    topics = lda.topics(texts, top_k=5)
+                    if tag in topics:
+                        topics.remove(tag)
+                    result = {"data": {"texts": texts, "topics": topics}}
+                    code = 200
+                elif cursor is None:
+                    result = {'error': 'Server in trouble'}
+                    code = 500
+                else:
+                    result = {'error': 'Tag not found'}
+                    code = 404
+            else:
+                result = {'error': 'Not logged'}
+                code = 401
+        else:
+            result = {'error': 'Something wrong with request'}
+            code = 400
+
+        self.response = Response(json.dumps(result), mimetype='application/json')
+        self.response.status_code = code

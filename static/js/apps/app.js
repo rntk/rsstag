@@ -34,6 +34,8 @@ import PostsWordTree from '../components/posts-wordtree.js';
 import TagContexts from '../components/tag-contexts.js';
 import BiGramsMentionsStorage from '../storages/bigrams-mentions-storage.js';
 import BiGramsMentionsChart from '../components/bigrams-mentions-chart.js';
+import TopicsTextsStorage from '../storages/topics-texts-storage.js';
+import TopicsTexts from '../components/topics-texts.js';
 
 function handleScroll() {
     let $tools = document.querySelector('#global_tools');
@@ -233,6 +235,11 @@ window.onload = () => {
             <TagContexts ES={wordtree_evsys} tag={tag} />,
             document.getElementById('tag_contexts')
         );
+        const topics_texts_evsys = new EventsSystem();
+        const topics_texts_chart = new TopicsTexts("#topics_texts", topics_texts_evsys);
+        const topics_texts_storage = new TopicsTextsStorage(tag.tag, topics_texts_evsys);
+        topics_texts_chart.start();
+        topics_texts_storage.start();
 
     } else if (/^\/map$/.test(path)) {
         let map_handler = new RssTagYMap('map', window.EVSYS);
