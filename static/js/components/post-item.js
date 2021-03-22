@@ -5,7 +5,8 @@ export default class PostsItem extends React.Component{
     constructor(props) {
         super(props);
         this.state = {
-            post: props.post
+            post: props.post,
+            tag: props.tag
         };
         this.showed = false;
         this.clickReadButton = this.clickReadButton.bind(this);
@@ -87,6 +88,28 @@ export default class PostsItem extends React.Component{
                     </div>
                 );
             }
+            let post_tag_contexts = [];
+            if (post.post.lemmas && post.post.lemmas.length) {
+                let tags = this.state.tag.split(" ");
+                const wwindow = 5;
+                let words = post.post.lemmas.split(" ");
+                for (let tag of tags) {
+                    for (let i = 0; i < words.length; i++) {
+                        let word = words[i];
+                        if (word === tag) {
+                            let st_pos = Math.max(i - wwindow, 0);
+                            let en_pos = Math.min(i + wwindow, words.length);
+                            let before = words.slice(st_pos, i).join(" ") + " ";
+                            let after = " " + words.slice(i + 1, en_pos).join(" ");
+                            post_tag_contexts.push(
+                                <p key={`lem_${post.pos}_${i}`}>{before}<span
+                                    className="post_tag_context_tag">{tag}</span>{after}</p>
+                            );
+                        }
+                    }
+                }
+            }
+
             return(
                 <div className={"post " + (this.state.post.current? "current_post": "")} key={post.pos} ref={this.getNode} onClick={this.setCurrent}><a name={'p' + post.pos}></a>
                     <h3 className="post_title">
@@ -99,6 +122,7 @@ export default class PostsItem extends React.Component{
                         {post.post.date}{(post.post.clusters)? ' | ' + post.post.clusters.join(', '): ''}
                     </div>
                     <div className={'post_content ' + (post.showed? '': 'hide')} dangerouslySetInnerHTML={this.dangerHTML(post)}></div>
+                    <div className="post_tag_contexts">{post_tag_contexts}</div>
                     <div className="post_tools">
                         <span className="post_show_content" onClick={this.changePostsContentState}>{post.showed? 'Hide': 'Show'} post</span>
                         <span className="post_show_links" onClick={this.showPostLinks}>Show links</span>
