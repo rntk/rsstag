@@ -105,8 +105,8 @@ window.onload = () => {
             document.getElementById('cats_list')
         );
     } else if (
-        (/\/group\/(tag|hottag)\/.*/.test(path)) || (/\/tags\/sentiment\/.*/.test(path)) ||
-        (/\/tags\/group\/.*/.test(path))
+        /\/group\/(tag|hottag)\/.*/.test(path) || /\/tags\/sentiment\/.*/.test(path) ||
+        /\/tags\/group\/.*/.test(path) || /\/themes\/[0-9]+/.test(path)
     ) {
         const tags_storage = new TagsStorage(window.EVSYS);
         ReactDOM.render(

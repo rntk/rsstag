@@ -55,7 +55,9 @@ class RSSTagRoutes:
             {'url': '/tag-topics/<string:tag>', 'endpoint': 'on_tag_topics_get', 'methods': ['GET']},
             {'url': '/topics-texts/<string:tag>', 'endpoint': 'on_topics_texts_get', 'methods': ['GET']},
             {'url': '/bigrams-dates/<string:tag>', 'endpoint': 'on_bigrams_dates_get', 'methods': ['GET']},
-            {'url': '/wordtree-texts/<string:tag>', 'endpoint': 'on_wordtree_texts_get', 'methods': ['GET']}
+            {'url': '/wordtree-texts/<string:tag>', 'endpoint': 'on_wordtree_texts_get', 'methods': ['GET']},
+
+            {'url': '/themes/<int:page_number>', 'endpoint': 'on_themes_get', 'methods': ['GET']}
         ]
 
         self._rules = []

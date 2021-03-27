@@ -1804,3 +1804,74 @@ class RSSTagApplication(object):
 
         self.response = Response(json.dumps(result), mimetype='application/json')
         self.response.status_code = code
+
+    def on_themes_get(self, page_number: int=1) -> None:
+        if self.user:
+            all_tags = []
+            cursor = self.posts.get_all(self.user["sid"], self.user['settings']['only_unread'], {"lemmas": True})
+            if cursor:
+                texts = [gzip.decompress(post["lemmas"]).decode('utf-8', 'replace') for post in cursor]
+                lda = LDA()
+                topics = lda.topics(texts, top_k=10)
+                tags = self.tags.get_by_tags(self.user['sid'], topics, self.user['settings']['only_unread'])
+                if tags:
+                    for tag in tags:
+                        all_tags.append({
+                            'tag': tag['tag'],
+                            'url': tag['local_url'],
+                            'words': tag['words'],
+                            'count': tag['unread_count'] if self.user['settings']['only_unread'] else tag[
+                                'posts_count'],
+                            'sentiment': tag['sentiment'] if 'sentiment' in tag else [],
+                            'temp': tag['temperature']
+                        })
+                    all_tags.sort(key=lambda t: t["temp"], reverse=True)
+            page_count = self.getPageCount(1, self.user['settings']['tags_on_page'])
+            if page_number <= 0:
+                p_number = 1
+                self.user['page'] = p_number
+            elif page_number > page_count:
+                p_number = page_count
+                self.response = redirect(
+                    self.routes.getUrlByEndpoint(endpoint='on_themes_get', params={'page_number': p_number})
+                )
+                self.user['page'] = p_number
+            else:
+                p_number = page_number
+            p_number -= 1
+            if p_number < 0:
+                p_number = 1
+            new_cookie_page_value = p_number + 1
+            pages_map, start_tags_range, end_tags_range = self.calcPagerData(
+                p_number,
+                page_count,
+                self.user['settings']['tags_on_page'],
+                'on_themes_get'
+            )
+            db_letters = self.letters.get(self.user['sid'], make_sort=True)
+            if db_letters:
+                letters = self.letters.to_list(db_letters, self.user['settings']['only_unread'])
+            else:
+                letters = []
+            page = self.template_env.get_template('group-by-tag.html')
+            self.response = Response(
+                page.render(
+                    tags=all_tags,
+                    sort_by_title='tags',
+                    sort_by_link=self.routes.getUrlByEndpoint(
+                        endpoint='on_themes_get',
+                        params={'page_number': new_cookie_page_value}
+                    ),
+                    group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
+                    pages_map=pages_map,
+                    current_page=new_cookie_page_value,
+                    letters=letters,
+                    user_settings=self.user['settings'],
+                    provider=self.user['provider']
+                ),
+                mimetype='text/html'
+            )
+            self.users.update_by_sid(
+                self.user['sid'],
+                {'page': new_cookie_page_value, 'letter': ''}
+            )
