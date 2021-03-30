@@ -57,7 +57,7 @@ class RssTagEntityExtractor:
                     yield sign
                     sign = ''
 
-    def treat_entities(self, entities: List[list]) -> List[str]:
+    def treat_entities(self, entities: List[list]) -> List[List[str]]:
         new_entities = []
         for entity in entities:
             new_entity = []
@@ -129,7 +129,7 @@ class RssTagEntityExtractor:
             self._log.error('Can`t add to stat word: "%s". Info: %s', word, e)
 
 
-    def extract_entities(self, text: str) -> List[str]:
+    def extract_entities(self, text: str) -> List[List[str]]:
         entities = []
         entity = []
         add_to_entity = False

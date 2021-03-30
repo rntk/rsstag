@@ -207,27 +207,18 @@ class RSSTagWorker:
         result = False
         posts = RssTagPosts(db)
         all_posts = posts.get_all(owner, projection={'content': True, 'pid': True})
-        texts = []
         count_ent = defaultdict(int)
         if all_posts:
+            ent_ex = RssTagEntityExtractor()
             for post in all_posts:
                 text = post['content']['title'] + ' ' + gzip.decompress(post['content']['content']).decode('utf-8', 'ignore')
-                if text:
-                    texts.append(text)
-        if texts:
-            ent_ex = RssTagEntityExtractor()
-            all_entities = []
-            for i, text in enumerate(texts):
+                if not text:
+                    continue
                 entities = ent_ex.extract_entities(text)
-                all_entities.append(entities)
-            for t_i, entities in enumerate(all_entities):
                 for e_i, entity in enumerate(entities):
                     cl_entity = ent_ex.clean_entity(entity)
-                    if cl_entity:
-                        all_entities[t_i][e_i] = cl_entity
-
-            for entities in all_entities:
-                for entity in entities:
+                    if not cl_entity:
+                        continue
                     for word in entity:
                         if len(word) > 1:
                             count_ent[word] += 1

@@ -306,7 +306,7 @@ class RssTagTags:
         updates = [
             UpdateOne(
                 {'owner': owner, 'tag': entity},
-                {operator: {'temperature': number}}
+                {operator: {'temperature': number, 'ner': number}}
             )
             for entity, number in entities.items()
         ]
