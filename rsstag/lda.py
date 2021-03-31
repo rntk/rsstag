@@ -8,10 +8,11 @@ from nltk.corpus import stopwords
 class LDA:
     def __init__(self) -> None:
         self.log = logging.getLogger('LDA')
+        stopw = ["это"]
+        self._stopwords = set(stopwords.words('english') + stopwords.words('russian') + stopw)
 
     def topics(self, texts: List[str], topics_n: int=10, top_k: int = 10) -> List[str]:
-        stopw = set(stopwords.words('english') + stopwords.words('russian'))
-        vectorizer = TfidfVectorizer(stop_words=stopw)
+        vectorizer = TfidfVectorizer(stop_words=self._stopwords)
         vectors = vectorizer.fit_transform(texts)
         model = LatentDirichletAllocation(n_components=topics_n)
         model.fit(vectors)

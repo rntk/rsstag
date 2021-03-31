@@ -1859,7 +1859,7 @@ class RSSTagApplication(object):
                     tags=all_tags,
                     sort_by_title='tags',
                     sort_by_link=self.routes.getUrlByEndpoint(
-                        endpoint='on_themes_get',
+                        endpoint='on_group_by_tags_get',
                         params={'page_number': new_cookie_page_value}
                     ),
                     group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
