@@ -1,13 +1,23 @@
 """Remove all html tags"""
 from html.parser import HTMLParser
+from html import unescape
 
 class HTMLCleaner(HTMLParser):
     """Remove all html tags"""
-    _strings = []
-    _error = None
+    def __init__(self):
+        super().__init__()
+        _strings = []
+        _error = None
 
     def handle_data(self, data):
         """Add data to strings"""
+        repeat = True
+        while repeat:
+            txt = unescape(data)
+            if data == txt:
+                repeat = False
+            data = txt
+
         self._strings.append(data)
 
     def purge(self):
