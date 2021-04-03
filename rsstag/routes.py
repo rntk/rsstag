@@ -22,6 +22,7 @@ class RSSTagRoutes:
             {'url': '/refresh', 'endpoint': 'on_refresh_get_post', 'methods': ['GET', 'POST']},
 
             {'url': '/tag/<string:quoted_tag>', 'endpoint': 'on_tag_get', 'methods': ['GET']},
+            {'url': '/entity/<string:quoted_tag>', 'endpoint': 'on_entity_get', 'methods': ['GET']},
             {'url': '/category/<string:quoted_category>', 'endpoint': 'on_category_get', 'methods': ['GET']},
             {'url': '/feed/<string:quoted_feed>', 'endpoint': 'on_feed_get', 'methods': ['GET']},
             {'url': '/read/posts', 'endpoint': 'on_read_posts_post', 'methods': ['POST']},
@@ -53,6 +54,7 @@ class RSSTagRoutes:
 
             {'url': '/tag-dates/<string:tag>', 'endpoint': 'on_tag_dates_get', 'methods': ['GET']},
             {'url': '/tag-topics/<string:tag>', 'endpoint': 'on_tag_topics_get', 'methods': ['GET']},
+            {'url': '/tag-entities/<string:tag>', 'endpoint': 'on_tag_entities_get', 'methods': ['GET']},
             {'url': '/topics-texts/<string:tag>', 'endpoint': 'on_topics_texts_get', 'methods': ['GET']},
             {'url': '/bigrams-dates/<string:tag>', 'endpoint': 'on_bigrams_dates_get', 'methods': ['GET']},
             {'url': '/wordtree-texts/<string:tag>', 'endpoint': 'on_wordtree_texts_get', 'methods': ['GET']},

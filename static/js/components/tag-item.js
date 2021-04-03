@@ -16,6 +16,12 @@ export default class TagItem extends React.Component{
         if (this.state.tag.sentiment && this.state.tag.sentiment.length) {
             sentiment = this.state.tag.sentiment[0].replace('/', '_');
         }
+        let hide_tag_info_link = false;
+        if (this.props.is_bigram) {
+            hide_tag_info_link = true;
+        } else if (this.props.is_entity) {
+            hide_tag_info_link = this.state.tag.tag.search(/\s/) !== -1;
+        }
 
         return (
             <div style={style}>
@@ -25,7 +31,7 @@ export default class TagItem extends React.Component{
                         {this.state.tag.tag}
                     </a> ({this.state.tag.count})<br />
                     ({this.state.tag.words.join(', ')})<br />
-                    {(this.props.is_bigram)? '': <a href={'/tag-info/' + this.state.tag.tag} className="get_tag_siblings">...</a>}
+                    {(hide_tag_info_link)? '': <a href={'/tag-info/' + this.state.tag.tag} className="get_tag_siblings">...</a>}
                 </li>
             </div>
         )

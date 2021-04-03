@@ -30,7 +30,7 @@ export default class TagsList extends React.Component{
                 let tag = tag_item[1];
 
                 tags.push(
-                    <TagItem key={tag.tag} tag={tag} tags={this.state.tags} tag_hash={this.state.tag_hash} ES={this.props.ES} uniq_id={tag.tag} is_bigram={this.props.is_bigram} />
+                    <TagItem key={tag.tag} tag={tag} tags={this.state.tags} tag_hash={this.state.tag_hash} ES={this.props.ES} uniq_id={tag.tag} is_bigram={this.props.is_bigram} is_entity={this.props.is_entities} />
                 );
             }
             return(

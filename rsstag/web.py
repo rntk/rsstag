@@ -1,6 +1,7 @@
 ﻿import os
+import re
 import json
-from urllib.parse import unquote_plus, urlencode, unquote, quote_plus
+from urllib.parse import unquote_plus, urlencode, unquote, quote_plus, quote
 from http import client
 import html
 import time
@@ -26,6 +27,10 @@ from rsstag.bi_grams import RssTagBiGrams
 from rsstag.users import RssTagUsers
 from rsstag.providers import BazquxProvider, TelegramProvider
 from rsstag.lda import LDA
+from navec import Navec
+from slovnet import NER
+from rsstag.tags_builder import TagsBuilder
+from rsstag.html_cleaner import HTMLCleaner
 
 class RSSTagApplication(object):
     request = None
@@ -54,6 +59,8 @@ class RSSTagApplication(object):
         'on_refresh_get_post'
     )
     no_category_name = 'NotCategorized'
+    navec = None
+    ner = None
 
     def __init__(self, config_path=None):
         self.config = load_config(config_path)
@@ -1875,3 +1882,127 @@ class RSSTagApplication(object):
                 self.user['sid'],
                 {'page': new_cookie_page_value, 'letter': ''}
             )
+
+    def on_tag_entities_get(self, tag: str):
+        if tag:
+            if self.user:
+                cursor = self.posts.get_by_tags(self.user["sid"], [tag], self.user['settings']['only_unread'], {"content": True, "tags": True, "bi_grams": True})
+                if cursor:
+                    html_cleaner = HTMLCleaner()
+                    tags_builder = TagsBuilder()
+                    if self.navec is None:
+                        self.navec = Navec.load('./data/navec_news_v1_1B_250K_300d_100q.tar')
+                    if self.ner is None:
+                        self.ner = NER.load('./data/slovnet_ner_news_v1.tar')
+                        self.ner.navec(self.navec)
+                    ners = {}
+                    text_clearing = re.compile("[^\w\d ]")
+                    for post in cursor:
+                        html_cleaner.purge()
+                        txt = post["content"]["title"] + ". " + gzip.decompress(post["content"]["content"]).decode('utf-8', 'replace')
+                        html_cleaner.feed(txt)
+                        txt = html.unescape(" ".join(html_cleaner.get_content()))
+                        markup = self.ner(txt)
+                        if len(markup.spans) == 0:
+                            continue
+                        for span in markup.spans:
+                            n = txt[span.start:span.stop].casefold()
+                            n = text_clearing.sub(" ", n)
+                            if " " in n:
+                                words = n.split(" ")
+                                ns = map(lambda w: tags_builder.process_word(w), words)
+                                n = " ".join(ns)
+                            else:
+                                words = [n]
+                                n = tags_builder.process_word(n)
+                            if n not in ners:
+                                ners[n] = {
+                                    'tag': n,
+                                    'url': "/entity/" + quote(n),
+                                    'words': [],
+                                    'count': 0,
+                                    'sentiment': [],
+                                    'temp': 0
+                                }
+                            ners[n]["count"] += 1
+                            ners[n]["words"] = list(set(ners[n]["words"] + words))
+
+                    result = {'data': [ners[n] for n in ners]}
+                    code = 200
+                elif cursor is None:
+                    result = {'error': 'Server in trouble'}
+                    code = 500
+                else:
+                    result = {'error': 'Tag not found'}
+                    code = 404
+            else:
+                result = {'error': 'Not logged'}
+                code = 401
+        else:
+            result = {'error': 'Something wrong with request'}
+            code = 400
+
+        self.response = Response(json.dumps(result), mimetype='application/json')
+        self.response.status_code = code
+
+    def on_entity_get(self, quoted_tag=None):
+        page_number = self.user['page']
+        letter = self.user['letter']
+        tmp_letters = self.letters.get(self.user['sid'])
+        if not page_number:
+            page_number = 1
+        if tmp_letters and letter and letter in tmp_letters['letters']:
+            back_link = self.routes.getUrlByEndpoint(
+                endpoint='on_group_by_tags_startwith_get',
+                params={'letter': letter, 'page_number': page_number}
+            )
+        else:
+            back_link = self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number})
+        tag = unquote(quoted_tag)
+        projection = {'_id': False, 'content.content': False}
+        if self.user['settings']['only_unread']:
+            only_unread = self.user['settings']['only_unread']
+        else:
+            only_unread = None
+        db_posts = self.posts.get_by_tags(self.user['sid'], tag.split(), only_unread, projection)
+        if db_posts is not None:
+            if self.user['settings']['similar_posts']:
+                clusters = self.posts.get_clusters(db_posts)
+                if clusters:
+                    cl_posts = self.posts.get_by_clusters(self.user['sid'], list(clusters), only_unread, projection)
+                    if cl_posts:
+                        db_posts.extend(cl_posts)
+            posts = []
+            by_feed = {}
+            pids = set()
+            for post in db_posts:
+                post["lemmas"] = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
+                if post['pid'] not in pids:
+                    pids.add(post['pid'])
+                    if post['feed_id'] not in by_feed:
+                        feed = self.feeds.get_by_feed_id(self.user['sid'], post['feed_id'])
+                        if feed:
+                            by_feed[post['feed_id']] = feed
+                    if post['feed_id']in by_feed:
+                        posts.append({
+                            'post': post,
+                            'pos': post['pid'],
+                            'category_title': by_feed[post['feed_id']]['category_title'],
+                            'feed_title': by_feed[post['feed_id']]['title'],
+                            'favicon': by_feed[post['feed_id']]['favicon']
+                        })
+            page = self.template_env.get_template('posts.html')
+            self.response = Response(
+                page.render(
+                    posts=posts,
+                    tag=tag,
+                    back_link=back_link,
+                    group='tag',
+                    words=[],
+                    user_settings=self.user['settings'],
+                    provider=self.user['provider']
+                ),
+                mimetype='text/html'
+            )
+        else:
+            self.on_error(InternalServerError())

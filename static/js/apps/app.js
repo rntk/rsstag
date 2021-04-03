@@ -130,7 +130,8 @@ window.onload = () => {
         );
         bi_grams_storage.start();
     } else if ( /^\/feed*/.test(path) || /^\/category*/.test(path) ||
-            /^\/tag\/.*/.test(path) || /^\/posts\/with\/tags\/.*/.test(path) || /^\/bi-gram\/.*/.test(path)) {
+            /^\/tag\/.*/.test(path) || /^\/posts\/with\/tags\/.*/.test(path) || /^\/bi-gram\/.*/.test(path) ||
+        /^\/entity\/.*/.test(path)) {
         const posts_storage = new PostsStorage(window.EVSYS);
         ReactDOM.render(
             <PostsList ES={window.EVSYS} />,
@@ -235,6 +236,17 @@ window.onload = () => {
             <TagContexts ES={wordtree_evsys} tag={tag} />,
             document.getElementById('tag_contexts')
         );
+        const tag_entities_evsys = new EventsSystem();
+        const tag_entities_storage = new TagsStorage(tag_entities_evsys, '/tag-entities');
+        ReactDOM.render(
+            <TagsList ES={tag_entities_evsys} is_entities={true} />,
+            document.getElementById('tag_entities')
+        );
+        ReactDOM.render(
+            <TagButton ES={tag_entities_evsys} title="Load entities" tag={tag} />,
+            document.getElementById('load_entities')
+        );
+        tag_entities_storage.start();
         /*const topics_texts_evsys = new EventsSystem();
         const topics_texts_chart = new TopicsTexts("#topics_texts", topics_texts_evsys);
         const topics_texts_storage = new TopicsTextsStorage(tag.tag, topics_texts_evsys);
