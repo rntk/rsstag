@@ -31,6 +31,7 @@ import TagMentionsChart from '../components/tag-mentions-chart.js';
 import WordTreeStorage from '../storages/wordtree-storage.js';
 import WordTree from '../components/wordtree.js';
 import PostsWordTree from '../components/posts-wordtree.js';
+import PostsWordsCloud from '../components/posts-wordscloud.js';
 import TagContexts from '../components/tag-contexts.js';
 import BiGramsMentionsStorage from '../storages/bigrams-mentions-storage.js';
 import BiGramsMentionsChart from '../components/bigrams-mentions-chart.js';
@@ -151,6 +152,8 @@ window.onload = () => {
         );
         const posts_wordtree = new PostsWordTree("#posts_wordtree", window.EVSYS)
         posts_wordtree.start();
+        const posts_wordscloud = new PostsWordsCloud("#posts_wordscloud_image", window.EVSYS)
+        posts_wordscloud.start();
         posts_storage.start();
     } else if (/\/tag-info\/.*/.test(path)) {
         let tag = window.initial_tag;
