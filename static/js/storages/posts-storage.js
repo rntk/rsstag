@@ -281,9 +281,9 @@ export default class PostsStorage {
 
     errorMessage(msg, err) {
         if (err) {
-            console.log(msg);
-        } else {
             console.log(msg, err);
+        } else {
+            console.log(msg);
         }
         this.ES.trigger(this.POSTS_ERROR_MESSAGE, msg);
     }
