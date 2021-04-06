@@ -42,7 +42,7 @@ export default class PostsList extends React.Component{
                 let post = item[1];
 
                 posts.push(
-                    <PostItem post={post} tag={this.state.group_title} key={post.pos} ES={this.props.ES} current={this.state.current_post} />
+                    <PostItem post={post} tag={this.state.group_title} key={post.pos} ES={this.props.ES} current={this.state.current_post} words={this.state.words} />
                 );
                 for (let tag of post.post.tags) {
                     if (!(tag in freq)) {

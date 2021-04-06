@@ -6,7 +6,8 @@ export default class PostsItem extends React.Component{
         super(props);
         this.state = {
             post: props.post,
-            tag: props.tag
+            tag: props.tag,
+            words: props.words
         };
         this.showed = false;
         this.clickReadButton = this.clickReadButton.bind(this);
@@ -40,11 +41,33 @@ export default class PostsItem extends React.Component{
         }
     }
 
+    // TODO: dirty hack, may affect performance.
+    highliteTag(content) {
+        let words = this.state.words.slice();
+        words.sort((a, b) => {
+            if (a.length < b.length) {
+                return 1;
+            }
+            if (a.length > b.length) {
+                return -1;
+            }
+
+            return 0;
+        });
+        for (let word of words) {
+            let repl = "<b>$1</b>";
+            let reg = new RegExp(`(${word})`, "gi");
+            content = content.replaceAll(reg, repl);
+        }
+
+        return content;
+    }
+
     dangerHTML(post) {
         let html = {__html: ''};
 
         if (post.showed) {//TODO: add content clearing from scripts, iframes etc.
-            html = {__html: post.post.content.content};
+            html = {__html: this.highliteTag(post.post.content.content)};
         }
 
         return html;
