@@ -109,11 +109,15 @@ export default class PostsItem extends React.Component{
                     }
                 }
             }
+            let post_title = post.post.content.title;
+            if (post_title === "") {
+                post_title = "No Title";
+            }
 
             return(
                 <div className={"post " + (this.state.post.current? "current_post": "")} key={post.pos} ref={this.getNode} onClick={this.setCurrent}><a name={'p' + post.pos}></a>
                     <h3 className="post_title">
-                        <a className="post_title_link" href={post.post.url} target="_blank" dangerouslySetInnerHTML={{__html: post.post.content.title}}></a>
+                        <a className="post_title_link" href={post.post.url} target="_blank" dangerouslySetInnerHTML={{__html: post_title}}></a>
                     </h3>
                     <div className="post_meta">
                         #{post.pos} |
