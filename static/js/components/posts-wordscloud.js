@@ -62,7 +62,9 @@ export default class PostsWordsCloud {
                 })
                 .text(function(d) { return d.text; });
         };
-        cld.size([1024, 1024]).fontSize(d => d.size).words(data_words).on("end", draw).start();
+        setTimeout(() => {
+            cld.size([1024, 1024]).fontSize(d => d.size).words(data_words).on("end", draw).start();
+        }, 1000);
     }
 
     bindEvents() {
