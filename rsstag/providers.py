@@ -338,7 +338,9 @@ class TelegramProvider:
                 for entity in entities:
                     if "type" in entity and "url" in entity["type"]:
                         attachments_list.append(entity["type"]["url"])
-
+                resp = self._tlg.get_message_link(post["chat_id"], post["id"])
+                resp.wait()
+                t_link = resp.update["link"]
                 posts.append({
                     'content': {
                         'title': "",
@@ -347,7 +349,7 @@ class TelegramProvider:
                     'feed_id': stream_id,
                     'category_id': self.no_category_name,
                     'id': post['id'],
-                    'url': "https://t.me/{}/{}".format(telegram_channel.lstrip("@"), post["id"]),
+                    'url': t_link,
                     'date': p_date,
                     'unix_date': pu_date,
                     'read': False,
