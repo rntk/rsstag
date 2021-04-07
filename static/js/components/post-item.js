@@ -1,5 +1,6 @@
 'use strict';
 import React from 'react';
+import {stopwords} from "../libs/stopwords";
 
 export default class PostsItem extends React.Component{
     constructor(props) {
@@ -15,6 +16,7 @@ export default class PostsItem extends React.Component{
         this.changePostsContentState = this.changePostsContentState.bind(this);
         this.setCurrent = this.setCurrent.bind(this);
         this.getNode = this.getNode.bind(this);
+        this.stopw = stopwords();
     }
 
     setCurrent() {
@@ -117,6 +119,9 @@ export default class PostsItem extends React.Component{
                 const wwindow = 5;
                 let words = post.post.lemmas.split(" ");
                 for (let tag of tags) {
+                    if (this.stopw.has(tag)) {
+                        continue;
+                    }
                     for (let i = 0; i < words.length; i++) {
                         let word = words[i];
                         if (word === tag) {
