@@ -1,5 +1,5 @@
 import logging
-from typing import Optional
+from typing import Optional, List
 from pymongo import MongoClient, DESCENDING, UpdateOne
 
 class RssTagBiGrams:
@@ -75,5 +75,52 @@ class RssTagBiGrams:
             except Exception as e:
                 result = None
                 self.log.error('Can`t change unread_count for bi-grams. User %s. info: %s', owner, e)
+
+        return result
+
+    def count(self, owner: str, only_unread: bool=False, regexp: str='', sentiments: List[str]=None, groups: List[str]=None) -> Optional[int]:
+        query = {'owner': owner}
+        if regexp:
+            query['tag'] = {'$regex': regexp, '$options': 'i'}
+        if only_unread:
+            query['unread_count'] = {'$gt': 0}
+        if sentiments:
+            query['$and'] = [{'sentiment': {'$exists': True}}, {'sentiment': {'$all': sentiments}}]
+        if groups:
+            query['$and'] = [{'groups': {'$exists': True}}, {'groups': {'$all': groups}}]
+        try:
+            result = self.db.bi_grams.count(query)
+        except Exception as e:
+            self.log.error('Can`t get tags number for user %s. Info: e', owner, e)
+            result = None
+
+        return result
+
+    def get_all(self, owner: str, only_unread: bool=False, hot_tags: bool=False,
+                opts: dict=None, projection: dict=None) -> Optional[list]:
+        query = {'owner': owner}
+        if 'regexp' in opts:
+            query['tag'] = {'$regex': opts['regexp'], '$options': 'i'}
+        sort_data = []
+        if hot_tags:
+            sort_data.append(('temperature', DESCENDING))
+        if only_unread:
+            sort_data.append(('unread_count', DESCENDING))
+            query['unread_count'] = {'$gt': 0}
+        else:
+            sort_data.append(('posts_count', DESCENDING))
+        params = {}
+        if 'offset' in opts:
+            params['skip'] = opts['offset']
+        if 'limit' in opts:
+            params['limit'] = opts['limit']
+        if projection:
+            params['projection'] = projection
+        try:
+            cursor = self.db.bi_grams.find(query, **params).sort(sort_data)
+            result = list(cursor)
+        except Exception as e:
+            self.log.error('Can`t get all tags user %s. Info: %s', owner, e)
+            result = None
 
         return result

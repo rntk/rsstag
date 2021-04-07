@@ -13,6 +13,7 @@ class RSSTagRoutes:
             {'url': '/provider', 'endpoint': 'on_select_provider_get', 'methods': ['GET']},
             {'url': '/provider', 'endpoint': 'on_select_provider_post', 'methods': ['POST']},
             {'url': '/group/tag/<int:page_number>', 'endpoint': 'on_group_by_tags_get', 'methods': ['GET']},
+            {'url': '/group/bi-grams/<int:page_number>', 'endpoint': 'on_group_by_bigrams_get', 'methods': ['GET']},
             {
                 'url': '/group/tag/startwith/<string(length: 1):letter>/<int:page_number>',
                 'endpoint': 'on_group_by_tags_startwith_get',
