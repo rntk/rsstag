@@ -1243,9 +1243,9 @@ class RSSTagApplication(object):
                         tags_set.add(sibling[0])
                 except Exception as e:
                     logging.warning('In %s not found tag %s', self.config['settings']['d2v_model'], tag)
-            elif (model == self.models['w2v']) and self.w2v:
+            elif model == self.models['w2v']:
                 st = os.stat(self.config['settings']['w2v_model'])
-                if st.st_mtime != self.w2v_mod_date:
+                if (st.st_mtime != self.w2v_mod_date) or not self.w2v:
                     self.w2v = Word2Vec.load(self.config['settings']['w2v_model'])
                     self.w2v_mod_date = st.st_mtime
                 try:
