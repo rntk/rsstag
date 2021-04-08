@@ -130,7 +130,7 @@ class RSSTagWorker:
             ))
         post_tags = {"lemmas": gzip.compress(builder.get_prepared_text().encode('utf-8', 'replace'))}
         if tags_updates:
-            post_tags['tags'] = tags
+            post_tags['tags'] = [tag for tag in tags]
         if bi_grams_updates:
             post_tags['bi_grams'] = list(bi_grams.keys())
         try:
@@ -362,10 +362,8 @@ class RSSTagWorker:
         bi_count = bi_grams.count(user_sid)
         if bi_count == 0:
             return False
-        words_count = tags.count(user_sid)
-        if words_count == 0:
-            return False
         cursor = bi_grams.get_all(user_sid, projection={"tag": True, "posts_count": True}, get_cursor=True)
+        stopw = set(stopwords.words('english') + stopwords.words('russian'))
         for bi in cursor:
             grams = bi["tag"].split(" ")
             for_search = []
@@ -376,10 +374,12 @@ class RSSTagWorker:
                 freqs = tags.get_by_tags(user_sid, for_search, projection={"tag": True, "freq": True})
                 for fr in freqs:
                     freq_cache[fr["tag"]] = fr["freq"]
-            f1 = freq_cache[grams[0]] / words_count
-            f2 = freq_cache[grams[1]] / words_count
-            bi_f = bi["posts_count"] / bi_count
-            temp = math.log(bi_f / f1 * f2) / -math.log(bi_f)
+            f1 = freq_cache[grams[0]]
+            f2 = freq_cache[grams[1]]
+            bi_f = bi["posts_count"]
+            temp = bi_f / math.log(f1 + f2)
+            if grams[0] in stopw or grams[1] in stopw:
+                temp /= 2
             if bi_grams.set_temperature(user_sid, bi["tag"], temp) is None:
                 return False
 
