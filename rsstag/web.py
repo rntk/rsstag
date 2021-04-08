@@ -1018,7 +1018,7 @@ class RSSTagApplication(object):
             tags = self.bi_grams.get_all(
                 self.user['sid'],
                 self.user['settings']['only_unread'],
-                hot_tags=False,
+                self.user['settings']['hot_tags'],
                 opts={
                     'offset': start_tags_range,
                     'limit': self.user['settings']['tags_on_page']

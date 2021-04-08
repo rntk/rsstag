@@ -2,6 +2,7 @@
 import logging
 import time
 import gzip
+import math
 from _collections import defaultdict
 from typing import Optional
 from random import randint
@@ -14,10 +15,11 @@ from rsstag.utils import load_config
 from rsstag.routes import RSSTagRoutes
 from rsstag.users import RssTagUsers
 from rsstag.tasks import TASK_NOOP, TASK_DOWNLOAD, TASK_MARK, TASK_TAGS, TASK_WORDS, TASK_TAGS_GROUP, \
-    TAG_NOT_IN_PROCESSING, TASK_LETTERS, TASK_TAGS_SENTIMENT, TASK_W2V, TASK_NER, TASK_CLUSTERING
+    TAG_NOT_IN_PROCESSING, TASK_LETTERS, TASK_TAGS_SENTIMENT, TASK_W2V, TASK_NER, TASK_CLUSTERING, TASK_BIGRAMS_RANK
 from rsstag.tasks import RssTagTasks
 from rsstag.letters import RssTagLetters
 from rsstag.tags import RssTagTags
+from rsstag.bi_grams import RssTagBiGrams
 from rsstag.posts import RssTagPosts
 from rsstag.entity_extractor import RssTagEntityExtractor
 from rsstag.w2v import W2VLearn
@@ -83,6 +85,7 @@ class RSSTagWorker:
             tags = [tag]
             words[tag] = set(tags)
         for tag in tags:
+            freq = tags[tag]
             tags_updates.append(UpdateOne(
                 {'owner': post['owner'], 'tag': tag},
                 {
@@ -97,7 +100,7 @@ class RSSTagWorker:
                         ),
                         'processing': TAG_NOT_IN_PROCESSING
                     },
-                    '$inc': {'posts_count': 1, 'unread_count': 1},
+                    '$inc': {'posts_count': 1, 'unread_count': 1, "freq": freq},
                     '$addToSet': {'words': {'$each': list(words[tag])}}
                 },
                 upsert=True
@@ -352,6 +355,24 @@ class RSSTagWorker:
 
         return result #Always True. TODO: refactor or replace by somethin
 
+    def make_bi_grams_rank(self, db: MongoClient, user_sid: str, bi_gram: dict) -> bool:
+        tags = RssTagTags(db)
+        bi_grams = RssTagBiGrams(db)
+        grams = bi_gram["tag"].split(" ")
+        freqs = tags.get_by_tags(user_sid, grams, projection={"freq": True})
+        words_count = tags.count(user_sid)
+        if not freqs:
+            return False
+        if len(freqs) != 2:
+            return False
+        f1 = freqs[0]["freq"] / words_count
+        f2 = freqs[1]["freq"] / words_count
+        bi_f = bi_gram["posts_count"] / bi_grams.count(user_sid)
+        temp = math.log(bi_f / f1 * f2) / -math.log(bi_f)
+        res = bi_grams.set_temperature(user_sid, bi_gram["tag"], temp)
+
+        return res == True
+
     def worker(self):
         """Worker for bazqux.com"""
         cl = MongoClient(self._config['settings']['db_host'], int(self._config['settings']['db_port']))
@@ -411,6 +432,8 @@ class RSSTagWorker:
                 task_done = self.make_w2v(db, task['user']['sid'], self._config)
             elif task['type'] == TASK_TAGS_GROUP:
                 task_done = self.make_tags_groups(db, task['user']['sid'], self._config)
+            elif task['type'] == TASK_BIGRAMS_RANK:
+                task_done = self.make_bi_grams_rank(db, task['user']['sid'], task['data'])
             '''elif task['type'] == TASK_WORDS:
                 task_done = self.process_words(db, task['data'])'''
             #TODO: add tags_coords, add D2V?

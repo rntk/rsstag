@@ -124,3 +124,17 @@ class RssTagBiGrams:
             result = None
 
         return result
+
+    def set_temperature(self, owner: str, bi_gram: str, temperature: float) -> Optional[bool]:
+        try:
+            resp = self.db.bi_grams.update_one(
+                {
+                    'owner': owner,
+                    'tag': bi_gram
+                },
+                {"$set": {"temperature": temperature}}
+            )
+            return resp.matched_count > 0
+        except Exception as e:
+            self.log.error('Can`t change unread_count for bi-grams. User %s. info: %s', owner, e)
+            return None

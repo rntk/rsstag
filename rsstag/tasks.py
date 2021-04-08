@@ -18,6 +18,7 @@ TASK_D2V = 9
 TASK_TAGS_SENTIMENT = 10
 TASK_TAGS_GROUP = 11
 TASK_TAGS_COORDS = 12
+TASK_BIGRAMS_RANK = 13
 
 POST_NOT_IN_PROCESSING = 0
 TASK_NOT_IN_PROCESSING = 0
@@ -28,7 +29,7 @@ class RssTagTasks:
     indexes = ['user', 'processing']
     _tasks_after = {
         TASK_DOWNLOAD: [TASK_TAGS],
-        TASK_TAGS: [TASK_LETTERS, TASK_TAGS_SENTIMENT, TASK_NER, TASK_CLUSTERING], #TASK_TAGS_COORDS
+        TASK_TAGS: [TASK_BIGRAMS_RANK, TASK_LETTERS, TASK_TAGS_SENTIMENT, TASK_NER, TASK_CLUSTERING], #TASK_TAGS_COORDS
         TASK_NER: [TASK_W2V],
         TASK_W2V: [TASK_TAGS_GROUP]
     }
@@ -118,6 +119,21 @@ class RssTagTasks:
                             task['type'] = TASK_NOOP
                             if self.add_next_tasks(task['user']['sid'], user_task['type']):
                                 self._db.tasks.remove({'_id': user_task['_id']})
+                    elif user_task['type'] == TASK_BIGRAMS_RANK:
+                        data = self._db.bi_grams.find_one_and_update(
+                            {
+                                'owner': task['user']['sid'],
+                                'temperature': 0,
+                                'processing': TAG_NOT_IN_PROCESSING
+                            },
+                            {'$set': {'processing': time.time()}},
+                            projection={"tag": True, "posts_count": True}
+                        )
+                        if data:
+                            self._db.tasks.update_one({'_id': user_task['_id']}, {'$set': {'processing': TASK_NOT_IN_PROCESSING}})
+                        else:
+                            task['type'] = TASK_NOOP
+                            self._db.tasks.remove({'_id': user_task['_id']})
 
                     '''if task_type == TASK_WORDS:
                         if task['type'] == TASK_NOOP:
@@ -209,7 +225,8 @@ class RssTagTasks:
             TASK_D2V: 'Learning Doc2Vec',
             TASK_TAGS_SENTIMENT: 'Tags sentiment',
             TASK_TAGS_GROUP: 'Tags groups searching',
-            TASK_TAGS_COORDS: 'Searching geo objects in tags'
+            TASK_TAGS_COORDS: 'Searching geo objects in tags',
+            TASK_BIGRAMS_RANK: 'Bi-grams ranking'
         }
 
         if task_type in task_titles:

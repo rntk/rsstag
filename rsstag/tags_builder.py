@@ -13,7 +13,6 @@ class TagsBuilder:
         self.purge()
         '''self._text = ''
         self._prepared_text = ''
-        self._tags = set()
         self._words = {}
         self._bi_grams = {}
         self._bi_grams_words = defaultdict(set)'''
@@ -30,7 +29,7 @@ class TagsBuilder:
     def purge(self) -> None:
         """Clear state"""
         self._text = ''
-        self._tags = set()
+        self._tags: defaultdict = defaultdict(int)
         self._words = defaultdict(set)
         self._prepared_text = ''
         self._bi_grams = {}
@@ -72,9 +71,9 @@ class TagsBuilder:
 
         return tag
 
-    def get_tags(self) -> List[str]:
+    def get_tags(self) -> defaultdict:
         """Get builded tags"""
-        return list(self._tags)
+        return self._tags
 
     def get_words(self) -> Dict[str, set]:
         """Get words grouped by tag"""
@@ -95,7 +94,7 @@ class TagsBuilder:
         for current_word in words:
             tag = self.process_word(current_word)
             if tag:
-                self._tags.add(tag)
+                self._tags[tag] += 1
                 self._words[tag].add(current_word)
 
     def build_bi_grams(self, text: str) -> None:
@@ -127,7 +126,7 @@ class TagsBuilder:
             if not tag:
                 continue
             lemmas.append(tag)
-            self._tags.add(tag)
+            self._tags[tag] += 1
             self._words[tag].add(word)
             for i in range(self._window):
                 i += 1
