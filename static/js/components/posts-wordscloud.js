@@ -33,13 +33,28 @@ export default class PostsWordsCloud {
                 all_words[word]++;
             }
         }
-        let data_words = []
+        let data_words = [];
+        let mn = 9999999;
+        let mx = 0;
         for (let word in all_words) {
+            let fr = all_words[word];
+            if (fr > mx) {
+                mx = fr;
+            }
+            if (fr < mn) {
+                mn = fr;
+            }
             data_words.push({
                 text: word,
-                size: all_words[word]
-            })
+                size: fr
+            });
         }
+        const min_f = 14;
+        const max_f = 100;
+        data_words = data_words.map(el => {
+            el.size = min_f + (((el.size - mn) * (max_f - min_f)) / (mx - mn));
+            return el;
+        });
 
         let cld = cloud();
 
@@ -54,13 +69,15 @@ export default class PostsWordsCloud {
                 .selectAll("text")
                 .data(words)
                 .enter().append("text")
-                .style("font-size", function(d) { return d.size + "px"; })
+                .style("font-size", (d) => {
+                    return d.size;
+                })
                 .style("font-family", "Impact")
                 .attr("text-anchor", "middle")
-                .attr("transform", function(d) {
+                .attr("transform", (d) => {
                     return "translate(" + [d.x, d.y] + ")rotate(" + d.rotate + ")";
                 })
-                .text(function(d) { return d.text; });
+                .text((d) => { return d.text; });
         };
         setTimeout(() => {
             cld.size([1024, 1024]).fontSize(d => d.size).words(data_words).on("end", draw).start();
