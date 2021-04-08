@@ -355,23 +355,35 @@ class RSSTagWorker:
 
         return result #Always True. TODO: refactor or replace by somethin
 
-    def make_bi_grams_rank(self, db: MongoClient, user_sid: str, bi_gram: dict) -> bool:
+    def make_bi_grams_rank(self, db: MongoClient, user_sid: str) -> bool:
         tags = RssTagTags(db)
         bi_grams = RssTagBiGrams(db)
-        grams = bi_gram["tag"].split(" ")
-        freqs = tags.get_by_tags(user_sid, grams, projection={"freq": True})
+        freq_cache = {}
+        bi_count = bi_grams.count(user_sid)
+        if bi_count == 0:
+            return False
         words_count = tags.count(user_sid)
-        if not freqs:
+        if words_count == 0:
             return False
-        if len(freqs) != 2:
-            return False
-        f1 = freqs[0]["freq"] / words_count
-        f2 = freqs[1]["freq"] / words_count
-        bi_f = bi_gram["posts_count"] / bi_grams.count(user_sid)
-        temp = math.log(bi_f / f1 * f2) / -math.log(bi_f)
-        res = bi_grams.set_temperature(user_sid, bi_gram["tag"], temp)
+        cursor = bi_grams.get_all(user_sid, projection={"tag": True, "posts_count": True}, get_cursor=True)
+        for bi in cursor:
+            grams = bi["tag"].split(" ")
+            for_search = []
+            for tag in grams:
+                if tag not in freq_cache:
+                    for_search.append(tag)
+            if for_search:
+                freqs = tags.get_by_tags(user_sid, for_search, projection={"tag": True, "freq": True})
+                for fr in freqs:
+                    freq_cache[fr["tag"]] = fr["freq"]
+            f1 = freq_cache[grams[0]] / words_count
+            f2 = freq_cache[grams[1]] / words_count
+            bi_f = bi["posts_count"] / bi_count
+            temp = math.log(bi_f / f1 * f2) / -math.log(bi_f)
+            if bi_grams.set_temperature(user_sid, bi["tag"], temp) is None:
+                return False
 
-        return res == True
+        return True
 
     def worker(self):
         """Worker for bazqux.com"""
@@ -433,7 +445,7 @@ class RSSTagWorker:
             elif task['type'] == TASK_TAGS_GROUP:
                 task_done = self.make_tags_groups(db, task['user']['sid'], self._config)
             elif task['type'] == TASK_BIGRAMS_RANK:
-                task_done = self.make_bi_grams_rank(db, task['user']['sid'], task['data'])
+                task_done = self.make_bi_grams_rank(db, task['user']['sid'])
             '''elif task['type'] == TASK_WORDS:
                 task_done = self.process_words(db, task['data'])'''
             #TODO: add tags_coords, add D2V?

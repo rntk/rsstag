@@ -119,21 +119,6 @@ class RssTagTasks:
                             task['type'] = TASK_NOOP
                             if self.add_next_tasks(task['user']['sid'], user_task['type']):
                                 self._db.tasks.remove({'_id': user_task['_id']})
-                    elif user_task['type'] == TASK_BIGRAMS_RANK:
-                        data = self._db.bi_grams.find_one_and_update(
-                            {
-                                'owner': task['user']['sid'],
-                                'temperature': 0,
-                                'processing': TAG_NOT_IN_PROCESSING
-                            },
-                            {'$set': {'processing': time.time()}},
-                            projection={"tag": True, "posts_count": True}
-                        )
-                        if data:
-                            self._db.tasks.update_one({'_id': user_task['_id']}, {'$set': {'processing': TASK_NOT_IN_PROCESSING}})
-                        else:
-                            task['type'] = TASK_NOOP
-                            self._db.tasks.remove({'_id': user_task['_id']})
 
                     '''if task_type == TASK_WORDS:
                         if task['type'] == TASK_NOOP:

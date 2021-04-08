@@ -1,6 +1,6 @@
 import logging
-from typing import Optional, List
-from pymongo import MongoClient, DESCENDING, UpdateOne
+from typing import Optional, List, Union
+from pymongo import MongoClient, DESCENDING, UpdateOne, CursorType
 
 class RssTagBiGrams:
     indexes = ['owner', 'tag', 'tags', 'unread_count', 'posts_count']
@@ -97,9 +97,9 @@ class RssTagBiGrams:
         return result
 
     def get_all(self, owner: str, only_unread: bool=False, hot_tags: bool=False,
-                opts: dict=None, projection: dict=None) -> Optional[list]:
+                opts: dict=None, projection: dict=None, get_cursor: bool=False) -> Optional[Union[list, CursorType]]:
         query = {'owner': owner}
-        if 'regexp' in opts:
+        if opts and 'regexp' in opts:
             query['tag'] = {'$regex': opts['regexp'], '$options': 'i'}
         sort_data = []
         if hot_tags:
@@ -110,15 +110,18 @@ class RssTagBiGrams:
         else:
             sort_data.append(('posts_count', DESCENDING))
         params = {}
-        if 'offset' in opts:
+        if opts and 'offset' in opts:
             params['skip'] = opts['offset']
-        if 'limit' in opts:
+        if opts and 'limit' in opts:
             params['limit'] = opts['limit']
         if projection:
             params['projection'] = projection
         try:
             cursor = self.db.bi_grams.find(query, **params).sort(sort_data)
-            result = list(cursor)
+            if get_cursor:
+                result = cursor
+            else:
+                result = list(cursor)
         except Exception as e:
             self.log.error('Can`t get all tags user %s. Info: %s', owner, e)
             result = None
