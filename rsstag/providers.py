@@ -4,6 +4,7 @@ import time
 import gzip
 import logging
 import asyncio
+from html import escape
 from hashlib import md5
 from datetime import date, datetime
 from random import randint
@@ -338,6 +339,7 @@ class TelegramProvider:
                 for entity in entities:
                     if "type" in entity and "url" in entity["type"]:
                         attachments_list.append(entity["type"]["url"])
+                post_text = escape(post_text)
                 resp = self._tlg.get_message_link(post["chat_id"], post["id"])
                 resp.wait()
                 t_link = resp.update["link"]
