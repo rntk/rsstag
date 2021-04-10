@@ -45,7 +45,10 @@ export default class PostsItem extends React.Component{
 
     // TODO: dirty hack, may affect performance.
     highliteTag(content) {
-        let words = this.state.words.slice();
+        let words = this.state.words.slice().filter(w => !this.stopw.has(w));
+        if (!words.length) {
+            return content;
+        }
         words.sort((a, b) => {
             if (a.length < b.length) {
                 return 1;
@@ -56,13 +59,10 @@ export default class PostsItem extends React.Component{
 
             return 0;
         });
-        for (let word of words) {
-            let repl = "<b>$1</b>";
-            let reg = new RegExp(`(${word})`, "gi");
-            content = content.replaceAll(reg, repl);
-        }
+        const repl = "<b>$1</b>";
+        const reg = new RegExp(`(${words.join("|")})`, "gi");
 
-        return content;
+        return content.replaceAll(reg, repl);
     }
 
     dangerHTML(post) {
