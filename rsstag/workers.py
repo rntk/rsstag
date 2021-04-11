@@ -377,9 +377,9 @@ class RSSTagWorker:
             f1 = freq_cache[grams[0]]
             f2 = freq_cache[grams[1]]
             bi_f = bi["posts_count"]
-            temp = bi_f / math.log(f1 + f2)
+            temp = (bi_f / math.log(f1 + f2))
             if grams[0] in stopw or grams[1] in stopw:
-                temp /= 2
+                temp /= f1 + f2
             if bi_grams.set_temperature(user_sid, bi["tag"], temp) is None:
                 return False
 
