@@ -339,7 +339,9 @@ class TelegramProvider:
                 for entity in entities:
                     if "type" in entity and "url" in entity["type"]:
                         attachments_list.append(entity["type"]["url"])
-                post_text = escape(post_text)
+                # https://core.telegram.org/type/MessageEntity
+                # https://core.telegram.org/api/entities
+                post_text = escape(post_text).replace("\n", "<br />")
                 resp = self._tlg.get_message_link(post["chat_id"], post["id"])
                 resp.wait()
                 t_link = resp.update["link"]
