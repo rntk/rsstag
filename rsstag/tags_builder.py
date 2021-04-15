@@ -6,6 +6,7 @@ from typing import List, Dict
 import pymorphy2
 from nltk.stem import PorterStemmer
 from nltk.corpus import stopwords
+from functools import lru_cache
 
 class TagsBuilder:
     """Build tags from text. Support languages: english, russian"""
@@ -45,10 +46,13 @@ class TagsBuilder:
         return words
 
     def process_word(self, current_word: str) -> str:
+        return self.process_word_(current_word.strip().casefold())
+
+    @lru_cache()
+    def process_word_(self, current_word: str) -> str:
         """Make tag/token from gven word"""
         tag = ''
         try:
-            current_word = current_word.strip().casefold()
             word_length = len(current_word)
             if self.only_cyrillic.match(current_word):
                 temp = self.cyrillic.parse(current_word)
