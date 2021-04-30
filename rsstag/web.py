@@ -1979,7 +1979,7 @@ class RSSTagApplication(object):
                             continue
                         for span in markup.spans:
                             n = txt[span.start:span.stop].casefold()
-                            n = text_clearing.sub(" ", n)
+                            n = text_clearing.sub(" ", n).strip()
                             if " " in n:
                                 words = n.split(" ")
                                 ns = map(lambda w: tags_builder.process_word(w), words)
