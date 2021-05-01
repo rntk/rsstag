@@ -49,8 +49,8 @@ export default class PostsWordsCloud {
                 size: fr
             });
         }
-        const min_f = 14;
-        const max_f = 100;
+        const min_f = 8;
+        const max_f = 130;
         data_words = data_words.map(el => {
             el.size = min_f + (((el.size - mn) * (max_f - min_f)) / (mx - mn));
             return el;
