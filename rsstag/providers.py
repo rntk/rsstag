@@ -11,6 +11,8 @@ from random import randint
 from urllib.parse import quote_plus, urlencode
 from http import client
 from typing import Tuple, List, Optional
+from collections import defaultdict
+from io import StringIO
 
 from rsstag.tasks import POST_NOT_IN_PROCESSING
 from rsstag.routes import RSSTagRoutes
@@ -258,6 +260,86 @@ class BazquxProvider:
 
         return result
 
+ME_BOLD = "textEntityTypeBold"
+ME_ITALIC = "textEntityTypeItalic"
+ME_CODE = "textEntityTypeCode"
+ME_STRIKE = "textEntityTypeStrike"
+ME_UNDERLINE = "textEntityTypeUnderline"
+ME_PRE = "textEntityTypePre"
+ME_TEXT_URL = "textEntityTypeTextUrl"
+
+# https://core.telegram.org/type/MessageEntity
+# https://core.telegram.org/api/entities
+def tlg_post_to_html(post: dict) -> str:
+    result_html = StringIO()
+    entities = []
+    post_text = ""
+    if "caption" in post["content"]:
+        entities = post["content"]["caption"]["entities"]
+        post_text = post['content']["caption"]["text"]
+    elif "text" in post["content"]:
+        entities = post["content"]["text"]["entities"]
+        post_text = post["content"]["text"]["text"]
+    starts = defaultdict(list)
+    ends = defaultdict(list)
+    for ent in entities:
+        if "textEntity" != ent["@type"]:
+            continue
+        s = ent["offset"]
+        e = s + ent["length"]
+        t = ent["type"]["@type"]
+        starts[s].append(ent)
+        ends[e].append(t)
+
+    for i, symb in enumerate(post_text):
+        if i in starts:
+            for enti in starts[i]:
+                en = enti["type"]["@type"]
+                tag = ""
+                if en == ME_BOLD:
+                    tag = "<b>"
+                elif en == ME_ITALIC:
+                    tag = "<i>"
+                elif en == ME_CODE:
+                    tag = "<code>"
+                elif en == ME_STRIKE:
+                    tag = "<s>"
+                elif en == ME_UNDERLINE:
+                    tag = "<u>"
+                elif en == ME_PRE:
+                    tag = "<i>"
+                elif en == ME_TEXT_URL:
+                    tag = '<a href="{}">'.format(enti["type"]["url"])
+
+                result_html.write(tag)
+
+        result_html.write(symb)
+
+        if i in ends:
+            for en in ends[i]:
+                tag = ""
+                if en == ME_BOLD:
+                    tag = "</b>"
+                elif en == ME_ITALIC:
+                    tag = "</i>"
+                elif en == ME_CODE:
+                    tag = "</code>"
+                elif en == ME_STRIKE:
+                    tag = "</s>"
+                elif en == ME_UNDERLINE:
+                    tag = "</u>"
+                elif en == ME_PRE:
+                    tag = "</i>"
+                elif en == ME_TEXT_URL:
+                    tag = "</a>"
+
+                result_html.write(tag)
+
+        if symb == "\n":
+            result_html.write("<br />")
+
+    return result_html.getvalue()
+
 class TelegramProvider:
     def __init__(self, config: dict):
         self._config = config
@@ -329,19 +411,15 @@ class TelegramProvider:
 
                 attachments_list = []
                 entities = []
-                post_text = ""
+                post_text = tlg_post_to_html(post)
                 if "caption" in post["content"]:
                     entities = post["content"]["caption"]["entities"]
-                    post_text = post['content']["caption"]["text"]
                 elif "text" in post["content"]:
                     entities = post["content"]["text"]["entities"]
-                    post_text = post["content"]["text"]["text"]
                 for entity in entities:
                     if "type" in entity and "url" in entity["type"]:
                         attachments_list.append(entity["type"]["url"])
-                # https://core.telegram.org/type/MessageEntity
-                # https://core.telegram.org/api/entities
-                post_text = escape(post_text).replace("\n", "<br />")
+
                 resp = self._tlg.get_message_link(post["chat_id"], post["id"])
                 resp.wait()
                 t_link = resp.update["link"]
