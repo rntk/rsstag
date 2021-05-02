@@ -49,7 +49,7 @@ class RssTagUsers:
         if provider == "telegram":
             user["phone"] = password
             user["telegram_channel"] = login
-            user["telegram_limit"] = 1000
+            user["telegram_limit"] = 5000
         try:
             self._db.users.insert_one(user)
             result = sid
