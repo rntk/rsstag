@@ -286,7 +286,7 @@ def tlg_post_to_html(post: dict) -> str:
         if "textEntity" != ent["@type"]:
             continue
         s = ent["offset"]
-        e = s + ent["length"]
+        e = s + ent["length"] - 1
         t = ent["type"]["@type"]
         starts[s].append(ent)
         ends[e].append(t)

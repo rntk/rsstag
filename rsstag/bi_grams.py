@@ -3,9 +3,10 @@ from typing import Optional, List, Union
 from pymongo import MongoClient, DESCENDING, UpdateOne, CursorType
 
 class RssTagBiGrams:
-    indexes = ['owner', 'tag', 'tags', 'unread_count', 'posts_count']
+    indexes = ['owner', 'tag', 'tags', 'unread_count', 'posts_count', 'temperature']
     def __init__(self, db: MongoClient) -> None:
         self.db = db
+
         self.log = logging.getLogger('bi_grams')
 
     def prepare(self) -> None:
