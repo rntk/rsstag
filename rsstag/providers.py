@@ -4,7 +4,6 @@ import time
 import gzip
 import logging
 import asyncio
-from html import escape
 from hashlib import md5
 from datetime import date, datetime
 from random import randint
@@ -356,6 +355,7 @@ class TelegramProvider:
             api_hash=self._config[provider]["app_hash"],
             phone=user["phone"],
             database_encryption_key='tlg123456',
+            files_directory="./tlg"
         )
         self._tlg.login(blocking=True)
         channels = []
@@ -382,6 +382,10 @@ class TelegramProvider:
         pid = 0
         for channel in channels:
             limit = max_limit
+            if all_channels:
+                limit = channel["unread_count"]
+                if limit <= 0:
+                    continue
             posts_n = 0
             has_posts = True
             from_id = 0
@@ -458,6 +462,7 @@ class TelegramProvider:
                         'processing': POST_NOT_IN_PROCESSING
                     })
                     pid += 1
+                time.sleep(randint(1, 3))
             logging.info("Downloaded: %s - %s", telegram_channel, posts_n)
 
         self._tlg.stop()
