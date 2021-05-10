@@ -354,8 +354,8 @@ class TelegramProvider:
             api_id=self._config[provider]["app_id"],
             api_hash=self._config[provider]["app_hash"],
             phone=user["phone"],
-            database_encryption_key='tlg123456',
-            files_directory="./tlg"
+            database_encryption_key=self._config[provider]["encryption_key"],
+            files_directory=self._config[provider]["db_dir"],
         )
         self._tlg.login(blocking=True)
         channels = []
