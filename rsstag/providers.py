@@ -464,7 +464,8 @@ class TelegramProvider:
                         'processing': POST_NOT_IN_PROCESSING
                     })
                     pid += 1
-                time.sleep(randint(1, 3))
+                if randint(0, 1) == 0:
+                    time.sleep(randint(1, 2))
             logging.info("Downloaded: %s - %s", telegram_channel, posts_n)
 
         self._tlg.stop()
