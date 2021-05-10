@@ -386,6 +386,8 @@ class TelegramProvider:
                 limit = channel["unread_count"]
                 if limit <= 0:
                     continue
+                if not channel["type"]["is_channel"]:
+                    continue
             posts_n = 0
             has_posts = True
             from_id = 0
