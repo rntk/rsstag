@@ -2063,6 +2063,11 @@ class RSSTagApplication(object):
                             'feed_title': by_feed[post['feed_id']]['title'],
                             'favicon': by_feed[post['feed_id']]['favicon']
                         })
+            tags_cur = self.tags.get_by_tags(self.user["sid"], tag.split(), only_unread=only_unread)
+            words = set()
+            if tags_cur is not None:
+                for tg in tags_cur:
+                    words.update(tg["words"])
             page = self.template_env.get_template('posts.html')
             self.response = Response(
                 page.render(
@@ -2070,7 +2075,7 @@ class RSSTagApplication(object):
                     tag=tag,
                     back_link=back_link,
                     group='tag',
-                    words=[],
+                    words=list(words),
                     user_settings=self.user['settings'],
                     provider=self.user['provider']
                 ),
