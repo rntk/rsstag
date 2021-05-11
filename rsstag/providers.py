@@ -12,6 +12,7 @@ from http import client
 from typing import Tuple, List, Optional
 from collections import defaultdict
 from io import StringIO
+import unicodedata
 
 from rsstag.tasks import POST_NOT_IN_PROCESSING
 from rsstag.routes import RSSTagRoutes
@@ -289,8 +290,8 @@ def tlg_post_to_html(post: dict) -> str:
         t = ent["type"]["@type"]
         starts[s].append(ent)
         ends[e].append(t)
-
-    for i, symb in enumerate(post_text):
+    i = 0
+    for symb in post_text:
         if i in starts:
             for enti in starts[i]:
                 en = enti["type"]["@type"]
@@ -336,6 +337,13 @@ def tlg_post_to_html(post: dict) -> str:
 
         if symb == "\n":
             result_html.write("<br />")
+
+        b = symb.encode("utf-8")
+        if len(b) >= 4 and unicodedata.category(symb) == "So":
+            i += 2
+            continue
+
+        i += 1
 
     return result_html.getvalue()
 
