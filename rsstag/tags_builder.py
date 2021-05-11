@@ -143,6 +143,9 @@ class TagsBuilder:
                     bi_words.append(words[next_pos])
                 for bi_word in bi_words:
                     bi_tag = self.process_word(bi_word)
+                    if not bi_tag:
+                        logging.error("Bigram bug: %s", text)
+                        continue
                     bi_grams_l = [tag, bi_tag]
                     bi_grams_l.sort()
                     bi_gram = " ".join(bi_grams_l)

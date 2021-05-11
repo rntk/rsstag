@@ -374,6 +374,9 @@ class RSSTagWorker:
                 freqs = tags.get_by_tags(user_sid, for_search, projection={"tag": True, "freq": True})
                 for fr in freqs:
                     freq_cache[fr["tag"]] = fr["freq"]
+            if not grams[0] or not grams[1]:
+                logging.error("Bigrams bug: %s", bi["tag"])
+                continue
             f1 = freq_cache[grams[0]]
             f2 = freq_cache[grams[1]]
             bi_f = bi["posts_count"]
