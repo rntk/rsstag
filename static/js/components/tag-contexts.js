@@ -20,6 +20,29 @@ export default class TagContexts extends React.Component {
         this.props.ES.unbind(this.props.ES.WORDTREE_TEXTS_UPDATED, this.updateState);
     }
 
+    hrefs(left, tag, right) {
+        let hrefs = [];
+        let ls = left.trim().split(" ");
+        let rs = right.trim().split(" ");
+        let l = "";
+        let r = "";
+        if (ls.length) {
+            l = ls[ls.length - 1];
+            hrefs.push("/entity/" + encodeURIComponent(l + " " + tag));
+        } else {
+            hrefs.push("#");
+        }
+        if (rs.length) {
+            r = rs[0];
+            hrefs.push("/entity/" + encodeURIComponent(tag + " " + r));
+        } else {
+            hrefs.push("#");
+        }
+        hrefs.push("/entity/" + encodeURIComponent((l + " " + tag + " " + r).trim()));
+
+        return hrefs;
+    }
+
     render() {
         if (!this.state.texts) {
             return <p>No data yet</p>;
@@ -35,6 +58,7 @@ export default class TagContexts extends React.Component {
         };
         let left_style = {
             textAlign: "center",
+            verticalAlign: "bottom"
         }
         let right_style = {
             textAlign: "center",
@@ -60,9 +84,22 @@ export default class TagContexts extends React.Component {
             let pos = txt.indexOf(tag);
             let left_txt = txt.substr(0, pos);
             let right_txt = txt.substr(pos + tag.length + 1, txt.length);
-            lefts.push(<td style={left_style} key={"txt_left" + i}>{fn(left_txt, i)}</td>);
-            middles.push(<td style={middle_style} key={"txt_middle" + i}>{tag}</td>);
-            rights.push(<td style={right_style} key={"txt_right" + i}>{fn(right_txt, i)}</td>);
+            let hrefs = this.hrefs(left_txt, tag, right_txt);
+            lefts.push(
+                <td style={left_style} key={"txt_left" + i}>
+                    <a href={hrefs[0]}>{fn(left_txt, i)}</a>
+                </td>
+            );
+            middles.push(
+                <td style={middle_style} key={"txt_middle" + i}>
+                    <a href={hrefs[2]}>{tag}</a>
+                </td>
+            );
+            rights.push(
+                <td style={right_style} key={"txt_right" + i}>
+                    <a href={hrefs[1]}>{fn(right_txt, i)}</a>
+                </td>
+            );
             /*texts.push(
                 <tr key={"txt" + i}>
                     <td key={"txt_left" + i} style={left_style}>{left_txt}</td>
