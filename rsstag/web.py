@@ -321,10 +321,7 @@ class RSSTagApplication(object):
                 self.response = redirect(self.routes.getUrlByEndpoint(endpoint='on_root_get'))
                 return ''
             elif user is not None:
-                if self.user:
-                    self.user['provider'] = self.request.cookies.get('provider')
-                else:
-                    self.user = {'provider': self.request.cookies.get('provider')}
+                self.user = {'provider': self.request.cookies.get('provider')}
                 if (self.user['provider'] == 'bazqux') or (self.user['provider'] == 'inoreader'):
                     provider = BazquxProvider(self.config)
                     token = provider.get_token(login, password)
