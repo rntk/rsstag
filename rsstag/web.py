@@ -7,7 +7,8 @@ import html
 import time
 import gzip
 import logging
-from collections import OrderedDict, defaultdict
+import math
+from collections import OrderedDict, defaultdict, Counter
 from hashlib import md5
 from werkzeug.wrappers import Response, Request
 from werkzeug.exceptions import HTTPException, NotFound, InternalServerError
@@ -25,12 +26,13 @@ from rsstag.tags import RssTagTags
 from rsstag.letters import RssTagLetters
 from rsstag.bi_grams import RssTagBiGrams
 from rsstag.users import RssTagUsers
-from rsstag.providers import BazquxProvider, TelegramProvider
+from rsstag.providers import BazquxProvider
 from rsstag.lda import LDA
 from navec import Navec
 from slovnet import NER
 from rsstag.tags_builder import TagsBuilder
 from rsstag.html_cleaner import HTMLCleaner
+from nltk.corpus import stopwords
 
 class RSSTagApplication(object):
     request = None
@@ -2080,3 +2082,71 @@ class RSSTagApplication(object):
             )
         else:
             self.on_error(InternalServerError())
+
+    def on_tag_tfidf_get(self, tag: str):
+        if tag:
+            if self.user:
+                cursor = self.posts.get_by_tags(self.user["sid"], [tag], self.user['settings']['only_unread'], {"lemmas": True})
+                if cursor:
+                    topics = set()
+                    stopw = set(stopwords.words('english') + stopwords.words('russian'))
+                    texts = [gzip.decompress(post["lemmas"]).decode('utf-8', 'replace') for post in cursor]
+                    freq_d = Counter()
+                    for text in texts:
+                        words = [word for word in text.split() if word not in stopw]
+                        st = set(words)
+                        freq_d.update(st)
+                    for text in texts:
+                        words = [word for word in text.split() if word not in stopw]
+                        tfidf = []
+                        freq = Counter(words)
+                        for word in words:
+                            tf = freq[word] / len(words)
+                            idf = math.log(len(texts) / freq_d[word])
+                            tfidf.append((word, tf * idf))
+                        tfidf.sort(key=lambda x: x[1], reverse=True)
+                        topics.update([ti[0] for ti in tfidf[:5]])
+                    topics.add(tag)
+                    topics = list(topics)
+
+                    tags = self.tags.get_by_tags(self.user['sid'], topics, self.user['settings']['only_unread'])
+                    if tags:
+                        t_words = []
+                        for tg in tags:
+                            if tg['tag'] == tag:
+                                t_words = tg["words"]
+                                break
+                        all_tags = []
+                        for tg in tags:
+                            if tg['tag'] == tag:
+                                continue
+                            all_tags.append({
+                                'tag': tag + " " + tg['tag'],
+                                'url': "/entity/" + quote(tag + " " + tg['tag']),
+                                'words': tg['words'] + t_words,
+                                'count': freq_d[tg['tag']],
+                                'sentiment': tg['sentiment'] if 'sentiment' in tg else [],
+                                'temp': tg['temperature'],
+                                'freq': tg['freq']
+                            })
+                            all_tags.sort(key=lambda t: t["count"] / t["freq"], reverse=True)
+                        result = {'data': all_tags}
+                        code = 200
+                    else:
+                        result = {'error': 'Tags not found'}
+                        code = 404
+                elif cursor is None:
+                    result = {'error': 'Server in trouble'}
+                    code = 500
+                else:
+                    result = {'error': 'Tag not found'}
+                    code = 404
+            else:
+                result = {'error': 'Not logged'}
+                code = 401
+        else:
+            result = {'error': 'Something wrong with request'}
+            code = 400
+
+        self.response = Response(json.dumps(result), mimetype='application/json')
+        self.response.status_code = code

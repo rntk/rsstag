@@ -250,6 +250,18 @@ window.onload = () => {
             document.getElementById('load_entities')
         );
         tag_entities_storage.start();
+
+        const tag_tfidf_evsys = new EventsSystem();
+        const tag_tfidf_storage = new TagsStorage(tag_tfidf_evsys, '/tag-tfidf');
+        ReactDOM.render(
+            <TagsList ES={tag_tfidf_evsys} is_entities={true} />,
+            document.getElementById('tag_tfidf')
+        );
+        ReactDOM.render(
+            <TagButton ES={tag_tfidf_evsys} title="Load TFIDF" tag={tag} />,
+            document.getElementById('load_tfidf')
+        );
+        tag_tfidf_storage.start();
         /*const topics_texts_evsys = new EventsSystem();
         const topics_texts_chart = new TopicsTexts("#topics_texts", topics_texts_evsys);
         const topics_texts_storage = new TopicsTextsStorage(tag.tag, topics_texts_evsys);

@@ -55,6 +55,7 @@ class RSSTagRoutes:
 
             {'url': '/tag-dates/<string:tag>', 'endpoint': 'on_tag_dates_get', 'methods': ['GET']},
             {'url': '/tag-topics/<string:tag>', 'endpoint': 'on_tag_topics_get', 'methods': ['GET']},
+            {'url': '/tag-tfidf/<string:tag>', 'endpoint': 'on_tag_tfidf_get', 'methods': ['GET']},
             {'url': '/tag-entities/<string:tag>', 'endpoint': 'on_tag_entities_get', 'methods': ['GET']},
             {'url': '/topics-texts/<string:tag>', 'endpoint': 'on_topics_texts_get', 'methods': ['GET']},
             {'url': '/bigrams-dates/<string:tag>', 'endpoint': 'on_bigrams_dates_get', 'methods': ['GET']},
