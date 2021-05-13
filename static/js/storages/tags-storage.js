@@ -73,6 +73,7 @@ export default class TagsStorage {
                             return 1;
                         }
                     });
+                    state.tags = new Map();
                     for (let i = 0; i < data.data.length; i++) {
                         state.tags.set(data.data[i].tag, data.data[i]);
                     }
