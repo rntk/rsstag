@@ -87,8 +87,18 @@ export default class PostsItem extends React.Component{
             if (post.links) {
                 let tags = [],
                     grouped_links = {};
+                let tgs = post.links.tags.slice(0);
+                tgs.sort((f, s) => {
+                    if (f.tag > s.tag) {
+                        return 1;
+                    }
+                    if (f.tag < s.tag) {
+                        return -1;
+                    }
 
-                post.links.tags.forEach(tag => {
+                    return 0;
+                });
+                tgs.forEach(tag => {
                     let letter = tag.tag.charAt(0);
 
                     if (!(letter in grouped_links)) {
