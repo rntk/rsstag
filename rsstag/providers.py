@@ -339,9 +339,12 @@ def tlg_post_to_html(post: dict) -> str:
             result_html.write("<br />")
 
         b = symb.encode("utf-8")
-        if len(b) >= 4 and unicodedata.category(symb) == "So":
-            i += 2
-            continue
+        b_ln = len(b)
+        if b_ln > 2:
+            cat = unicodedata.category(symb)
+            if (b_ln >= 4 and cat == "So") or (b_ln >= 3 and cat == "Sk"):
+                i += 2
+                continue
 
         i += 1
 
