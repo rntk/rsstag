@@ -39,6 +39,7 @@ class RssTagTasks:
     def __init__(self, db: MongoClient) -> None:
         self._db = db
         self._log = logging.getLogger('tasks')
+        self._bath_size = 10
 
     def prepare(self) -> None:
         for index in self.indexes:
@@ -105,14 +106,19 @@ class RssTagTasks:
                 if task['user']:
                     task['type'] = user_task['type']
                     if user_task['type'] == TASK_TAGS:
-                        data = self._db.posts.find_one_and_update(
-                            {
-                                'owner': task['user']['sid'],
-                                'tags': [],
-                                'processing': POST_NOT_IN_PROCESSING
-                            },
-                            {'$set': {'processing': time.time()}}
-                        )
+                        data = []
+                        for i in range(self._bath_size):
+                            p = self._db.posts.find_one_and_update(
+                                {
+                                    'owner': task['user']['sid'],
+                                    'tags': [],
+                                    'processing': POST_NOT_IN_PROCESSING
+                                },
+                                {'$set': {'processing': time.time()}}
+                            )
+                            if p:
+                                data.append(p)
+
                         if data:
                             self._db.tasks.update_one({'_id': user_task['_id']}, {'$set': {'processing': TASK_NOT_IN_PROCESSING}})
                         else:
@@ -154,10 +160,11 @@ class RssTagTasks:
         try:
             if task['type'] == TASK_TAGS:
                 remove_task = False
-                self._db.posts.find_one_and_update(
-                    {'_id': task['data']['_id']},
-                    {'$set': {'processing': POST_NOT_IN_PROCESSING}}
-                )
+                for post in task['data']:
+                    self._db.posts.find_one_and_update(
+                        {'_id': post['_id']},
+                        {'$set': {'processing': POST_NOT_IN_PROCESSING}}
+                    )
                 '''elif task['type'] == TASK_WORDS:
                     self._db.tags.find_one_and_update(
                         {'_id': task['data']['_id']},

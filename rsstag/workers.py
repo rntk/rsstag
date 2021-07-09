@@ -3,8 +3,8 @@ import logging
 import time
 import gzip
 import math
-from _collections import defaultdict
-from typing import Optional
+from collections import defaultdict
+from typing import Optional, List
 from random import randint
 from multiprocessing import Process
 from rsstag.tags_builder import TagsBuilder
@@ -61,38 +61,66 @@ class RSSTagWorker:
 
         return result
 
-    def make_tags(self, db: MongoClient, post: dict, builder: TagsBuilder, cleaner: HTMLCleaner) -> bool:
-        #logging.info('Start process %s', post['_id'])
-        content = gzip.decompress(post['content']['content'])
-        text = post['content']['title'] + ' '+ content.decode('utf-8')
-        cleaner.purge()
-        cleaner.feed(text)
-        strings = cleaner.get_content()
-        text = ' '.join(strings)
-        builder.purge()
-        builder.build_tags_and_bi_grams(text)
-        tags = builder.get_tags()
-        words = builder.get_words()
-        bi_grams = builder.get_bi_grams()
-        bi_words = builder.get_bi_grams_words()
-        result = False
+    def make_tags(self, db: MongoClient, posts: List[dict], builder: TagsBuilder, cleaner: HTMLCleaner) -> bool:
+        if not posts:
+            return False
+        posts_updates = []
         tags_updates = []
         bi_grams_updates = []
-        first_letters = set()
+        sum_tags = {}
+        sum_bigrams = {}
         routes = RSSTagRoutes(self._config['settings']['host_name'])
-        if tags == []:
-            tag = 'notitle'
-            tags = [tag]
-            words[tag] = set(tags)
-        for tag in tags:
-            freq = tags[tag]
+        owner = posts[0]["owner"]
+        for post in posts:
+            #logging.info('Start process %s', post['_id'])
+            content = gzip.decompress(post['content']['content'])
+            text = post['content']['title'] + ' ' + content.decode('utf-8')
+            cleaner.purge()
+            cleaner.feed(text)
+            strings = cleaner.get_content()
+            text = ' '.join(strings)
+            builder.purge()
+            builder.build_tags_and_bi_grams(text)
+            tags = builder.get_tags()
+            tag_words = builder.get_words()
+            bi_grams = builder.get_bi_grams()
+            bi_words = builder.get_bi_grams_words()
+            if not tags:
+                continue
+            post_tags = {"lemmas": gzip.compress(builder.get_prepared_text().encode('utf-8', 'replace'))}
+            if tags:
+                post_tags['tags'] = [tag for tag in tags]
+            if bi_grams:
+                post_tags['bi_grams'] = list(bi_grams.keys())
+            posts_updates.append(UpdateOne(
+                {'_id': post['_id']},
+                {'$set': post_tags}
+            ))
+            for tag, freq in tags.items():
+                if tag not in sum_tags:
+                    sum_tags[tag] = {"posts": 0, "freq": 0, "words": set()}
+                sum_tags[tag]["posts"] += 1
+                sum_tags[tag]["freq"] += freq
+                sum_tags[tag]["words"].update(tag_words[tag])
+            for bigram, bi_tags in bi_grams.items():
+                if bigram not in sum_bigrams:
+                    sum_bigrams[bigram] = {
+                        "tags": list(bi_tags),
+                        "posts": 0,
+                        "words": set(),
+                    }
+                sum_bigrams[bigram]["posts"] += 1
+                sum_bigrams[bigram]["words"].update(bi_words[bigram])
+
+            # logging.info('Processed %s', post['_id'])
+        for tag, tag_d in sum_tags.items():
             tags_updates.append(UpdateOne(
-                {'owner': post['owner'], 'tag': tag},
+                {'owner': owner, 'tag': tag},
                 {
                     '$set': {
                         'read': False,
                         'tag': tag,
-                        'owner': post['owner'],
+                        'owner': owner,
                         'temperature': 0,
                         'local_url': routes.getUrlByEndpoint(
                             endpoint='on_tag_get',
@@ -100,48 +128,40 @@ class RSSTagWorker:
                         ),
                         'processing': TAG_NOT_IN_PROCESSING
                     },
-                    '$inc': {'posts_count': 1, 'unread_count': 1, "freq": freq},
-                    '$addToSet': {'words': {'$each': list(words[tag])}}
+                    '$inc': {'posts_count': tag_d["posts"], 'unread_count': tag_d["posts"], "freq": tag_d["freq"]},
+                    '$addToSet': {'words': {'$each': list(tag_d["words"])}}
                 },
                 upsert=True
             ))
-            first_letters.add(tag[0])
-
-        for bi_gram, bi_value in bi_grams.items():
+        for bi_gram, bi_d in sum_bigrams.items():
             bi_grams_updates.append(UpdateOne(
-                {'owner': post['owner'], 'tag':bi_gram},
+                {'owner': owner, 'tag':bi_gram},
                 {
                     '$set': {
                         'read': False,
                         'tag': bi_gram,
-                        'owner': post['owner'],
+                        'owner': owner,
                         'temperature': 0,
                         'local_url': routes.getUrlByEndpoint(
                             endpoint='on_bi_gram_get',
                             params={'bi_gram': bi_gram}
                         ),
-                        'tags': list(bi_value),
+                        'tags': list(bi_d["tags"]),
                         'processing': TAG_NOT_IN_PROCESSING
                     },
-                    '$inc': {'posts_count': 1, 'unread_count': 1},
-                    '$addToSet': {'words': {'$each': list(bi_words[bi_gram])}}
+                    '$inc': {'posts_count': bi_d["posts"], 'unread_count': bi_d["posts"]},
+                    '$addToSet': {'words': {'$each': list(bi_d["words"])}}
                 },
                 upsert=True
             ))
-        post_tags = {"lemmas": gzip.compress(builder.get_prepared_text().encode('utf-8', 'replace'))}
-        if tags_updates:
-            post_tags['tags'] = [tag for tag in tags]
-        if bi_grams_updates:
-            post_tags['bi_grams'] = list(bi_grams.keys())
         try:
-            db.posts.update({'_id': post['_id']}, {'$set': post_tags})
+            db.posts.bulk_write(posts_updates, ordered=False)
             db.tags.bulk_write(tags_updates, ordered=False)
             db.bi_grams.bulk_write(bi_grams_updates, ordered=False)
             result = True
         except Exception as e:
             result = False
-            logging.error('Can`t save tags/bi-grams for post %s. Info: %s', post['_id'], e)
-        #logging.info('Processed %s', post['_id'])
+            logging.error('Can`t save tags/bi-grams for posts. Info: %s', e)
 
         return result
 
