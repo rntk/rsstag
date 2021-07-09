@@ -39,7 +39,7 @@ class RssTagTasks:
     def __init__(self, db: MongoClient) -> None:
         self._db = db
         self._log = logging.getLogger('tasks')
-        self._bath_size = 10
+        self._bath_size = 200
 
     def prepare(self) -> None:
         for index in self.indexes:
