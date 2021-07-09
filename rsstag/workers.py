@@ -87,7 +87,7 @@ class RSSTagWorker:
             bi_words = builder.get_bi_grams_words()
             post_tags = {
                 "lemmas": gzip.compress(builder.get_prepared_text().encode('utf-8', 'replace')),
-                "tags": [],
+                "tags": [""],
                 'bi_grams': []
             }
             if tags:
