@@ -99,8 +99,11 @@ class RssTagTasks:
             'data': None
         }
         try:
-            user_task = self._db.tasks.find_one_and_update({'processing': TASK_NOT_IN_PROCESSING}, {'$set': {'processing': time.time()}})
-            if user_task and user_task['processing'] == TASK_NOT_IN_PROCESSING:
+            user_task = self._db.tasks.find_one_and_update(
+                {'$or': [{'processing': TASK_NOT_IN_PROCESSING}, {'type': TASK_TAGS}]},
+                {'$set': {'processing': time.time()}}
+            )
+            if user_task:
                 data = user_task
                 task['user'] = users.get_by_sid(user_task['user'])
                 if task['user']:
@@ -116,12 +119,11 @@ class RssTagTasks:
                                 },
                                 {'$set': {'processing': time.time()}}
                             )
-                            if p:
-                                data.append(p)
+                            if not p:
+                                break
+                            data.append(p)
 
-                        if data:
-                            self._db.tasks.update_one({'_id': user_task['_id']}, {'$set': {'processing': TASK_NOT_IN_PROCESSING}})
-                        else:
+                        if not data:
                             task['type'] = TASK_NOOP
                             if self.add_next_tasks(task['user']['sid'], user_task['type']):
                                 self._db.tasks.remove({'_id': user_task['_id']})
