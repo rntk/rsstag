@@ -377,7 +377,40 @@ class RSSTagWorker:
 
         return result #Always True. TODO: refactor or replace by somethin
 
-    def make_bi_grams_rank(self, db: MongoClient, user_sid: str) -> bool:
+    def make_bi_grams_rank(self, db: MongoClient, task: dict) -> bool:
+        tags = RssTagTags(db)
+        bi_grams = RssTagBiGrams(db)
+        freq_cache = {}
+        user_sid = task['user']['sid']
+        bi_count = bi_grams.count(user_sid)
+        if bi_count == 0:
+            return False
+        stopw = set(stopwords.words('english') + stopwords.words('russian'))
+        for bi in task['data']:
+            grams = bi["tag"].split(" ")
+            for_search = []
+            for tag in grams:
+                if tag not in freq_cache:
+                    for_search.append(tag)
+            if for_search:
+                freqs = tags.get_by_tags(user_sid, for_search, projection={"tag": True, "freq": True})
+                for fr in freqs:
+                    freq_cache[fr["tag"]] = fr["freq"]
+            if not grams[0] or not grams[1]:
+                logging.error("Bigrams bug: %s", bi["tag"])
+                continue
+            f1 = freq_cache[grams[0]]
+            f2 = freq_cache[grams[1]]
+            bi_f = bi["posts_count"]
+            temp = (bi_f / math.log(f1 + f2))
+            if grams[0] in stopw or grams[1] in stopw:
+                temp /= f1 + f2
+            if bi_grams.set_temperature(user_sid, bi["tag"], temp) is None:
+                return False
+
+        return True
+
+    def _make_bi_grams_rank(self, db: MongoClient, user_sid: str) -> bool:
         tags = RssTagTags(db)
         bi_grams = RssTagBiGrams(db)
         freq_cache = {}
@@ -470,7 +503,7 @@ class RSSTagWorker:
             elif task['type'] == TASK_TAGS_GROUP:
                 task_done = self.make_tags_groups(db, task['user']['sid'], self._config)
             elif task['type'] == TASK_BIGRAMS_RANK:
-                task_done = self.make_bi_grams_rank(db, task['user']['sid'])
+                task_done = self.make_bi_grams_rank(db, task)
             '''elif task['type'] == TASK_WORDS:
                 task_done = self.process_words(db, task['data'])'''
             #TODO: add tags_coords, add D2V?

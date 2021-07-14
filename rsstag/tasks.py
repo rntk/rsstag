@@ -21,6 +21,7 @@ TASK_TAGS_COORDS = 12
 TASK_BIGRAMS_RANK = 13
 
 POST_NOT_IN_PROCESSING = 0
+BIGRAM_NOT_IN_PROCESSING = 0
 TASK_NOT_IN_PROCESSING = 0
 TASK_FREEZED = -1
 TAG_NOT_IN_PROCESSING = 0
@@ -40,6 +41,7 @@ class RssTagTasks:
         self._db = db
         self._log = logging.getLogger('tasks')
         self._bath_size = 200
+        self._bigrams_bath_size = 1000
 
     def prepare(self) -> None:
         for index in self.indexes:
@@ -100,7 +102,7 @@ class RssTagTasks:
         }
         try:
             user_task = self._db.tasks.find_one_and_update(
-                {'$or': [{'processing': TASK_NOT_IN_PROCESSING}, {'type': TASK_TAGS}]},
+                {'$or': [{'processing': TASK_NOT_IN_PROCESSING}, {'type': TASK_TAGS}, {'type': TASK_BIGRAMS_RANK}]},
                 {'$set': {'processing': time.time()}}
             )
             if user_task:
@@ -132,6 +134,30 @@ class RssTagTasks:
                             if locked_task:
                                 if self.add_next_tasks(task['user']['sid'], user_task['type']):
                                     self._db.tasks.remove({'_id': user_task['_id']})
+                    elif user_task['type'] == TASK_BIGRAMS_RANK:
+                        data = []
+                        for i in range(self._bigrams_bath_size):
+                            p = self._db.bi_grams.find_one_and_update(
+                                {
+                                    'owner': task['user']['sid'],
+                                    'temperature': 0,
+                                    'processing': BIGRAM_NOT_IN_PROCESSING
+                                },
+                                {'$set': {'processing': time.time()}},
+                                projection={"tag": True, "posts_count": True}
+                            )
+                            if not p:
+                                break
+                            data.append(p)
+
+                        if not data:
+                            locked_task = self._db.tasks.find_one_and_update(
+                                {'_id': user_task['_id'], 'remove': {'$exists': False}},
+                                {'$set': {'remove': True}}
+                            )
+                            task['type'] = TASK_NOOP
+                            if locked_task:
+                                self._db.tasks.remove({'_id': user_task['_id']})
 
                     '''if task_type == TASK_WORDS:
                         if task['type'] == TASK_NOOP:
@@ -180,6 +206,13 @@ class RssTagTasks:
                             'worded': True
                         }}
                     )'''
+            elif task['type'] == TASK_BIGRAMS_RANK:
+                remove_task = False
+                for bigram in task['data']:
+                    self._db.bi_grams.find_one_and_update(
+                        {'_id': bigram['_id']},
+                        {'$set': {'processing': BIGRAM_NOT_IN_PROCESSING}}
+                    )
 
             if remove_task:
                 removed = self.remove_task(task['data']['_id'])
