@@ -124,9 +124,14 @@ class RssTagTasks:
                             data.append(p)
 
                         if not data:
+                            locked_task = self._db.tasks.find_one_and_update(
+                                {'_id': user_task['_id'], 'remove': {'$exists': False}},
+                                {'$set': {'remove': True}}
+                            )
                             task['type'] = TASK_NOOP
-                            if self.add_next_tasks(task['user']['sid'], user_task['type']):
-                                self._db.tasks.remove({'_id': user_task['_id']})
+                            if locked_task:
+                                if self.add_next_tasks(task['user']['sid'], user_task['type']):
+                                    self._db.tasks.remove({'_id': user_task['_id']})
 
                     '''if task_type == TASK_WORDS:
                         if task['type'] == TASK_NOOP:
