@@ -386,6 +386,7 @@ class RSSTagWorker:
         if bi_count == 0:
             return False
         stopw = set(stopwords.words('english') + stopwords.words('russian'))
+        bi_temps = {}
         for bi in task['data']:
             grams = bi["tag"].split(" ")
             for_search = []
@@ -405,8 +406,10 @@ class RSSTagWorker:
             temp = (bi_f / math.log(f1 + f2))
             if grams[0] in stopw or grams[1] in stopw:
                 temp /= f1 + f2
-            if bi_grams.set_temperature(user_sid, bi["tag"], temp) is None:
-                return False
+            bi_temps[bi] = temp
+
+        if bi_grams.set_temperatures(user_sid, bi_temps) is None:
+            return False
 
         return True
 

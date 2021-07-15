@@ -142,3 +142,23 @@ class RssTagBiGrams:
         except Exception as e:
             self.log.error('Can`t change unread_count for bi-grams. User %s. info: %s', owner, e)
             return None
+
+    def set_temperatures(self, owner: str, values: dict) -> Optional[bool]:
+        if not values:
+            return True
+
+        updates = []
+        for bi_gram, temperature in values.items():
+            updates.append(UpdateOne(
+                {
+                    'owner': owner,
+                    'tag': bi_gram
+                },
+                {"$set": {"temperature": temperature}}
+            ))
+        try:
+            self.db.bi_grams.bulk_write(updates, ordered=False)
+            return True
+        except Exception as e:
+            self.log.error('Can`t change unread_count for bi-grams. User %s. info: %s', owner, e)
+            return None
