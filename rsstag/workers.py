@@ -3,6 +3,7 @@ import logging
 import time
 import gzip
 import math
+from functools import lru_cache
 from collections import defaultdict
 from typing import Optional, List
 from random import randint
@@ -376,11 +377,18 @@ class RSSTagWorker:
                 logging.error('Can`t make tags santiment. Info: %s', e)
 
         return result #Always True. TODO: refactor or replace by somethin
+    @lru_cache(maxsize=10240)
+    def _tags_freqs(self, user_sid: str, tag: str) -> int:
+        tags = RssTagTags(self._db)
+        tag_d = tags.get_by_tag(user_sid, tag)
+        if tag_d:
+            return tag_d["freq"]
+
+        return 0
 
     def make_bi_grams_rank(self, db: MongoClient, task: dict) -> bool:
-        tags = RssTagTags(db)
+        self._db = db
         bi_grams = RssTagBiGrams(db)
-        freq_cache = {}
         user_sid = task['user']['sid']
         bi_count = bi_grams.count(user_sid)
         if bi_count == 0:
@@ -389,19 +397,11 @@ class RSSTagWorker:
         bi_temps = {}
         for bi in task['data']:
             grams = bi["tag"].split(" ")
-            for_search = []
-            for tag in grams:
-                if tag not in freq_cache:
-                    for_search.append(tag)
-            if for_search:
-                freqs = tags.get_by_tags(user_sid, for_search, projection={"tag": True, "freq": True})
-                for fr in freqs:
-                    freq_cache[fr["tag"]] = fr["freq"]
             if not grams[0] or not grams[1]:
                 logging.error("Bigrams bug: %s", bi["tag"])
                 continue
-            f1 = freq_cache[grams[0]]
-            f2 = freq_cache[grams[1]]
+            f1 = self._tags_freqs(user_sid, grams[0])
+            f2 = self._tags_freqs(user_sid, grams[1])
             bi_f = bi["posts_count"]
             temp = (bi_f / math.log(f1 + f2))
             if grams[0] in stopw or grams[1] in stopw:
