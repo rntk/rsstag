@@ -406,7 +406,7 @@ class RSSTagWorker:
             temp = (bi_f / math.log(f1 + f2))
             if grams[0] in stopw or grams[1] in stopw:
                 temp /= f1 + f2
-            bi_temps[bi] = temp
+            bi_temps[bi["tag"]] = temp
 
         if bi_grams.set_temperatures(user_sid, bi_temps) is None:
             return False
