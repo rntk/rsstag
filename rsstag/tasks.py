@@ -102,7 +102,7 @@ class RssTagTasks:
         }
         try:
             user_task = self._db.tasks.find_one_and_update(
-                {'$or': [{'processing': TASK_NOT_IN_PROCESSING}, {'type': TASK_TAGS}, {'type': TASK_BIGRAMS_RANK}]},
+                {'$or': [{'processing': TASK_NOT_IN_PROCESSING}, {'type': TASK_TAGS}]},
                 {'$set': {'processing': time.time()}}
             )
             if user_task:
@@ -136,28 +136,30 @@ class RssTagTasks:
                                     self._db.tasks.remove({'_id': user_task['_id']})
                     elif user_task['type'] == TASK_BIGRAMS_RANK:
                         data = []
-                        for i in range(self._bigrams_bath_size):
-                            p = self._db.bi_grams.find_one_and_update(
-                                {
-                                    'owner': task['user']['sid'],
-                                    'temperature': 0,
-                                    'processing': BIGRAM_NOT_IN_PROCESSING
-                                },
-                                {'$set': {'processing': time.time()}},
-                                projection={"tag": True, "posts_count": True}
+                        bis_dt = self._db.bi_grams.find(
+                            {
+                                'owner': task['user']['sid'],
+                                'temperature': 0,
+                                'processing': BIGRAM_NOT_IN_PROCESSING
+                            },
+                            projection={"tag": True, "posts_count": True}
+                        ).limit(self._bigrams_bath_size)
+                        ids = []
+                        for bi_dt in bis_dt:
+                            data.append(bi_dt)
+                            ids.append(bi_dt["_id"])
+                        if ids:
+                            self._db.bi_grams.update_many(
+                                {"_id": {"$in": ids}},
+                                {"$set": {"processing": time.time()}}
                             )
-                            if not p:
-                                break
-                            data.append(p)
-
-                        if not data:
-                            locked_task = self._db.tasks.find_one_and_update(
-                                {'_id': user_task['_id'], 'remove': {'$exists': False}},
-                                {'$set': {'remove': True}}
+                            self._db.tasks.update_one(
+                                {'_id': user_task['_id']},
+                                {'$set': {'processing': TASK_NOT_IN_PROCESSING}},
                             )
+                        else:
                             task['type'] = TASK_NOOP
-                            if locked_task:
-                                self._db.tasks.remove({'_id': user_task['_id']})
+                            self._db.tasks.remove({'_id': user_task['_id']})
 
                     '''if task_type == TASK_WORDS:
                         if task['type'] == TASK_NOOP:
