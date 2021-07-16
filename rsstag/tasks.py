@@ -40,7 +40,7 @@ class RssTagTasks:
     def __init__(self, db: MongoClient) -> None:
         self._db = db
         self._log = logging.getLogger('tasks')
-        self._bath_size = 200
+        self._posts_bath_size = 200
         self._bigrams_bath_size = 1000
 
     def prepare(self) -> None:
@@ -102,7 +102,7 @@ class RssTagTasks:
         }
         try:
             user_task = self._db.tasks.find_one_and_update(
-                {'$or': [{'processing': TASK_NOT_IN_PROCESSING}, {'type': TASK_TAGS}]},
+                {'processing': TASK_NOT_IN_PROCESSING},
                 {'$set': {'processing': time.time()}}
             )
             if user_task:
@@ -112,28 +112,31 @@ class RssTagTasks:
                     task['type'] = user_task['type']
                     if user_task['type'] == TASK_TAGS:
                         data = []
-                        for i in range(self._bath_size):
-                            p = self._db.posts.find_one_and_update(
-                                {
-                                    'owner': task['user']['sid'],
-                                    'tags': [],
-                                    'processing': POST_NOT_IN_PROCESSING
-                                },
-                                {'$set': {'processing': time.time()}}
-                            )
-                            if not p:
-                                break
+                        ps = self._db.posts.find(
+                            {
+                                'owner': task['user']['sid'],
+                                'tags': [],
+                                'processing': POST_NOT_IN_PROCESSING
+                            }
+                        ).limit(self._posts_bath_size)
+                        ids = []
+                        for p in ps:
                             data.append(p)
+                            ids.append(p["_id"])
 
-                        if not data:
-                            locked_task = self._db.tasks.find_one_and_update(
-                                {'_id': user_task['_id'], 'remove': {'$exists': False}},
-                                {'$set': {'remove': True}}
+                        if ids:
+                            self._db.posts.update_many(
+                                {"_id": {"$in": ids}},
+                                {"$set": {"processing": time.time()}}
                             )
+                            self._db.tasks.update_one(
+                                {'_id': user_task['_id']},
+                                {'$set': {'processing': TASK_NOT_IN_PROCESSING}},
+                            )
+                        else:
                             task['type'] = TASK_NOOP
-                            if locked_task:
-                                if self.add_next_tasks(task['user']['sid'], user_task['type']):
-                                    self._db.tasks.remove({'_id': user_task['_id']})
+                            if self.add_next_tasks(task['user']['sid'], user_task['type']):
+                                self._db.tasks.remove({'_id': user_task['_id']})
                     elif user_task['type'] == TASK_BIGRAMS_RANK:
                         data = []
                         bis_dt = self._db.bi_grams.find(
