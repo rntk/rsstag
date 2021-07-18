@@ -67,6 +67,7 @@ export default class SettingsStorage {
                     this.errorMessage('Error. Try later');
                 }
             });
+            this.changeSettingsWindowState();
         }).catch(err => {
             this.errorMessage('Error. Try later');
         });
