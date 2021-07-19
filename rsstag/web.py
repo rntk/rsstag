@@ -10,6 +10,8 @@ import logging
 import math
 from collections import OrderedDict, defaultdict, Counter
 from hashlib import md5
+
+import nltk
 from werkzeug.wrappers import Response, Request
 from werkzeug.exceptions import HTTPException, NotFound, InternalServerError
 from werkzeug.utils import redirect
@@ -115,6 +117,7 @@ class RSSTagApplication(object):
         self.updateEndpoints()
         self.tasks = RssTagTasks(self.db)
         self.tasks.prepare()
+        nltk.download('stopwords')
 
     def prepareDB(self):
         try:
