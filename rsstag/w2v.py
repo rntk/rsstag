@@ -45,7 +45,7 @@ class W2VLearn:
         if self._model:
             self._model.train(words, total_examples=len(words), epochs=n_epochs)
         else:
-            self._model = Word2Vec(words, window=15, iter=n_epochs, sample=1e-5, min_count=0, workers=os.cpu_count())
+            self._model = Word2Vec(words, window=15, epochs=n_epochs, sample=1e-5, min_count=0, workers=os.cpu_count())
         self._model.save(self._config['settings']['w2v_model'])
 
     def make_groups(self, tags: List[str], top_n: int=10, koef: float=0.3):
@@ -53,7 +53,7 @@ class W2VLearn:
         if self._model:
             for tag in tags:
                 try:
-                    similar_tags = self._model.similar_by_word(tag, topn=top_n)
+                    similar_tags = self._model.wv.similar_by_word(tag, topn=top_n)
                     for sim_tag, val in similar_tags:
                         if val >= koef:
                             groups[sim_tag].add(tag)
@@ -68,7 +68,7 @@ class W2VLearn:
         if self._model:
             for tag, tags in groups.items():
                 try:
-                    similar_tags = self._model.similar_by_word(tag, topn=top_n)
+                    similar_tags = self._model.wv.similar_by_word(tag, topn=top_n)
                     for sim_tag, val in similar_tags:
                         if (val >= koef) and (sim_tag in groups):
                             new_groups[sim_tag].add(tag)

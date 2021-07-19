@@ -1309,7 +1309,7 @@ class RSSTagApplication(object):
         if model in self.models:
             if (model == self.models['d2v']) and self.d2v:
                 try:
-                    siblings = self.d2v.similar_by_word(tag, topn=30)
+                    siblings = self.d2v.dv.similar_by_word(tag, topn=30)
                     for sibling in siblings:
                         tags_set.add(sibling[0])
                 except Exception as e:
@@ -1320,7 +1320,7 @@ class RSSTagApplication(object):
                     self.w2v = Word2Vec.load(self.config['settings']['w2v_model'])
                     self.w2v_mod_date = st.st_mtime
                 try:
-                    siblings = self.w2v.similar_by_word(tag, topn=30)
+                    siblings = self.w2v.wv.similar_by_word(tag, topn=30)
                     for sibling in siblings:
                         tags_set.add(sibling[0])
                 except Exception as e:
