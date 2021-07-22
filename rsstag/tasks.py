@@ -135,8 +135,15 @@ class RssTagTasks:
                             )
                         else:
                             task['type'] = TASK_NOOP
-                            if self.add_next_tasks(task['user']['sid'], user_task['type']):
-                                self._db.tasks.remove({'_id': user_task['_id']})
+                            psc = self._db.posts.count_documents(
+                                {
+                                    'owner': task['user']['sid'],
+                                    'tags': [],
+                                }
+                            )
+                            if psc == 0:
+                                if self.add_next_tasks(task['user']['sid'], user_task['type']):
+                                    self._db.tasks.remove({'_id': user_task['_id']})
                     elif user_task['type'] == TASK_BIGRAMS_RANK:
                         data = []
                         bis_dt = self._db.bi_grams.find(
