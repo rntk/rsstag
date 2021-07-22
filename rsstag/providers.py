@@ -9,7 +9,7 @@ from datetime import date, datetime
 from random import randint
 from urllib.parse import quote_plus, urlencode
 from http import client
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, Iterator
 from collections import defaultdict
 from io import StringIO
 import unicodedata
@@ -76,7 +76,7 @@ class BazquxProvider:
             return (posts, data['category'])
 
 
-    def download(self, user: dict) -> Tuple[List, List]:
+    def download(self, user: dict) -> Iterator[Tuple[List, List]]:
         posts = []
         feeds = {}
         connection = client.HTTPSConnection(self._config[user['provider']]['api_host'])
@@ -187,7 +187,7 @@ class BazquxProvider:
                     })
                     pid += 1
 
-        return (posts, list(feeds.values()))
+        yield (posts, list(feeds.values()))
 
     def mark(self, data: dict, user: dict) -> Optional[bool]:
         status = data['status']
@@ -481,7 +481,7 @@ class TelegramProvider:
 
         self._tlg.stop()
 
-        return (posts, list(feeds.values()))
+        yield (posts, list(feeds.values()))
 
     def mark(self, data: dict, user: dict) -> Optional[bool]:
         return True

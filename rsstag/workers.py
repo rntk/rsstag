@@ -377,6 +377,7 @@ class RSSTagWorker:
                 logging.error('Can`t make tags santiment. Info: %s', e)
 
         return result #Always True. TODO: refactor or replace by somethin
+
     @lru_cache(maxsize=10240)
     def _tags_freqs(self, user_sid: str, tag: str) -> int:
         tags = RssTagTags(self._db)
@@ -468,16 +469,27 @@ class RSSTagWorker:
                 logging.info('Start downloading for user')
                 if self.clear_user_data(db, task['user']):
                     provider = providers[task["user"]["provider"]]
-                    posts, feeds = provider.download(task['user'])
-                    if posts:
-                        logging.info('Try save data in db. Posts: %s. Feeds: %s', len(posts), len(feeds))
-                        try:
-                            db.feeds.insert_many(feeds)
+                    posts_n = 0
+                    try:
+                        for posts, feeds in provider.download(task['user']):
+                            posts_n += len(posts)
+                            feeds_bulk = []
+                            for fee in feeds:
+                                feeds_bulk.append(
+                                    UpdateOne(
+                                        {"feed_id": fee["feed_id"]},
+                                        {"$set": fee},
+                                        upsert=True
+                                    )
+                                )
                             db.posts.insert_many(posts)
-                            task_done = True
-                        except Exception as e:
-                            task_done = False
-                            logging.error('Can`t save in db for user %s. Info: %s', task['user']['sid'], e)
+                            db.feeds.bulk_write(feeds_bulk)
+                        task_done = True
+                    except Exception as e:
+                        task_done = False
+                        logging.error('Can`t save in db for user %s. Info: %s', task['user']['sid'], e)
+                    logging.info('Saved posts: %s.', posts_n)
+
             elif task['type'] == TASK_MARK:
                 provider = providers[task["user"]["provider"]]
                 marked = provider.mark(task['data'], task['user'])
