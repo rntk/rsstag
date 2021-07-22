@@ -10,7 +10,7 @@ from random import randint
 from multiprocessing import Process
 from rsstag.tags_builder import TagsBuilder
 from rsstag.html_cleaner import HTMLCleaner
-from pymongo import MongoClient, UpdateOne
+from pymongo import MongoClient, UpdateOne, ReplaceOne
 from rsstag.providers import BazquxProvider, TelegramProvider
 from rsstag.utils import load_config
 from rsstag.routes import RSSTagRoutes
@@ -476,9 +476,9 @@ class RSSTagWorker:
                             feeds_bulk = []
                             for fee in feeds:
                                 feeds_bulk.append(
-                                    UpdateOne(
+                                    ReplaceOne(
                                         {"feed_id": fee["feed_id"]},
-                                        {"$set": fee},
+                                        fee,
                                         upsert=True
                                     )
                                 )
