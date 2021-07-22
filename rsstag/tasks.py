@@ -123,15 +123,11 @@ class RssTagTasks:
                         for p in ps:
                             data.append(p)
                             ids.append(p["_id"])
-
+                        unlock_task = True
                         if ids:
                             self._db.posts.update_many(
                                 {"_id": {"$in": ids}},
                                 {"$set": {"processing": time.time()}}
-                            )
-                            self._db.tasks.update_one(
-                                {'_id': user_task['_id']},
-                                {'$set': {'processing': TASK_NOT_IN_PROCESSING}},
                             )
                         else:
                             task['type'] = TASK_NOOP
@@ -144,6 +140,12 @@ class RssTagTasks:
                             if psc == 0:
                                 if self.add_next_tasks(task['user']['sid'], user_task['type']):
                                     self._db.tasks.remove({'_id': user_task['_id']})
+                                    unlock_task = False
+                        if unlock_task:
+                            self._db.tasks.update_one(
+                                {'_id': user_task['_id']},
+                                {'$set': {'processing': TASK_NOT_IN_PROCESSING}},
+                            )
                     elif user_task['type'] == TASK_BIGRAMS_RANK:
                         data = []
                         bis_dt = self._db.bi_grams.find(
