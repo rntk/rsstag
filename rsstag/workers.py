@@ -473,17 +473,23 @@ class RSSTagWorker:
                     try:
                         for posts, feeds in provider.download(task['user']):
                             posts_n += len(posts)
-                            feeds_bulk = []
+                            f_ids = [f['feed_id'] for f in feeds]
+                            c = db.feeds.find(
+                                {
+                                    'owner': task['user']['sid'],
+                                    'feed_id': {'$in': f_ids},
+                                },
+                                projection={'feed_id': True, '_id': False}
+                            )
+                            skip_ids = {fc['feed_id'] for fc in c}
+                            n_feeds = []
                             for fee in feeds:
-                                feeds_bulk.append(
-                                    ReplaceOne(
-                                        {"feed_id": fee["feed_id"]},
-                                        fee,
-                                        upsert=True
-                                    )
-                                )
+                                if fee['feed_id'] in skip_ids:
+                                    continue
+                                n_feeds.append(fee)
                             db.posts.insert_many(posts)
-                            db.feeds.bulk_write(feeds_bulk)
+                            if n_feeds:
+                                db.feeds.insert_many(n_feeds)
                         task_done = True
                     except Exception as e:
                         task_done = False
