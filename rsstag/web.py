@@ -820,6 +820,8 @@ class RSSTagApplication(object):
                         })
                         for t in d['tags']:
                             tags[t] += 1
+                            if not t:
+                                continue
                             letters[t[0]] += 1
                         for bi_g in d['bi_grams']:
                             bi_grams[bi_g] += 1
