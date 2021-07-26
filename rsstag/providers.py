@@ -419,7 +419,6 @@ class TelegramProvider:
                     continue
                 if not channel["type"]["is_channel"]:
                     continue
-            limit = 1
             posts_n = 0
             has_posts = True
             from_id = 0
