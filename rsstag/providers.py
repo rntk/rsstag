@@ -371,13 +371,33 @@ class TelegramProvider:
         self._tlg.login(blocking=True)
         channels = []
         if all_channels:
-            r = self._tlg.get_chats(offset_order=9223372036854775807)
-            r.wait()
-            ids = r.update
-            for c_id in ids["chat_ids"]:
-                r = self._tlg.get_chat(c_id)
+            list_offset = 9223372036854775807
+            prev_chat_id = 0
+            uniq_chat_ids = set()
+            while True:
+                r = self._tlg.get_chats(offset_order=list_offset, offset_chat_id=prev_chat_id)
                 r.wait()
-                channels.append(r.update)
+                ids = r.update
+                if not ids:
+                    break
+                if not ids["chat_ids"]:
+                    break
+                chats_n = ids["total_count"]
+                if chats_n <= len(channels):
+                    break
+                for c_id in ids["chat_ids"]:
+                    if c_id in uniq_chat_ids:
+                        continue
+                    r = self._tlg.get_chat(c_id)
+                    r.wait()
+                    channels.append(r.update)
+                prev_chat_id = ids["chat_ids"][-1]
+                uniq_chat_ids.update(ids["chat_ids"])
+                r = self._tlg.get_chat(prev_chat_id)
+                r.wait()
+                chat_d = r.update
+                list_offset = chat_d["positions"][0]["order"]
+                time.sleep(1)
         else:
             telegram_channel = user["telegram_channel"]
             channel_req = self._tlg.search_channel(telegram_channel)
@@ -399,6 +419,7 @@ class TelegramProvider:
                     continue
                 if not channel["type"]["is_channel"]:
                     continue
+            limit = 1
             posts_n = 0
             has_posts = True
             from_id = 0
