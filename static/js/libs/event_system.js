@@ -47,6 +47,8 @@ export default class EventsSystem {
 
         this.TOPICS_TEXTS_UPDATED = "topics_texts_updated";
 
+        this.TAGS_CLUSTERS_UPDATED = "tag_clusters_updated";
+
         this._events = {};
     }
 

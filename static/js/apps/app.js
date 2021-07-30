@@ -37,6 +37,8 @@ import BiGramsMentionsStorage from '../storages/bigrams-mentions-storage.js';
 import BiGramsMentionsChart from '../components/bigrams-mentions-chart.js';
 import TopicsTextsStorage from '../storages/topics-texts-storage.js';
 import TopicsTexts from '../components/topics-texts.js';
+import TagsClustersStorage from '../storages/tags-clusters-storage.js';
+import TagsClustersList from '../components/tags-clusters.js';
 
 function handleScroll() {
     let $tools = document.querySelector('#global_tools');
@@ -132,7 +134,7 @@ window.onload = () => {
         bi_grams_storage.start();
     } else if ( /^\/feed*/.test(path) || /^\/category*/.test(path) ||
             /^\/tag\/.*/.test(path) || /^\/posts\/with\/tags\/.*/.test(path) || /^\/bi-gram\/.*/.test(path) ||
-        /^\/entity\/.*/.test(path)) {
+        /^\/entity\/.*/.test(path) || /^\/posts\/.*/.test(path)) {
         const posts_storage = new PostsStorage(window.EVSYS);
         ReactDOM.render(
             <PostsList ES={window.EVSYS} />,
@@ -193,6 +195,18 @@ window.onload = () => {
             document.getElementById('load_siblings')
         );
         siblings_storage.start();
+
+        const clusters_evsys = new EventsSystem();
+        const clusters_storage = new TagsClustersStorage(clusters_evsys);
+        ReactDOM.render(
+            <TagsClustersList ES={clusters_evsys} tag={tag.tag} />,
+            document.getElementById('tag_clusters')
+        );
+        ReactDOM.render(
+            <TagButton ES={clusters_evsys} title="Load clusters" tag={tag} />,
+            document.getElementById('load_clusters')
+        );
+        clusters_storage.start();
 
         const bi_grams_evsys = new EventsSystem();
         const bi_grams_storage = new TagsStorage(bi_grams_evsys, '/tag-bi-grams');

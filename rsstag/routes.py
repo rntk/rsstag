@@ -36,6 +36,7 @@ class RSSTagRoutes:
                 'endpoint': 'on_get_posts_with_tags',
                 'methods': ['GET']
             },
+            {'url': '/posts/<string:pids>', 'endpoint': 'on_posts_get', 'methods': ['GET']},
             {'url': '/tag-siblings/<string:tag>', 'endpoint': 'on_get_tag_siblings', 'methods': ['GET']},
             {'url': '/tag-similar/<string:model>/<string:tag>', 'endpoint': 'on_get_tag_similar', 'methods': ['GET']},
             {'url': '/tag-bi-grams/<string:tag>', 'endpoint': 'on_get_tag_bi_grams', 'methods': ['GET']},
@@ -55,6 +56,7 @@ class RSSTagRoutes:
 
             {'url': '/tag-dates/<string:tag>', 'endpoint': 'on_tag_dates_get', 'methods': ['GET']},
             {'url': '/tag-topics/<string:tag>', 'endpoint': 'on_tag_topics_get', 'methods': ['GET']},
+            {'url': '/tag-clusters/<string:tag>', 'endpoint': 'on_tag_clusters_get', 'methods': ['GET']},
             {'url': '/tag-tfidf/<string:tag>', 'endpoint': 'on_tag_tfidf_get', 'methods': ['GET']},
             {'url': '/tag-entities/<string:tag>', 'endpoint': 'on_tag_entities_get', 'methods': ['GET']},
             {'url': '/topics-texts/<string:tag>', 'endpoint': 'on_topics_texts_get', 'methods': ['GET']},

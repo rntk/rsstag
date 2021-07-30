@@ -36,6 +36,9 @@ from rsstag.tags_builder import TagsBuilder
 from rsstag.html_cleaner import HTMLCleaner
 from nltk.corpus import stopwords
 
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.cluster import DBSCAN
+
 class RSSTagApplication(object):
     request = None
     response = None
@@ -2155,3 +2158,172 @@ class RSSTagApplication(object):
 
         self.response = Response(json.dumps(result), mimetype='application/json')
         self.response.status_code = code
+
+    def on_tag_clusters_get(self, tag: str):
+        if tag:
+            if self.user:
+                cursor = self.posts.get_by_tags(self.user["sid"], [tag], self.user['settings']['only_unread'], {"lemmas": True, "pid": True})
+                if cursor:
+                    pids = []
+                    texts = []
+                    for post in  cursor:
+                        texts.append(gzip.decompress(post["lemmas"]).decode('utf-8', 'replace'))
+                        pids.append(post["pid"])
+                    stopw = set(stopwords.words('english') + stopwords.words('russian'))
+                    vectorizer = TfidfVectorizer(stop_words=stopw)
+                    vectorizer.fit(texts)
+                    vectors = vectorizer.transform(texts)
+                    dbs = DBSCAN(eps=0.7, min_samples=2)
+                    cl = dbs.fit_predict(vectors)
+                    label_txt = {}
+                    for i, label in enumerate(dbs.labels_):
+                        if label < 0:
+                            continue
+                        label = str(label)
+                        if label not in label_txt:
+                            label_txt[label] = []
+                        label_txt[label].append({
+                            "txt": texts[i],
+                            "pid": pids[i]
+                        })
+                    result = {'data': label_txt}
+                    code = 200
+                elif cursor is None:
+                    result = {'error': 'Server in trouble'}
+                    code = 500
+                else:
+                    result = {'error': 'Tag not found'}
+                    code = 404
+            else:
+                result = {'error': 'Not logged'}
+                code = 401
+        else:
+            result = {'error': 'Something wrong with request'}
+            code = 400
+
+        self.response = Response(json.dumps(result), mimetype='application/json')
+        self.response.status_code = code
+
+    def on_tag_get(self, quoted_tag=None):
+        page_number = self.user['page']
+        letter = self.user['letter']
+        tmp_letters = self.letters.get(self.user['sid'])
+        if not page_number:
+            page_number = 1
+        if tmp_letters and letter and letter in tmp_letters['letters']:
+            back_link = self.routes.getUrlByEndpoint(
+                endpoint='on_group_by_tags_startwith_get',
+                params={'letter': letter, 'page_number': page_number}
+            )
+        else:
+            back_link = self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number})
+        tag = unquote(quoted_tag)
+        current_tag = self.tags.get_by_tag(self.user['sid'], tag)
+        if current_tag:
+            projection = {'_id': False, 'content.content': False}
+            if self.user['settings']['only_unread']:
+                only_unread = self.user['settings']['only_unread']
+            else:
+                only_unread = None
+            db_posts = self.posts.get_by_tags(self.user['sid'], [tag], only_unread, projection)
+            if db_posts is not None:
+                if self.user['settings']['similar_posts']:
+                    clusters = self.posts.get_clusters(db_posts)
+                    if clusters:
+                        cl_posts = self.posts.get_by_clusters(self.user['sid'], list(clusters), only_unread, projection)
+                        if cl_posts:
+                            db_posts.extend(cl_posts)
+                posts = []
+                by_feed = {}
+                pids = set()
+                for post in db_posts:
+                    post["lemmas"] = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
+                    if post['pid'] not in pids:
+                        pids.add(post['pid'])
+                        if post['feed_id'] not in by_feed:
+                            feed = self.feeds.get_by_feed_id(self.user['sid'], post['feed_id'])
+                            if feed:
+                                by_feed[post['feed_id']] = feed
+                        if post['feed_id']in by_feed:
+                            posts.append({
+                                'post': post,
+                                'pos': post['pid'],
+                                'category_title': by_feed[post['feed_id']]['category_title'],
+                                'feed_title': by_feed[post['feed_id']]['title'],
+                                'favicon': by_feed[post['feed_id']]['favicon']
+                            })
+                page = self.template_env.get_template('posts.html')
+                self.response = Response(
+                    page.render(
+                        posts=posts,
+                        tag=tag,
+                        back_link=back_link,
+                        group='tag',
+                        words=current_tag['words'],
+                        user_settings=self.user['settings'],
+                        provider=self.user['provider']
+                    ),
+                    mimetype='text/html'
+                )
+            else:
+                self.on_error(InternalServerError())
+        elif current_tag is None:
+            self.on_error(InternalServerError())
+        else:
+            self.on_error(NotFound())
+
+    def on_posts_get(self, pids: str):
+        projection = {'_id': False, 'content.content': False}
+        if self.user['settings']['only_unread']:
+            only_unread = self.user['settings']['only_unread']
+        else:
+            only_unread = None
+        pids_i = [int(p) for p in pids.split("_")]
+        db_posts = self.posts.get_by_pids(self.user['sid'], pids_i, projection)
+        if db_posts is not None:
+            if self.user['settings']['similar_posts']:
+                clusters = self.posts.get_clusters(db_posts)
+                if clusters:
+                    cl_posts = self.posts.get_by_clusters(self.user['sid'], list(clusters), only_unread, projection)
+                    if cl_posts:
+                        db_posts.extend(cl_posts)
+            posts = []
+            by_feed = {}
+            pids = set()
+            for post in db_posts:
+                post["lemmas"] = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
+                if post['pid'] not in pids:
+                    pids.add(post['pid'])
+                    if post['feed_id'] not in by_feed:
+                        feed = self.feeds.get_by_feed_id(self.user['sid'], post['feed_id'])
+                        if feed:
+                            by_feed[post['feed_id']] = feed
+                    if post['feed_id'] in by_feed:
+                        posts.append({
+                            'post': post,
+                            'pos': post['pid'],
+                            'category_title': by_feed[post['feed_id']]['category_title'],
+                            'feed_title': by_feed[post['feed_id']]['title'],
+                            'favicon': by_feed[post['feed_id']]['favicon']
+                        })
+            page = self.template_env.get_template('posts.html')
+            if self.request.referrer:
+                back_link = self.request.referrer
+            else:
+                back_link = '/'
+            self.response = Response(
+                page.render(
+                    posts=posts,
+                    tag="NoTag",
+                    back_link=back_link,
+                    group='tag',
+                    words=[],
+                    user_settings=self.user['settings'],
+                    provider=self.user['provider']
+                ),
+                mimetype='text/html'
+            )
+        elif db_posts is None:
+            self.on_error(InternalServerError())
+        else:
+            self.on_error(NotFound())

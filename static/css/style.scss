@@ -582,3 +582,28 @@ h3 {
         margin-top: 1em;
     }
 }
+
+.tag_txt_clusters_tr {
+    vertical-align: middle;
+}
+
+.tag_txt_clusters_td_left, .tag_txt_clusters_td_right, .tag_txt_clusters_td_middle {
+    vertical-align: middle;
+    padding-bottom: 1em;
+}
+
+.tag_txt_clusters_td_left, .tag_txt_clusters_td_right {
+    width: 44%;
+}
+
+.tag_txt_clusters_td_middle {
+    width: 10%;
+}
+
+.tag_txt_clusters_cluster {
+    margin-bottom: 1em;
+    padding-bottom: 1em;
+    border-bottom: 1px solid $my_gray;
+    vertical-align: middle;
+    display: block;
+}
