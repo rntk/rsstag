@@ -412,13 +412,15 @@ class TelegramProvider:
         max_limit = user["telegram_limit"]
         pid = 0
         for channel in channels:
-            limit = max_limit
+            limit = channel["unread_count"]
             if all_channels:
-                limit = channel["unread_count"]
                 if limit <= 0:
                     continue
                 if not channel["type"]["is_channel"]:
                     continue
+            else:
+                if limit <= 0:
+                    limit = max_limit
             posts_n = 0
             has_posts = True
             from_id = 0
