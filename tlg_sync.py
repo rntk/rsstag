@@ -1,4 +1,5 @@
 import sys
+import time
 from typing import List, Tuple
 
 from telegram.client import Telegram
@@ -24,6 +25,7 @@ def tlg_sync(cfg: dict, phone: str, sync_ids: List[Tuple[int,int]]) -> None:
     for chat_id, msg_id in sync_ids:
         print(chat_id, msg_id)
         view(tlg, chat_id, [msg_id])
+    time.sleep(5)
 
     tlg.stop()
 
@@ -51,30 +53,30 @@ if __name__ == "__main__":
     feeds_h = RssTagFeeds(db)
     posts_h = RssTagPosts(db)
     users = db.users.find({})
-    user = users[0]
-    if user["provider"] != "telegram":
-        print("Not telegram provider")
-        exit()
-    user_id = user["sid"]
-    feeds = feeds_h.get_all(user_id)
-    tlg_ids = []
-    for feed in feeds:
-        feed_id = int(feed["feed_id"])
-        posts = posts_h.get_by_feed_id(user_id, str(feed_id), projection={"id": True, "_id": False, "read": True})
-        posts.sort(key=lambda x: x["id"], reverse=False)
-        p_id = 0
-        n = 0
-        for p in posts:
-            if not p["read"]:
-                break
-            n += 1
-            p_id = p["id"]
-        print(feed_id, feed["title"], len(posts), n)
-        if p_id == 0:
-            continue
+    for user in users:
+        if user["provider"] != "telegram":
+            print("Not telegram provider")
+            exit()
+        user_id = user["sid"]
+        feeds = feeds_h.get_all(user_id)
+        tlg_ids = []
+        for feed in feeds:
+            feed_id = int(feed["feed_id"])
+            posts = posts_h.get_by_feed_id(user_id, str(feed_id), projection={"id": True, "_id": False, "read": True})
+            posts.sort(key=lambda x: x["id"], reverse=False)
+            p_id = 0
+            n = 0
+            for p in posts:
+                if not p["read"]:
+                    break
+                n += 1
+                p_id = p["id"]
+            print(feed_id, feed["title"], len(posts), n)
+            if p_id == 0:
+                continue
 
-        tlg_ids.append((feed_id, p_id))
+            tlg_ids.append((feed_id, p_id))
 
-    print(len(tlg_ids))
-    if tlg_ids:
-        tlg_sync(cfg, user["phone"], tlg_ids)
+        print(len(tlg_ids))
+        if tlg_ids:
+            tlg_sync(cfg, user["phone"], tlg_ids)
