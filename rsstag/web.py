@@ -590,7 +590,6 @@ class RSSTagApplication(object):
                     page.render(
                         posts=posts,
                         tag=cat,
-                        back_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
                         group='category',
                         words=[],
                         user_settings=self.user['settings'],
@@ -606,18 +605,6 @@ class RSSTagApplication(object):
             self.on_error(NotFound())
 
     def on_tag_get(self, quoted_tag=None):
-        page_number = self.user['page']
-        letter = self.user['letter']
-        tmp_letters = self.letters.get(self.user['sid'])
-        if not page_number:
-            page_number = 1
-        if tmp_letters and letter and letter in tmp_letters['letters']:
-            back_link = self.routes.getUrlByEndpoint(
-                endpoint='on_group_by_tags_startwith_get',
-                params={'letter': letter, 'page_number': page_number}
-            )
-        else:
-            back_link = self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number})
         tag = unquote(quoted_tag)
         current_tag = self.tags.get_by_tag(self.user['sid'], tag)
         if current_tag:
@@ -658,7 +645,6 @@ class RSSTagApplication(object):
                     page.render(
                         posts=posts,
                         tag=tag,
-                        back_link=back_link,
                         group='tag',
                         words=current_tag['words'],
                         user_settings=self.user['settings'],
@@ -709,15 +695,10 @@ class RSSTagApplication(object):
                                 'favicon': by_feed[post['feed_id']]['favicon']
                             })
                 page = self.template_env.get_template('posts.html')
-                if self.request.referrer:
-                    back_link = self.request.referrer
-                else:
-                    back_link = '/'
                 self.response = Response(
                     page.render(
                         posts=posts,
                         tag=bi_gram,
-                        back_link=back_link,
                         group='tag',
                         words=current_bi_gram['words'],
                         user_settings=self.user['settings'],
@@ -772,7 +753,6 @@ class RSSTagApplication(object):
                     page.render(
                         posts=posts,
                         tag=current_feed['title'],
-                        back_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
                         group='feed',
                         words=[],
                         user_settings=self.user['settings'],
@@ -1537,29 +1517,12 @@ class RSSTagApplication(object):
                     for p_id in posts_for_delete:
                         del posts[p_id]
                     result[tag]['posts'] = sorted(result[tag]['posts'], key=lambda p: p['feed_id'])
-                letter = self.user['letter']
-                page_number = self.user['page']
-                if letter:
-                    back_link = self.routes.getUrlByEndpoint(
-                        endpoint='on_group_by_tags_startwith_get',
-                        params={'letter': letter, 'page_number': page_number}
-                    )
-                elif self.user['settings']['hot_tags']:
-                    back_link = self.routes.getUrlByEndpoint(
-                        endpoint='on_group_by_hottags_get',
-                        params={'page_number': page_number}
-                    )
-                else:
-                    back_link = self.routes.getUrlByEndpoint(
-                        endpoint='on_group_by_tags_get',
-                        params={'page_number': page_number}
-                    )
                 page = self.template_env.get_template('tags-posts.html')
                 self.response = Response(
                     page.render(
                         tags=result,
                         selected_tags=','.join(tags),
-                        back_link=back_link, group='tag',
+                        group='tag',
                         user_settings=self.user['settings'],
                         provider=self.user['provider']
                     ),
@@ -2028,18 +1991,6 @@ class RSSTagApplication(object):
         self.response.status_code = code
 
     def on_entity_get(self, quoted_tag=None):
-        page_number = self.user['page']
-        letter = self.user['letter']
-        tmp_letters = self.letters.get(self.user['sid'])
-        if not page_number:
-            page_number = 1
-        if tmp_letters and letter and letter in tmp_letters['letters']:
-            back_link = self.routes.getUrlByEndpoint(
-                endpoint='on_group_by_tags_startwith_get',
-                params={'letter': letter, 'page_number': page_number}
-            )
-        else:
-            back_link = self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number})
         tag = unquote(quoted_tag)
         projection = {'_id': False, 'content.content': False}
         if self.user['settings']['only_unread']:
@@ -2083,7 +2034,6 @@ class RSSTagApplication(object):
                 page.render(
                     posts=posts,
                     tag=tag,
-                    back_link=back_link,
                     group='tag',
                     words=list(words),
                     user_settings=self.user['settings'],
@@ -2208,18 +2158,6 @@ class RSSTagApplication(object):
         self.response.status_code = code
 
     def on_tag_get(self, quoted_tag=None):
-        page_number = self.user['page']
-        letter = self.user['letter']
-        tmp_letters = self.letters.get(self.user['sid'])
-        if not page_number:
-            page_number = 1
-        if tmp_letters and letter and letter in tmp_letters['letters']:
-            back_link = self.routes.getUrlByEndpoint(
-                endpoint='on_group_by_tags_startwith_get',
-                params={'letter': letter, 'page_number': page_number}
-            )
-        else:
-            back_link = self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': page_number})
         tag = unquote(quoted_tag)
         current_tag = self.tags.get_by_tag(self.user['sid'], tag)
         if current_tag:
@@ -2260,7 +2198,6 @@ class RSSTagApplication(object):
                     page.render(
                         posts=posts,
                         tag=tag,
-                        back_link=back_link,
                         group='tag',
                         words=current_tag['words'],
                         user_settings=self.user['settings'],
@@ -2310,15 +2247,10 @@ class RSSTagApplication(object):
                             'favicon': by_feed[post['feed_id']]['favicon']
                         })
             page = self.template_env.get_template('posts.html')
-            if self.request.referrer:
-                back_link = self.request.referrer
-            else:
-                back_link = '/'
             self.response = Response(
                 page.render(
                     posts=posts,
                     tag="NoTag",
-                    back_link=back_link,
                     group='tag',
                     words=[],
                     user_settings=self.user['settings'],
