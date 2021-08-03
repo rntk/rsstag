@@ -850,7 +850,7 @@ class RSSTagApplication(object):
         self.response = Response(json.dumps(result), mimetype='application/json')
         self.response.status_code = code
 
-    def calcPagerData(self, p_number, page_count, items_per_page, endpoint, sentiment='', group=''):
+    def calcPagerData(self, p_number, page_count, items_per_page, endpoint, sentiment='', group='', letter=''):
         pages_map = {}
         page_count = round(page_count)
         numbers_start_range = p_number - self.count_showed_numbers + 1
@@ -864,6 +864,8 @@ class RSSTagApplication(object):
             params['sentiment'] = sentiment
         if group:
             params['group'] = group
+        if letter:
+            params['letter'] = letter
         if page_count > 11:
             pages_map['middle'] = []
             for i in range(numbers_start_range, numbers_end_range):
@@ -1175,7 +1177,8 @@ class RSSTagApplication(object):
                     p_number,
                     page_count,
                     self.user['settings']['tags_on_page'],
-                    'on_group_by_tags_get'
+                    'on_group_by_tags_startwith_get',
+                    letter=letter
                 )
                 sorted_tags = []
                 tags = self.tags.get_all(
