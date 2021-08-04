@@ -2126,10 +2126,10 @@ class RSSTagApplication(object):
                     vectorizer = TfidfVectorizer(stop_words=stopw)
                     vectorizer.fit(texts)
                     vectors = vectorizer.transform(texts)
-                    dbs = DBSCAN(eps=0.7, min_samples=2)
+                    dbs = DBSCAN(eps=0.7, min_samples=2, metric="cosine")
                     cl = dbs.fit_predict(vectors)
                     label_txt = {}
-                    for i, label in enumerate(dbs.labels_):
+                    for i, label in enumerate(cl):
                         if label < 0:
                             continue
                         label = str(label)
