@@ -253,3 +253,10 @@ class RssTagPosts:
                 result.update(post[field])
 
         return result
+
+    def count(self, owner: str) -> Optional[int]:
+        try:
+            return self._db.posts.count_documents({'owner': owner})
+        except Exception as e:
+            self._log.error('Can`t count posts. User %s. Info: %s', owner, e)
+            return None

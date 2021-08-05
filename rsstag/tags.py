@@ -318,3 +318,15 @@ class RssTagTags:
             result = None
 
         return result
+
+    def get_tags_sum(self, owner: str) -> Optional[int]:
+        try:
+            cursor = self._db.tags.aggregate([
+                {'$match': {'owner': owner}},
+                {"$group": {"_id": "$owner", "counter": {"$sum": "$posts_count"}}}
+            ])
+            for dt in cursor:
+                return dt["counter"]
+        except Exception as e:
+            self._log.error('Can`t get posts stat. User %s. Info: %s', owner, e)
+            return None

@@ -19,6 +19,7 @@ TASK_TAGS_SENTIMENT = 10
 TASK_TAGS_GROUP = 11
 TASK_TAGS_COORDS = 12
 TASK_BIGRAMS_RANK = 13
+TASK_TAGS_RANK = 14
 
 POST_NOT_IN_PROCESSING = 0
 BIGRAM_NOT_IN_PROCESSING = 0
@@ -30,7 +31,7 @@ class RssTagTasks:
     indexes = ['user', 'processing']
     _tasks_after = {
         TASK_DOWNLOAD: [TASK_TAGS],
-        TASK_TAGS: [TASK_BIGRAMS_RANK, TASK_LETTERS, TASK_TAGS_SENTIMENT, TASK_NER, TASK_CLUSTERING], #TASK_TAGS_COORDS
+        TASK_TAGS: [TASK_BIGRAMS_RANK, TASK_NER, TASK_TAGS_RANK, TASK_LETTERS, TASK_TAGS_SENTIMENT, TASK_CLUSTERING], #TASK_TAGS_COORDS
         TASK_NER: [TASK_W2V],
         TASK_W2V: [TASK_TAGS_GROUP]
     }
@@ -42,6 +43,7 @@ class RssTagTasks:
         self._log = logging.getLogger('tasks')
         self._posts_bath_size = 200
         self._bigrams_bath_size = 1000
+        self._tags_bath_size = 1000
 
     def prepare(self) -> None:
         for index in self.indexes:
@@ -98,7 +100,8 @@ class RssTagTasks:
         task = {
             'type': TASK_NOOP,
             'user': None,
-            'data': None
+            'data': None,
+            "_id": ""
         }
         try:
             user_task = self._db.tasks.find_one_and_update(
@@ -106,6 +109,7 @@ class RssTagTasks:
                 {'$set': {'processing': time.time()}}
             )
             if user_task:
+                task["_id"] = user_task["_id"]
                 data = user_task
                 task['user'] = users.get_by_sid(user_task['user'])
                 if task['user']:
@@ -172,6 +176,32 @@ class RssTagTasks:
                         else:
                             task['type'] = TASK_NOOP
                             self._db.tasks.remove({'_id': user_task['_id']})
+                    elif user_task['type'] == TASK_TAGS_RANK:
+                        data = []
+                        tags_dt = self._db.tags.find(
+                            {
+                                'owner': task['user']['sid'],
+                                'temperature': 0,
+                                'processing': TAG_NOT_IN_PROCESSING
+                            },
+                            projection={"tag": True, "posts_count": True, "freq": True}
+                        ).limit(self._tags_bath_size)
+                        ids = []
+                        for tag_dt in tags_dt:
+                            data.append(tag_dt)
+                            ids.append(tag_dt["_id"])
+                        if ids:
+                            self._db.tags.update_many(
+                                {"_id": {"$in": ids}},
+                                {"$set": {"processing": time.time()}}
+                            )
+                            self._db.tasks.update_one(
+                                {'_id': user_task['_id']},
+                                {'$set': {'processing': TASK_NOT_IN_PROCESSING}},
+                            )
+                        else:
+                            task['type'] = TASK_NOOP
+                            self._db.tasks.remove({'_id': user_task['_id']})
 
                     '''if task_type == TASK_WORDS:
                         if task['type'] == TASK_NOOP:
@@ -227,6 +257,13 @@ class RssTagTasks:
                         {'_id': bigram['_id']},
                         {'$set': {'processing': BIGRAM_NOT_IN_PROCESSING}}
                     )
+            elif task['type'] == TASK_TAGS_RANK:
+                remove_task = False
+                for tag in task['data']:
+                    self._db.tags.find_one_and_update(
+                        {'_id': tag['_id']},
+                        {'$set': {'processing': TAG_NOT_IN_PROCESSING}}
+                    )
 
             if remove_task:
                 removed = self.remove_task(task['data']['_id'])
@@ -272,7 +309,8 @@ class RssTagTasks:
             TASK_TAGS_SENTIMENT: 'Tags sentiment',
             TASK_TAGS_GROUP: 'Tags groups searching',
             TASK_TAGS_COORDS: 'Searching geo objects in tags',
-            TASK_BIGRAMS_RANK: 'Bi-grams ranking'
+            TASK_BIGRAMS_RANK: 'Bi-grams ranking',
+            TASK_TAGS_RANK: 'Tags ranking',
         }
 
         if task_type in task_titles:

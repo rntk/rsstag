@@ -16,7 +16,7 @@ from rsstag.utils import load_config
 from rsstag.routes import RSSTagRoutes
 from rsstag.users import RssTagUsers
 from rsstag.tasks import TASK_NOOP, TASK_DOWNLOAD, TASK_MARK, TASK_TAGS, TASK_WORDS, TASK_TAGS_GROUP, \
-    TAG_NOT_IN_PROCESSING, TASK_LETTERS, TASK_TAGS_SENTIMENT, TASK_W2V, TASK_NER, TASK_CLUSTERING, TASK_BIGRAMS_RANK
+    TAG_NOT_IN_PROCESSING, TASK_LETTERS, TASK_TAGS_SENTIMENT, TASK_W2V, TASK_NER, TASK_CLUSTERING, TASK_BIGRAMS_RANK, TASK_TAGS_RANK
 from rsstag.tasks import RssTagTasks
 from rsstag.letters import RssTagLetters
 from rsstag.tags import RssTagTags
@@ -40,6 +40,7 @@ class RSSTagWorker:
             filemode='a',
             level=getattr(logging, self._config['settings']['log_level'].upper())
         )
+        self._stopw = set(stopwords.words('english') + stopwords.words('russian'))
 
     def start(self):
         """Start worker"""
@@ -252,7 +253,7 @@ class RSSTagWorker:
         if count_ent:
             logging.info('Found %s entities for user %s', len(count_ent), owner)
             tags = RssTagTags(db)
-            result = tags.add_entities(owner, count_ent, replace=True)
+            result = tags.add_entities(owner, count_ent)
 
         return result
 
@@ -270,7 +271,7 @@ class RSSTagWorker:
                 texts_for_vec.append(text)
 
         if texts_for_vec:
-            vectorizer = TfidfVectorizer(stop_words=set(stopwords.words('english') + stopwords.words('russian')))
+            vectorizer = TfidfVectorizer(stop_words=self._stopw)
             dbs = DBSCAN(eps=0.9, min_samples=2, n_jobs=1)
             dbs.fit(vectorizer.fit_transform(texts_for_vec))
             clusters = defaultdict(set)
@@ -388,13 +389,11 @@ class RSSTagWorker:
         return 0
 
     def make_bi_grams_rank(self, db: MongoClient, task: dict) -> bool:
-        self._db = db
         bi_grams = RssTagBiGrams(db)
         user_sid = task['user']['sid']
         bi_count = bi_grams.count(user_sid)
         if bi_count == 0:
             return False
-        stopw = set(stopwords.words('english') + stopwords.words('russian'))
         bi_temps = {}
         for bi in task['data']:
             grams = bi["tag"].split(" ")
@@ -405,7 +404,7 @@ class RSSTagWorker:
             f2 = self._tags_freqs(user_sid, grams[1])
             bi_f = bi["posts_count"]
             temp = (bi_f / math.log(f1 + f2))
-            if grams[0] in stopw or grams[1] in stopw:
+            if grams[0] in self._stopw or grams[1] in self._stopw:
                 temp /= f1 + f2
             bi_temps[bi["tag"]] = temp
 
@@ -422,7 +421,6 @@ class RSSTagWorker:
         if bi_count == 0:
             return False
         cursor = bi_grams.get_all(user_sid, projection={"tag": True, "posts_count": True}, get_cursor=True)
-        stopw = set(stopwords.words('english') + stopwords.words('russian'))
         for bi in cursor:
             grams = bi["tag"].split(" ")
             for_search = []
@@ -440,17 +438,72 @@ class RSSTagWorker:
             f2 = freq_cache[grams[1]]
             bi_f = bi["posts_count"]
             temp = (bi_f / math.log(f1 + f2))
-            if grams[0] in stopw or grams[1] in stopw:
+            if grams[0] in self._stopw or grams[1] in self._stopw:
                 temp /= f1 + f2
             if bi_grams.set_temperature(user_sid, bi["tag"], temp) is None:
                 return False
 
         return True
 
+    @lru_cache(maxsize=10)
+    def _get_posts_count(self, owner: str, task_id: str) -> Optional[int]:
+        posts_h = RssTagPosts(self._db)
+
+        return posts_h.count(owner)
+
+    @lru_cache(maxsize=10)
+    def _get_tags_count(self, owner: str, task_id: str) -> Optional[int]:
+        tags_h = RssTagTags(self._db)
+
+        return tags_h.get_tags_sum(owner)
+
+    def _make_tags_rank(self, db: MongoClient, task: dict) -> bool:
+        user_sid = task['user']['sid']
+        posts_count = self._get_posts_count(user_sid, task["_id"])
+        if posts_count == 0:
+            return True
+        if posts_count is None:
+            return False
+        tags_count = self._get_tags_count(user_sid, task["_id"])
+        if tags_count == 0:
+            return True
+        if tags_count is None:
+            return False
+        tag_temps = {}
+        for tag_d in task['data']:
+            tf = tag_d["freq"] / tags_count
+            idf = math.log(posts_count / tag_d["posts_count"])
+            temp = tf * idf
+            tag_temps[tag_d["tag"]] = temp
+
+        tags_h = RssTagTags(db)
+
+        if tags_h.add_entities(user_sid, tag_temps, replace=True) is None:
+            return False
+
+        return True
+
+    def make_tags_rank(self, db: MongoClient, task: dict) -> bool:
+        tag_temps = {}
+        for tag_d in task['data']:
+            tf = tag_d["posts_count"] / math.log(1 + tag_d["freq"])
+            if tag_d["tag"] in self._stopw:
+                tf /= tag_d["freq"]
+            tag_temps[tag_d["tag"]] = tf
+
+        tags_h = RssTagTags(db)
+
+        if tags_h.add_entities(task['user']['sid'], tag_temps) is None:
+            return False
+
+        return True
+
     def worker(self):
         """Worker for bazqux.com"""
         cl = MongoClient(self._config['settings']['db_host'], int(self._config['settings']['db_port']))
+
         db = cl[self._config['settings']['db_name']]
+        self._db = db
 
         providers = {
             "bazqux": BazquxProvider(self._config),
@@ -525,6 +578,8 @@ class RSSTagWorker:
                 task_done = self.make_tags_groups(db, task['user']['sid'], self._config)
             elif task['type'] == TASK_BIGRAMS_RANK:
                 task_done = self.make_bi_grams_rank(db, task)
+            elif task['type'] == TASK_TAGS_RANK:
+                task_done = self.make_tags_rank(db, task)
             '''elif task['type'] == TASK_WORDS:
                 task_done = self.process_words(db, task['data'])'''
             #TODO: add tags_coords, add D2V?
