@@ -379,7 +379,7 @@ class RSSTagWorker:
 
         return result #Always True. TODO: refactor or replace by somethin
 
-    @lru_cache(maxsize=10240)
+    @lru_cache(maxsize=5128)
     def _tags_freqs(self, user_sid: str, tag: str) -> int:
         tags = RssTagTags(self._db)
         tag_d = tags.get_by_tag(user_sid, tag)

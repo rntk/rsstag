@@ -48,7 +48,7 @@ class TagsBuilder:
     def process_word(self, current_word: str) -> str:
         return self.process_word_(current_word.strip().casefold())
 
-    @lru_cache(maxsize=10480)
+    @lru_cache(maxsize=5128)
     def process_word_(self, current_word: str) -> str:
         """Make tag/token from gven word"""
         tag = ''
