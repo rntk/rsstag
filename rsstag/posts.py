@@ -68,7 +68,7 @@ class RssTagPosts:
 
         return result
 
-    def get_by_tags(self, owner: str, tags: list, only_unread: Optional[bool]=None, projection: dict={}) -> Optional[list]:
+    def get_by_tags(self, owner: str, tags: list, only_unread: Optional[bool]=None, projection: dict=None) -> Optional[list]:
         """
         TODO: may be need change condition from 'tags': {'$all': tags} to 'tags': {'$elemMAtch': {'$in': tags}}
         """
@@ -84,7 +84,7 @@ class RssTagPosts:
                 cursor = self._db.posts.find(query, projection=projection).sort(sort_data)
             else:
                 cursor = self._db.posts.find(query).sort(sort_data)
-            result = list(cursor)
+            result = list(cursor.allow_disk_use(True))
         except Exception as e:
             self._log.error('Can`t get posts by tags %s. User %s. Info: %s', tags, owner, e)
             result = None
