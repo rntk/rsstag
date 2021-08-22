@@ -416,7 +416,12 @@ class TelegramProvider:
             if all_channels:
                 if limit <= 0:
                     continue
-                if not channel["type"]["is_channel"]:
+                if "is_channel" in channel["type"]:
+                    if not channel["type"]["is_channel"]:
+                        logging.warning("Skip not channel %s: ", channel)
+                        continue
+                else:
+                    logging.warning("Skip no is_channel: %s", channel)
                     continue
             else:
                 if limit <= 0:
