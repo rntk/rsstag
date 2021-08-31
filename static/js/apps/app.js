@@ -208,6 +208,18 @@ window.onload = () => {
         );
         bi_grams_storage.start();
 
+        const pmi_evsys = new EventsSystem();
+        const pmi_storage = new TagsStorage(pmi_evsys, '/tag-pmi');
+        ReactDOM.render(
+            <TagsList ES={pmi_evsys} is_bigram={true} />,
+            document.getElementById('pmi')
+        );
+        ReactDOM.render(
+            <TagButton ES={pmi_evsys} title="Load PMI" tag={tag} />,
+            document.getElementById('load_pmi')
+        );
+        pmi_storage.start();
+
         const tag_topics_evsys = new EventsSystem();
         const tag_topics_storage = new TagsStorage(tag_topics_evsys, '/tag-topics');
         ReactDOM.render(

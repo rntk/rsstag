@@ -40,6 +40,7 @@ class RSSTagRoutes:
             {'url': '/tag-siblings/<string:tag>', 'endpoint': 'on_get_tag_siblings', 'methods': ['GET']},
             {'url': '/tag-similar/<string:model>/<string:tag>', 'endpoint': 'on_get_tag_similar', 'methods': ['GET']},
             {'url': '/tag-bi-grams/<string:tag>', 'endpoint': 'on_get_tag_bi_grams', 'methods': ['GET']},
+            {'url': '/tag-pmi/<string:tag>', 'endpoint': 'on_get_tag_pmi', 'methods': ['GET']},
             {'url': '/tags-search', 'endpoint': 'on_post_tags_search', 'methods': ['POST']},
             {'url': '/speech', 'endpoint': 'on_post_speech', 'methods': ['POST']},
 

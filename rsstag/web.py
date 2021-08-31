@@ -2207,3 +2207,91 @@ class RSSTagApplication(object):
             self.on_error(InternalServerError())
         else:
             self.on_error(NotFound())
+
+    def on_get_tag_pmi(self, tag: str):
+        if tag:
+            if self.user:
+                cursor = self.posts.get_by_tags(self.user["sid"], [tag], self.user['settings']['only_unread'], {"lemmas": True})
+                if cursor:
+                    stopw = set(stopwords.words('english') + stopwords.words('russian'))
+                    texts = [gzip.decompress(post["lemmas"]).decode('utf-8', 'replace') for post in cursor]
+                    uniq_words = set()
+                    bigrams = Counter()
+                    bigrams_count = Counter()
+                    window = 5
+                    for text in texts:
+                        words_l = [word for word in text.split() if word not in stopw and word != tag]
+                        uniq_words.update(words_l)
+                        bi_grams = []
+                        for word_pos, word in enumerate(words_l):
+                            for i in range(window):
+                                i += 1
+                                bi_words = []
+                                prev_pos = word_pos - i
+                                if prev_pos >= 0:
+                                    bi_words.append(words_l[prev_pos])
+                                next_pos = word_pos + i
+                                if next_pos < len(words_l):
+                                    bi_words.append(words_l[next_pos])
+                                for bi_word in bi_words:
+                                    if word == bi_word:
+                                        continue
+                                    bi_grams_l = [word, bi_word]
+                                    bi_grams_l.sort()
+                                    bi_gram = " ".join(bi_grams_l)
+                                    bi_grams.append(bi_gram)
+                        bigrams.update(bi_grams)
+                        bigrams_count.update(set(bi_grams))
+
+                    tags = self.tags.get_by_tags(self.user['sid'], list(uniq_words), self.user['settings']['only_unread'])
+                    if tags:
+                        tags_d = {}
+                        for tg in tags:
+                            tags_d[tg["tag"]] = tg
+
+                        pmis = []
+                        for bi, bi_freq in bigrams.items():
+                            if bi_freq < 2:
+                                continue
+                            bi_words = bi.split(" ")
+                            f1 = tags_d[bi_words[0]]["freq"]
+                            f2 = tags_d[bi_words[1]]["freq"]
+                            bi_fr = bi_freq
+                            pmi = math.log(bi_fr / (f1 * f2))
+                            if pmi > 0:
+                                pmis.append((bi, pmi))
+                        pmis.sort(key=lambda x: x[1], reverse=False)
+
+                        all_pmis = []
+                        for bi, temp in pmis[:4000]:
+                            bi_words = bi.split(" ")
+                            all_pmis.append({
+                                'tag': bi,
+                                'url': "/entity/" + quote(tag + " " + bi),
+                                'words': tags_d[bi_words[0]]["words"] + tags_d[bi_words[1]]["words"],
+                                'count': bigrams_count[bi],
+                                'sentiment': [],
+                                'temp': temp,
+                                'freq': bigrams[bi]
+                            })
+                        all_pmis.sort(key=lambda x: x["count"], reverse=True)
+                        result = {'data': all_pmis}
+                        code = 200
+                    else:
+                        result = {'error': 'Tags not found'}
+                        code = 404
+                elif cursor is None:
+                    result = {'error': 'Server in trouble'}
+                    code = 500
+                else:
+                    result = {'error': 'Tag not found'}
+                    code = 404
+            else:
+                result = {'error': 'Not logged'}
+                code = 401
+        else:
+            result = {'error': 'Something wrong with request'}
+            code = 400
+
+        self.response = Response(json.dumps(result), mimetype='application/json')
+        self.response.status_code = code
