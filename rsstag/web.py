@@ -2256,11 +2256,9 @@ class RSSTagApplication(object):
                             bi_words = bi.split(" ")
                             f1 = tags_d[bi_words[0]]["freq"]
                             f2 = tags_d[bi_words[1]]["freq"]
-                            bi_fr = bi_freq
-                            pmi = math.log(bi_fr / (f1 * f2))
-                            if pmi > 0:
-                                pmis.append((bi, pmi))
-                        pmis.sort(key=lambda x: x[1], reverse=False)
+                            pmi = bi_freq / (abs(f1 - f2) + 1)
+                            pmis.append((bi, pmi))
+                        pmis.sort(key=lambda x: x[1], reverse=True)
 
                         all_pmis = []
                         for bi, temp in pmis[:4000]:
