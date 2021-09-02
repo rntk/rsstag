@@ -44,12 +44,18 @@ export default class TagsStorage {
     }
 
     bindEvents() {
-        this.ES.bind(this.ES.CHANGE_TAG_SIBLINGS_STATE, this.changeTagSiblingsState.bind(this));
+        this.ES.bind(this.ES.CHANGE_TAGS_LOAD_BUTTON_STATE, this.changeTagSiblingsState.bind(this));
     }
 
-    changeTagSiblingsState(tag) {
+    changeTagSiblingsState(event_data) {
+        if (event_data.hide_list) {
+            let state = this.getState()
+            state.tags = new Map();
+            this.setState(state);
+            return;
+        }
         //if (this._state.tags.has(tag)) {
-        this.fetchTagSiblings(tag);
+        this.fetchTagSiblings(event_data.tag);
         //}
     }
 

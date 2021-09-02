@@ -44,16 +44,22 @@ export default class BiGramsStorage {
     }
 
     bindEvents() {
-        this.ES.bind(this.ES.CHANGE_TAG_SIBLINGS_STATE, this.changeTagSiblingsState.bind(this));
+        this.ES.bind(this.ES.CHANGE_TAGS_LOAD_BUTTON_STATE, this.changeTagBigramsState.bind(this));
     }
 
-    changeTagSiblingsState(tag) {
-        if (this._state.tags.has(tag)) {
-            this.fetchTagSiblings(tag);
+    changeTagBigramsState(event_Data) {
+        if (event_data.hide_list) {
+            let state = this.getState()
+            state.tags = new Map();
+            this.setState(state);
+            return;
+        }
+        if (this._state.tags.has(event_data.tag)) {
+            this.fetchTagBigrams(event_datatag);
         }
     }
 
-    fetchTagSiblings(tag) {
+    fetchTagBigrams(tag) {
         if (tag) {
             rsstag_utils.fetchJSON(
                 this.urls.get_tag_siblings + '/' + encodeURIComponent(tag),

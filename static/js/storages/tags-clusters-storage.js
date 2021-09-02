@@ -23,14 +23,20 @@ export default class TagsClustersStorage {
     }
 
     bindEvents() {
-        this.ES.bind(this.ES.CHANGE_TAG_SIBLINGS_STATE, this.changeTagSiblingsState.bind(this));
+        this.ES.bind(this.ES.CHANGE_TAGS_LOAD_BUTTON_STATE, this.changeTagClustersState.bind(this));
     }
 
-    changeTagSiblingsState(tag) {
-        this.fetchTagSiblings(tag);
+    changeTagClustersState(event_data) {
+        if (event_data.hide_list) {
+            let state = this.getState()
+            state.clusters = new Map();
+            this.setState(state);
+            return;
+        }
+        this.fetchTagClusters(event_data.tag);
     }
 
-    fetchTagSiblings(tag) {
+    fetchTagClusters(tag) {
         if (tag) {
             rsstag_utils.fetchJSON(
                 this.urls.get_tag_siblings + '/' + encodeURIComponent(tag),

@@ -167,7 +167,7 @@ window.onload = () => {
             document.getElementById('similar_w2v_tags')
         );
         ReactDOM.render(
-            <TagButton ES={similar_w2v_evsys} title="Load Word2Vec" tag={tag} />,
+            <TagButton ES={similar_w2v_evsys} title="Word2Vec" tag={tag} />,
             document.getElementById('load_similar_w2v')
         );
         similar_w2v_storage.start();
@@ -179,7 +179,7 @@ window.onload = () => {
             document.getElementById('siblings_tags')
         );
         ReactDOM.render(
-            <TagButton ES={siblings_evsys} title="Load siblings" tag={tag} />,
+            <TagButton ES={siblings_evsys} title="siblings" tag={tag} />,
             document.getElementById('load_siblings')
         );
         siblings_storage.start();
@@ -191,7 +191,7 @@ window.onload = () => {
             document.getElementById('tag_clusters')
         );
         ReactDOM.render(
-            <TagButton ES={clusters_evsys} title="Load clusters" tag={tag} />,
+            <TagButton ES={clusters_evsys} title="clusters" tag={tag} />,
             document.getElementById('load_clusters')
         );
         clusters_storage.start();
@@ -203,7 +203,7 @@ window.onload = () => {
             document.getElementById('bi_grams')
         );
         ReactDOM.render(
-            <TagButton ES={bi_grams_evsys} title="Load bi-grams" tag={tag} />,
+            <TagButton ES={bi_grams_evsys} title="bi-grams" tag={tag} />,
             document.getElementById('load_bi_grams')
         );
         bi_grams_storage.start();
@@ -215,7 +215,7 @@ window.onload = () => {
             document.getElementById('pmi')
         );
         ReactDOM.render(
-            <TagButton ES={pmi_evsys} title="Load PMI" tag={tag} />,
+            <TagButton ES={pmi_evsys} title="PMI" tag={tag} />,
             document.getElementById('load_pmi')
         );
         pmi_storage.start();
@@ -227,7 +227,7 @@ window.onload = () => {
             document.getElementById('tag_topics')
         );
         ReactDOM.render(
-            <TagButton ES={tag_topics_evsys} title="Load topics" tag={tag} />,
+            <TagButton ES={tag_topics_evsys} title="topics" tag={tag} />,
             document.getElementById('load_topics')
         );
         tag_topics_storage.start();
@@ -260,7 +260,7 @@ window.onload = () => {
             document.getElementById('tag_entities')
         );
         ReactDOM.render(
-            <TagButton ES={tag_entities_evsys} title="Load entities" tag={tag} />,
+            <TagButton ES={tag_entities_evsys} title="entities" tag={tag} />,
             document.getElementById('load_entities')
         );
         tag_entities_storage.start();
@@ -272,7 +272,7 @@ window.onload = () => {
             document.getElementById('tag_tfidf')
         );
         ReactDOM.render(
-            <TagButton ES={tag_tfidf_evsys} title="Load TFIDF" tag={tag} />,
+            <TagButton ES={tag_tfidf_evsys} title="TFIDF" tag={tag} />,
             document.getElementById('load_tfidf')
         );
         tag_tfidf_storage.start();

@@ -18,7 +18,7 @@ export default class EventsSystem {
 
         this.TAGS_ERROR_MESSAGE = 'tags_error_message';
         this.TAGS_UPDATED = 'tags_updated';
-        this.CHANGE_TAG_SIBLINGS_STATE = 'change_tag_siblings_state';
+        this.CHANGE_TAGS_LOAD_BUTTON_STATE = 'change_tags_load_button_state';
 
         this.CHANGE_PROGRESSBAR = 'change_pprogressbar';
         this.PROGRESSBAR_ANIMATION_END = 'progressbar_animation_end';
