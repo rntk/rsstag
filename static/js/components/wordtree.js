@@ -9,24 +9,26 @@ export default class WordTree {
     }
 
     updateWordTree(data) {
-        google.charts.load('current', {packages:['wordtree']});
-        google.charts.setOnLoadCallback(() => {
-            let texts = [];
-            for (let txt of data.texts) {
-                texts.push([txt]);
+        if (!data.texts.length) {
+            this._container.innerHTML = "<p>No texts</p>";
+            return;
+        }
+        this._container.innerHTML = "";
+        let texts = [];
+        for (let txt of data.texts) {
+            texts.push([txt]);
+        }
+        let dt = google.visualization.arrayToDataTable(texts);
+        let chart = new google.visualization.WordTree(this._container);
+        let options = {
+            wordtree: {
+                format: 'implicit',
+                word: data.tag,
+                type: "double",
+                backgroundColor: "#d7d7af"
             }
-            let dt = google.visualization.arrayToDataTable(texts);
-            let chart = new google.visualization.WordTree(this._container);
-            let options = {
-                wordtree: {
-                    format: 'implicit',
-                    word: data.tag,
-                    type: "double",
-                    backgroundColor: "#d7d7af"
-                }
-            };
-            chart.draw(dt, options);
-        });
+        };
+        chart.draw(dt, options);
     }
 
     bindEvents() {
@@ -34,6 +36,7 @@ export default class WordTree {
     }
 
     start() {
+        google.charts.load('current', {packages:['wordtree']});
         this.bindEvents();
     }
 };

@@ -255,6 +255,10 @@ window.onload = () => {
         const wordtree_evsys = new EventsSystem();
         const wordtree = new WordTree("#wordtree", wordtree_evsys);
         const wordtree_storage = new WordTreeStorage(tag.tag, wordtree_evsys);
+        ReactDOM.render(
+            <TagButton ES={wordtree_evsys} title="wordtree" tag={tag} />,
+            document.getElementById('load_wordtree')
+        );
         wordtree.start();
         wordtree_storage.start();
         ReactDOM.render(

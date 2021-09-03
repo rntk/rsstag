@@ -11,10 +11,21 @@ export default class WordTreeStorage {
         this.urls = {
             get_wordtree_texts: '/wordtree-texts'
         }
+        this.changeState = this.changeState.bind(this);
     }
 
     getState() {
         return (Object.assign({}, this._state));
+    }
+
+    changeState(event_data) {
+        if (event_data.hide_list) {
+            let state = this.getState()
+            state.texts = [];
+            this.setState(state);
+            return;
+        }
+        this.fetchWordTreeTexts(event_data.tag);
     }
 
     setState(state) {
@@ -48,8 +59,11 @@ export default class WordTreeStorage {
         this.ES.trigger(this.TAGS_ERROR_MESSAGE, msg);
     }
 
+    bindEvents() {
+        this.ES.bind(this.ES.CHANGE_TAGS_LOAD_BUTTON_STATE, this.changeState);
+    }
+
     start() {
-        let state = this.getState();
-        this.fetchWordTreeTexts(state.tag);
+        this.bindEvents();
     }
 };
