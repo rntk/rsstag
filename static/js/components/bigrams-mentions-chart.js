@@ -11,6 +11,11 @@ export default class BiGramsMentionsChart {
     }
 
     updateMentions(data) {
+        if (!data.bigrams) {
+            this._container.innerHTML = "<p>No mentions</p>";
+            return;
+        }
+        this._container.innerHTML = "";
         let skip_bi = new Set();
         let sums = new Set();
         for (let bi in data.bigrams) {
@@ -127,10 +132,8 @@ export default class BiGramsMentionsChart {
             labels: labels,
             datasets: datasets
         };
-        let ctx = this._container.querySelector("canvas")
-        if (!ctx) {
-            return;
-        }
+        let ctx = document.createElement("canvas");
+        this._container.appendChild(ctx);
         let ch = new Chart(ctx.getContext("2d"), {
             type: "bar",
             data: dtset,

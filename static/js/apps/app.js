@@ -242,10 +242,13 @@ window.onload = () => {
         tag_mentions_chart.start();
         tag_mentions_storage.start();
 
-
         const bigrams_mentions_evsys = new EventsSystem();
         const bigrams_mentions_chart = new BiGramsMentionsChart("#bigrams_mentions_chart", bigrams_mentions_evsys);
         const bigrams_mentions_storage = new BiGramsMentionsStorage(tag.tag, bigrams_mentions_evsys);
+        ReactDOM.render(
+            <TagButton ES={bigrams_mentions_evsys} title="mentions" tag={tag} />,
+            document.getElementById('load_bigrams_mentions')
+        );
         bigrams_mentions_chart.start();
         bigrams_mentions_storage.start();
 
