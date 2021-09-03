@@ -9,6 +9,10 @@ export default class TagMentionsChart {
     }
 
     updateMentions(data) {
+        if (!data.dates.length) {
+            this.hideChart();
+            return;
+        }
         let mp = {};
         let current = 0;
         let aggr = 3600 * 24 * 1000;
@@ -61,14 +65,17 @@ export default class TagMentionsChart {
                 data: values
             }]
         }
-        let ctx = this._container.querySelector("canvas")
-        if (!ctx) {
-            return;
-        }
+        this._container.innerHTML = "";
+        let ctx = document.createElement("canvas");
+        this._container.appendChild(ctx);
         let ch = new Chart(ctx.getContext("2d"), {
             type: "bar",
             data: dtset
         });
+    }
+
+    hideChart() {
+        this._container.innerHTML = "<p>No mentions</p>";
     }
 
     bindEvents() {

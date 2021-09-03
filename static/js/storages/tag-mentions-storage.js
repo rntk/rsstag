@@ -11,6 +11,7 @@ export default class TagMetionsStorage {
         this.urls = {
             get_tag_dates: '/tag-dates'
         }
+        this.changeMentionsState = this.changeMentionsState.bind(this);
     }
 
     getState() {
@@ -20,6 +21,16 @@ export default class TagMetionsStorage {
     setState(state) {
         this._state = state;
         this.ES.trigger(this.ES.TAG_MENTIONS_UPDATED, this.getState());
+    }
+
+    changeMentionsState(event_data) {
+        if (event_data.hide_list) {
+            let state = this.getState()
+            state.dates = [];
+            this.setState(state);
+            return;
+        }
+        this.fetchTagDates(event_data.tag);
     }
 
     fetchTagDates(tag) {
@@ -48,8 +59,11 @@ export default class TagMetionsStorage {
         this.ES.trigger(this.TAGS_ERROR_MESSAGE, msg);
     }
 
+    bindEvents() {
+        this.ES.bind(this.ES.CHANGE_TAGS_LOAD_BUTTON_STATE, this.changeMentionsState);
+    }
+
     start() {
-        let state = this.getState();
-        this.fetchTagDates(state.tag);
+        this.bindEvents();
     }
 };

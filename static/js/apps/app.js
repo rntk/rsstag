@@ -232,11 +232,16 @@ window.onload = () => {
         );
         tag_topics_storage.start();
 
-        const tag_mentionss_evsys = new EventsSystem();
-        const tag_mentions_chart = new TagMentionsChart("#mentions_chart", tag_mentionss_evsys);
-        const tag_mentions_storage = new TagMentionsStorage(tag.tag, tag_mentionss_evsys);
+        const tag_mentions_evsys = new EventsSystem();
+        const tag_mentions_chart = new TagMentionsChart("#mentions_chart", tag_mentions_evsys);
+        const tag_mentions_storage = new TagMentionsStorage(tag.tag, tag_mentions_evsys);
+        ReactDOM.render(
+            <TagButton ES={tag_mentions_evsys} title="mentions" tag={tag} />,
+            document.getElementById('load_mentions')
+        );
         tag_mentions_chart.start();
         tag_mentions_storage.start();
+
 
         const bigrams_mentions_evsys = new EventsSystem();
         const bigrams_mentions_chart = new BiGramsMentionsChart("#bigrams_mentions_chart", bigrams_mentions_evsys);
