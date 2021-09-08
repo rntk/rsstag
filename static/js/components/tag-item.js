@@ -25,9 +25,10 @@ export default class TagItem extends React.Component{
         let sub_tags = [];
         if (hide_tag_info_link) {
             let subs = this.state.tag.tag.split(" ");
-            for (let tag of subs) {
+            for (let i = 0; i < subs.length; i++) {
+                const tag = subs[i];
                 sub_tags.push(
-                    <a href={'/tag-info/' + encodeURIComponent(tag)} key={`st_${this.state.tag.tag}_${tag}`} title={tag} className="cloud_sub_item_title">
+                    <a href={'/tag-info/' + encodeURIComponent(tag)} key={`st_${this.state.tag.tag}_${tag}_${i}`} title={tag} className="cloud_sub_item_title">
                         ...
                     </a>
                 )
