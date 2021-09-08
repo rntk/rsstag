@@ -18,17 +18,22 @@ export default class WordTree {
         for (let txt of data.texts) {
             texts.push([txt]);
         }
+        let tags = data.tag.split(" ");
         let dt = google.visualization.arrayToDataTable(texts);
-        let chart = new google.visualization.WordTree(this._container);
-        let options = {
-            wordtree: {
-                format: 'implicit',
-                word: data.tag,
-                type: "double",
-                backgroundColor: "#d7d7af"
-            }
-        };
-        chart.draw(dt, options);
+        for (const tag of tags) {
+            let container = document.createElement("div");
+            this._container.appendChild(container);
+            let chart = new google.visualization.WordTree(container);
+            let options = {
+                wordtree: {
+                    format: 'implicit',
+                    word: tag,
+                    type: "double",
+                    backgroundColor: "#d7d7af"
+                }
+            };
+            chart.draw(dt, options);
+        }
     }
 
     bindEvents() {

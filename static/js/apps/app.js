@@ -2,7 +2,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
 import PostsStorage from '../storages/posts-storage.js';
-import PostsList from '../components/posts-list.js';
+import {PostTabs} from '../components/post-tabs.js';
 import EventsSystem from '../libs/event_system.js';
 import SettingsMenu from '../components/settings-menu.js';
 import ReadAllButton from '../components/readall-button.js';
@@ -30,13 +30,13 @@ import TagMentionsStorage from '../storages/tag-mentions-storage.js';
 import TagMentionsChart from '../components/tag-mentions-chart.js';
 import WordTreeStorage from '../storages/wordtree-storage.js';
 import WordTree from '../components/wordtree.js';
-import PostsWordTree from '../components/posts-wordtree.js';
-import PostsWordsCloud from '../components/posts-wordscloud.js';
+//import PostsWordTree from '../components/posts-wordtree.js';
+//import PostsWordsCloud from '../components/posts-wordscloud.js';
 import TagContexts from '../components/tag-contexts.js';
 import BiGramsMentionsStorage from '../storages/bigrams-mentions-storage.js';
 import BiGramsMentionsChart from '../components/bigrams-mentions-chart.js';
-import TopicsTextsStorage from '../storages/topics-texts-storage.js';
-import TopicsTexts from '../components/topics-texts.js';
+//import TopicsTextsStorage from '../storages/topics-texts-storage.js';
+//import TopicsTexts from '../components/topics-texts.js';
 import TagsClustersStorage from '../storages/tags-clusters-storage.js';
 import TagsClustersList from '../components/tags-clusters.js';
 
@@ -137,7 +137,7 @@ window.onload = () => {
         /^\/entity\/.*/.test(path) || /^\/posts\/.*/.test(path)) {
         const posts_storage = new PostsStorage(window.EVSYS);
         ReactDOM.render(
-            <PostsList ES={window.EVSYS} />,
+            <PostTabs ES={window.EVSYS} />,
             document.getElementById('posts_page')
         );
         ReactDOM.render(
@@ -152,10 +152,6 @@ window.onload = () => {
             <PostsNumbers ES={window.EVSYS} />,
             document.getElementById('posts_stat')
         );
-        const posts_wordtree = new PostsWordTree("#posts_wordtree", window.EVSYS)
-        posts_wordtree.start();
-        const posts_wordscloud = new PostsWordsCloud("#posts_wordscloud_image", window.EVSYS)
-        posts_wordscloud.start();
         posts_storage.start();
     } else if (/\/tag-info\/.*/.test(path)) {
         let tag = window.initial_tag;

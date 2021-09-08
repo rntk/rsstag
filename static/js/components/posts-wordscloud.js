@@ -6,19 +6,14 @@ export default class PostsWordsCloud {
     constructor(container_id, event_system) {
         this.ES = event_system;
         this._container = document.querySelector(container_id);
-        this._renderred = false;
 
         this.updateWordsCloud = this.updateWordsCloud.bind(this);
     }
 
     updateWordsCloud(data) {
-        if (this._renderred) {
-            return;
-        }
         if (!data.posts) {
             return;
         }
-        this._renderred = true;
         let all_words = {};
         let stopw = stopwords();
         for (let item of data.posts) {
@@ -79,9 +74,7 @@ export default class PostsWordsCloud {
                 })
                 .text((d) => { return d.text; });
         };
-        setTimeout(() => {
-            cld.size([1024, 1024]).fontSize(d => d.size).words(data_words).on("end", draw).start();
-        }, 1000);
+        cld.size([1024, 1024]).fontSize(d => d.size).words(data_words).on("end", draw).start();
     }
 
     bindEvents() {

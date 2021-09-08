@@ -607,3 +607,21 @@ h3 {
     vertical-align: middle;
     display: block;
 }
+
+.post_tab_lists {
+    padding: 0;
+    margin: 0
+}
+
+.post_tab {
+    display: inline-block;
+    list-style: none;
+    padding: 0.5em;
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+.post_tab_active {
+    font-weight: bold;
+    text-decoration: none;
+}
