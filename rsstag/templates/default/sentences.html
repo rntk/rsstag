@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>{{group}} | {{tag}}</title>
+{% include "head-data.html" %}
+</head>
+<body>
+{% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
+
+<div id="global_tools">
+    <div class="left_half">
+        <div id="link_on_root" class="global_tools_button">
+            <a href="/">main</a>
+        </div>
+        <div id="help_button" class="global_tools_button">
+            <a href="#">help</a>
+        </div>
+    </div>
+    <div class="right_half">
+        {{ g_status.global_status() }}
+        {{ menu.settings_menu() }}
+    </div>
+</div>
+<div class="page">
+    <div id="posts_page">
+        <h4>{{tag}}</h4>
+        <h5>(
+            {% for w in words %}
+                {{w}},
+            {% endfor %}
+        )</h5>
+        {% if sentences %}
+            <div>
+                {% for p in sentences %}
+                    <div class="post" data-feed="{{p['feed_id']}}" id="p{{p['pid']}}" data-pos="{{p['pid']}}"><a name="p{{p['pid']}}"></a>
+                        <div class="post_content">
+                            {{p["sentence"]}}&nbsp
+                            <a href="/posts/{{p['pid']}}">...</a>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p>No unread posts</p>
+        {% endif %}
+    </div>
+</div>
+</body>
+</html>

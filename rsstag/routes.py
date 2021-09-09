@@ -36,6 +36,11 @@ class RSSTagRoutes:
                 'endpoint': 'on_get_posts_with_tags',
                 'methods': ['GET']
             },
+            {
+                'url': '/sentences/with/tags/<string:s_tags>',
+                'endpoint': 'on_get_sentences_with_tags',
+                'methods': ['GET']
+            },
             {'url': '/posts/<string:pids>', 'endpoint': 'on_posts_get', 'methods': ['GET']},
             {'url': '/tag-siblings/<string:tag>', 'endpoint': 'on_get_tag_siblings', 'methods': ['GET']},
             {'url': '/tag-similar/<string:model>/<string:tag>', 'endpoint': 'on_get_tag_similar', 'methods': ['GET']},

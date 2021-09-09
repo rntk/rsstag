@@ -34,6 +34,7 @@ export default class TagItem extends React.Component{
                 )
             }
         }
+        let sents_link = <a href={"/sentences/with/tags/" + encodeURIComponent(this.state.tag.tag)} className="tag_sentences_link">sents</a>;
 
         return (
             <div style={style}>
@@ -43,9 +44,11 @@ export default class TagItem extends React.Component{
                         {this.state.tag.tag}
                     </a> ({this.state.tag.count})<br />
                     {sub_tags}
+                    {(sub_tags.length)? sents_link: ""}
                     {(sub_tags.length)? <br />: ""}
                     ({this.state.tag.words.join(', ')})<br />
-                    {(hide_tag_info_link)? '': <a href={'/tag-info/' + this.state.tag.tag} className="get_tag_siblings">...</a>}
+                    {(hide_tag_info_link)? "": <a href={'/tag-info/' + this.state.tag.tag} className="get_tag_siblings">...</a>}
+                    {(hide_tag_info_link)? "": sents_link}
                 </li>
             </div>
         )

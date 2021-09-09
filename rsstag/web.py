@@ -39,6 +39,8 @@ from nltk.corpus import stopwords
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import DBSCAN
 
+from razdel import sentenize
+
 class RSSTagApplication(object):
     request = None
     response = None
@@ -2293,3 +2295,66 @@ class RSSTagApplication(object):
 
         self.response = Response(json.dumps(result), mimetype='application/json')
         self.response.status_code = code
+
+    def on_get_sentences_with_tags(self, s_tags: str):
+        if not s_tags:
+            self.on_error(NotFound())
+            return
+
+        q_tags = s_tags.split(" ")
+        if self.user['settings']['only_unread']:
+            only_unread = self.user['settings']['only_unread']
+        else:
+            only_unread = None
+
+        db_posts = self.posts.get_by_tags(self.user['sid'], q_tags, only_unread=only_unread)
+        db_tags = self.tags.get_by_tags(self.user['sid'], q_tags, only_unread=only_unread)
+        if (db_posts is None) or (db_tags is None):
+            self.on_error(InternalServerError())
+            return
+
+        words = set()
+        for t in db_tags:
+            words.update(t["words"])
+        by_feed = {}
+        sentences = []
+        html_c = HTMLCleaner()
+        w_cond = "|".join(words)
+        w_reg = re.compile(".*\W({})\W.*".format(w_cond), re.I)
+        for post in db_posts:
+            txt = gzip.decompress(post["content"]["content"]).decode('utf-8', 'replace')
+            if post["content"]["title"]:
+                txt = post["content"]["title"] + ". " + txt
+            html_c.purge()
+            html_c.feed(txt)
+            txt = " ".join(html_c.get_content())
+
+            if post['feed_id'] not in by_feed:
+                feed = self.feeds.get_by_feed_id(self.user['sid'], post['feed_id'])
+                if feed:
+                    by_feed[post['feed_id']] = feed
+            sents = []
+            for snt in sentenize(txt):
+                if w_reg.match(snt.text) is None:
+                    continue
+                sents.append(snt.text)
+            for s in sents:
+                sentences.append({
+                    'sentence': s,
+                    'pid': post['pid'],
+                    'category_title': by_feed[post['feed_id']]['category_title'],
+                    'feed_title': by_feed[post['feed_id']]['title'],
+                    'favicon': by_feed[post['feed_id']]['favicon']
+                })
+        page = self.template_env.get_template('sentences.html')
+        self.response = Response(
+            page.render(
+                sentences=sentences,
+                tag=s_tags,
+                group="tag",
+                words=list(words),
+                user_settings=self.user['settings'],
+                provider=self.user['provider']
+            ),
+            mimetype='text/html'
+        )
