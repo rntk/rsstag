@@ -2328,7 +2328,6 @@ class RSSTagApplication(object):
             html_c.purge()
             html_c.feed(txt)
             txt = " ".join(html_c.get_content())
-
             if post['feed_id'] not in by_feed:
                 feed = self.feeds.get_by_feed_id(self.user['sid'], post['feed_id'])
                 if feed:
@@ -2338,14 +2337,13 @@ class RSSTagApplication(object):
                 if w_reg.match(snt.text) is None:
                     continue
                 sents.append(snt.text)
-            for s in sents:
-                sentences.append({
-                    'sentence': s,
-                    'pid': post['pid'],
-                    'category_title': by_feed[post['feed_id']]['category_title'],
-                    'feed_title': by_feed[post['feed_id']]['title'],
-                    'favicon': by_feed[post['feed_id']]['favicon']
-                })
+            sentences.append({
+                'sentence': sents,
+                'pid': post['pid'],
+                'category_title': by_feed[post['feed_id']]['category_title'],
+                'feed_title': by_feed[post['feed_id']]['title'],
+                'favicon': by_feed[post['feed_id']]['favicon']
+            })
         page = self.template_env.get_template('sentences.html')
         self.response = Response(
             page.render(

@@ -34,7 +34,12 @@
                 {% for p in sentences %}
                     <div class="post" data-feed="{{p['feed_id']}}" id="p{{p['pid']}}" data-pos="{{p['pid']}}"><a name="p{{p['pid']}}"></a>
                         <div class="post_content">
-                            {{p["sentence"]}}&nbsp
+                            <ul>
+                            {% for s in p["sentence"] %}
+                                <li>{{s}}</li>
+                            {% endfor %}
+                            </ul>
+                            &nbsp
                             <a href="/posts/{{p['pid']}}">...</a>
                         </div>
                     </div>
