@@ -2320,7 +2320,7 @@ class RSSTagApplication(object):
         sentences = []
         html_c = HTMLCleaner()
         w_cond = "|".join(words)
-        w_reg = re.compile(".*\W({})\W.*".format(w_cond), re.I)
+        w_reg = re.compile(".*({}).*".format(w_cond), re.I)
         for post in db_posts:
             txt = gzip.decompress(post["content"]["content"]).decode('utf-8', 'replace')
             if post["content"]["title"]:
@@ -2333,16 +2333,30 @@ class RSSTagApplication(object):
                 if feed:
                     by_feed[post['feed_id']] = feed
             sents = []
-            for snt in sentenize(txt):
-                if w_reg.match(snt.text) is None:
+            sz_sents = list(sentenize(txt))
+            for i, snt in enumerate(sz_sents):
+                t = snt.text.strip()
+                if not t:
                     continue
-                sents.append(snt.text)
+                if w_reg.match(t) is None:
+                    continue
+                if len(t) < 200:
+                    pos = i - 1
+                    if pos >= 0:
+                        t = sz_sents[pos].text + " " + t
+                    pos = i + 1
+                    if pos < len(sz_sents):
+                        t += " " + sz_sents[pos].text
+                sents.append(t)
+            if not sents:
+                continue
             sentences.append({
                 'sentence': sents,
                 'pid': post['pid'],
                 'category_title': by_feed[post['feed_id']]['category_title'],
                 'feed_title': by_feed[post['feed_id']]['title'],
-                'favicon': by_feed[post['feed_id']]['favicon']
+                'favicon': by_feed[post['feed_id']]['favicon'],
+                "date": post["date"]
             })
         page = self.template_env.get_template('sentences.html')
         self.response = Response(

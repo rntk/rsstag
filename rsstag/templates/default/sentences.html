@@ -33,6 +33,9 @@
             <div>
                 {% for p in sentences %}
                     <div class="post" data-feed="{{p['feed_id']}}" id="p{{p['pid']}}" data-pos="{{p['pid']}}"><a name="p{{p['pid']}}"></a>
+                        <div class="post_meta">{{p['category_title']}} | {#<img src="{{p['favicon']}}" class="favicon" />#}<b class="post_feed_title">
+                            {{p['feed_title']}}</b> | {{p['date']}}
+                        </div>
                         <div class="post_content">
                             <ul>
                             {% for s in p["sentence"] %}
