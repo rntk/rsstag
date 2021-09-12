@@ -16,7 +16,8 @@ class RssTagUsers:
             'tags_on_page': 100,
             'posts_on_page': 30,
             'hot_tags': False,
-            'similar_posts': True
+            'similar_posts': True,
+            "context_n": 5
         }
 
     def prepare(self) -> None:

@@ -118,7 +118,8 @@ export default class PostsItem extends React.Component{
                     <div>
                         <a href={post.links.c_url}>{post.links.c_title}</a>&nbsp;| &nbsp;
                         <a href={post.links.f_url}>{post.links.f_title}</a>&nbsp;| &nbsp;
-                        <a href={post.links.p_url}>To site</a><br />
+                        <a href={post.links.p_url}>To site</a>&nbsp;| &nbsp;
+                        <a href={post.links.ctx_url}>With context</a><br />
                         {tags}
                     </div>
                 );

@@ -1464,6 +1464,10 @@ class RSSTagApplication(object):
                         'f_url': feed['local_url'],
                         'f_title': feed['title'],
                         'p_url': current_post['url'],
+                        "ctx_url": self.routes.getUrlByEndpoint(
+                            endpoint='on_posts_get',
+                            params={"pids": post_id, "context": int(self.user["settings"]["context_n"])}
+                        ),
                         'tags': []
                     }
                 }
@@ -2160,12 +2164,31 @@ class RSSTagApplication(object):
         self.response.status_code = code
 
     def on_posts_get(self, pids: str):
+        context_n = 0
+        ctx_n = None
+        if "context" in self.request.args:
+            ctx_n = self.request.args["context"]
+        if ctx_n:
+            context_n = int(ctx_n)
         projection = {'_id': False, 'content.content': False}
         if self.user['settings']['only_unread']:
             only_unread = self.user['settings']['only_unread']
         else:
             only_unread = None
         pids_i = [int(p) for p in pids.split("_")]
+        c_pids = set()
+        if context_n > 0:
+            only_unread = None
+            for pid_i in pids_i:
+                for i in range(context_n):
+                    i += 1
+                    pd = pid_i - i
+                    if pd >= 0:
+                        c_pids.add(pd)
+                    c_pids.add(pid_i + i)
+        if c_pids:
+            pids_i.extend(c_pids)
+
         db_posts = self.posts.get_by_pids(self.user['sid'], pids_i, projection)
         if db_posts is not None:
             if self.user['settings']['similar_posts']:
@@ -2194,6 +2217,8 @@ class RSSTagApplication(object):
                             'favicon': by_feed[post['feed_id']]['favicon']
                         })
             page = self.template_env.get_template('posts.html')
+            if context_n:
+                posts.sort(key=lambda p: p["pos"], reverse=True)
             self.response = Response(
                 page.render(
                     posts=posts,
