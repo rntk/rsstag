@@ -42,6 +42,7 @@ class RSSTagRoutes:
                 'methods': ['GET']
             },
             {'url': '/posts/<string:pids>', 'endpoint': 'on_posts_get', 'methods': ['GET']},
+            {'url': '/posts/cluster/<int:cluster>', 'endpoint': 'on_cluster_get', 'methods': ['GET']},
             {'url': '/tag-siblings/<string:tag>', 'endpoint': 'on_get_tag_siblings', 'methods': ['GET']},
             {'url': '/tag-similar/<string:model>/<string:tag>', 'endpoint': 'on_get_tag_similar', 'methods': ['GET']},
             {'url': '/tag-bi-grams/<string:tag>', 'endpoint': 'on_get_tag_bi_grams', 'methods': ['GET']},
