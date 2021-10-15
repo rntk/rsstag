@@ -10,12 +10,7 @@ export default class BiGramsMentionsChart {
         this.updateMentions = this.updateMentions.bind(this);
     }
 
-    updateMentions(data) {
-        if (!data.bigrams) {
-            this._container.innerHTML = "<p>No mentions</p>";
-            return;
-        }
-        this._container.innerHTML = "";
+    getDates(data, skip) {
         let skip_bi = new Set();
         let sums = new Set();
         for (let bi in data.bigrams) {
@@ -28,7 +23,10 @@ export default class BiGramsMentionsChart {
         sums = Array.from(sums);
         sums.sort();
         let stopw = stopwords();
-        let sum_pos = Math.max(sums.length - 5, 0);
+        let sum_pos = Math.max(sums.length - 5);
+        if (!skip) {
+            sum_pos = 0;
+        }
         let min_n = sums[sum_pos];
         if (min_n === 1) {
             min_n++;
@@ -55,6 +53,20 @@ export default class BiGramsMentionsChart {
             for (let d in data.bigrams[bi]) {
                 dates.add(d);
             }
+        }
+
+        return [dates, skip_bi];
+    }
+
+    updateMentions(data) {
+        if (!data.bigrams) {
+            this._container.innerHTML = "<p>No mentions</p>";
+            return;
+        }
+        this._container.innerHTML = "";
+        let [dates, skip_bi] = this.getDates(data, true);
+        if (dates.size === 0) {
+            [dates, skip_bi] = this.getDates(data, false);
         }
         dates = Array.from(dates);
         dates.sort();
