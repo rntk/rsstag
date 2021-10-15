@@ -1,0 +1,37 @@
+﻿<!DOCTYPE html />
+<html>
+<head>
+<title>Clusters</title>
+{% include "head-data.html" %}
+</head>
+<body>
+{% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
+
+<div id="global_tools">
+    <div class="left_half">
+        <div id="link_on_root" class="global_tools_button">
+            <a href="/">main</a>
+        </div>
+        <div id="help_button" class="global_tools_button">
+            <a href="#">help</a>
+        </div>
+    </div>
+    <div class="right_half">
+        {{ g_status.global_status() }}
+        {{ menu.settings_menu() }}
+    </div>
+</div>
+<div class="page">
+    <div id="posts_page">
+        {% if links %}
+            {% for cl in links %}
+            <a href="{{cl[1]}}" class="cluster_link">{{cl[0]}}&nbsp;({{cl[2]}})</a>
+            {% endfor %}
+        {% else %}
+            <p>No clusters</p>
+        {% endif %}
+    </div>
+</div>
+<!--div id="show_tags"><a href="#tags">Show "level up"</a><a name="tags"></div-->
+<div id="progressbar"></div></body>
+</html>

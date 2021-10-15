@@ -748,4 +748,9 @@ h3.post_title {
   padding-left: 0.5em;
 }
 
+.cluster_link {
+  display: inline-block;
+  margin: 0.4em;
+}
+
 /*# sourceMappingURL=style.css.map */

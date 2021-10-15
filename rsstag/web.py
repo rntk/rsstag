@@ -2445,3 +2445,40 @@ class RSSTagApplication(object):
             self.on_error(InternalServerError())
         else:
             self.on_error(NotFound())
+
+    def on_clusters_get(self):
+        projection = {'_id': False, 'clusters': True}
+        if self.user['settings']['only_unread']:
+            only_unread = self.user['settings']['only_unread']
+        else:
+            only_unread = None
+        db_posts = self.posts.get_all(self.user['sid'], only_unread, projection)
+        links = {}
+        if db_posts:
+            for post in db_posts:
+                if "clusters" not in post:
+                    continue
+
+                for cl in post["clusters"]:
+                    if cl not in links:
+                        links[cl] = {
+                            "l": self.routes.getUrlByEndpoint(endpoint='on_cluster_get', params={"cluster": cl}),
+                            "n": 0
+                        }
+                    links[cl]["n"] += 1
+
+        elif db_posts is None:
+            self.on_error(InternalServerError())
+            return
+
+        lnks = [(cl, links[cl]["l"], links[cl]["n"]) for cl in links]
+        lnks.sort(key=lambda x: x[2], reverse=True)
+        page = self.template_env.get_template('clusters.html')
+        self.response = Response(
+            page.render(
+                links=lnks,
+                user_settings=self.user['settings'],
+                provider=self.user['provider']
+            ),
+            mimetype='text/html'
+        )
