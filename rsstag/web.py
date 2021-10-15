@@ -1869,7 +1869,7 @@ class RSSTagApplication(object):
         self.response = Response(json.dumps(result), mimetype='application/json')
         self.response.status_code = code
 
-    def on_themes_get(self, page_number: int=1) -> None:
+    def on_topics_get(self, page_number: int=1) -> None:
         if self.user:
             all_tags = []
             cursor = self.posts.get_all(self.user["sid"], self.user['settings']['only_unread'], {"lemmas": True})
@@ -1897,7 +1897,7 @@ class RSSTagApplication(object):
             elif page_number > page_count:
                 p_number = page_count
                 self.response = redirect(
-                    self.routes.getUrlByEndpoint(endpoint='on_themes_get', params={'page_number': p_number})
+                    self.routes.getUrlByEndpoint(endpoint='on_topics_get', params={'page_number': p_number})
                 )
                 self.user['page'] = p_number
             else:
@@ -1910,7 +1910,7 @@ class RSSTagApplication(object):
                 p_number,
                 page_count,
                 self.user['settings']['tags_on_page'],
-                'on_themes_get'
+                'on_topics_get'
             )
             db_letters = self.letters.get(self.user['sid'], make_sort=True)
             if db_letters:
