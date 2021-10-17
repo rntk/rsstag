@@ -385,9 +385,7 @@ class RSSTagApplication(object):
             except Exception as e:
                 logging.error('Can`t create refresh task for user %s. Info: %s', self.user['sid'], e)
 
-            return redirect(self.routes.getUrlByEndpoint(endpoint='on_root_get'))
-        else:
-            return redirect(self.routes.getUrlByEndpoint(endpoint='on_root_get'))
+        return redirect(self.routes.getUrlByEndpoint(endpoint="on_root_get"))
 
     def on_status_get(self, request: Request) -> Response:
         if self.user:
@@ -407,10 +405,12 @@ class RSSTagApplication(object):
                 'is_ok': False,
                 'msgs': ['Looks like you are not logged in']
             }}
-        response = Response(json.dumps(result), mimetype='text/html')
-        response.headers['Pragma'] = 'no-cache'
 
-        return response
+        return Response(
+            json.dumps(result),
+            mimetype="text/html",
+            headers={"Pragma": "no-cache"}
+        )
 
     def on_settings_post(self, request: Request) -> Response:
         try:
@@ -442,20 +442,19 @@ class RSSTagApplication(object):
             result = {'error': 'Something wrong with settings'}
             code = 400
 
-        response = Response(json.dumps(result), mimetype='application/json')
-        response.status_code = code
-
-        return response
-
-    def on_error(self, request: Request, e) -> Response:
-        page = self.template_env.get_template('error.html')
-        response = Response(
-            page.render(title='ERROR', body='Error: {0}, {1}'.format(e.code, e.description)),
-            mimetype='text/html'
+        return Response(
+            json.dumps(result),
+            mimetype="application/json",
+            status=code
         )
-        response.status_code = e.code
 
-        return response
+    def on_error(self, request: Request, e: HTTPException) -> Response:
+        page = self.template_env.get_template('error.html')
+        return Response(
+            page.render(title='ERROR', body='Error: {0}, {1}'.format(e.code, e.description)),
+            mimetype="text/html",
+            status = e.code
+        )
 
     def on_root_get(self, request: Request, err=None) -> Response:
         if not err:
@@ -505,62 +504,62 @@ class RSSTagApplication(object):
             page_number = 1
         by_feed = {}
         db_feeds = self.feeds.get_all(self.user['sid'])
-        if db_feeds is not None:
-            for f in db_feeds:
-                by_feed[f['feed_id']] = f
-            if self.user['settings']['only_unread']:
-                only_unread = self.user['settings']['only_unread']
-            else:
-                only_unread = None
-            grouped = self.posts.get_grouped_stat(self.user['sid'], only_unread)
-            if grouped is not None:
-                by_category = {self.feeds.all_feeds: {
-                    'unread_count': 0,
-                    'title': self.feeds.all_feeds,
-                    'url': self.routes.getUrlByEndpoint(
-                        endpoint='on_category_get',
-                        params={'quoted_category': self.feeds.all_feeds}
-                    ),
-                    'feeds': []
-                }}
-                for g in grouped:
-                    if g['count'] > 0:
-                        if g['category_id'] not in by_category:
-                            by_category[g['category_id']] = {
-                                'unread_count': 0,
-                                'title': by_feed[g['_id']]['category_title'],
-                                'url': by_feed[g['_id']]['category_local_url'], 'feeds': []
-                            }
-                        by_category[g['category_id']]['unread_count'] += g['count']
-                        by_category[self.feeds.all_feeds]['unread_count'] += g['count']
-                        by_category[g['category_id']]['feeds'].append({
-                            'unread_count': g['count'],
-                            'url': by_feed[g['_id']]['local_url'],
-                            'title': by_feed[g['_id']]['title']
-                        })
-                if len(by_category) > 1:
-                    data = getSortedDictByAlphabet(by_category)
-                    if self.no_category_name in data:
-                        data.move_to_end(self.no_category_name)
-                else:
-                    data = OrderedDict()
-                page = self.template_env.get_template('group-by-category.html')
-                response = Response(
-                    page.render(
-                        data=data,
-                        group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_get',
-                                                                   params={'page_number': page_number}),
-                        user_settings=self.user['settings'],
-                        provider=self.user['provider'],
-                    ),
-                    mimetype='text/html'
-                )
-            else:
-                response = self.on_error(request, InternalServerError())
-        else:
-            response = self.on_error(request, InternalServerError())
+        if db_feeds is None:
+            return self.on_error(request, InternalServerError())
 
-        return response
+        for f in db_feeds:
+            by_feed[f['feed_id']] = f
+        if self.user['settings']['only_unread']:
+            only_unread = self.user['settings']['only_unread']
+        else:
+            only_unread = None
+
+        grouped = self.posts.get_grouped_stat(self.user['sid'], only_unread)
+        if grouped is None:
+            return self.on_error(request, InternalServerError())
+
+        by_category = {self.feeds.all_feeds: {
+            'unread_count': 0,
+            'title': self.feeds.all_feeds,
+            'url': self.routes.getUrlByEndpoint(
+                endpoint='on_category_get',
+                params={'quoted_category': self.feeds.all_feeds}
+            ),
+            'feeds': []
+        }}
+        for g in grouped:
+            if g['count'] > 0:
+                if g['category_id'] not in by_category:
+                    by_category[g['category_id']] = {
+                        'unread_count': 0,
+                        'title': by_feed[g['_id']]['category_title'],
+                        'url': by_feed[g['_id']]['category_local_url'], 'feeds': []
+                    }
+                by_category[g['category_id']]['unread_count'] += g['count']
+                by_category[self.feeds.all_feeds]['unread_count'] += g['count']
+                by_category[g['category_id']]['feeds'].append({
+                    'unread_count': g['count'],
+                    'url': by_feed[g['_id']]['local_url'],
+                    'title': by_feed[g['_id']]['title']
+                })
+        if len(by_category) > 1:
+            data = getSortedDictByAlphabet(by_category)
+            if self.no_category_name in data:
+                data.move_to_end(self.no_category_name)
+        else:
+            data = OrderedDict()
+        page = self.template_env.get_template('group-by-category.html')
+
+        return Response(
+            page.render(
+                data=data,
+                group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_get',
+                                                           params={'page_number': page_number}),
+                user_settings=self.user['settings'],
+                provider=self.user['provider'],
+            ),
+            mimetype='text/html'
+        )
 
     def on_category_get(self, request: Request, quoted_category=None) -> Response:
         cat = unquote_plus(quoted_category)
