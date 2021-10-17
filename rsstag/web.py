@@ -853,10 +853,11 @@ class RSSTagApplication(object):
                     code = 500
                     result = {'error': 'Database error'}
 
-        response = Response(json.dumps(result), mimetype='application/json')
-        response.status_code = code
-
-        return response
+        return Response(
+            json.dumps(result),
+            mimetype="application/json",
+            status=code
+        )
 
     def calcPagerData(self, p_number, page_count, items_per_page, endpoint, sentiment='', group='', letter=''):
         pages_map = {}
@@ -908,431 +909,399 @@ class RSSTagApplication(object):
 
     def on_get_tag_page(self, request: Request, tag='') -> Response:
         tag_data = self.tags.get_by_tag(self.user['sid'], tag)
-        if tag_data is not None:
-            del tag_data['_id']
-            page = self.template_env.get_template('tag-info.html')
-            response = Response(
-                page.render(
-                    tag=tag_data,
-                    sort_by_title='tags',
-                    sort_by_link=self.routes.getUrlByEndpoint(
-                        endpoint='on_group_by_tags_get',
-                        params={'page_number': 1}
-                    ),
-                    group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
-                    user_settings=self.user['settings'],
-                    provider=self.user['provider']
-                ),
-                mimetype='text/html'
-            )
-        elif tag_data is None:
-            response = self.on_error(request, InternalServerError())
-        else:
-            response = self.on_error(request, NotFound())
+        if tag_data is None:
+            return self.on_error(request, InternalServerError())
 
-        return response
+        if not tag_data:
+            return self.on_error(request, NotFound())
+
+        del tag_data['_id']
+        page = self.template_env.get_template('tag-info.html')
+
+        return Response(
+            page.render(
+                tag=tag_data,
+                sort_by_title='tags',
+                sort_by_link=self.routes.getUrlByEndpoint(
+                    endpoint='on_group_by_tags_get',
+                    params={'page_number': 1}
+                ),
+                group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
+                user_settings=self.user['settings'],
+                provider=self.user['provider']
+            ),
+            mimetype='text/html'
+        )
 
     def on_group_by_tags_get(self, request: Request, page_number: int=1) -> Response:
         tags_count = self.tags.count(self.user['sid'], self.user['settings']['only_unread'])
-        if tags_count is not None:
-            page_count = self.getPageCount(tags_count, self.user['settings']['tags_on_page'])
-            if page_number <= 0:
-                p_number = 1
-                self.user['page'] = p_number
-            elif page_number > page_count:
-                p_number = page_count
-                response = redirect(
-                    self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': p_number})
-                )
-                self.user['page'] = p_number
-            else:
-                p_number = page_number
-            p_number -= 1
-            if p_number < 0:
-                p_number = 1
-            new_cookie_page_value = p_number + 1
-            pages_map, start_tags_range, end_tags_range = self.calcPagerData(
-                p_number,
-                page_count,
-                self.user['settings']['tags_on_page'],
-                'on_group_by_tags_get'
-            )
-            sorted_tags = []
-            tags = self.tags.get_all(
-                self.user['sid'],
-                self.user['settings']['only_unread'],
-                self.user['settings']['hot_tags'],
-                opts={
-                    'offset': start_tags_range,
-                    'limit': self.user['settings']['tags_on_page']
-                }
-            )
-            if tags is not None:
-                for t in tags:
-                    sorted_tags.append({
-                        'tag': t['tag'],
-                        'url': t['local_url'],
-                        'words': t['words'],
-                        'count': t['unread_count'] if self.user['settings']['only_unread'] else t['posts_count'],
-                        'sentiment': t['sentiment'] if 'sentiment' in t else []
-                    })
-                db_letters = self.letters.get(self.user['sid'], make_sort=True)
-                if db_letters:
-                    letters = self.letters.to_list(db_letters, self.user['settings']['only_unread'])
-                else:
-                    letters = []
-                page = self.template_env.get_template('group-by-tag.html')
-                response = Response(
-                    page.render(
-                        tags=sorted_tags,
-                        sort_by_title='tags',
-                        sort_by_link=self.routes.getUrlByEndpoint(
-                            endpoint='on_group_by_tags_get',
-                            params={'page_number': new_cookie_page_value}
-                        ),
-                        group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
-                        pages_map=pages_map,
-                        current_page=new_cookie_page_value,
-                        letters=letters,
-                        user_settings=self.user['settings'],
-                        provider=self.user['provider']
-                    ),
-                    mimetype='text/html'
-                )
-            else:
-                response = self.on_error(request, InternalServerError())
-            self.users.update_by_sid(
-                self.user['sid'],
-                {'page': new_cookie_page_value, 'letter': ''}
-            )
-        else:
-            response = self.on_error(request, InternalServerError())
+        if tags_count is None:
+            return self.on_error(request, InternalServerError())
 
-        return response
+        page_count = self.getPageCount(tags_count, self.user['settings']['tags_on_page'])
+        p_number = page_number
+        if page_number <= 0:
+            p_number = 1
+        elif page_number > page_count:
+            p_number = page_count
+
+        self.user['page'] = p_number
+        new_cookie_page_value = p_number
+        p_number -= 1
+        if p_number < 0:
+            p_number = 1
+        pages_map, start_tags_range, end_tags_range = self.calcPagerData(
+            p_number,
+            page_count,
+            self.user['settings']['tags_on_page'],
+            'on_group_by_tags_get'
+        )
+        sorted_tags = []
+        tags = self.tags.get_all(
+            self.user['sid'],
+            self.user['settings']['only_unread'],
+            self.user['settings']['hot_tags'],
+            opts={
+                'offset': start_tags_range,
+                'limit': self.user['settings']['tags_on_page']
+            }
+        )
+        if tags is None:
+            return self.on_error(request, InternalServerError())
+
+        for t in tags:
+            sorted_tags.append({
+                'tag': t['tag'],
+                'url': t['local_url'],
+                'words': t['words'],
+                'count': t['unread_count'] if self.user['settings']['only_unread'] else t['posts_count'],
+                'sentiment': t['sentiment'] if 'sentiment' in t else []
+            })
+        db_letters = self.letters.get(self.user['sid'], make_sort=True)
+        if db_letters:
+            letters = self.letters.to_list(db_letters, self.user['settings']['only_unread'])
+        else:
+            letters = []
+        self.users.update_by_sid(
+            self.user['sid'],
+            {'page': new_cookie_page_value, 'letter': ''}
+        )
+        page = self.template_env.get_template('group-by-tag.html')
+
+        return Response(
+            page.render(
+                tags=sorted_tags,
+                sort_by_title='tags',
+                sort_by_link=self.routes.getUrlByEndpoint(
+                    endpoint='on_group_by_tags_get',
+                    params={'page_number': new_cookie_page_value}
+                ),
+                group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
+                pages_map=pages_map,
+                current_page=new_cookie_page_value,
+                letters=letters,
+                user_settings=self.user['settings'],
+                provider=self.user['provider']
+            ),
+            mimetype='text/html'
+        )
 
     def on_group_by_bigrams_get(self, request: Request, page_number: int=1) -> Response:
         tags_count = self.bi_grams.count(self.user['sid'], only_unread=self.user['settings']['only_unread'])
-        if tags_count is not None:
-            page_count = self.getPageCount(tags_count, self.user['settings']['tags_on_page'])
-            if page_number <= 0:
-                p_number = 1
-                self.user['page'] = p_number
-            elif page_number > page_count:
-                p_number = page_count
-                response = redirect(
-                    self.routes.getUrlByEndpoint(endpoint='on_group_by_bi_grams_get', params={'page_number': p_number})
-                )
-                self.user['page'] = p_number
-            else:
-                p_number = page_number
-            p_number -= 1
-            if p_number < 0:
-                p_number = 1
-            new_cookie_page_value = p_number + 1
-            pages_map, start_tags_range, end_tags_range = self.calcPagerData(
-                p_number,
-                page_count,
-                self.user['settings']['tags_on_page'],
-                'on_group_by_bigrams_get'
-            )
-            sorted_tags = []
-            tags = self.bi_grams.get_all(
-                self.user['sid'],
-                self.user['settings']['only_unread'],
-                self.user['settings']['hot_tags'],
-                opts={
-                    'offset': start_tags_range,
-                    'limit': self.user['settings']['tags_on_page']
-                }
-            )
-            if tags is not None:
-                for t in tags:
-                    sorted_tags.append({
-                        'tag': t['tag'],
-                        'url': t['local_url'],
-                        'words': t['words'],
-                        'count': t['unread_count'] if self.user['settings']['only_unread'] else t['posts_count'],
-                        'sentiment': []
-                    })
-                letters = []
-                page = self.template_env.get_template('group-by-tag.html')
-                response = Response(
-                    page.render(
-                        tags=sorted_tags,
-                        sort_by_title='tags',
-                        sort_by_link=self.routes.getUrlByEndpoint(
-                            endpoint='on_group_by_bigrams_get',
-                            params={'page_number': new_cookie_page_value}
-                        ),
-                        group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
-                        pages_map=pages_map,
-                        current_page=new_cookie_page_value,
-                        letters=letters,
-                        user_settings=self.user['settings'],
-                        provider=self.user['provider']
-                    ),
-                    mimetype='text/html'
-                )
-            else:
-                response = self.on_error(request, InternalServerError())
-            self.users.update_by_sid(
-                self.user['sid'],
-                {'page': new_cookie_page_value, 'letter': ''}
-            )
-        else:
-            response = self.on_error(request, InternalServerError())
+        if tags_count is None:
+            return self.on_error(request, InternalServerError())
 
-        return response
+        page_count = self.getPageCount(tags_count, self.user['settings']['tags_on_page'])
+        p_number = page_number
+        if page_number <= 0:
+            p_number = 1
+        elif page_number > page_count:
+            p_number = page_count
+
+        self.user['page'] = p_number
+        new_cookie_page_value = p_number
+        p_number -= 1
+        if p_number < 0:
+            p_number = 1
+        pages_map, start_tags_range, end_tags_range = self.calcPagerData(
+            p_number,
+            page_count,
+            self.user['settings']['tags_on_page'],
+            'on_group_by_bigrams_get'
+        )
+        sorted_tags = []
+        tags = self.bi_grams.get_all(
+            self.user['sid'],
+            self.user['settings']['only_unread'],
+            self.user['settings']['hot_tags'],
+            opts={
+                'offset': start_tags_range,
+                'limit': self.user['settings']['tags_on_page']
+            }
+        )
+        if tags is None:
+            return self.on_error(request, InternalServerError())
+
+        for t in tags:
+            sorted_tags.append({
+                'tag': t['tag'],
+                'url': t['local_url'],
+                'words': t['words'],
+                'count': t['unread_count'] if self.user['settings']['only_unread'] else t['posts_count'],
+                'sentiment': []
+            })
+        letters = []
+        self.users.update_by_sid(
+            self.user['sid'],
+            {'page': new_cookie_page_value, 'letter': ''}
+        )
+        page = self.template_env.get_template('group-by-tag.html')
+
+        return Response(
+            page.render(
+                tags=sorted_tags,
+                sort_by_title='tags',
+                sort_by_link=self.routes.getUrlByEndpoint(
+                    endpoint='on_group_by_bigrams_get',
+                    params={'page_number': new_cookie_page_value}
+                ),
+                group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
+                pages_map=pages_map,
+                current_page=new_cookie_page_value,
+                letters=letters,
+                user_settings=self.user['settings'],
+                provider=self.user['provider']
+            ),
+            mimetype='text/html'
+        )
 
     def on_group_by_tags_sentiment(self, request: Request, sentiment:str, page_number: int=1) -> Response:
         sentiment = sentiment.replace('|', '/')
         tags_count = self.tags.count(self.user['sid'], self.user['settings']['only_unread'], sentiments=[sentiment])
-        if tags_count is not None:
-            page_count = self.getPageCount(tags_count, self.user['settings']['tags_on_page'])
-            if page_number <= 0:
-                p_number = 1
-                self.user['page'] = p_number
-            elif page_number > page_count:
-                p_number = page_count
-                response = redirect(
-                    self.routes.getUrlByEndpoint(
-                        endpoint='on_group_by_tags_sentiment',
-                        params={'sentiment': sentiment, 'page_number': p_number}
-                    )
-                )
-                self.user['page'] = p_number
-            else:
-                p_number = page_number
-            p_number -= 1
-            if p_number < 0:
-                p_number = 1
-            new_cookie_page_value = p_number + 1
-            pages_map, start_tags_range, end_tags_range = self.calcPagerData(
-                p_number,
-                page_count,
-                self.user['settings']['tags_on_page'],
-                'on_group_by_tags_sentiment',
-                sentiment=sentiment
-            )
-            sorted_tags = []
-            tags = self.tags.get_by_sentiment(
-                self.user['sid'],
-                [sentiment],
-                self.user['settings']['only_unread'],
-                self.user['settings']['hot_tags'],
-                opts={
-                    'offset': start_tags_range,
-                    'limit': self.user['settings']['tags_on_page']
-                }
-            )
-            if tags is not None:
-                for t in tags:
-                    sorted_tags.append({
-                        'tag': t['tag'],
-                        'url': t['local_url'],
-                        'words': t['words'],
-                        'count': t['unread_count'] if self.user['settings']['only_unread'] else t['posts_count'],
-                        'sentiment': t['sentiment'] if 'sentiment' in t else []
-                    })
-                db_letters = self.letters.get(self.user['sid'], make_sort=True)
-                if db_letters:
-                    letters = self.letters.to_list(db_letters, self.user['settings']['only_unread'])
-                else:
-                    letters = []
-                page = self.template_env.get_template('group-by-tag.html')
-                response = Response(
-                    page.render(
-                        tags=sorted_tags,
-                        sort_by_title='tags',
-                        sort_by_link=self.routes.getUrlByEndpoint(
-                            endpoint='on_group_by_tags_sentiment',
-                            params={'sentiment': sentiment, 'page_number': new_cookie_page_value}
-                        ),
-                        group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
-                        pages_map=pages_map,
-                        current_page=new_cookie_page_value,
-                        letters=letters,
-                        user_settings=self.user['settings'],
-                        provider=self.user['provider']
-                    ),
-                    mimetype='text/html'
-                )
-            else:
-                response = self.on_error(request, InternalServerError())
-            self.users.update_by_sid(
-                self.user['sid'],
-                {'page': new_cookie_page_value, 'letter': ''}
-            )
-        else:
-            response = self.on_error(request, InternalServerError())
+        if tags_count is None:
+            return self.on_error(request, InternalServerError())
 
-        return response
+        page_count = self.getPageCount(tags_count, self.user['settings']['tags_on_page'])
+        p_number = page_number
+        if page_number <= 0:
+            p_number = 1
+        elif page_number > page_count:
+            p_number = page_count
+
+        self.user['page'] = p_number
+        new_cookie_page_value = p_number
+        p_number -= 1
+        if p_number < 0:
+            p_number = 1
+        pages_map, start_tags_range, end_tags_range = self.calcPagerData(
+            p_number,
+            page_count,
+            self.user['settings']['tags_on_page'],
+            'on_group_by_tags_sentiment',
+            sentiment=sentiment
+        )
+        sorted_tags = []
+        tags = self.tags.get_by_sentiment(
+            self.user['sid'],
+            [sentiment],
+            self.user['settings']['only_unread'],
+            self.user['settings']['hot_tags'],
+            opts={
+                'offset': start_tags_range,
+                'limit': self.user['settings']['tags_on_page']
+            }
+        )
+        if tags is None:
+            return self.on_error(request, InternalServerError())
+
+        for t in tags:
+            sorted_tags.append({
+                'tag': t['tag'],
+                'url': t['local_url'],
+                'words': t['words'],
+                'count': t['unread_count'] if self.user['settings']['only_unread'] else t['posts_count'],
+                'sentiment': t['sentiment'] if 'sentiment' in t else []
+            })
+        db_letters = self.letters.get(self.user['sid'], make_sort=True)
+        if db_letters:
+            letters = self.letters.to_list(db_letters, self.user['settings']['only_unread'])
+        else:
+            letters = []
+        self.users.update_by_sid(
+            self.user['sid'],
+            {'page': new_cookie_page_value, 'letter': ''}
+        )
+        page = self.template_env.get_template('group-by-tag.html')
+
+        return Response(
+            page.render(
+                tags=sorted_tags,
+                sort_by_title='tags',
+                sort_by_link=self.routes.getUrlByEndpoint(
+                    endpoint='on_group_by_tags_sentiment',
+                    params={'sentiment': sentiment, 'page_number': new_cookie_page_value}
+                ),
+                group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
+                pages_map=pages_map,
+                current_page=new_cookie_page_value,
+                letters=letters,
+                user_settings=self.user['settings'],
+                provider=self.user['provider']
+            ),
+            mimetype='text/html'
+        )
 
     def on_group_by_tags_startwith_get(self, request: Request, letter='', page_number=1) -> Response:
         db_letters = self.letters.get(self.user['sid'], make_sort=True)
-        if (db_letters is not None) and (letter in db_letters['letters']):
-            tags_count = self.tags.count(self.user['sid'], self.user['settings']['only_unread'], '^{}'.format(letter))
-            if tags_count is not None:
-                page_count = self.getPageCount(tags_count, self.user['settings']['tags_on_page'])
-                if page_number <= 0:
-                    p_number = 1
-                    self.user['page'] = p_number
-                elif page_number > page_count:
-                    p_number = page_count
-                    response = redirect(
-                        self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': p_number})
-                    )
-                    self.user['page'] = p_number
-                else:
-                    p_number = page_number
-                p_number -= 1
-                if p_number < 0:
-                    p_number = 1
-                new_cookie_page_value = p_number + 1
-                pages_map, start_tags_range, end_tags_range = self.calcPagerData(
-                    p_number,
-                    page_count,
-                    self.user['settings']['tags_on_page'],
-                    'on_group_by_tags_startwith_get',
-                    letter=letter
-                )
-                sorted_tags = []
-                tags = self.tags.get_all(
-                    self.user['sid'],
-                    self.user['settings']['only_unread'],
-                    self.user['settings']['hot_tags'],
-                    opts={
-                        'offset': start_tags_range,
-                        'limit': self.user['settings']['tags_on_page'],
-                        'regexp': '^{}'.format(letter)
-                    }
-                )
-                if tags is not None:
-                    for t in tags:
-                        sorted_tags.append({
-                            'tag': t['tag'],
-                            'url': t['local_url'],
-                            'words': t['words'],
-                            'count': t['unread_count'] if self.user['settings']['only_unread'] else t['posts_count'],
-                            'sentiment': t['sentiment'] if 'sentiment' in t else []
-                        })
-                    if db_letters:
-                        letters = self.letters.to_list(db_letters, self.user['settings']['only_unread'])
-                    else:
-                        letters = []
-                    page = self.template_env.get_template('group-by-tag.html')
-                    response = Response(
-                        page.render(
-                            tags=sorted_tags,
-                            sort_by_title='tags',
-                            sort_by_link=self.routes.getUrlByEndpoint(
-                                endpoint='on_group_by_tags_get',
-                                params={'page_number': new_cookie_page_value}
-                            ),
-                            group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
-                            pages_map=pages_map,
-                            current_page=new_cookie_page_value,
-                            letters=letters,
-                            user_settings=self.user['settings'],
-                            provider=self.user['provider']
-                        ),
-                        mimetype='text/html'
-                    )
-                else:
-                    response = self.on_error(request, InternalServerError())
-                self.users.update_by_sid(self.user['sid'], {'letter': letter})
-            else:
-                response = self.on_error(request, InternalServerError())
-        elif db_letters is None:
-            response = self.on_error(request, InternalServerError())
-        else:
-            response = self.on_error(request, NotFound())
+        if db_letters is None:
+            return self.on_error(request, InternalServerError())
 
-        return response
+        if letter not in db_letters['letters']:
+            return self.on_error(request, NotFound())
+
+        tags_count = self.tags.count(self.user['sid'], self.user['settings']['only_unread'], '^{}'.format(letter))
+        if tags_count is not None:
+            return self.on_error(request, InternalServerError())
+
+        page_count = self.getPageCount(tags_count, self.user['settings']['tags_on_page'])
+        p_number = page_number
+        if page_number <= 0:
+            p_number = 1
+        elif page_number > page_count:
+            p_number = page_count
+
+        self.user['page'] = p_number
+        new_cookie_page_value = p_number
+        p_number -= 1
+        if p_number < 0:
+            p_number = 1
+        pages_map, start_tags_range, end_tags_range = self.calcPagerData(
+            p_number,
+            page_count,
+            self.user['settings']['tags_on_page'],
+            'on_group_by_tags_startwith_get',
+            letter=letter
+        )
+        sorted_tags = []
+        tags = self.tags.get_all(
+            self.user['sid'],
+            self.user['settings']['only_unread'],
+            self.user['settings']['hot_tags'],
+            opts={
+                'offset': start_tags_range,
+                'limit': self.user['settings']['tags_on_page'],
+                'regexp': '^{}'.format(letter)
+            }
+        )
+        if tags is None:
+            return self.on_error(request, InternalServerError())
+
+        for t in tags:
+            sorted_tags.append({
+                'tag': t['tag'],
+                'url': t['local_url'],
+                'words': t['words'],
+                'count': t['unread_count'] if self.user['settings']['only_unread'] else t['posts_count'],
+                'sentiment': t['sentiment'] if 'sentiment' in t else []
+            })
+        if db_letters:
+            letters = self.letters.to_list(db_letters, self.user['settings']['only_unread'])
+        else:
+            letters = []
+        self.users.update_by_sid(self.user['sid'], {'letter': letter})
+        page = self.template_env.get_template('group-by-tag.html')
+
+        return Response(
+            page.render(
+                tags=sorted_tags,
+                sort_by_title='tags',
+                sort_by_link=self.routes.getUrlByEndpoint(
+                    endpoint='on_group_by_tags_get',
+                    params={'page_number': new_cookie_page_value}
+                ),
+                group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
+                pages_map=pages_map,
+                current_page=new_cookie_page_value,
+                letters=letters,
+                user_settings=self.user['settings'],
+                provider=self.user['provider']
+            ),
+            mimetype='text/html'
+        )
 
     def on_group_by_tags_group(self, request: Request, group='', page_number=1) -> Response:
         tags_count = self.tags.count(self.user['sid'], self.user['settings']['only_unread'], groups=[group])
-        if tags_count is not None:
-            page_count = self.getPageCount(tags_count, self.user['settings']['tags_on_page'])
-            if page_number <= 0:
-                p_number = 1
-                self.user['page'] = p_number
-            elif page_number > page_count:
-                p_number = page_count
-                response = redirect(
-                    self.routes.getUrlByEndpoint(
-                        endpoint='on_group_by_tags_group',
-                        params={'group': group, 'page_number': p_number}
-                    )
-                )
-                self.user['page'] = p_number
-            else:
-                p_number = page_number
-            p_number -= 1
-            if p_number < 0:
-                p_number = 1
-            new_cookie_page_value = p_number + 1
-            pages_map, start_tags_range, end_tags_range = self.calcPagerData(
-                p_number,
-                page_count,
-                self.user['settings']['tags_on_page'],
-                'on_group_by_tags_group',
-                group=group
-            )
-            sorted_tags = []
-            tags = self.tags.get_by_group(
-                self.user['sid'],
-                [group],
-                self.user['settings']['only_unread'],
-                self.user['settings']['hot_tags'],
-                opts={
-                    'offset': start_tags_range,
-                    'limit': self.user['settings']['tags_on_page']
-                }
-            )
-            if tags is not None:
-                for t in tags:
-                    sorted_tags.append({
-                        'tag': t['tag'],
-                        'url': t['local_url'],
-                        'words': t['words'],
-                        'count': t['unread_count'] if self.user['settings']['only_unread'] else t['posts_count'],
-                        'sentiment': t['sentiment'] if 'sentiment' in t else []
-                    })
-                db_letters = self.letters.get(self.user['sid'], make_sort=True)
-                if db_letters:
-                    letters = self.letters.to_list(db_letters, self.user['settings']['only_unread'])
-                else:
-                    letters = []
-                page = self.template_env.get_template('group-by-tag.html')
-                response = Response(
-                    page.render(
-                        tags=sorted_tags,
-                        sort_by_title='tags',
-                        sort_by_link=self.routes.getUrlByEndpoint(
-                            endpoint='on_group_by_tags_group',
-                            params={'group': group, 'page_number': new_cookie_page_value}
-                        ),
-                        group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
-                        pages_map=pages_map,
-                        current_page=new_cookie_page_value,
-                        letters=letters,
-                        user_settings=self.user['settings'],
-                        provider=self.user['provider']
-                    ),
-                    mimetype='text/html'
-                )
-            else:
-                response = self.on_error(request, InternalServerError())
-            self.users.update_by_sid(
-                self.user['sid'],
-                {'page': new_cookie_page_value, 'letter': ''}
-            )
+        if tags_count is None:
+            return self.on_error(request, InternalServerError())
+
+        page_count = self.getPageCount(tags_count, self.user['settings']['tags_on_page'])
+        p_number = page_number
+        if page_number <= 0:
+            p_number = 1
+        elif page_number > page_count:
+            p_number = page_count
+        self.user['page'] = p_number
+        new_cookie_page_value = p_number
+        p_number -= 1
+        if p_number < 0:
+            p_number = 1
+        pages_map, start_tags_range, end_tags_range = self.calcPagerData(
+            p_number,
+            page_count,
+            self.user['settings']['tags_on_page'],
+            'on_group_by_tags_group',
+            group=group
+        )
+        sorted_tags = []
+        tags = self.tags.get_by_group(
+            self.user['sid'],
+            [group],
+            self.user['settings']['only_unread'],
+            self.user['settings']['hot_tags'],
+            opts={
+                'offset': start_tags_range,
+                'limit': self.user['settings']['tags_on_page']
+            }
+        )
+        if tags is None:
+            return self.on_error(request, InternalServerError())
+
+        for t in tags:
+            sorted_tags.append({
+                'tag': t['tag'],
+                'url': t['local_url'],
+                'words': t['words'],
+                'count': t['unread_count'] if self.user['settings']['only_unread'] else t['posts_count'],
+                'sentiment': t['sentiment'] if 'sentiment' in t else []
+            })
+        db_letters = self.letters.get(self.user['sid'], make_sort=True)
+        if db_letters:
+            letters = self.letters.to_list(db_letters, self.user['settings']['only_unread'])
         else:
-            response = self.on_error(request, InternalServerError())
+            letters = []
+        self.users.update_by_sid(
+            self.user['sid'],
+            {'page': new_cookie_page_value, 'letter': ''}
+        )
+        page = self.template_env.get_template('group-by-tag.html')
 
-        return response
-
+        return Response(
+            page.render(
+                tags=sorted_tags,
+                sort_by_title='tags',
+                sort_by_link=self.routes.getUrlByEndpoint(
+                    endpoint='on_group_by_tags_group',
+                    params={'group': group, 'page_number': new_cookie_page_value}
+                ),
+                group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
+                pages_map=pages_map,
+                current_page=new_cookie_page_value,
+                letters=letters,
+                user_settings=self.user['settings'],
+                provider=self.user['provider']
+            ),
+            mimetype='text/html'
+        )
 
     def on_get_tag_similar(self, request: Request, model='', tag='') -> Response:
         tags_set = set()
@@ -1381,10 +1350,11 @@ class RSSTagApplication(object):
             code = 404
             result = {'error': 'Unknown model'}
 
-        response = Response(json.dumps(result), mimetype='application/json')
-        response.status_code = code
-
-        return response
+        return Response(
+            json.dumps(result),
+            mimetype="application/json",
+            status=code
+        )
 
     def on_get_tag_siblings(self, request: Request, tag='') -> Response:
         all_tags = []
