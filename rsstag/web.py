@@ -115,12 +115,6 @@ class RSSTagApplication(object):
 
         nltk.download('stopwords')
 
-    def prepareDB(self):
-        try:
-            self.db.words.create_index('word')
-        except Exception as e:
-            logging.warning('Indexes not created. May be already exists.')
-
     def close(self):
         logging.info('Goodbye!')
 
