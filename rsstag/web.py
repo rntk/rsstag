@@ -1686,54 +1686,46 @@ class RSSTagApplication(object):
 
     def on_get_groups(self, request: Request, page_number=1) -> Response:
         groups = self.tags.get_groups(self.user['sid'], self.user['settings']['only_unread'])
-        if groups:
-            groups_count = len(groups)
-            page_count = self.getPageCount(groups_count, self.user['settings']['tags_on_page'])
-            if page_number <= 0:
-                p_number = 1
-                self.user['page'] = p_number
-            elif page_number > page_count:
-                p_number = page_count
-                response = redirect(
-                    self.routes.getUrlByEndpoint(
-                        endpoint='on_get_groups',
-                        params={'page_number': p_number}
-                    )
-                )
-                self.user['page'] = p_number
-            else:
-                p_number = page_number
-            p_number -= 1
-            if p_number < 0:
-                p_number = 1
-            new_cookie_page_value = p_number + 1
-            pages_map, start_tags_range, end_tags_range = self.calcPagerData(
-                p_number,
-                page_count,
-                self.user['settings']['tags_on_page'],
-                'on_get_groups',
-            )
-            page = self.template_env.get_template('tags-groups.html')
-            page_groups = sorted(groups.items(), key=lambda el: el[1], reverse=True)
-            response = Response(
-                page.render(
-                    support=self.config['settings']['support'],
-                    version=self.config['settings']['version'],
-                    user_settings=self.user['settings'],
-                    provider=self.user['provider'],
-                    pages_map=pages_map,
-                    groups=page_groups[start_tags_range:end_tags_range]
-                ),
-                mimetype='text/html'
-            )
-            self.users.update_by_sid(
-                self.user['sid'],
-                {'page': new_cookie_page_value, 'letter': ''}
-            )
-        else:
-            response = self.on_error(request, InternalServerError())
+        if not groups:
+            return self.on_error(request, InternalServerError())
 
-        return response
+        groups_count = len(groups)
+        page_count = self.getPageCount(groups_count, self.user['settings']['tags_on_page'])
+        p_number = page_number
+        if page_number <= 0:
+            p_number = 1
+        elif page_number > page_count:
+            p_number = page_count
+
+        self.user['page'] = p_number
+        new_cookie_page_value = p_number
+        p_number -= 1
+        if p_number < 0:
+            p_number = 1
+        pages_map, start_tags_range, end_tags_range = self.calcPagerData(
+            p_number,
+            page_count,
+            self.user['settings']['tags_on_page'],
+            'on_get_groups',
+        )
+        self.users.update_by_sid(
+            self.user['sid'],
+            {'page': new_cookie_page_value, 'letter': ''}
+        )
+        page_groups = sorted(groups.items(), key=lambda el: el[1], reverse=True)
+        page = self.template_env.get_template('tags-groups.html')
+
+        return Response(
+            page.render(
+                support=self.config['settings']['support'],
+                version=self.config['settings']['version'],
+                user_settings=self.user['settings'],
+                provider=self.user['provider'],
+                pages_map=pages_map,
+                groups=page_groups[start_tags_range:end_tags_range]
+            ),
+            mimetype='text/html'
+        )
 
     def on_tag_dates_get(self, request: Request, tag: str) -> Response:
         if tag:
@@ -1758,10 +1750,11 @@ class RSSTagApplication(object):
             result = {'error': 'Something wrong with request'}
             code = 400
 
-        response = Response(json.dumps(result), mimetype='application/json')
-        response.status_code = code
-
-        return response
+        return Response(
+            json.dumps(result),
+            mimetype="application/json",
+            status=code
+        )
 
     def on_bigrams_dates_get(self, request: Request, tag: str) -> Response:
         if tag:
@@ -1794,10 +1787,11 @@ class RSSTagApplication(object):
             result = {'error': 'Something wrong with request'}
             code = 400
 
-        response = Response(json.dumps(result), mimetype='application/json')
-        response.status_code = code
-
-        return response
+        return Response(
+            json.dumps(result),
+            mimetype="application/json",
+            status=code
+        )
 
     def on_wordtree_texts_get(self, request: Request, tag: str) -> Response:
         if tag:
@@ -1831,10 +1825,11 @@ class RSSTagApplication(object):
             result = {'error': 'Something wrong with request'}
             code = 400
 
-        response = Response(json.dumps(result), mimetype='application/json')
-        response.status_code = code
-
-        return response
+        return Response(
+            json.dumps(result),
+            mimetype="application/json",
+            status=code
+        )
 
     def on_tag_topics_get(self, request: Request, tag: str) -> Response:
         if tag:
@@ -1878,10 +1873,11 @@ class RSSTagApplication(object):
             result = {'error': 'Something wrong with request'}
             code = 400
 
-        response = Response(json.dumps(result), mimetype='application/json')
-        response.status_code = code
-
-        return response
+        return Response(
+            json.dumps(result),
+            mimetype="application/json",
+            status=code
+        )
 
     def on_topics_texts_get(self, request: Request, tag: str) -> Response:
         if tag:
@@ -1908,10 +1904,11 @@ class RSSTagApplication(object):
             result = {'error': 'Something wrong with request'}
             code = 400
 
-        response = Response(json.dumps(result), mimetype='application/json')
-        response.status_code = code
-
-        return response
+        return Response(
+            json.dumps(result),
+            mimetype="application/json",
+            status=code
+        )
 
     def on_topics_get(self, request: Request, page_number: int=1) -> Response:
         if self.user:
