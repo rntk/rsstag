@@ -43,33 +43,10 @@ from sklearn.cluster import DBSCAN
 from razdel import sentenize
 
 class RSSTagApplication(object):
-    template_env = None
-    routes = None
-    endpoints = {}
-    config = None
-    config_path = None
-    providers = []
-    user_ttl = 0
-    count_showed_numbers = 4
-    d2v = None
-    w2v = None
-    w2v_mod_date = None
-    models = {'d2v': 'd2v', 'w2v': 'w2v'}
-    allow_not_logged = (
-        'on_root_get',
-        'on_login_get',
-        'on_login_post',
-        'on_select_provider_post',
-        'on_select_provider_get',
-        'on_status_get',
-        'on_refresh_get_post'
-    )
-    no_category_name = 'NotCategorized'
-    navec = None
-    ner = None
-
     def __init__(self, config_path=None):
         self.config = load_config(config_path)
+        self.w2v_mod_date = None
+        self.no_category_name = 'NotCategorized'
         if self.config['settings']['no_category_name']:
             self.no_category_name = self.config['settings']['no_category_name']
         if os.path.exists(self.config['settings']['d2v_model']):
@@ -116,9 +93,26 @@ class RSSTagApplication(object):
         self.users = RssTagUsers(self.db)
         self.users.prepare()
         self.routes = RSSTagRoutes(self.config['settings']['host_name'])
+        self.endpoints = {}
         self.updateEndpoints()
         self.tasks = RssTagTasks(self.db)
         self.tasks.prepare()
+        self.count_showed_numbers = 4
+        self.d2v = None
+        self.w2v = None
+        self.models = {'d2v': 'd2v', 'w2v': 'w2v'}
+        self.allow_not_logged = (
+            'on_root_get',
+            'on_login_get',
+            'on_login_post',
+            'on_select_provider_post',
+            'on_select_provider_get',
+            'on_status_get',
+            'on_refresh_get_post'
+        )
+        self.navec = None
+        self.ner = None
+
         nltk.download('stopwords')
 
     def prepareDB(self):
