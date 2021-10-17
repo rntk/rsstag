@@ -1160,7 +1160,7 @@ class RSSTagApplication(object):
             return self.on_error(request, NotFound())
 
         tags_count = self.tags.count(self.user['sid'], self.user['settings']['only_unread'], '^{}'.format(letter))
-        if tags_count is not None:
+        if tags_count is None:
             return self.on_error(request, InternalServerError())
 
         page_count = self.getPageCount(tags_count, self.user['settings']['tags_on_page'])
