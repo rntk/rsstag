@@ -564,232 +564,234 @@ class RSSTagApplication(object):
     def on_category_get(self, request: Request, quoted_category=None) -> Response:
         cat = unquote_plus(quoted_category)
         db_feeds = self.feeds.get_by_category(self.user['sid'], cat)
-        if db_feeds:
-            by_feed = {}
-            for f in db_feeds:
-                by_feed[f['feed_id']] = f
-            projection = {'_id': False, 'content.content': False}
-            if self.user['settings']['only_unread']:
-                only_unread = self.user['settings']['only_unread']
-            else:
-                only_unread = None
-            if cat != self.feeds.all_feeds:
-                db_posts = self.posts.get_by_category(self.user['sid'], only_unread, cat, projection)
-            else:
-                db_posts = self.posts.get_all(self.user['sid'], only_unread, projection)
-            if db_posts is not None:
-                if self.user['settings']['similar_posts']:
-                    clusters = self.posts.get_clusters(db_posts)
-                    if clusters:
-                        cl_posts = self.posts.get_by_clusters(self.user['sid'], list(clusters), only_unread, projection)
-                        if cl_posts:
-                            for post in cl_posts:
-                                if post['feed_id'] not in by_feed:
-                                    feed = self.feeds.get_by_feed_id(self.user['sid'], post['feed_id'])
-                                    if feed:
-                                        by_feed[post['feed_id']] = feed
-                            db_posts.extend(cl_posts)
-                posts = []
-                pids = set()
-                for post in db_posts:
-                    post["lemmas"] = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
-                    if post['pid'] not in pids:
-                        pids.add(post['pid'])
-                        if post['feed_id'] in by_feed:
-                            posts.append({
-                                'post': post,
-                                'pos': post['pid'],
-                                'category_title': by_feed[post['feed_id']]['category_title'],
-                                'feed_title': by_feed[post['feed_id']]['title'],
-                                'favicon': by_feed[post['feed_id']]['favicon']
-                            })
-                page = self.template_env.get_template('posts.html')
-                response = Response(
-                    page.render(
-                        posts=posts,
-                        tag=cat,
-                        group='category',
-                        words=[],
-                        user_settings=self.user['settings'],
-                        provider=self.user['provider']
-                    ),
-                    mimetype='text/html'
-                )
-            else:
-                response = self.on_error(request, InternalServerError())
-        elif db_feeds is None:
-            response = self.on_error(request, InternalServerError())
-        else:
-            response = self.on_error(request, NotFound())
+        if db_feeds is None:
+            return self.on_error(request, InternalServerError())
 
-        return response
+        if not db_feeds:
+            return self.on_error(request, NotFound())
+
+        by_feed = {}
+        for f in db_feeds:
+            by_feed[f['feed_id']] = f
+        projection = {'_id': False, 'content.content': False}
+        if self.user['settings']['only_unread']:
+            only_unread = self.user['settings']['only_unread']
+        else:
+            only_unread = None
+        if cat != self.feeds.all_feeds:
+            db_posts = self.posts.get_by_category(self.user['sid'], only_unread, cat, projection)
+        else:
+            db_posts = self.posts.get_all(self.user['sid'], only_unread, projection)
+
+        if db_posts is None:
+            return self.on_error(request, InternalServerError())
+
+        if self.user['settings']['similar_posts']:
+            clusters = self.posts.get_clusters(db_posts)
+            if clusters:
+                cl_posts = self.posts.get_by_clusters(self.user['sid'], list(clusters), only_unread, projection)
+                if cl_posts:
+                    for post in cl_posts:
+                        if post['feed_id'] not in by_feed:
+                            feed = self.feeds.get_by_feed_id(self.user['sid'], post['feed_id'])
+                            if feed:
+                                by_feed[post['feed_id']] = feed
+                    db_posts.extend(cl_posts)
+        posts = []
+        pids = set()
+        for post in db_posts:
+            post["lemmas"] = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
+            if post['pid'] not in pids:
+                pids.add(post['pid'])
+                if post['feed_id'] in by_feed:
+                    posts.append({
+                        'post': post,
+                        'pos': post['pid'],
+                        'category_title': by_feed[post['feed_id']]['category_title'],
+                        'feed_title': by_feed[post['feed_id']]['title'],
+                        'favicon': by_feed[post['feed_id']]['favicon']
+                    })
+        page = self.template_env.get_template('posts.html')
+
+        return Response(
+            page.render(
+                posts=posts,
+                tag=cat,
+                group='category',
+                words=[],
+                user_settings=self.user['settings'],
+                provider=self.user['provider']
+            ),
+            mimetype='text/html'
+        )
 
     def on_tag_get(self, request: Request, quoted_tag=None) -> Response:
         tag = unquote(quoted_tag)
         current_tag = self.tags.get_by_tag(self.user['sid'], tag)
-        if current_tag:
-            projection = {'_id': False, 'content.content': False}
-            if self.user['settings']['only_unread']:
-                only_unread = self.user['settings']['only_unread']
-            else:
-                only_unread = None
-            db_posts = self.posts.get_by_tags(self.user['sid'], [tag], only_unread, projection)
-            if db_posts is not None:
-                if self.user['settings']['similar_posts']:
-                    clusters = self.posts.get_clusters(db_posts)
-                    if clusters:
-                        cl_posts = self.posts.get_by_clusters(self.user['sid'], list(clusters), only_unread, projection)
-                        if cl_posts:
-                            db_posts.extend(cl_posts)
-                posts = []
-                by_feed = {}
-                pids = set()
-                for post in db_posts:
-                    post["lemmas"] = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
-                    if post['pid'] not in pids:
-                        pids.add(post['pid'])
-                        if post['feed_id'] not in by_feed:
-                            feed = self.feeds.get_by_feed_id(self.user['sid'], post['feed_id'])
-                            if feed:
-                                by_feed[post['feed_id']] = feed
-                        if post['feed_id']in by_feed:
-                            posts.append({
-                                'post': post,
-                                'pos': post['pid'],
-                                'category_title': by_feed[post['feed_id']]['category_title'],
-                                'feed_title': by_feed[post['feed_id']]['title'],
-                                'favicon': by_feed[post['feed_id']]['favicon']
-                            })
-                page = self.template_env.get_template('posts.html')
-                response = Response(
-                    page.render(
-                        posts=posts,
-                        tag=tag,
-                        group='tag',
-                        words=current_tag['words'],
-                        user_settings=self.user['settings'],
-                        provider=self.user['provider']
-                    ),
-                    mimetype='text/html'
-                )
-            else:
-                response = self.on_error(request, InternalServerError())
-        elif current_tag is None:
-            response = self.on_error(request, InternalServerError())
-        else:
-            response = self.on_error(request, NotFound())
+        if current_tag is None:
+            return self.on_error(request, InternalServerError())
 
-        return response
+        if not current_tag:
+            return self.on_error(request, NotFound())
+
+        projection = {'_id': False, 'content.content': False}
+        if self.user['settings']['only_unread']:
+            only_unread = self.user['settings']['only_unread']
+        else:
+            only_unread = None
+        db_posts = self.posts.get_by_tags(self.user['sid'], [tag], only_unread, projection)
+        if db_posts is None:
+            return self.on_error(request, InternalServerError())
+
+        if self.user['settings']['similar_posts']:
+            clusters = self.posts.get_clusters(db_posts)
+            if clusters:
+                cl_posts = self.posts.get_by_clusters(self.user['sid'], list(clusters), only_unread, projection)
+                if cl_posts:
+                    db_posts.extend(cl_posts)
+        posts = []
+        by_feed = {}
+        pids = set()
+        for post in db_posts:
+            post["lemmas"] = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
+            if post['pid'] not in pids:
+                pids.add(post['pid'])
+                if post['feed_id'] not in by_feed:
+                    feed = self.feeds.get_by_feed_id(self.user['sid'], post['feed_id'])
+                    if feed:
+                        by_feed[post['feed_id']] = feed
+                if post['feed_id']in by_feed:
+                    posts.append({
+                        'post': post,
+                        'pos': post['pid'],
+                        'category_title': by_feed[post['feed_id']]['category_title'],
+                        'feed_title': by_feed[post['feed_id']]['title'],
+                        'favicon': by_feed[post['feed_id']]['favicon']
+                    })
+        page = self.template_env.get_template('posts.html')
+
+        return Response(
+            page.render(
+                posts=posts,
+                tag=tag,
+                group='tag',
+                words=current_tag['words'],
+                user_settings=self.user['settings'],
+                provider=self.user['provider']
+            ),
+            mimetype='text/html'
+        )
 
     def on_bi_gram_get(self, request: Request, bi_gram='') -> Response:
         current_bi_gram = self.bi_grams.get_by_bi_gram(self.user['sid'], bi_gram)
-        if current_bi_gram:
-            projection = {'_id': False, 'content.content': False}
-            if self.user['settings']['only_unread']:
-                only_unread = self.user['settings']['only_unread']
-            else:
-                only_unread = None
-            db_posts = self.posts.get_by_bi_grams(self.user['sid'], [bi_gram], only_unread, projection)
-            if db_posts is not None:
-                if self.user['settings']['similar_posts']:
-                    clusters = self.posts.get_clusters(db_posts)
-                    if clusters:
-                        cl_posts = self.posts.get_by_clusters(self.user['sid'], list(clusters), only_unread, projection)
-                        if cl_posts:
-                            db_posts.extend(cl_posts)
-                posts = []
-                by_feed = {}
-                pids = set()
-                for post in db_posts:
-                    post["lemmas"] = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
-                    if post['pid'] not in pids:
-                        pids.add(post['pid'])
-                        if post['feed_id'] not in by_feed:
-                            feed = self.feeds.get_by_feed_id(self.user['sid'], post['feed_id'])
-                            if feed:
-                                by_feed[post['feed_id']] = feed
-                        if post['feed_id'] in by_feed:
-                            posts.append({
-                                'post': post,
-                                'pos': post['pid'],
-                                'category_title': by_feed[post['feed_id']]['category_title'],
-                                'feed_title': by_feed[post['feed_id']]['title'],
-                                'favicon': by_feed[post['feed_id']]['favicon']
-                            })
-                page = self.template_env.get_template('posts.html')
-                response = Response(
-                    page.render(
-                        posts=posts,
-                        tag=bi_gram,
-                        group='tag',
-                        words=current_bi_gram['words'],
-                        user_settings=self.user['settings'],
-                        provider=self.user['provider']
-                    ),
-                    mimetype='text/html'
-                )
-            else:
-                response = self.on_error(request, InternalServerError())
-        elif current_bi_gram is None:
-            response = self.on_error(request, InternalServerError())
+        if current_bi_gram is None:
+            return self.on_error(request, InternalServerError())
+
+        if not current_bi_gram:
+            return self.on_error(request, NotFound())
+
+        projection = {'_id': False, 'content.content': False}
+        if self.user['settings']['only_unread']:
+            only_unread = self.user['settings']['only_unread']
         else:
-            response = self.on_error(request, NotFound())
+            only_unread = None
+        db_posts = self.posts.get_by_bi_grams(self.user['sid'], [bi_gram], only_unread, projection)
+        if db_posts is None:
+            return self.on_error(request, InternalServerError())
+
+        if self.user['settings']['similar_posts']:
+            clusters = self.posts.get_clusters(db_posts)
+            if clusters:
+                cl_posts = self.posts.get_by_clusters(self.user['sid'], list(clusters), only_unread, projection)
+                if cl_posts:
+                    db_posts.extend(cl_posts)
+        posts = []
+        by_feed = {}
+        pids = set()
+        for post in db_posts:
+            post["lemmas"] = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
+            if post['pid'] not in pids:
+                pids.add(post['pid'])
+                if post['feed_id'] not in by_feed:
+                    feed = self.feeds.get_by_feed_id(self.user['sid'], post['feed_id'])
+                    if feed:
+                        by_feed[post['feed_id']] = feed
+                if post['feed_id'] in by_feed:
+                    posts.append({
+                        'post': post,
+                        'pos': post['pid'],
+                        'category_title': by_feed[post['feed_id']]['category_title'],
+                        'feed_title': by_feed[post['feed_id']]['title'],
+                        'favicon': by_feed[post['feed_id']]['favicon']
+                    })
+        page = self.template_env.get_template('posts.html')
+
+        return Response(
+            page.render(
+                posts=posts,
+                tag=bi_gram,
+                group='tag',
+                words=current_bi_gram['words'],
+                user_settings=self.user['settings'],
+                provider=self.user['provider']
+            ),
+            mimetype='text/html'
+        )
 
     def on_feed_get(self, request: Request, quoted_feed=None) -> Response:
         feed = unquote_plus(quoted_feed)
         current_feed = self.feeds.get_by_feed_id(self.user['sid'], feed)
-        projection = {'_id': False, 'content.content': False}
-        if current_feed is not None:
-            if self.user['settings']['only_unread']:
-                only_unread = self.user['settings']['only_unread']
-            else:
-                only_unread = None
-            db_posts = self.posts.get_by_feed_id(
-                self.user['sid'],
-                current_feed['feed_id'],
-                only_unread,
-                projection
-            )
-            if db_posts is not None:
-                posts = []
-                if self.user['settings']['similar_posts']:
-                    clusters = self.posts.get_clusters(db_posts)
-                    if clusters:
-                        cl_posts = self.posts.get_by_clusters(self.user['sid'], list(clusters), only_unread, projection)
-                        if cl_posts:
-                            db_posts.extend(cl_posts)
-                pids = set()
-                for post in db_posts:
-                    post["lemmas"] = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
-                    if post['pid'] not in pids:
-                        pids.add(post['pid'])
-                        posts.append({
-                            'post': post,
-                            'category_title': current_feed['category_title'],
-                            'pos': post['pid'],
-                            'feed_title': current_feed['title'],
-                            'favicon': current_feed['favicon']
-                        })
-                page = self.template_env.get_template('posts.html')
-                response = Response(
-                    page.render(
-                        posts=posts,
-                        tag=current_feed['title'],
-                        group='feed',
-                        words=[],
-                        user_settings=self.user['settings'],
-                        provider=self.user['provider']
-                    ),
-                    mimetype='text/html'
-                )
-            else:
-                response = self.on_error(request, InternalServerError())
-        elif current_feed is None:
-            response = self.on_error(request, InternalServerError())
-        else:
-            response = self.on_error(request, NotFound())
+        if current_feed is None:
+            return self.on_error(request, InternalServerError())
 
-        return response
+        if not current_feed:
+            return self.on_error(request, NotFound())
+
+        projection = {'_id': False, 'content.content': False}
+        if self.user['settings']['only_unread']:
+            only_unread = self.user['settings']['only_unread']
+        else:
+            only_unread = None
+        db_posts = self.posts.get_by_feed_id(
+            self.user['sid'],
+            current_feed['feed_id'],
+            only_unread,
+            projection
+        )
+        if db_posts is None:
+            return self.on_error(request, InternalServerError())
+
+        posts = []
+        if self.user['settings']['similar_posts']:
+            clusters = self.posts.get_clusters(db_posts)
+            if clusters:
+                cl_posts = self.posts.get_by_clusters(self.user['sid'], list(clusters), only_unread, projection)
+                if cl_posts:
+                    db_posts.extend(cl_posts)
+        pids = set()
+        for post in db_posts:
+            post["lemmas"] = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
+            if post['pid'] not in pids:
+                pids.add(post['pid'])
+                posts.append({
+                    'post': post,
+                    'category_title': current_feed['category_title'],
+                    'pos': post['pid'],
+                    'feed_title': current_feed['title'],
+                    'favicon': current_feed['favicon']
+                })
+        page = self.template_env.get_template('posts.html')
+        return Response(
+            page.render(
+                posts=posts,
+                tag=current_feed['title'],
+                group='feed',
+                words=[],
+                user_settings=self.user['settings'],
+                provider=self.user['provider']
+            ),
+            mimetype='text/html'
+        )
 
     def on_read_posts_post(self, request: Request) -> Response:
         try:
