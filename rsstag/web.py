@@ -1392,10 +1392,11 @@ class RSSTagApplication(object):
             code = 500
             result = {'error': 'Database trouble'}
 
-        response = Response(json.dumps(result), mimetype='application/json')
-        response.status_code = code
-
-        return response
+        return Response(
+            json.dumps(result),
+            mimetype="application/json",
+            status=code
+        )
 
     def on_get_tag_bi_grams(self, request: Request, tag='') -> Response:
         bi_grams = self.bi_grams.get_by_tags(self.user['sid'], [tag], self.user['settings']['only_unread'])
@@ -1415,10 +1416,11 @@ class RSSTagApplication(object):
             code = 500
             result = {'error': 'Database trouble'}
 
-        response = Response(json.dumps(result), mimetype='application/json')
-        response.status_code = code
-
-        return response
+        return Response(
+            json.dumps(result),
+            mimetype="application/json",
+            status=code
+        )
 
     def on_posts_content_post(self, request: Request) -> Response:
         try:
@@ -1457,10 +1459,11 @@ class RSSTagApplication(object):
                 code = 404
                 result = {'error': 'Not found'}
 
-        response = Response(json.dumps(result), mimetype='application/json')
-        response.status_code = code
-
-        return response
+        return Response(
+            json.dumps(result),
+            mimetype="application/json",
+            status=code
+        )
 
     def on_post_links_get(self, request: Request, post_id: int) -> Response:
         projection = {
@@ -1508,10 +1511,11 @@ class RSSTagApplication(object):
             code = 404
             result = {'error': 'Not found'}
 
-        response = Response(json.dumps(result), mimetype='application/json')
-        response.status_code = code
-
-        return response
+        return Response(
+            json.dumps(result),
+            mimetype="application/json",
+            status=code
+        )
 
     def on_get_posts_with_tags(self, request: Request, s_tags: str) -> Response:#TODO: delete or change or something other
         if s_tags:
@@ -1592,10 +1596,11 @@ class RSSTagApplication(object):
             code = 400
             result = {'error': 'Request can`t be empty'}
 
-        response = Response(json.dumps(result), mimetype='application/json')
-        response.status_code = code
-
-        return response
+        return Response(
+            json.dumps(result),
+            mimetype="application/json",
+            status=code
+        )
 
     def on_get_map(self, request: Request) -> Response:
         projection = {'_id': False}
@@ -1606,6 +1611,7 @@ class RSSTagApplication(object):
         if countries is None:
             countries = []
         page = self.template_env.get_template('map.html')
+
         return Response(
             page.render(
                 support=self.config['settings']['support'],
@@ -1659,13 +1665,15 @@ class RSSTagApplication(object):
             code = 500
             result = {'error': 'Database trouble'}
 
-        response = Response(json.dumps(result), mimetype='application/json')
-        response.status_code = code
-
-        return response
+        return Response(
+            json.dumps(result),
+            mimetype="application/json",
+            status=code
+        )
 
     def on_get_tag_net_page(self, request: Request) -> Response:
         page = self.template_env.get_template('tags-net.html')
+
         return Response(
             page.render(
                 support=self.config['settings']['support'],
