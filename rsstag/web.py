@@ -42,7 +42,6 @@ from sklearn.cluster import DBSCAN
 from razdel import sentenize
 
 class RSSTagApplication(object):
-    response = None
     template_env = None
     routes = None
     endpoints = {}
@@ -176,21 +175,22 @@ class RSSTagApplication(object):
             handler, values = adapter.match()
             logging.info('%s', handler)
             if self.user and self.user['ready']:
-                self.endpoints[handler](request, **values)
+                response = self.endpoints[handler](request, **values)
             else:
                 if handler in self.allow_not_logged:
-                    self.endpoints[handler](request, **values)
+                    response = self.endpoints[handler](request, **values)
                 else:
-                    self.response = redirect(self.routes.getUrlByEndpoint('on_root_get'))
+                    response = redirect(self.routes.getUrlByEndpoint('on_root_get'))
         except HTTPException as e:
-            self.on_error(request, e)
+            response = self.on_error(request, e)
         if self.need_cookie_update:
-            self.response.set_cookie('sid', self.user['sid'], max_age=self.user_ttl, httponly=True)
+            response.set_cookie('sid', self.user['sid'], max_age=self.user_ttl, httponly=True)
             #self.response.set_cookie('sid', self.user['sid'])
         request.close()
-        self.response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+        response.headers['X-Frame-Options'] = 'SAMEORIGIN'
         logging.info('%s', time.time() - st)
-        return self.response(http_env, start_resp)
+
+        return response(http_env, start_resp)
 
     def getSpeech(self, text):
         file_format = 'mp3'
@@ -232,24 +232,27 @@ class RSSTagApplication(object):
         return result
 
 
-    def on_select_provider_get(self, request):
+    def on_select_provider_get(self, request) -> Response:
         page = self.template_env.get_template('provider.html')
-        self.response = Response(page.render(
+        return Response(page.render(
             select_provider_url=self.routes.getUrlByEndpoint(endpoint='on_select_provider_post'),
             version=self.config['settings']['version'],
             support=self.config['settings']['support']
         ), mimetype='text/html')
 
-    def on_select_provider_post(self, request: Request):
+
+    def on_select_provider_post(self, request: Request) -> Response:
         provider = request.form.get('provider')
         if provider:
-            self.response = redirect(self.routes.getUrlByEndpoint(endpoint='on_login_get'))
-            self.response.set_cookie('provider', provider, max_age=300, httponly=True)
+            response = redirect(self.routes.getUrlByEndpoint(endpoint='on_login_get'))
+            response.set_cookie('provider', provider, max_age=300, httponly=True)
         else:
             page = self.template_env.get_template('error.html')
-            self.response = Response(page.render(err=['Unknown provider']), mimetype='text/html')
+            response = Response(page.render(err=['Unknown provider']), mimetype='text/html')
 
-    def on_post_speech(self, request: Request):
+        return response
+
+    def on_post_speech(self, request: Request) -> Response:
         try:
             post_id = int(request.form.get('post_id'))
         except Exception as e:
@@ -275,32 +278,36 @@ class RSSTagApplication(object):
             result = {'error': 'No post id'}
             code = 400
 
-        self.response = Response(json.dumps(result), mimetype='application/json')
-        self.response.status_code = code
+        response = Response(json.dumps(result), mimetype='application/json')
+        response.status_code = code
 
-    def on_login_get(self, request: Request, err=None):
+        return response
+
+    def on_login_get(self, request: Request, err=None) -> Response:
         provider = request.cookies.get('provider')
         if provider in self.providers:
-            if (provider == 'bazqux') or (provider == 'inoreader') or (provider == 'telegram'):
-                page = self.template_env.get_template('login.html')
-                if not err:
-                    err = []
-                self.response = Response(page.render(
-                    err=err,
-                    login_url=self.routes.getUrlByEndpoint(endpoint='on_login_get'),
-                    version=self.config['settings']['version'],
-                    support=self.config['settings']['support'],
-                    provider=provider
-                ), mimetype='text/html')
+            #if (provider == 'bazqux') or (provider == 'inoreader') or (provider == 'telegram'):
+            page = self.template_env.get_template('login.html')
+            if not err:
+                err = []
+            response = Response(page.render(
+                err=err,
+                login_url=self.routes.getUrlByEndpoint(endpoint='on_login_get'),
+                version=self.config['settings']['version'],
+                support=self.config['settings']['support'],
+                provider=provider
+            ), mimetype='text/html')
         else:
             page = self.template_env.get_template('error.html')
-            self.response = Response(page.render(
+            response = Response(page.render(
                 err=['Unknown provider'],
                 version=self.config['settings']['version'],
                 support=self.config['settings']['support']
             ), mimetype='text/html')
 
-    def on_login_post(self, request: Request):
+        return response
+
+    def on_login_post(self, request: Request) -> Response:
         login = request.form.get('login')
         password = request.form.get('password')
         err = []
@@ -327,8 +334,8 @@ class RSSTagApplication(object):
                 user = None
             if user:
                 self.prepareSession(request, user)
-                self.response = redirect(self.routes.getUrlByEndpoint(endpoint='on_root_get'))
-                return ''
+                return redirect(self.routes.getUrlByEndpoint(endpoint='on_root_get'))
+
             elif user is not None:
                 self.user = {'provider': request.cookies.get('provider')}
                 if (self.user['provider'] == 'bazqux') or (self.user['provider'] == 'inoreader'):
@@ -346,14 +353,14 @@ class RSSTagApplication(object):
 
         else:
             err.append('Login or Password can`t be empty')
-        if not err:
-            #self.response = redirect(self.routes.getUrlByEndpoint(endpoint='on_root_get'))
-            self.response = redirect(self.routes.getUrlByEndpoint(endpoint='on_refresh_get_post'))
-        else:
-            self.response = Response('', mimetype='text/html')
-            self.on_login_get(request, err)
 
-    def on_refresh_get_post(self, request: Request):
+        if err:
+            return self.on_login_get(request, err)
+
+        #self.response = redirect(self.routes.getUrlByEndpoint(endpoint='on_root_get'))
+        return redirect(self.routes.getUrlByEndpoint(endpoint='on_refresh_get_post'))
+
+    def on_refresh_get_post(self, request: Request) -> Response:
         if self.user:
             try:
                 updated = False
@@ -377,11 +384,12 @@ class RSSTagApplication(object):
                     logging.error('Cant update data of user %s while create "posts update" task', self.user['sid'])
             except Exception as e:
                 logging.error('Can`t create refresh task for user %s. Info: %s', self.user['sid'], e)
-            self.response = redirect(self.routes.getUrlByEndpoint(endpoint='on_root_get'))
-        else:
-            self.response = redirect(self.routes.getUrlByEndpoint(endpoint='on_root_get'))
 
-    def on_status_get(self, request: Request):
+            return redirect(self.routes.getUrlByEndpoint(endpoint='on_root_get'))
+        else:
+            return redirect(self.routes.getUrlByEndpoint(endpoint='on_root_get'))
+
+    def on_status_get(self, request: Request) -> Response:
         if self.user:
             if self.user['retoken']:
                 result = {'data': {
@@ -399,10 +407,12 @@ class RSSTagApplication(object):
                 'is_ok': False,
                 'msgs': ['Looks like you are not logged in']
             }}
-        self.response = Response(json.dumps(result), mimetype='text/html')
-        self.response.headers['Pragma'] = 'no-cache'
+        response = Response(json.dumps(result), mimetype='text/html')
+        response.headers['Pragma'] = 'no-cache'
 
-    def on_settings_post(self, request: Request):
+        return response
+
+    def on_settings_post(self, request: Request) -> Response:
         try:
             settings = json.loads(request.get_data(as_text=True))
         except Exception as e:
@@ -432,18 +442,22 @@ class RSSTagApplication(object):
             result = {'error': 'Something wrong with settings'}
             code = 400
 
-        self.response = Response(json.dumps(result), mimetype='application/json')
-        self.response.status_code = code
+        response = Response(json.dumps(result), mimetype='application/json')
+        response.status_code = code
 
-    def on_error(self, request: Request, e):
+        return response
+
+    def on_error(self, request: Request, e) -> Response:
         page = self.template_env.get_template('error.html')
-        self.response = Response(
+        response = Response(
             page.render(title='ERROR', body='Error: {0}, {1}'.format(e.code, e.description)),
             mimetype='text/html'
         )
-        self.response.status_code = e.code
+        response.status_code = e.code
 
-    def on_root_get(self, request: Request, err=None):
+        return response
+
+    def on_root_get(self, request: Request, err=None) -> Response:
         if not err:
             err = []
         only_unread = True
@@ -457,7 +471,7 @@ class RSSTagApplication(object):
             if sentiments is None:
                 sentiments = tuple()
             page = self.template_env.get_template('root-logged.html')
-            self.response = Response(
+            response = Response(
                 page.render(
                     err=err,
                     support=self.config['settings']['support'],
@@ -472,7 +486,7 @@ class RSSTagApplication(object):
         else:
             provider = 'Not selected'
             page = self.template_env.get_template('root.html')
-            self.response = Response(
+            response = Response(
                 page.render(
                     err=err,
                     only_unread=only_unread,
@@ -483,7 +497,9 @@ class RSSTagApplication(object):
                 mimetype='text/html'
             )
 
-    def on_group_by_category_get(self, request: Request):
+        return response
+
+    def on_group_by_category_get(self, request: Request) -> Response:
         page_number = self.user['page']
         if not page_number:
             page_number = 1
@@ -529,7 +545,7 @@ class RSSTagApplication(object):
                 else:
                     data = OrderedDict()
                 page = self.template_env.get_template('group-by-category.html')
-                self.response = Response(
+                response = Response(
                     page.render(
                         data=data,
                         group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_get',
@@ -540,11 +556,13 @@ class RSSTagApplication(object):
                     mimetype='text/html'
                 )
             else:
-                self.on_error(request, InternalServerError())
+                response = self.on_error(request, InternalServerError())
         else:
-            self.on_error(request, InternalServerError())
+            response = self.on_error(request, InternalServerError())
 
-    def on_category_get(self, request: Request, quoted_category=None):
+        return response
+
+    def on_category_get(self, request: Request, quoted_category=None) -> Response:
         cat = unquote_plus(quoted_category)
         db_feeds = self.feeds.get_by_category(self.user['sid'], cat)
         if db_feeds:
@@ -587,7 +605,7 @@ class RSSTagApplication(object):
                                 'favicon': by_feed[post['feed_id']]['favicon']
                             })
                 page = self.template_env.get_template('posts.html')
-                self.response = Response(
+                response = Response(
                     page.render(
                         posts=posts,
                         tag=cat,
@@ -599,13 +617,15 @@ class RSSTagApplication(object):
                     mimetype='text/html'
                 )
             else:
-                self.on_error(request, InternalServerError())
+                response = self.on_error(request, InternalServerError())
         elif db_feeds is None:
-            self.on_error(request, InternalServerError())
+            response = self.on_error(request, InternalServerError())
         else:
-            self.on_error(request, NotFound())
+            response = self.on_error(request, NotFound())
 
-    def on_tag_get(self, request: Request, quoted_tag=None):
+        return response
+
+    def on_tag_get(self, request: Request, quoted_tag=None) -> Response:
         tag = unquote(quoted_tag)
         current_tag = self.tags.get_by_tag(self.user['sid'], tag)
         if current_tag:
@@ -642,7 +662,7 @@ class RSSTagApplication(object):
                                 'favicon': by_feed[post['feed_id']]['favicon']
                             })
                 page = self.template_env.get_template('posts.html')
-                self.response = Response(
+                response = Response(
                     page.render(
                         posts=posts,
                         tag=tag,
@@ -654,13 +674,15 @@ class RSSTagApplication(object):
                     mimetype='text/html'
                 )
             else:
-                self.on_error(request, InternalServerError())
+                response = self.on_error(request, InternalServerError())
         elif current_tag is None:
-            self.on_error(request, InternalServerError())
+            response = self.on_error(request, InternalServerError())
         else:
-            self.on_error(request, NotFound())
+            response = self.on_error(request, NotFound())
 
-    def on_bi_gram_get(self, request: Request, bi_gram=''):
+        return response
+
+    def on_bi_gram_get(self, request: Request, bi_gram='') -> Response:
         current_bi_gram = self.bi_grams.get_by_bi_gram(self.user['sid'], bi_gram)
         if current_bi_gram:
             projection = {'_id': False, 'content.content': False}
@@ -696,7 +718,7 @@ class RSSTagApplication(object):
                                 'favicon': by_feed[post['feed_id']]['favicon']
                             })
                 page = self.template_env.get_template('posts.html')
-                self.response = Response(
+                response = Response(
                     page.render(
                         posts=posts,
                         tag=bi_gram,
@@ -708,13 +730,13 @@ class RSSTagApplication(object):
                     mimetype='text/html'
                 )
             else:
-                self.on_error(request, InternalServerError())
+                response = self.on_error(request, InternalServerError())
         elif current_bi_gram is None:
-            self.on_error(request, InternalServerError())
+            response = self.on_error(request, InternalServerError())
         else:
-            self.on_error(request, NotFound())
+            response = self.on_error(request, NotFound())
 
-    def on_feed_get(self, request: Request, quoted_feed=None):
+    def on_feed_get(self, request: Request, quoted_feed=None) -> Response:
         feed = unquote_plus(quoted_feed)
         current_feed = self.feeds.get_by_feed_id(self.user['sid'], feed)
         projection = {'_id': False, 'content.content': False}
@@ -750,7 +772,7 @@ class RSSTagApplication(object):
                             'favicon': current_feed['favicon']
                         })
                 page = self.template_env.get_template('posts.html')
-                self.response = Response(
+                response = Response(
                     page.render(
                         posts=posts,
                         tag=current_feed['title'],
@@ -762,13 +784,15 @@ class RSSTagApplication(object):
                     mimetype='text/html'
                 )
             else:
-                self.on_error(request, InternalServerError())
+                response = self.on_error(request, InternalServerError())
         elif current_feed is None:
-            self.on_error(request, InternalServerError())
+            response = self.on_error(request, InternalServerError())
         else:
-            self.on_error(request, NotFound())
+            response = self.on_error(request, NotFound())
 
-    def on_read_posts_post(self, request: Request):
+        return response
+
+    def on_read_posts_post(self, request: Request) -> Response:
         try:
             data = json.loads(request.get_data(as_text=True))
             if data['ids'] and isinstance(data['ids'], list):
@@ -828,8 +852,10 @@ class RSSTagApplication(object):
                     code = 500
                     result = {'error': 'Database error'}
 
-        self.response = Response(json.dumps(result), mimetype='application/json')
-        self.response.status_code = code
+        response = Response(json.dumps(result), mimetype='application/json')
+        response.status_code = code
+
+        return response
 
     def calcPagerData(self, p_number, page_count, items_per_page, endpoint, sentiment='', group='', letter=''):
         pages_map = {}
@@ -879,12 +905,12 @@ class RSSTagApplication(object):
         end_tags_range = round(start_tags_range + items_per_page)
         return (pages_map, start_tags_range, end_tags_range)
 
-    def on_get_tag_page(self, request: Request, tag=''):
+    def on_get_tag_page(self, request: Request, tag='') -> Response:
         tag_data = self.tags.get_by_tag(self.user['sid'], tag)
         if tag_data is not None:
             del tag_data['_id']
             page = self.template_env.get_template('tag-info.html')
-            self.response = Response(
+            response = Response(
                 page.render(
                     tag=tag_data,
                     sort_by_title='tags',
@@ -899,11 +925,13 @@ class RSSTagApplication(object):
                 mimetype='text/html'
             )
         elif tag_data is None:
-            self.on_error(request, InternalServerError())
+            response = self.on_error(request, InternalServerError())
         else:
-            self.on_error(request, NotFound())
+            response = self.on_error(request, NotFound())
 
-    def on_group_by_tags_get(self, request: Request, page_number: int=1) -> None:
+        return response
+
+    def on_group_by_tags_get(self, request: Request, page_number: int=1) -> Response:
         tags_count = self.tags.count(self.user['sid'], self.user['settings']['only_unread'])
         if tags_count is not None:
             page_count = self.getPageCount(tags_count, self.user['settings']['tags_on_page'])
@@ -912,7 +940,7 @@ class RSSTagApplication(object):
                 self.user['page'] = p_number
             elif page_number > page_count:
                 p_number = page_count
-                self.response = redirect(
+                response = redirect(
                     self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': p_number})
                 )
                 self.user['page'] = p_number
@@ -953,7 +981,7 @@ class RSSTagApplication(object):
                 else:
                     letters = []
                 page = self.template_env.get_template('group-by-tag.html')
-                self.response = Response(
+                response = Response(
                     page.render(
                         tags=sorted_tags,
                         sort_by_title='tags',
@@ -971,15 +999,17 @@ class RSSTagApplication(object):
                     mimetype='text/html'
                 )
             else:
-                self.on_error(request, InternalServerError())
+                response = self.on_error(request, InternalServerError())
             self.users.update_by_sid(
                 self.user['sid'],
                 {'page': new_cookie_page_value, 'letter': ''}
             )
         else:
-            self.on_error(request, InternalServerError())
+            response = self.on_error(request, InternalServerError())
 
-    def on_group_by_bigrams_get(self, request: Request, page_number: int=1) -> None:
+        return response
+
+    def on_group_by_bigrams_get(self, request: Request, page_number: int=1) -> Response:
         tags_count = self.bi_grams.count(self.user['sid'], only_unread=self.user['settings']['only_unread'])
         if tags_count is not None:
             page_count = self.getPageCount(tags_count, self.user['settings']['tags_on_page'])
@@ -988,7 +1018,7 @@ class RSSTagApplication(object):
                 self.user['page'] = p_number
             elif page_number > page_count:
                 p_number = page_count
-                self.response = redirect(
+                response = redirect(
                     self.routes.getUrlByEndpoint(endpoint='on_group_by_bi_grams_get', params={'page_number': p_number})
                 )
                 self.user['page'] = p_number
@@ -1025,7 +1055,7 @@ class RSSTagApplication(object):
                     })
                 letters = []
                 page = self.template_env.get_template('group-by-tag.html')
-                self.response = Response(
+                response = Response(
                     page.render(
                         tags=sorted_tags,
                         sort_by_title='tags',
@@ -1043,15 +1073,17 @@ class RSSTagApplication(object):
                     mimetype='text/html'
                 )
             else:
-                self.on_error(request, InternalServerError())
+                response = self.on_error(request, InternalServerError())
             self.users.update_by_sid(
                 self.user['sid'],
                 {'page': new_cookie_page_value, 'letter': ''}
             )
         else:
-            self.on_error(request, InternalServerError())
+            response = self.on_error(request, InternalServerError())
 
-    def on_group_by_tags_sentiment(self, request: Request, sentiment:str, page_number: int=1) -> None:
+        return response
+
+    def on_group_by_tags_sentiment(self, request: Request, sentiment:str, page_number: int=1) -> Response:
         sentiment = sentiment.replace('|', '/')
         tags_count = self.tags.count(self.user['sid'], self.user['settings']['only_unread'], sentiments=[sentiment])
         if tags_count is not None:
@@ -1061,7 +1093,7 @@ class RSSTagApplication(object):
                 self.user['page'] = p_number
             elif page_number > page_count:
                 p_number = page_count
-                self.response = redirect(
+                response = redirect(
                     self.routes.getUrlByEndpoint(
                         endpoint='on_group_by_tags_sentiment',
                         params={'sentiment': sentiment, 'page_number': p_number}
@@ -1107,7 +1139,7 @@ class RSSTagApplication(object):
                 else:
                     letters = []
                 page = self.template_env.get_template('group-by-tag.html')
-                self.response = Response(
+                response = Response(
                     page.render(
                         tags=sorted_tags,
                         sort_by_title='tags',
@@ -1125,15 +1157,17 @@ class RSSTagApplication(object):
                     mimetype='text/html'
                 )
             else:
-                self.on_error(request, InternalServerError())
+                response = self.on_error(request, InternalServerError())
             self.users.update_by_sid(
                 self.user['sid'],
                 {'page': new_cookie_page_value, 'letter': ''}
             )
         else:
-            self.on_error(request, InternalServerError())
+            response = self.on_error(request, InternalServerError())
 
-    def on_group_by_tags_startwith_get(self, request: Request, letter='', page_number=1):
+        return response
+
+    def on_group_by_tags_startwith_get(self, request: Request, letter='', page_number=1) -> Response:
         db_letters = self.letters.get(self.user['sid'], make_sort=True)
         if (db_letters is not None) and (letter in db_letters['letters']):
             tags_count = self.tags.count(self.user['sid'], self.user['settings']['only_unread'], '^{}'.format(letter))
@@ -1144,7 +1178,7 @@ class RSSTagApplication(object):
                     self.user['page'] = p_number
                 elif page_number > page_count:
                     p_number = page_count
-                    self.response = redirect(
+                    response = redirect(
                         self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_get', params={'page_number': p_number})
                     )
                     self.user['page'] = p_number
@@ -1186,7 +1220,7 @@ class RSSTagApplication(object):
                     else:
                         letters = []
                     page = self.template_env.get_template('group-by-tag.html')
-                    self.response = Response(
+                    response = Response(
                         page.render(
                             tags=sorted_tags,
                             sort_by_title='tags',
@@ -1204,16 +1238,18 @@ class RSSTagApplication(object):
                         mimetype='text/html'
                     )
                 else:
-                    self.on_error(request, InternalServerError())
+                    response = self.on_error(request, InternalServerError())
                 self.users.update_by_sid(self.user['sid'], {'letter': letter})
             else:
-                self.on_error(request, InternalServerError())
+                response = self.on_error(request, InternalServerError())
         elif db_letters is None:
-            self.on_error(request, InternalServerError())
+            response = self.on_error(request, InternalServerError())
         else:
-            self.on_error(request, NotFound())
+            response = self.on_error(request, NotFound())
 
-    def on_group_by_tags_group(self, request: Request, group='', page_number=1):
+        return response
+
+    def on_group_by_tags_group(self, request: Request, group='', page_number=1) -> Response:
         tags_count = self.tags.count(self.user['sid'], self.user['settings']['only_unread'], groups=[group])
         if tags_count is not None:
             page_count = self.getPageCount(tags_count, self.user['settings']['tags_on_page'])
@@ -1222,7 +1258,7 @@ class RSSTagApplication(object):
                 self.user['page'] = p_number
             elif page_number > page_count:
                 p_number = page_count
-                self.response = redirect(
+                response = redirect(
                     self.routes.getUrlByEndpoint(
                         endpoint='on_group_by_tags_group',
                         params={'group': group, 'page_number': p_number}
@@ -1268,7 +1304,7 @@ class RSSTagApplication(object):
                 else:
                     letters = []
                 page = self.template_env.get_template('group-by-tag.html')
-                self.response = Response(
+                response = Response(
                     page.render(
                         tags=sorted_tags,
                         sort_by_title='tags',
@@ -1286,16 +1322,18 @@ class RSSTagApplication(object):
                     mimetype='text/html'
                 )
             else:
-                self.on_error(request, InternalServerError())
+                response = self.on_error(request, InternalServerError())
             self.users.update_by_sid(
                 self.user['sid'],
                 {'page': new_cookie_page_value, 'letter': ''}
             )
         else:
-            self.on_error(request, InternalServerError())
+            response = self.on_error(request, InternalServerError())
+
+        return response
 
 
-    def on_get_tag_similar(self, request: Request, model='', tag=''):
+    def on_get_tag_similar(self, request: Request, model='', tag='') -> Response:
         tags_set = set()
         all_tags = []
         if model in self.models:
@@ -1342,10 +1380,12 @@ class RSSTagApplication(object):
             code = 404
             result = {'error': 'Unknown model'}
 
-        self.response = Response(json.dumps(result), mimetype='application/json')
-        self.response.status_code = code
+        response = Response(json.dumps(result), mimetype='application/json')
+        response.status_code = code
 
-    def on_get_tag_siblings(self, request: Request, tag=''):
+        return response
+
+    def on_get_tag_siblings(self, request: Request, tag='') -> Response:
         all_tags = []
         if self.user['settings']['only_unread']:
             only_unread = self.user['settings']['only_unread']
@@ -1381,10 +1421,12 @@ class RSSTagApplication(object):
             code = 500
             result = {'error': 'Database trouble'}
 
-        self.response = Response(json.dumps(result), mimetype='application/json')
-        self.response.status_code = code
+        response = Response(json.dumps(result), mimetype='application/json')
+        response.status_code = code
 
-    def on_get_tag_bi_grams(self, request: Request, tag=''):
+        return response
+
+    def on_get_tag_bi_grams(self, request: Request, tag='') -> Response:
         bi_grams = self.bi_grams.get_by_tags(self.user['sid'], [tag], self.user['settings']['only_unread'])
         if bi_grams is not None:
             all_bi_grams = []
@@ -1402,10 +1444,12 @@ class RSSTagApplication(object):
             code = 500
             result = {'error': 'Database trouble'}
 
-        self.response = Response(json.dumps(result), mimetype='application/json')
-        self.response.status_code = code
+        response = Response(json.dumps(result), mimetype='application/json')
+        response.status_code = code
 
-    def on_posts_content_post(self, request: Request):
+        return response
+
+    def on_posts_content_post(self, request: Request) -> Response:
         try:
             wanted_posts = json.loads(request.get_data(as_text=True))
             if not (isinstance(wanted_posts, list) and wanted_posts):
@@ -1442,10 +1486,12 @@ class RSSTagApplication(object):
                 code = 404
                 result = {'error': 'Not found'}
 
-        self.response = Response(json.dumps(result), mimetype='application/json')
-        self.response.status_code = code
+        response = Response(json.dumps(result), mimetype='application/json')
+        response.status_code = code
 
-    def on_post_links_get(self, request: Request, post_id: int) -> None:
+        return response
+
+    def on_post_links_get(self, request: Request, post_id: int) -> Response:
         projection = {
             'tags': True,
             'feed_id': True,
@@ -1491,10 +1537,12 @@ class RSSTagApplication(object):
             code = 404
             result = {'error': 'Not found'}
 
-        self.response = Response(json.dumps(result), mimetype='application/json')
-        self.response.status_code = code
+        response = Response(json.dumps(result), mimetype='application/json')
+        response.status_code = code
 
-    def on_get_posts_with_tags(self, request: Request, s_tags: str):#TODO: delete or change or something other
+        return response
+
+    def on_get_posts_with_tags(self, request: Request, s_tags: str) -> Response:#TODO: delete or change or something other
         if s_tags:
             tags = s_tags.split('-')
             if tags:
@@ -1529,7 +1577,7 @@ class RSSTagApplication(object):
                         del posts[p_id]
                     result[tag]['posts'] = sorted(result[tag]['posts'], key=lambda p: p['feed_id'])
                 page = self.template_env.get_template('tags-posts.html')
-                self.response = Response(
+                response = Response(
                     page.render(
                         tags=result,
                         selected_tags=','.join(tags),
@@ -1540,9 +1588,11 @@ class RSSTagApplication(object):
                     mimetype='text/html'
                 )
         else:
-            self.response = redirect(self.routes.getUrlByEndpoint('on_root_get'))
+            response = redirect(self.routes.getUrlByEndpoint('on_root_get'))
 
-    def on_post_tags_search(self, request: Request):
+        return response
+
+    def on_post_tags_search(self, request: Request) -> Response:
         s_request = unquote_plus(request.form.get('req'))
         if s_request:
             search_result = self.tags.get_all(
@@ -1571,10 +1621,12 @@ class RSSTagApplication(object):
             code = 400
             result = {'error': 'Request can`t be empty'}
 
-        self.response = Response(json.dumps(result), mimetype='application/json')
-        self.response.status_code = code
+        response = Response(json.dumps(result), mimetype='application/json')
+        response.status_code = code
 
-    def on_get_map(self, request: Request):
+        return response
+
+    def on_get_map(self, request: Request) -> Response:
         projection = {'_id': False}
         cities = self.tags.get_city_tags(self.user['sid'], self.user['settings']['only_unread'], projection)
         countries = self.tags.get_country_tags(self.user['sid'], self.user['settings']['only_unread'], projection)
@@ -1583,7 +1635,7 @@ class RSSTagApplication(object):
         if countries is None:
             countries = []
         page = self.template_env.get_template('map.html')
-        self.response = Response(
+        return Response(
             page.render(
                 support=self.config['settings']['support'],
                 version=self.config['settings']['version'],
@@ -1595,7 +1647,7 @@ class RSSTagApplication(object):
             mimetype='text/html'
         )
 
-    def on_get_tag_net(self, request: Request, tag=''):
+    def on_get_tag_net(self, request: Request, tag='') -> Response:
         all_tags = []
         edges = defaultdict(set)
         if self.user['settings']['only_unread']:
@@ -1636,12 +1688,14 @@ class RSSTagApplication(object):
             code = 500
             result = {'error': 'Database trouble'}
 
-        self.response = Response(json.dumps(result), mimetype='application/json')
-        self.response.status_code = code
+        response = Response(json.dumps(result), mimetype='application/json')
+        response.status_code = code
 
-    def on_get_tag_net_page(self, request: Request):
+        return response
+
+    def on_get_tag_net_page(self, request: Request) -> Response:
         page = self.template_env.get_template('tags-net.html')
-        self.response = Response(
+        return Response(
             page.render(
                 support=self.config['settings']['support'],
                 version=self.config['settings']['version'],
@@ -1651,7 +1705,7 @@ class RSSTagApplication(object):
             mimetype='text/html'
         )
 
-    def on_get_groups(self, request: Request, page_number=1):
+    def on_get_groups(self, request: Request, page_number=1) -> Response:
         groups = self.tags.get_groups(self.user['sid'], self.user['settings']['only_unread'])
         if groups:
             groups_count = len(groups)
@@ -1661,7 +1715,7 @@ class RSSTagApplication(object):
                 self.user['page'] = p_number
             elif page_number > page_count:
                 p_number = page_count
-                self.response = redirect(
+                response = redirect(
                     self.routes.getUrlByEndpoint(
                         endpoint='on_get_groups',
                         params={'page_number': p_number}
@@ -1682,7 +1736,7 @@ class RSSTagApplication(object):
             )
             page = self.template_env.get_template('tags-groups.html')
             page_groups = sorted(groups.items(), key=lambda el: el[1], reverse=True)
-            self.response = Response(
+            response = Response(
                 page.render(
                     support=self.config['settings']['support'],
                     version=self.config['settings']['version'],
@@ -1698,9 +1752,11 @@ class RSSTagApplication(object):
                 {'page': new_cookie_page_value, 'letter': ''}
             )
         else:
-            self.on_error(request, InternalServerError())
+            response = self.on_error(request, InternalServerError())
 
-    def on_tag_dates_get(self, request: Request, tag: str):
+        return response
+
+    def on_tag_dates_get(self, request: Request, tag: str) -> Response:
         if tag:
             if self.user:
                 cursor = self.posts.get_by_tags(self.user["sid"], [tag], self.user['settings']['only_unread'], {"unix_date": True})
@@ -1723,10 +1779,12 @@ class RSSTagApplication(object):
             result = {'error': 'Something wrong with request'}
             code = 400
 
-        self.response = Response(json.dumps(result), mimetype='application/json')
-        self.response.status_code = code
+        response = Response(json.dumps(result), mimetype='application/json')
+        response.status_code = code
 
-    def on_bigrams_dates_get(self, request: Request, tag: str):
+        return response
+
+    def on_bigrams_dates_get(self, request: Request, tag: str) -> Response:
         if tag:
             if self.user:
                 cursor = self.posts.get_by_tags(self.user["sid"], [tag], self.user['settings']['only_unread'], {"unix_date": True, "bi_grams": True})
@@ -1757,10 +1815,12 @@ class RSSTagApplication(object):
             result = {'error': 'Something wrong with request'}
             code = 400
 
-        self.response = Response(json.dumps(result), mimetype='application/json')
-        self.response.status_code = code
+        response = Response(json.dumps(result), mimetype='application/json')
+        response.status_code = code
 
-    def on_wordtree_texts_get(self, request: Request, tag: str):
+        return response
+
+    def on_wordtree_texts_get(self, request: Request, tag: str) -> Response:
         if tag:
             if self.user:
                 cursor = self.posts.get_by_tags(self.user["sid"], [tag], self.user['settings']['only_unread'], {"lemmas": True})
@@ -1792,10 +1852,12 @@ class RSSTagApplication(object):
             result = {'error': 'Something wrong with request'}
             code = 400
 
-        self.response = Response(json.dumps(result), mimetype='application/json')
-        self.response.status_code = code
+        response = Response(json.dumps(result), mimetype='application/json')
+        response.status_code = code
 
-    def on_tag_topics_get(self, request: Request, tag: str):
+        return response
+
+    def on_tag_topics_get(self, request: Request, tag: str) -> Response:
         if tag:
             if self.user:
                 cursor = self.posts.get_by_tags(self.user["sid"], [tag], self.user['settings']['only_unread'], {"lemmas": True})
@@ -1837,10 +1899,12 @@ class RSSTagApplication(object):
             result = {'error': 'Something wrong with request'}
             code = 400
 
-        self.response = Response(json.dumps(result), mimetype='application/json')
-        self.response.status_code = code
+        response = Response(json.dumps(result), mimetype='application/json')
+        response.status_code = code
 
-    def on_topics_texts_get(self, request: Request, tag: str):
+        return response
+
+    def on_topics_texts_get(self, request: Request, tag: str) -> Response:
         if tag:
             if self.user:
                 cursor = self.posts.get_by_tags(self.user["sid"], [tag], self.user['settings']['only_unread'], {"lemmas": True})
@@ -1865,10 +1929,12 @@ class RSSTagApplication(object):
             result = {'error': 'Something wrong with request'}
             code = 400
 
-        self.response = Response(json.dumps(result), mimetype='application/json')
-        self.response.status_code = code
+        response = Response(json.dumps(result), mimetype='application/json')
+        response.status_code = code
 
-    def on_topics_get(self, request: Request, page_number: int=1) -> None:
+        return response
+
+    def on_topics_get(self, request: Request, page_number: int=1) -> Response:
         if self.user:
             all_tags = []
             cursor = self.posts.get_all(self.user["sid"], self.user['settings']['only_unread'], {"lemmas": True})
@@ -1895,7 +1961,7 @@ class RSSTagApplication(object):
                 self.user['page'] = p_number
             elif page_number > page_count:
                 p_number = page_count
-                self.response = redirect(
+                response = redirect(
                     self.routes.getUrlByEndpoint(endpoint='on_topics_get', params={'page_number': p_number})
                 )
                 self.user['page'] = p_number
@@ -1917,7 +1983,7 @@ class RSSTagApplication(object):
             else:
                 letters = []
             page = self.template_env.get_template('group-by-tag.html')
-            self.response = Response(
+            response = Response(
                 page.render(
                     tags=all_tags,
                     sort_by_title='tags',
@@ -1939,7 +2005,9 @@ class RSSTagApplication(object):
                 {'page': new_cookie_page_value, 'letter': ''}
             )
 
-    def on_tag_entities_get(self, request: Request, tag: str):
+        return response
+
+    def on_tag_entities_get(self, request: Request, tag: str) -> Response:
         if tag:
             if self.user:
                 cursor = self.posts.get_by_tags(self.user["sid"], [tag], self.user['settings']['only_unread'], {"content": True, "tags": True, "bi_grams": True})
@@ -1998,10 +2066,12 @@ class RSSTagApplication(object):
             result = {'error': 'Something wrong with request'}
             code = 400
 
-        self.response = Response(json.dumps(result), mimetype='application/json')
-        self.response.status_code = code
+        response = Response(json.dumps(result), mimetype='application/json')
+        response.status_code = code
 
-    def on_entity_get(self, request: Request, quoted_tag=None):
+        return response
+
+    def on_entity_get(self, request: Request, quoted_tag=None) -> Response:
         tag = unquote(quoted_tag)
         projection = {'_id': False, 'content.content': False}
         if self.user['settings']['only_unread']:
@@ -2041,7 +2111,7 @@ class RSSTagApplication(object):
                 for tg in tags_cur:
                     words.update(tg["words"])
             page = self.template_env.get_template('posts.html')
-            self.response = Response(
+            response = Response(
                 page.render(
                     posts=posts,
                     tag=tag,
@@ -2053,9 +2123,11 @@ class RSSTagApplication(object):
                 mimetype='text/html'
             )
         else:
-            self.on_error(request, InternalServerError())
+            response = self.on_error(request, InternalServerError())
 
-    def on_tag_tfidf_get(self, request: Request, tag: str):
+        return response
+
+    def on_tag_tfidf_get(self, request: Request, tag: str) -> Response:
         if tag:
             if self.user:
                 cursor = self.posts.get_by_tags(self.user["sid"], [tag], self.user['settings']['only_unread'], {"lemmas": True})
@@ -2120,10 +2192,10 @@ class RSSTagApplication(object):
             result = {'error': 'Something wrong with request'}
             code = 400
 
-        self.response = Response(json.dumps(result), mimetype='application/json')
-        self.response.status_code = code
+        response = Response(json.dumps(result), mimetype='application/json')
+        response.status_code = code
 
-    def on_tag_clusters_get(self, request: Request, tag: str):
+    def on_tag_clusters_get(self, request: Request, tag: str) -> Response:
         if tag:
             if self.user:
                 cursor = self.posts.get_by_tags(self.user["sid"], [tag], self.user['settings']['only_unread'], {"lemmas": True, "pid": True})
@@ -2165,10 +2237,12 @@ class RSSTagApplication(object):
             result = {'error': 'Something wrong with request'}
             code = 400
 
-        self.response = Response(json.dumps(result), mimetype='application/json')
-        self.response.status_code = code
+        response = Response(json.dumps(result), mimetype='application/json')
+        response.status_code = code
 
-    def on_posts_get(self, request: Request, pids: str):
+        return response
+
+    def on_posts_get(self, request: Request, pids: str) -> Response:
         context_n = 0
         ctx_n = None
         if "context" in request.args:
@@ -2224,7 +2298,7 @@ class RSSTagApplication(object):
             page = self.template_env.get_template('posts.html')
             if context_n:
                 posts.sort(key=lambda p: p["pos"], reverse=True)
-            self.response = Response(
+            response = Response(
                 page.render(
                     posts=posts,
                     tag="NoTag",
@@ -2236,11 +2310,13 @@ class RSSTagApplication(object):
                 mimetype='text/html'
             )
         elif db_posts is None:
-            self.on_error(request, InternalServerError())
+            response = self.on_error(request, InternalServerError())
         else:
-            self.on_error(request, NotFound())
+            response = self.on_error(request, NotFound())
 
-    def on_get_tag_pmi(self, request: Request, tag: str):
+        return response
+
+    def on_get_tag_pmi(self, request: Request, tag: str) -> Response:
         if tag:
             if self.user:
                 cursor = self.posts.get_by_tags(self.user["sid"], [tag], self.user['settings']['only_unread'], {"lemmas": True})
@@ -2323,13 +2399,15 @@ class RSSTagApplication(object):
             result = {'error': 'Something wrong with request'}
             code = 400
 
-        self.response = Response(json.dumps(result), mimetype='application/json')
-        self.response.status_code = code
+        response = Response(json.dumps(result), mimetype='application/json')
+        response.status_code = code
 
-    def on_get_sentences_with_tags(self, request: Request, s_tags: str):
+        return response
+
+    def on_get_sentences_with_tags(self, request: Request, s_tags: str) -> Response:
         if not s_tags:
-            self.on_error(request, NotFound())
-            return
+            return self.on_error(request, NotFound())
+
 
         q_tags = s_tags.split(" ")
         if self.user['settings']['only_unread']:
@@ -2340,8 +2418,7 @@ class RSSTagApplication(object):
         db_posts = self.posts.get_by_tags(self.user['sid'], q_tags, only_unread=only_unread)
         db_tags = self.tags.get_by_tags(self.user['sid'], q_tags, only_unread=only_unread)
         if (db_posts is None) or (db_tags is None):
-            self.on_error(request, InternalServerError())
-            return
+            return self.on_error(request, InternalServerError())
 
         words = set()
         for t in db_tags:
@@ -2389,7 +2466,8 @@ class RSSTagApplication(object):
                 "date": post["date"]
             })
         page = self.template_env.get_template('sentences.html')
-        self.response = Response(
+
+        return Response(
             page.render(
                 sentences=sentences,
                 tag=s_tags,
@@ -2401,7 +2479,7 @@ class RSSTagApplication(object):
             mimetype='text/html'
         )
 
-    def on_cluster_get(self, request: Request, cluster: int):
+    def on_cluster_get(self, request: Request, cluster: int) -> Response:
         projection = {'_id': False, 'content.content': False}
         if self.user['settings']['only_unread']:
             only_unread = self.user['settings']['only_unread']
@@ -2429,7 +2507,7 @@ class RSSTagApplication(object):
                             'favicon': by_feed[post['feed_id']]['favicon']
                         })
             page = self.template_env.get_template('posts.html')
-            self.response = Response(
+            response = Response(
                 page.render(
                     posts=posts,
                     tag="NoTag",
@@ -2441,11 +2519,13 @@ class RSSTagApplication(object):
                 mimetype='text/html'
             )
         elif db_posts is None:
-            self.on_error(request, InternalServerError())
+            response = self.on_error(request, InternalServerError())
         else:
-            self.on_error(request, NotFound())
+            response = self.on_error(request, NotFound())
 
-    def on_clusters_get(self, request: Request):
+        return response
+
+    def on_clusters_get(self, request: Request) -> Response:
         projection = {'_id': False, 'clusters': True}
         if self.user['settings']['only_unread']:
             only_unread = self.user['settings']['only_unread']
@@ -2467,13 +2547,13 @@ class RSSTagApplication(object):
                     links[cl]["n"] += 1
 
         elif db_posts is None:
-            self.on_error(request, InternalServerError())
-            return
+            return self.on_error(request, InternalServerError())
 
         lnks = [(cl, links[cl]["l"], links[cl]["n"]) for cl in links]
         lnks.sort(key=lambda x: x[2], reverse=True)
         page = self.template_env.get_template('clusters.html')
-        self.response = Response(
+
+        return Response(
             page.render(
                 links=lnks,
                 user_settings=self.user['settings'],
