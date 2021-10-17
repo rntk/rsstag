@@ -2042,10 +2042,11 @@ class RSSTagApplication(object):
             result = {'error': 'Something wrong with request'}
             code = 400
 
-        response = Response(json.dumps(result), mimetype='application/json')
-        response.status_code = code
-
-        return response
+        return Response(
+            json.dumps(result),
+            mimetype="application/json",
+            status=code
+        )
 
     def on_entity_get(self, request: Request, quoted_tag=None) -> Response:
         tag = unquote(quoted_tag)
@@ -2055,53 +2056,53 @@ class RSSTagApplication(object):
         else:
             only_unread = None
         db_posts = self.posts.get_by_tags(self.user['sid'], tag.split(), only_unread, projection)
-        if db_posts is not None:
-            if self.user['settings']['similar_posts']:
-                clusters = self.posts.get_clusters(db_posts)
-                if clusters:
-                    cl_posts = self.posts.get_by_clusters(self.user['sid'], list(clusters), only_unread, projection)
-                    if cl_posts:
-                        db_posts.extend(cl_posts)
-            posts = []
-            by_feed = {}
-            pids = set()
-            for post in db_posts:
-                post["lemmas"] = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
-                if post['pid'] not in pids:
-                    pids.add(post['pid'])
-                    if post['feed_id'] not in by_feed:
-                        feed = self.feeds.get_by_feed_id(self.user['sid'], post['feed_id'])
-                        if feed:
-                            by_feed[post['feed_id']] = feed
-                    if post['feed_id']in by_feed:
-                        posts.append({
-                            'post': post,
-                            'pos': post['pid'],
-                            'category_title': by_feed[post['feed_id']]['category_title'],
-                            'feed_title': by_feed[post['feed_id']]['title'],
-                            'favicon': by_feed[post['feed_id']]['favicon']
-                        })
-            tags_cur = self.tags.get_by_tags(self.user["sid"], tag.split(), only_unread=only_unread)
-            words = set()
-            if tags_cur is not None:
-                for tg in tags_cur:
-                    words.update(tg["words"])
-            page = self.template_env.get_template('posts.html')
-            response = Response(
-                page.render(
-                    posts=posts,
-                    tag=tag,
-                    group='tag',
-                    words=list(words),
-                    user_settings=self.user['settings'],
-                    provider=self.user['provider']
-                ),
-                mimetype='text/html'
-            )
-        else:
-            response = self.on_error(request, InternalServerError())
+        if db_posts is None:
+            return self.on_error(request, InternalServerError())
 
-        return response
+        if self.user['settings']['similar_posts']:
+            clusters = self.posts.get_clusters(db_posts)
+            if clusters:
+                cl_posts = self.posts.get_by_clusters(self.user['sid'], list(clusters), only_unread, projection)
+                if cl_posts:
+                    db_posts.extend(cl_posts)
+        posts = []
+        by_feed = {}
+        pids = set()
+        for post in db_posts:
+            post["lemmas"] = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
+            if post['pid'] not in pids:
+                pids.add(post['pid'])
+                if post['feed_id'] not in by_feed:
+                    feed = self.feeds.get_by_feed_id(self.user['sid'], post['feed_id'])
+                    if feed:
+                        by_feed[post['feed_id']] = feed
+                if post['feed_id']in by_feed:
+                    posts.append({
+                        'post': post,
+                        'pos': post['pid'],
+                        'category_title': by_feed[post['feed_id']]['category_title'],
+                        'feed_title': by_feed[post['feed_id']]['title'],
+                        'favicon': by_feed[post['feed_id']]['favicon']
+                    })
+        tags_cur = self.tags.get_by_tags(self.user["sid"], tag.split(), only_unread=only_unread)
+        words = set()
+        if tags_cur is not None:
+            for tg in tags_cur:
+                words.update(tg["words"])
+
+        page = self.template_env.get_template('posts.html')
+
+        return Response(
+            page.render(
+                posts=posts,
+                tag=tag,
+                group='tag',
+                words=list(words),
+                user_settings=self.user['settings'],
+                provider=self.user['provider']
+            ),
+            mimetype='text/html'
+        )
 
     def on_tag_tfidf_get(self, request: Request, tag: str) -> Response:
         if tag:
@@ -2168,8 +2169,11 @@ class RSSTagApplication(object):
             result = {'error': 'Something wrong with request'}
             code = 400
 
-        response = Response(json.dumps(result), mimetype='application/json')
-        response.status_code = code
+        return Response(
+            json.dumps(result),
+            mimetype="application/json",
+            status=code
+        )
 
     def on_tag_clusters_get(self, request: Request, tag: str) -> Response:
         if tag:
@@ -2213,10 +2217,11 @@ class RSSTagApplication(object):
             result = {'error': 'Something wrong with request'}
             code = 400
 
-        response = Response(json.dumps(result), mimetype='application/json')
-        response.status_code = code
-
-        return response
+        return Response(
+            json.dumps(result),
+            mimetype='application/json',
+            status=code
+        )
 
     def on_posts_get(self, request: Request, pids: str) -> Response:
         context_n = 0
@@ -2245,52 +2250,49 @@ class RSSTagApplication(object):
             pids_i.extend(c_pids)
 
         db_posts = self.posts.get_by_pids(self.user['sid'], pids_i, projection)
-        if db_posts is not None:
-            if self.user['settings']['similar_posts']:
-                clusters = self.posts.get_clusters(db_posts)
-                if clusters:
-                    cl_posts = self.posts.get_by_clusters(self.user['sid'], list(clusters), only_unread, projection)
-                    if cl_posts:
-                        db_posts.extend(cl_posts)
-            posts = []
-            by_feed = {}
-            pids = set()
-            for post in db_posts:
-                post["lemmas"] = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
-                if post['pid'] not in pids:
-                    pids.add(post['pid'])
-                    if post['feed_id'] not in by_feed:
-                        feed = self.feeds.get_by_feed_id(self.user['sid'], post['feed_id'])
-                        if feed:
-                            by_feed[post['feed_id']] = feed
-                    if post['feed_id'] in by_feed:
-                        posts.append({
-                            'post': post,
-                            'pos': post['pid'],
-                            'category_title': by_feed[post['feed_id']]['category_title'],
-                            'feed_title': by_feed[post['feed_id']]['title'],
-                            'favicon': by_feed[post['feed_id']]['favicon']
-                        })
-            page = self.template_env.get_template('posts.html')
-            if context_n:
-                posts.sort(key=lambda p: p["pos"], reverse=True)
-            response = Response(
-                page.render(
-                    posts=posts,
-                    tag="NoTag",
-                    group='tag',
-                    words=[],
-                    user_settings=self.user['settings'],
-                    provider=self.user['provider']
-                ),
-                mimetype='text/html'
-            )
-        elif db_posts is None:
-            response = self.on_error(request, InternalServerError())
-        else:
-            response = self.on_error(request, NotFound())
+        if db_posts is None:
+            return self.on_error(request, InternalServerError())
 
-        return response
+        if self.user['settings']['similar_posts']:
+            clusters = self.posts.get_clusters(db_posts)
+            if clusters:
+                cl_posts = self.posts.get_by_clusters(self.user['sid'], list(clusters), only_unread, projection)
+                if cl_posts:
+                    db_posts.extend(cl_posts)
+        posts = []
+        by_feed = {}
+        pids = set()
+        for post in db_posts:
+            post["lemmas"] = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
+            if post['pid'] not in pids:
+                pids.add(post['pid'])
+                if post['feed_id'] not in by_feed:
+                    feed = self.feeds.get_by_feed_id(self.user['sid'], post['feed_id'])
+                    if feed:
+                        by_feed[post['feed_id']] = feed
+                if post['feed_id'] in by_feed:
+                    posts.append({
+                        'post': post,
+                        'pos': post['pid'],
+                        'category_title': by_feed[post['feed_id']]['category_title'],
+                        'feed_title': by_feed[post['feed_id']]['title'],
+                        'favicon': by_feed[post['feed_id']]['favicon']
+                    })
+        page = self.template_env.get_template('posts.html')
+        if context_n:
+            posts.sort(key=lambda p: p["pos"], reverse=True)
+
+        return Response(
+            page.render(
+                posts=posts,
+                tag="NoTag",
+                group='tag',
+                words=[],
+                user_settings=self.user['settings'],
+                provider=self.user['provider']
+            ),
+            mimetype='text/html'
+        )
 
     def on_get_tag_pmi(self, request: Request, tag: str) -> Response:
         if tag:
@@ -2375,15 +2377,15 @@ class RSSTagApplication(object):
             result = {'error': 'Something wrong with request'}
             code = 400
 
-        response = Response(json.dumps(result), mimetype='application/json')
-        response.status_code = code
-
-        return response
+        return Response(
+            json.dumps(result),
+            mimetype="application/json",
+            status=code
+        )
 
     def on_get_sentences_with_tags(self, request: Request, s_tags: str) -> Response:
         if not s_tags:
             return self.on_error(request, NotFound())
-
 
         q_tags = s_tags.split(" ")
         if self.user['settings']['only_unread']:
@@ -2462,44 +2464,41 @@ class RSSTagApplication(object):
         else:
             only_unread = None
         db_posts = self.posts.get_by_clusters(self.user['sid'], [cluster], only_unread, projection)
-        if db_posts:
-            posts = []
-            by_feed = {}
-            pids = set()
-            for post in db_posts:
-                post["lemmas"] = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
-                if post['pid'] not in pids:
-                    pids.add(post['pid'])
-                    if post['feed_id'] not in by_feed:
-                        feed = self.feeds.get_by_feed_id(self.user['sid'], post['feed_id'])
-                        if feed:
-                            by_feed[post['feed_id']] = feed
-                    if post['feed_id'] in by_feed:
-                        posts.append({
-                            'post': post,
-                            'pos': post['pid'],
-                            'category_title': by_feed[post['feed_id']]['category_title'],
-                            'feed_title': by_feed[post['feed_id']]['title'],
-                            'favicon': by_feed[post['feed_id']]['favicon']
-                        })
-            page = self.template_env.get_template('posts.html')
-            response = Response(
-                page.render(
-                    posts=posts,
-                    tag="NoTag",
-                    group='tag',
-                    words=[],
-                    user_settings=self.user['settings'],
-                    provider=self.user['provider']
-                ),
-                mimetype='text/html'
-            )
-        elif db_posts is None:
-            response = self.on_error(request, InternalServerError())
-        else:
-            response = self.on_error(request, NotFound())
+        if db_posts is None:
+            return self.on_error(request, InternalServerError())
 
-        return response
+        posts = []
+        by_feed = {}
+        pids = set()
+        for post in db_posts:
+            post["lemmas"] = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
+            if post['pid'] not in pids:
+                pids.add(post['pid'])
+                if post['feed_id'] not in by_feed:
+                    feed = self.feeds.get_by_feed_id(self.user['sid'], post['feed_id'])
+                    if feed:
+                        by_feed[post['feed_id']] = feed
+                if post['feed_id'] in by_feed:
+                    posts.append({
+                        'post': post,
+                        'pos': post['pid'],
+                        'category_title': by_feed[post['feed_id']]['category_title'],
+                        'feed_title': by_feed[post['feed_id']]['title'],
+                        'favicon': by_feed[post['feed_id']]['favicon']
+                    })
+        page = self.template_env.get_template('posts.html')
+
+        return Response(
+            page.render(
+                posts=posts,
+                tag="NoTag",
+                group='tag',
+                words=[],
+                user_settings=self.user['settings'],
+                provider=self.user['provider']
+            ),
+            mimetype='text/html'
+        )
 
     def on_clusters_get(self, request: Request) -> Response:
         projection = {'_id': False, 'clusters': True}
@@ -2508,22 +2507,21 @@ class RSSTagApplication(object):
         else:
             only_unread = None
         db_posts = self.posts.get_all(self.user['sid'], only_unread, projection)
-        links = {}
-        if db_posts:
-            for post in db_posts:
-                if "clusters" not in post:
-                    continue
-
-                for cl in post["clusters"]:
-                    if cl not in links:
-                        links[cl] = {
-                            "l": self.routes.getUrlByEndpoint(endpoint='on_cluster_get', params={"cluster": cl}),
-                            "n": 0
-                        }
-                    links[cl]["n"] += 1
-
-        elif db_posts is None:
+        if db_posts is None:
             return self.on_error(request, InternalServerError())
+
+        links = {}
+        for post in db_posts:
+            if "clusters" not in post:
+                continue
+
+            for cl in post["clusters"]:
+                if cl not in links:
+                    links[cl] = {
+                        "l": self.routes.getUrlByEndpoint(endpoint='on_cluster_get', params={"cluster": cl}),
+                        "n": 0
+                    }
+                links[cl]["n"] += 1
 
         lnks = [(cl, links[cl]["l"], links[cl]["n"]) for cl in links]
         lnks.sort(key=lambda x: x[2], reverse=True)
