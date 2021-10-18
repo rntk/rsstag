@@ -1,7 +1,7 @@
 import sys
 import logging
 from werkzeug.serving import run_simple
-from rsstag.web import RSSTagApplication
+from rsstag.web.app import RSSTagApplication
 
 if __name__ == '__main__':
     config_path = 'rsscloud.conf'

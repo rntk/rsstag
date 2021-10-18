@@ -15,7 +15,7 @@ from io import StringIO
 import unicodedata
 
 from rsstag.tasks import POST_NOT_IN_PROCESSING
-from rsstag.routes import RSSTagRoutes
+from rsstag.web.routes import RSSTagRoutes
 
 import aiohttp
 

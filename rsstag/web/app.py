@@ -21,7 +21,7 @@ from pymongo import MongoClient
 from gensim.models.doc2vec import Doc2Vec
 from gensim.models.word2vec import Word2Vec
 from rsstag.tasks import RssTagTasks, TASK_DOWNLOAD, TASK_MARK, TASK_NOT_IN_PROCESSING, TASK_ALL
-from rsstag.routes import RSSTagRoutes
+from rsstag.web.routes import RSSTagRoutes
 from rsstag.utils import getSortedDictByAlphabet, load_config
 from rsstag.posts import RssTagPosts
 from rsstag.feeds import RssTagFeeds
@@ -67,7 +67,7 @@ class RSSTagApplication(object):
         self.config_path = config_path
         self.template_env = Environment(
             loader=PackageLoader(
-                'rsstag',
+                'rsstag.web',
                 os.path.join(
                     'templates',
                     self.config['settings']['templates']

@@ -1,7 +1,7 @@
 import logging
 from collections import defaultdict
 from typing import Optional, List
-from rsstag.routes import RSSTagRoutes
+from rsstag.web.routes import RSSTagRoutes
 from rsstag.utils import getSortedDictByAlphabet
 from pymongo import MongoClient
 

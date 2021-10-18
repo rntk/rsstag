@@ -1,4 +1,4 @@
-from rsstag.web import RSSTagApplication
+from rsstag.web.app import RSSTagApplication
 
 config_path = 'rsscloud.conf'
 app = RSSTagApplication(config_path)
