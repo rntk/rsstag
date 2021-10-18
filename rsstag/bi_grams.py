@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, List, Iterable
+from typing import Optional, List, Iterator
 from pymongo import MongoClient, DESCENDING, UpdateOne
 
 class RssTagBiGrams:
@@ -20,7 +20,7 @@ class RssTagBiGrams:
 
         return self.db.bi_grams.find_one(query)
 
-    def get_by_tags(self, owner: str, tags: List[str], only_unread: Optional[bool]=None, projection: Optional[dict]=None) -> Iterable[dict]:
+    def get_by_tags(self, owner: str, tags: List[str], only_unread: Optional[bool]=None, projection: Optional[dict]=None) -> Iterator[dict]:
         query = {
             'owner': owner,
             'tags': {'$all': tags}
@@ -67,7 +67,7 @@ class RssTagBiGrams:
         return self.db.bi_grams.count(query)
 
     def get_all(self, owner: str, only_unread: bool=False, hot_tags: bool=False,
-                opts: dict=None, projection: dict=None) -> Iterable[dict]:
+                opts: dict=None, projection: dict=None) -> Iterator[dict]:
         query = {'owner': owner}
         if opts and 'regexp' in opts:
             query['tag'] = {'$regex': opts['regexp'], '$options': 'i'}
