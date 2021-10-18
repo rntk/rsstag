@@ -154,8 +154,9 @@ class RSSTagApplication(object):
                     response = self.endpoints[handler](user, request, **values)
                 else:
                     response = redirect(self.routes.getUrlByEndpoint('on_root_get'))
-        except HTTPException as e:
-            response = self.on_error(user, request, e)
+        except Exception as e:
+            logging.error("{} - {}".format(request.base_url, e))
+            response = self.on_error(user, request, InternalServerError())
         request.close()
         response.headers['X-Frame-Options'] = 'SAMEORIGIN'
         logging.info('%s', time.time() - st)
@@ -475,8 +476,6 @@ class RSSTagApplication(object):
             page_number = 1
         by_feed = {}
         db_feeds = self.feeds.get_all(user['sid'])
-        if db_feeds is None:
-            return self.on_error(user, request, InternalServerError())
 
         for f in db_feeds:
             by_feed[f['feed_id']] = f
@@ -535,15 +534,13 @@ class RSSTagApplication(object):
     def on_category_get(self, user: Optional[dict], request: Request, quoted_category=None) -> Response:
         cat = unquote_plus(quoted_category)
         db_feeds = self.feeds.get_by_category(user['sid'], cat)
-        if db_feeds is None:
-            return self.on_error(user, request, InternalServerError())
-
-        if not db_feeds:
-            return self.on_error(user, request, NotFound())
-
         by_feed = {}
         for f in db_feeds:
             by_feed[f['feed_id']] = f
+
+        if not by_feed:
+            return self.on_error(user, request, NotFound())
+
         projection = {'_id': False, 'content.content': False}
         if user['settings']['only_unread']:
             only_unread = user['settings']['only_unread']
@@ -712,9 +709,6 @@ class RSSTagApplication(object):
     def on_feed_get(self, user: Optional[dict], request: Request, quoted_feed=None) -> Response:
         feed = unquote_plus(quoted_feed)
         current_feed = self.feeds.get_by_feed_id(user['sid'], feed)
-        if current_feed is None:
-            return self.on_error(user, request, InternalServerError())
-
         if not current_feed:
             return self.on_error(user, request, NotFound())
 
