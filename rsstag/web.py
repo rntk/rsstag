@@ -385,25 +385,21 @@ class RSSTagApplication(object):
             logging.warning('Can`t json load settings. Cause: %s', e)
             settings = {}
         if settings:
-            if user:
-                settings = self.users.get_validated_settings(settings)
-                if settings:
-                    updated = self.users.update_settings(user['sid'], settings)
-                    if updated:
-                        result = {'data': 'ok'}
-                        code = 200
-                    elif updated is None:
-                        result = {'error': 'Server in trouble'}
-                        code = 500
-                    else:
-                        result = {'error': 'User not found'}
-                        code = 404
+            settings = self.users.get_validated_settings(settings)
+            if settings:
+                updated = self.users.update_settings(user['sid'], settings)
+                if updated:
+                    result = {'data': 'ok'}
+                    code = 200
+                elif updated is None:
+                    result = {'error': 'Server in trouble'}
+                    code = 500
                 else:
-                    result = {'error': 'Something wrong with settings'}
-                    code = 400
+                    result = {'error': 'User not found'}
+                    code = 404
             else:
-                result = {'error': 'Not logged'}
-                code = 401
+                result = {'error': 'Something wrong with settings'}
+                code = 400
         else:
             result = {'error': 'Something wrong with settings'}
             code = 400
@@ -1551,16 +1547,12 @@ class RSSTagApplication(object):
 
     def on_tag_dates_get(self, user: dict, request: Request, tag: str) -> Response:
         if tag:
-            if user:
-                cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"unix_date": True})
-                data = []
-                for dt in cursor:
-                    data.append(dt["unix_date"])
-                result = {'data': data}
-                code = 200
-            else:
-                result = {'error': 'Not logged'}
-                code = 401
+            cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"unix_date": True})
+            data = []
+            for dt in cursor:
+                data.append(dt["unix_date"])
+            result = {'data': data}
+            code = 200
         else:
             result = {'error': 'Something wrong with request'}
             code = 400
@@ -1573,24 +1565,20 @@ class RSSTagApplication(object):
 
     def on_bigrams_dates_get(self, user: dict, request: Request, tag: str) -> Response:
         if tag:
-            if user:
-                cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"unix_date": True, "bi_grams": True})
-                data = {}
-                for dt in cursor:
-                    d = int(dt["unix_date"])
-                    for bi in dt["bi_grams"]:
-                        if tag not in bi:
-                            continue
-                        if bi not in data:
-                            data[bi] = {}
-                        if d not in data[bi]:
-                            data[bi][d] = 0
-                        data[bi][d] += 1
-                result = {'data': data}
-                code = 200
-            else:
-                result = {'error': 'Not logged'}
-                code = 401
+            cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"unix_date": True, "bi_grams": True})
+            data = {}
+            for dt in cursor:
+                d = int(dt["unix_date"])
+                for bi in dt["bi_grams"]:
+                    if tag not in bi:
+                        continue
+                    if bi not in data:
+                        data[bi] = {}
+                    if d not in data[bi]:
+                        data[bi][d] = 0
+                    data[bi][d] += 1
+            result = {'data': data}
+            code = 200
         else:
             result = {'error': 'Something wrong with request'}
             code = 400
@@ -1603,25 +1591,21 @@ class RSSTagApplication(object):
 
     def on_wordtree_texts_get(self, user: dict, request: Request, tag: str) -> Response:
         if tag:
-            if user:
-                cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"lemmas": True})
-                data = []
-                window = 10
-                for post in cursor:
-                    text = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
-                    words = text.split()
-                    for i, word in enumerate(words):
-                        if word == tag:
-                            start_pos = i - window
-                            if start_pos < 0:
-                                start_pos = 0
-                            end_pos = i + window
-                            data.append(" ".join(words[start_pos:end_pos]))
-                result = {'data': data}
-                code = 200
-            else:
-                result = {'error': 'Not logged'}
-                code = 401
+            cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"lemmas": True})
+            data = []
+            window = 10
+            for post in cursor:
+                text = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
+                words = text.split()
+                for i, word in enumerate(words):
+                    if word == tag:
+                        start_pos = i - window
+                        if start_pos < 0:
+                            start_pos = 0
+                        end_pos = i + window
+                        data.append(" ".join(words[start_pos:end_pos]))
+            result = {'data': data}
+            code = 200
         else:
             result = {'error': 'Something wrong with request'}
             code = 400
@@ -1634,31 +1618,27 @@ class RSSTagApplication(object):
 
     def on_tag_topics_get(self, user: dict, request: Request, tag: str) -> Response:
         if tag:
-            if user:
-                cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"lemmas": True})
-                texts = [gzip.decompress(post["lemmas"]).decode('utf-8', 'replace') for post in cursor]
-                lda = LDA()
-                topics = lda.topics(texts, top_k=5)
-                if tag in topics:
-                    topics.remove(tag)
-                tags = self.tags.get_by_tags(user['sid'], topics, user['settings']['only_unread'])
-                all_tags = []
-                for tag in tags:
-                    all_tags.append({
-                        'tag': tag['tag'],
-                        'url': tag['local_url'],
-                        'words': tag['words'],
-                        'count': tag['unread_count'] if user['settings']['only_unread'] else tag[
-                            'posts_count'],
-                        'sentiment': tag['sentiment'] if 'sentiment' in tag else [],
-                        'temp': tag['temperature']
-                    })
-                    all_tags.sort(key=lambda t: t["temp"], reverse=True)
-                result = {'data': all_tags}
-                code = 200
-            else:
-                result = {'error': 'Not logged'}
-                code = 401
+            cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"lemmas": True})
+            texts = [gzip.decompress(post["lemmas"]).decode('utf-8', 'replace') for post in cursor]
+            lda = LDA()
+            topics = lda.topics(texts, top_k=5)
+            if tag in topics:
+                topics.remove(tag)
+            tags = self.tags.get_by_tags(user['sid'], topics, user['settings']['only_unread'])
+            all_tags = []
+            for tag in tags:
+                all_tags.append({
+                    'tag': tag['tag'],
+                    'url': tag['local_url'],
+                    'words': tag['words'],
+                    'count': tag['unread_count'] if user['settings']['only_unread'] else tag[
+                        'posts_count'],
+                    'sentiment': tag['sentiment'] if 'sentiment' in tag else [],
+                    'temp': tag['temperature']
+                })
+                all_tags.sort(key=lambda t: t["temp"], reverse=True)
+            result = {'data': all_tags}
+            code = 200
         else:
             result = {'error': 'Something wrong with request'}
             code = 400
@@ -1671,18 +1651,14 @@ class RSSTagApplication(object):
 
     def on_topics_texts_get(self, user: dict, request: Request, tag: str) -> Response:
         if tag:
-            if user:
-                cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"lemmas": True})
-                texts = [gzip.decompress(post["lemmas"]).decode('utf-8', 'replace') for post in cursor]
-                lda = LDA()
-                topics = lda.topics(texts, top_k=5)
-                if tag in topics:
-                    topics.remove(tag)
-                result = {"data": {"texts": texts, "topics": topics}}
-                code = 200
-            else:
-                result = {'error': 'Not logged'}
-                code = 401
+            cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"lemmas": True})
+            texts = [gzip.decompress(post["lemmas"]).decode('utf-8', 'replace') for post in cursor]
+            lda = LDA()
+            topics = lda.topics(texts, top_k=5)
+            if tag in topics:
+                topics.remove(tag)
+            result = {"data": {"texts": texts, "topics": topics}}
+            code = 200
         else:
             result = {'error': 'Something wrong with request'}
             code = 400
@@ -1694,115 +1670,109 @@ class RSSTagApplication(object):
         )
 
     def on_topics_get(self, user: dict, request: Request, page_number: int=1) -> Response:
-        if user:
-            all_tags = []
-            cursor = self.posts.get_all(user["sid"], user['settings']['only_unread'], {"lemmas": True})
-            texts = [gzip.decompress(post["lemmas"]).decode('utf-8', 'replace') for post in cursor]
-            lda = LDA()
-            topics = lda.topics(texts, top_k=10)
-            tags = self.tags.get_by_tags(user['sid'], topics, user['settings']['only_unread'])
-            for tag in tags:
-                all_tags.append({
-                    'tag': tag['tag'],
-                    'url': tag['local_url'],
-                    'words': tag['words'],
-                    'count': tag['unread_count'] if user['settings']['only_unread'] else tag[
-                        'posts_count'],
-                    'sentiment': tag['sentiment'] if 'sentiment' in tag else [],
-                    'temp': tag['temperature']
-                })
-            all_tags.sort(key=lambda t: t["temp"], reverse=True)
-            page_count = self.getPageCount(1, user['settings']['tags_on_page'])
-            p_number = page_number
-            if page_number <= 0:
-                p_number = 1
-            elif page_number > page_count:
-                p_number = page_count
+        all_tags = []
+        cursor = self.posts.get_all(user["sid"], user['settings']['only_unread'], {"lemmas": True})
+        texts = [gzip.decompress(post["lemmas"]).decode('utf-8', 'replace') for post in cursor]
+        lda = LDA()
+        topics = lda.topics(texts, top_k=10)
+        tags = self.tags.get_by_tags(user['sid'], topics, user['settings']['only_unread'])
+        for tag in tags:
+            all_tags.append({
+                'tag': tag['tag'],
+                'url': tag['local_url'],
+                'words': tag['words'],
+                'count': tag['unread_count'] if user['settings']['only_unread'] else tag[
+                    'posts_count'],
+                'sentiment': tag['sentiment'] if 'sentiment' in tag else [],
+                'temp': tag['temperature']
+            })
+        all_tags.sort(key=lambda t: t["temp"], reverse=True)
+        page_count = self.getPageCount(1, user['settings']['tags_on_page'])
+        p_number = page_number
+        if page_number <= 0:
+            p_number = 1
+        elif page_number > page_count:
+            p_number = page_count
 
-            new_cookie_page_value = p_number
-            p_number -= 1
-            if p_number < 0:
-                p_number = 1
-            pages_map, start_tags_range, end_tags_range = self.calcPagerData(
-                p_number,
-                page_count,
-                user['settings']['tags_on_page'],
-                'on_topics_get'
-            )
-            db_letters = self.letters.get(user['sid'], make_sort=True)
-            if db_letters:
-                letters = self.letters.to_list(db_letters, user['settings']['only_unread'])
-            else:
-                letters = []
-            page = self.template_env.get_template('group-by-tag.html')
-            response = Response(
-                page.render(
-                    tags=all_tags,
-                    sort_by_title='tags',
-                    sort_by_link=self.routes.getUrlByEndpoint(
-                        endpoint='on_group_by_tags_get',
-                        params={'page_number': new_cookie_page_value}
-                    ),
-                    group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
-                    pages_map=pages_map,
-                    current_page=new_cookie_page_value,
-                    letters=letters,
-                    user_settings=user['settings'],
-                    provider=user['provider']
+        new_cookie_page_value = p_number
+        p_number -= 1
+        if p_number < 0:
+            p_number = 1
+        pages_map, start_tags_range, end_tags_range = self.calcPagerData(
+            p_number,
+            page_count,
+            user['settings']['tags_on_page'],
+            'on_topics_get'
+        )
+        db_letters = self.letters.get(user['sid'], make_sort=True)
+        if db_letters:
+            letters = self.letters.to_list(db_letters, user['settings']['only_unread'])
+        else:
+            letters = []
+        page = self.template_env.get_template('group-by-tag.html')
+
+        return Response(
+            page.render(
+                tags=all_tags,
+                sort_by_title='tags',
+                sort_by_link=self.routes.getUrlByEndpoint(
+                    endpoint='on_group_by_tags_get',
+                    params={'page_number': new_cookie_page_value}
                 ),
-                mimetype='text/html'
-            )
-
-        return response
+                group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
+                pages_map=pages_map,
+                current_page=new_cookie_page_value,
+                letters=letters,
+                user_settings=user['settings'],
+                provider=user['provider']
+            ),
+            mimetype='text/html'
+        )
 
     def on_tag_entities_get(self, user: dict, request: Request, tag: str) -> Response:
         if tag:
-            if user:
-                cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"content": True, "tags": True, "bi_grams": True})
-                html_cleaner = HTMLCleaner()
-                tags_builder = TagsBuilder()
-                if self.navec is None:
-                    self.navec = Navec.load('./data/navec_news_v1_1B_250K_300d_100q.tar')
-                if self.ner is None:
-                    self.ner = NER.load('./data/slovnet_ner_news_v1.tar')
-                    self.ner.navec(self.navec)
-                ners = {}
-                text_clearing = re.compile("[^\w\d ]")
-                for post in cursor:
-                    html_cleaner.purge()
-                    txt = post["content"]["title"] + ". " + gzip.decompress(post["content"]["content"]).decode('utf-8', 'replace')
-                    html_cleaner.feed(txt)
-                    txt = html.unescape(" ".join(html_cleaner.get_content()))
-                    markup = self.ner(txt)
-                    if len(markup.spans) == 0:
-                        continue
-                    for span in markup.spans:
-                        n = txt[span.start:span.stop].casefold()
-                        n = text_clearing.sub(" ", n).strip()
-                        if " " in n:
-                            words = n.split(" ")
-                            ns = map(lambda w: tags_builder.process_word(w), words)
-                            n = " ".join(ns)
-                        else:
-                            words = [n]
-                            n = tags_builder.process_word(n)
-                        if n not in ners:
-                            ners[n] = {
-                                'tag': n,
-                                'url': "/entity/" + quote(n),
-                                'words': [],
-                                'count': 0,
-                                'sentiment': [],
-                                'temp': 0
-                            }
-                        ners[n]["count"] += 1
-                        ners[n]["words"] = list(set(ners[n]["words"] + words))
+            cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"content": True, "tags": True, "bi_grams": True})
+            html_cleaner = HTMLCleaner()
+            tags_builder = TagsBuilder()
+            if self.navec is None:
+                self.navec = Navec.load('./data/navec_news_v1_1B_250K_300d_100q.tar')
+            if self.ner is None:
+                self.ner = NER.load('./data/slovnet_ner_news_v1.tar')
+                self.ner.navec(self.navec)
+            ners = {}
+            text_clearing = re.compile("[^\w\d ]")
+            for post in cursor:
+                html_cleaner.purge()
+                txt = post["content"]["title"] + ". " + gzip.decompress(post["content"]["content"]).decode('utf-8', 'replace')
+                html_cleaner.feed(txt)
+                txt = html.unescape(" ".join(html_cleaner.get_content()))
+                markup = self.ner(txt)
+                if len(markup.spans) == 0:
+                    continue
+                for span in markup.spans:
+                    n = txt[span.start:span.stop].casefold()
+                    n = text_clearing.sub(" ", n).strip()
+                    if " " in n:
+                        words = n.split(" ")
+                        ns = map(lambda w: tags_builder.process_word(w), words)
+                        n = " ".join(ns)
+                    else:
+                        words = [n]
+                        n = tags_builder.process_word(n)
+                    if n not in ners:
+                        ners[n] = {
+                            'tag': n,
+                            'url': "/entity/" + quote(n),
+                            'words': [],
+                            'count': 0,
+                            'sentiment': [],
+                            'temp': 0
+                        }
+                    ners[n]["count"] += 1
+                    ners[n]["words"] = list(set(ners[n]["words"] + words))
 
-                result = {'data': [ners[n] for n in ners]}
-                code = 200
-            else:
-                result = {'error': 'Not logged'}
-                code = 401
+            result = {'data': [ners[n] for n in ners]}
+            code = 200
         else:
             result = {'error': 'Something wrong with request'}
             code = 400
@@ -1867,55 +1837,51 @@ class RSSTagApplication(object):
 
     def on_tag_tfidf_get(self, user: dict, request: Request, tag: str) -> Response:
         if tag:
-            if user:
-                cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"lemmas": True})
-                topics = set()
-                stopw = set(stopwords.words('english') + stopwords.words('russian'))
-                texts = [gzip.decompress(post["lemmas"]).decode('utf-8', 'replace') for post in cursor]
-                freq_d = Counter()
-                for text in texts:
-                    words = [word for word in text.split() if word not in stopw]
-                    st = set(words)
-                    freq_d.update(st)
-                for text in texts:
-                    words = [word for word in text.split() if word not in stopw]
-                    tfidf = []
-                    freq = Counter(words)
-                    for word in words:
-                        tf = freq[word] / len(words)
-                        idf = math.log(len(texts) / freq_d[word])
-                        tfidf.append((word, tf * idf))
-                    tfidf.sort(key=lambda x: x[1], reverse=True)
-                    topics.update([ti[0] for ti in tfidf[:5]])
-                topics.add(tag)
-                topics = list(topics)
+            cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"lemmas": True})
+            topics = set()
+            stopw = set(stopwords.words('english') + stopwords.words('russian'))
+            texts = [gzip.decompress(post["lemmas"]).decode('utf-8', 'replace') for post in cursor]
+            freq_d = Counter()
+            for text in texts:
+                words = [word for word in text.split() if word not in stopw]
+                st = set(words)
+                freq_d.update(st)
+            for text in texts:
+                words = [word for word in text.split() if word not in stopw]
+                tfidf = []
+                freq = Counter(words)
+                for word in words:
+                    tf = freq[word] / len(words)
+                    idf = math.log(len(texts) / freq_d[word])
+                    tfidf.append((word, tf * idf))
+                tfidf.sort(key=lambda x: x[1], reverse=True)
+                topics.update([ti[0] for ti in tfidf[:5]])
+            topics.add(tag)
+            topics = list(topics)
 
-                tags_c = self.tags.get_by_tags(user['sid'], topics, user['settings']['only_unread'])
-                tags = list(tags_c)
-                t_words = []
-                for tg in tags:
-                    if tg['tag'] == tag:
-                        t_words = tg["words"]
-                        break
-                all_tags = []
-                for tg in tags:
-                    if tg['tag'] == tag:
-                        continue
-                    all_tags.append({
-                        'tag': tag + " " + tg['tag'],
-                        'url': "/entity/" + quote(tag + " " + tg['tag']),
-                        'words': tg['words'] + t_words,
-                        'count': freq_d[tg['tag']],
-                        'sentiment': tg['sentiment'] if 'sentiment' in tg else [],
-                        'temp': tg['temperature'],
-                        'freq': tg['freq']
-                    })
-                    all_tags.sort(key=lambda t: t["count"] / t["freq"], reverse=True)
-                result = {'data': all_tags}
-                code = 200
-            else:
-                result = {'error': 'Not logged'}
-                code = 401
+            tags_c = self.tags.get_by_tags(user['sid'], topics, user['settings']['only_unread'])
+            tags = list(tags_c)
+            t_words = []
+            for tg in tags:
+                if tg['tag'] == tag:
+                    t_words = tg["words"]
+                    break
+            all_tags = []
+            for tg in tags:
+                if tg['tag'] == tag:
+                    continue
+                all_tags.append({
+                    'tag': tag + " " + tg['tag'],
+                    'url': "/entity/" + quote(tag + " " + tg['tag']),
+                    'words': tg['words'] + t_words,
+                    'count': freq_d[tg['tag']],
+                    'sentiment': tg['sentiment'] if 'sentiment' in tg else [],
+                    'temp': tg['temperature'],
+                    'freq': tg['freq']
+                })
+                all_tags.sort(key=lambda t: t["count"] / t["freq"], reverse=True)
+            result = {'data': all_tags}
+            code = 200
         else:
             result = {'error': 'Something wrong with request'}
             code = 400
@@ -1928,35 +1894,31 @@ class RSSTagApplication(object):
 
     def on_tag_clusters_get(self, user: dict, request: Request, tag: str) -> Response:
         if tag:
-            if user:
-                cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"lemmas": True, "pid": True})
-                pids = []
-                texts = []
-                for post in  cursor:
-                    texts.append(gzip.decompress(post["lemmas"]).decode('utf-8', 'replace'))
-                    pids.append(post["pid"])
-                stopw = set(stopwords.words('english') + stopwords.words('russian'))
-                vectorizer = TfidfVectorizer(stop_words=stopw)
-                vectorizer.fit(texts)
-                vectors = vectorizer.transform(texts)
-                dbs = DBSCAN(eps=0.7, min_samples=2, metric="cosine")
-                cl = dbs.fit_predict(vectors)
-                label_txt = {}
-                for i, label in enumerate(cl):
-                    if label < 0:
-                        continue
-                    label = str(label)
-                    if label not in label_txt:
-                        label_txt[label] = []
-                    label_txt[label].append({
-                        "txt": texts[i],
-                        "pid": pids[i]
-                    })
-                result = {'data': label_txt}
-                code = 200
-            else:
-                result = {'error': 'Not logged'}
-                code = 401
+            cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"lemmas": True, "pid": True})
+            pids = []
+            texts = []
+            for post in  cursor:
+                texts.append(gzip.decompress(post["lemmas"]).decode('utf-8', 'replace'))
+                pids.append(post["pid"])
+            stopw = set(stopwords.words('english') + stopwords.words('russian'))
+            vectorizer = TfidfVectorizer(stop_words=stopw)
+            vectorizer.fit(texts)
+            vectors = vectorizer.transform(texts)
+            dbs = DBSCAN(eps=0.7, min_samples=2, metric="cosine")
+            cl = dbs.fit_predict(vectors)
+            label_txt = {}
+            for i, label in enumerate(cl):
+                if label < 0:
+                    continue
+                label = str(label)
+                if label not in label_txt:
+                    label_txt[label] = []
+                label_txt[label].append({
+                    "txt": texts[i],
+                    "pid": pids[i]
+                })
+            result = {'data': label_txt}
+            code = 200
         else:
             result = {'error': 'Something wrong with request'}
             code = 400
@@ -2037,72 +1999,68 @@ class RSSTagApplication(object):
 
     def on_get_tag_pmi(self, user: dict, request: Request, tag: str) -> Response:
         if tag:
-            if user:
-                cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"lemmas": True})
-                stopw = set(stopwords.words('english') + stopwords.words('russian'))
-                texts = [gzip.decompress(post["lemmas"]).decode('utf-8', 'replace') for post in cursor]
-                uniq_words = set()
-                bigrams = Counter()
-                bigrams_count = Counter()
-                window = 5
-                for text in texts:
-                    words_l = [word for word in text.split() if word not in stopw and word != tag]
-                    uniq_words.update(words_l)
-                    bi_grams = []
-                    for word_pos, word in enumerate(words_l):
-                        for i in range(window):
-                            i += 1
-                            bi_words = []
-                            prev_pos = word_pos - i
-                            if prev_pos >= 0:
-                                bi_words.append(words_l[prev_pos])
-                            next_pos = word_pos + i
-                            if next_pos < len(words_l):
-                                bi_words.append(words_l[next_pos])
-                            for bi_word in bi_words:
-                                if word == bi_word:
-                                    continue
-                                bi_grams_l = [word, bi_word]
-                                bi_grams_l.sort()
-                                bi_gram = " ".join(bi_grams_l)
-                                bi_grams.append(bi_gram)
-                    bigrams.update(bi_grams)
-                    bigrams_count.update(set(bi_grams))
+            cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"lemmas": True})
+            stopw = set(stopwords.words('english') + stopwords.words('russian'))
+            texts = [gzip.decompress(post["lemmas"]).decode('utf-8', 'replace') for post in cursor]
+            uniq_words = set()
+            bigrams = Counter()
+            bigrams_count = Counter()
+            window = 5
+            for text in texts:
+                words_l = [word for word in text.split() if word not in stopw and word != tag]
+                uniq_words.update(words_l)
+                bi_grams = []
+                for word_pos, word in enumerate(words_l):
+                    for i in range(window):
+                        i += 1
+                        bi_words = []
+                        prev_pos = word_pos - i
+                        if prev_pos >= 0:
+                            bi_words.append(words_l[prev_pos])
+                        next_pos = word_pos + i
+                        if next_pos < len(words_l):
+                            bi_words.append(words_l[next_pos])
+                        for bi_word in bi_words:
+                            if word == bi_word:
+                                continue
+                            bi_grams_l = [word, bi_word]
+                            bi_grams_l.sort()
+                            bi_gram = " ".join(bi_grams_l)
+                            bi_grams.append(bi_gram)
+                bigrams.update(bi_grams)
+                bigrams_count.update(set(bi_grams))
 
-                tags = self.tags.get_by_tags(user['sid'], list(uniq_words), user['settings']['only_unread'])
-                tags_d = {}
-                for tg in tags:
-                    tags_d[tg["tag"]] = tg
+            tags = self.tags.get_by_tags(user['sid'], list(uniq_words), user['settings']['only_unread'])
+            tags_d = {}
+            for tg in tags:
+                tags_d[tg["tag"]] = tg
 
-                pmis = []
-                for bi, bi_freq in bigrams.items():
-                    if bi_freq < 2:
-                        continue
-                    bi_words = bi.split(" ")
-                    f1 = tags_d[bi_words[0]]["freq"]
-                    f2 = tags_d[bi_words[1]]["freq"]
-                    pmi = bi_freq / (abs(f1 - f2) + 1)
-                    pmis.append((bi, pmi))
-                pmis.sort(key=lambda x: x[1], reverse=True)
+            pmis = []
+            for bi, bi_freq in bigrams.items():
+                if bi_freq < 2:
+                    continue
+                bi_words = bi.split(" ")
+                f1 = tags_d[bi_words[0]]["freq"]
+                f2 = tags_d[bi_words[1]]["freq"]
+                pmi = bi_freq / (abs(f1 - f2) + 1)
+                pmis.append((bi, pmi))
+            pmis.sort(key=lambda x: x[1], reverse=True)
 
-                all_pmis = []
-                for bi, temp in pmis[:4000]:
-                    bi_words = bi.split(" ")
-                    all_pmis.append({
-                        'tag': bi,
-                        'url': "/entity/" + quote(tag + " " + bi),
-                        'words': tags_d[bi_words[0]]["words"] + tags_d[bi_words[1]]["words"],
-                        'count': bigrams_count[bi],
-                        'sentiment': [],
-                        'temp': temp,
-                        'freq': bigrams[bi]
-                    })
-                all_pmis.sort(key=lambda x: x["count"], reverse=True)
-                result = {'data': all_pmis}
-                code = 200
-            else:
-                result = {'error': 'Not logged'}
-                code = 401
+            all_pmis = []
+            for bi, temp in pmis[:4000]:
+                bi_words = bi.split(" ")
+                all_pmis.append({
+                    'tag': bi,
+                    'url': "/entity/" + quote(tag + " " + bi),
+                    'words': tags_d[bi_words[0]]["words"] + tags_d[bi_words[1]]["words"],
+                    'count': bigrams_count[bi],
+                    'sentiment': [],
+                    'temp': temp,
+                    'freq': bigrams[bi]
+                })
+            all_pmis.sort(key=lambda x: x["count"], reverse=True)
+            result = {'data': all_pmis}
+            code = 200
         else:
             result = {'error': 'Something wrong with request'}
             code = 400
