@@ -468,9 +468,7 @@ class RSSTagApplication(object):
         return response
 
     def on_group_by_category_get(self, user: dict, request: Request) -> Response:
-        page_number = user['page']
-        if not page_number:
-            page_number = 1
+        page_number = 1
         by_feed = {}
         db_feeds = self.feeds.get_all(user['sid'])
 
@@ -908,7 +906,6 @@ class RSSTagApplication(object):
         elif page_number > page_count:
             p_number = page_count
 
-        user['page'] = p_number
         new_cookie_page_value = p_number
         p_number -= 1
         if p_number < 0:
@@ -945,10 +942,6 @@ class RSSTagApplication(object):
             letters = self.letters.to_list(db_letters, user['settings']['only_unread'])
         else:
             letters = []
-        self.users.update_by_sid(
-            user['sid'],
-            {'page': new_cookie_page_value, 'letter': ''}
-        )
         page = self.template_env.get_template('group-by-tag.html')
 
         return Response(
@@ -981,7 +974,6 @@ class RSSTagApplication(object):
         elif page_number > page_count:
             p_number = page_count
 
-        user['page'] = p_number
         new_cookie_page_value = p_number
         p_number -= 1
         if p_number < 0:
@@ -1014,10 +1006,6 @@ class RSSTagApplication(object):
                 'sentiment': []
             })
         letters = []
-        self.users.update_by_sid(
-            user['sid'],
-            {'page': new_cookie_page_value, 'letter': ''}
-        )
         page = self.template_env.get_template('group-by-tag.html')
 
         return Response(
@@ -1051,7 +1039,6 @@ class RSSTagApplication(object):
         elif page_number > page_count:
             p_number = page_count
 
-        user['page'] = p_number
         new_cookie_page_value = p_number
         p_number -= 1
         if p_number < 0:
@@ -1090,10 +1077,6 @@ class RSSTagApplication(object):
             letters = self.letters.to_list(db_letters, user['settings']['only_unread'])
         else:
             letters = []
-        self.users.update_by_sid(
-            user['sid'],
-            {'page': new_cookie_page_value, 'letter': ''}
-        )
         page = self.template_env.get_template('group-by-tag.html')
 
         return Response(
@@ -1133,7 +1116,6 @@ class RSSTagApplication(object):
         elif page_number > page_count:
             p_number = page_count
 
-        user['page'] = p_number
         new_cookie_page_value = p_number
         p_number -= 1
         if p_number < 0:
@@ -1203,7 +1185,7 @@ class RSSTagApplication(object):
             p_number = 1
         elif page_number > page_count:
             p_number = page_count
-        user['page'] = p_number
+
         new_cookie_page_value = p_number
         p_number -= 1
         if p_number < 0:
@@ -1242,10 +1224,7 @@ class RSSTagApplication(object):
             letters = self.letters.to_list(db_letters, user['settings']['only_unread'])
         else:
             letters = []
-        self.users.update_by_sid(
-            user['sid'],
-            {'page': new_cookie_page_value, 'letter': ''}
-        )
+
         page = self.template_env.get_template('group-by-tag.html')
 
         return Response(
@@ -1660,7 +1639,6 @@ class RSSTagApplication(object):
         elif page_number > page_count:
             p_number = page_count
 
-        user['page'] = p_number
         new_cookie_page_value = p_number
         p_number -= 1
         if p_number < 0:
@@ -1671,10 +1649,7 @@ class RSSTagApplication(object):
             user['settings']['tags_on_page'],
             'on_get_groups',
         )
-        self.users.update_by_sid(
-            user['sid'],
-            {'page': new_cookie_page_value, 'letter': ''}
-        )
+
         page_groups = sorted(groups.items(), key=lambda el: el[1], reverse=True)
         page = self.template_env.get_template('tags-groups.html')
 
@@ -1895,21 +1870,16 @@ class RSSTagApplication(object):
                         })
                     all_tags.sort(key=lambda t: t["temp"], reverse=True)
             page_count = self.getPageCount(1, user['settings']['tags_on_page'])
+            p_number = page_number
             if page_number <= 0:
                 p_number = 1
-                user['page'] = p_number
             elif page_number > page_count:
                 p_number = page_count
-                response = redirect(
-                    self.routes.getUrlByEndpoint(endpoint='on_topics_get', params={'page_number': p_number})
-                )
-                user['page'] = p_number
-            else:
-                p_number = page_number
+
+            new_cookie_page_value = p_number
             p_number -= 1
             if p_number < 0:
                 p_number = 1
-            new_cookie_page_value = p_number + 1
             pages_map, start_tags_range, end_tags_range = self.calcPagerData(
                 p_number,
                 page_count,
@@ -1938,10 +1908,6 @@ class RSSTagApplication(object):
                     provider=user['provider']
                 ),
                 mimetype='text/html'
-            )
-            self.users.update_by_sid(
-                user['sid'],
-                {'page': new_cookie_page_value, 'letter': ''}
             )
 
         return response

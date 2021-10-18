@@ -37,8 +37,6 @@ class RssTagUsers:
             'sid': sid,
             'token': token,
             'provider': provider,
-            'letter': '',
-            'page': '1',
             'settings': self._settings,
             'ready': False,
             'message': 'Click on "Refresh posts" to start downloading data',
