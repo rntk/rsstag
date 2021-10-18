@@ -647,9 +647,6 @@ class RSSTagApplication(object):
 
     def on_bi_gram_get(self, user: dict, request: Request, bi_gram='') -> Response:
         current_bi_gram = self.bi_grams.get_by_bi_gram(user['sid'], bi_gram)
-        if current_bi_gram is None:
-            return self.on_error(user, request, InternalServerError())
-
         if not current_bi_gram:
             return self.on_error(user, request, NotFound())
 
@@ -964,9 +961,6 @@ class RSSTagApplication(object):
 
     def on_group_by_bigrams_get(self, user: dict, request: Request, page_number: int=1) -> Response:
         tags_count = self.bi_grams.count(user['sid'], only_unread=user['settings']['only_unread'])
-        if tags_count is None:
-            return self.on_error(user, request, InternalServerError())
-
         page_count = self.getPageCount(tags_count, user['settings']['tags_on_page'])
         p_number = page_number
         if page_number <= 0:
@@ -994,8 +988,6 @@ class RSSTagApplication(object):
                 'limit': user['settings']['tags_on_page']
             }
         )
-        if tags is None:
-            return self.on_error(user, request, InternalServerError())
 
         for t in tags:
             sorted_tags.append({
@@ -1342,26 +1334,19 @@ class RSSTagApplication(object):
 
     def on_get_tag_bi_grams(self, user: dict, request: Request, tag='') -> Response:
         bi_grams = self.bi_grams.get_by_tags(user['sid'], [tag], user['settings']['only_unread'])
-        if bi_grams is not None:
-            all_bi_grams = []
-            for tag in bi_grams:
-                all_bi_grams.append({
-                    'tag': tag['tag'],
-                    'url': tag['local_url'],
-                    'words': tag['words'],
-                    'count': tag['unread_count'] if user['settings']['only_unread'] else tag['posts_count'],
-                    'sentiment': tag['sentiment'] if 'sentiment' in tag else []
-                })
-            code = 200
-            result = {'data': all_bi_grams}
-        else:
-            code = 500
-            result = {'error': 'Database trouble'}
+        all_bi_grams = []
+        for tag in bi_grams:
+            all_bi_grams.append({
+                'tag': tag['tag'],
+                'url': tag['local_url'],
+                'words': tag['words'],
+                'count': tag['unread_count'] if user['settings']['only_unread'] else tag['posts_count'],
+                'sentiment': tag['sentiment'] if 'sentiment' in tag else []
+            })
 
         return Response(
-            json.dumps(result),
-            mimetype="application/json",
-            status=code
+            json.dumps({"data": all_bi_grams}),
+            mimetype="application/json"
         )
 
     def on_posts_content_post(self, user: dict, request: Request) -> Response:

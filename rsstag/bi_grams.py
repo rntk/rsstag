@@ -1,12 +1,11 @@
 import logging
-from typing import Optional, List, Union
-from pymongo import MongoClient, DESCENDING, UpdateOne, CursorType
+from typing import Optional, List, Iterable
+from pymongo import MongoClient, DESCENDING, UpdateOne
 
 class RssTagBiGrams:
     indexes = ['owner', 'tag', 'tags', 'unread_count', 'posts_count', 'temperature']
     def __init__(self, db: MongoClient) -> None:
         self.db = db
-
         self.log = logging.getLogger('bi_grams')
 
     def prepare(self) -> None:
@@ -18,19 +17,10 @@ class RssTagBiGrams:
 
     def get_by_bi_gram(self, owner: str, bi_gram: str) -> Optional[dict]:
         query = {'owner': owner, 'tag': bi_gram}
-        try:
-            db_bi_gram = self.db.bi_grams.find_one(query)
-            if db_bi_gram:
-                result = db_bi_gram
-            else:
-                result = {}
-        except Exception as e:
-            self.log.error('Can`t get bi-gram %s. User %s. Info: %s', bi_gram, owner, e)
-            result = None
 
-        return result
+        return self.db.bi_grams.find_one(query)
 
-    def get_by_tags(self, owner: str, tags: list, only_unread: Optional[bool]=None, projection: dict={}) -> Optional[list]:
+    def get_by_tags(self, owner: str, tags: List[str], only_unread: Optional[bool]=None, projection: Optional[dict]=None) -> Iterable[dict]:
         query = {
             'owner': owner,
             'tags': {'$all': tags}
@@ -41,22 +31,11 @@ class RssTagBiGrams:
             sort_data.append(('unread_count', DESCENDING))
         else:
             sort_data.append(('posts_count', DESCENDING))
-        try:
-            if projection:
-                cursor = self.db.bi_grams.find(query, projection=projection).sort(sort_data)
-            else:
-                cursor = self.db.bi_grams.find(query).sort(sort_data)
-            result = list(cursor)
-        except Exception as e:
-            self.log.error('Can`t get tagby tag %s. User %s. Info: %s', tags, owner, e)
-            result = None
 
-        return result
+        return self.db.bi_grams.find(query, projection=projection).sort(sort_data)
 
-
-    def change_unread(self, owner: str, tags: dict, readed: bool) -> Optional[bool]:
+    def change_unread(self, owner: str, tags: dict, readed: bool) -> bool:
         updates = []
-        result = False
         for tag in tags:
             updates.append(UpdateOne(
                 {
@@ -70,16 +49,11 @@ class RssTagBiGrams:
                 }
             ))
         if updates:
-            try:
-                bulk_result = self.db.bi_grams.bulk_write(updates, ordered=False)
-                result = (bulk_result.matched_count > 0)
-            except Exception as e:
-                result = None
-                self.log.error('Can`t change unread_count for bi-grams. User %s. info: %s', owner, e)
+            self.db.bi_grams.bulk_write(updates, ordered=False)
 
-        return result
+        return True
 
-    def count(self, owner: str, only_unread: bool=False, regexp: str='', sentiments: List[str]=None, groups: List[str]=None) -> Optional[int]:
+    def count(self, owner: str, only_unread: bool=False, regexp: str='', sentiments: List[str]=None, groups: List[str]=None) -> int:
         query = {'owner': owner}
         if regexp:
             query['tag'] = {'$regex': regexp, '$options': 'i'}
@@ -89,16 +63,11 @@ class RssTagBiGrams:
             query['$and'] = [{'sentiment': {'$exists': True}}, {'sentiment': {'$all': sentiments}}]
         if groups:
             query['$and'] = [{'groups': {'$exists': True}}, {'groups': {'$all': groups}}]
-        try:
-            result = self.db.bi_grams.count(query)
-        except Exception as e:
-            self.log.error('Can`t get tags number for user %s. Info: e', owner, e)
-            result = None
 
-        return result
+        return self.db.bi_grams.count(query)
 
     def get_all(self, owner: str, only_unread: bool=False, hot_tags: bool=False,
-                opts: dict=None, projection: dict=None, get_cursor: bool=False) -> Optional[Union[list, CursorType]]:
+                opts: dict=None, projection: dict=None) -> Iterable[dict]:
         query = {'owner': owner}
         if opts and 'regexp' in opts:
             query['tag'] = {'$regex': opts['regexp'], '$options': 'i'}
@@ -117,33 +86,21 @@ class RssTagBiGrams:
             params['limit'] = opts['limit']
         if projection:
             params['projection'] = projection
-        try:
-            cursor = self.db.bi_grams.find(query, **params).sort(sort_data)
-            if get_cursor:
-                result = cursor
-            else:
-                result = list(cursor)
-        except Exception as e:
-            self.log.error('Can`t get all tags user %s. Info: %s', owner, e)
-            result = None
 
-        return result
+        return self.db.bi_grams.find(query, **params).sort(sort_data)
 
-    def set_temperature(self, owner: str, bi_gram: str, temperature: float) -> Optional[bool]:
-        try:
-            resp = self.db.bi_grams.update_one(
-                {
-                    'owner': owner,
-                    'tag': bi_gram
-                },
-                {"$set": {"temperature": temperature}}
-            )
-            return resp.matched_count > 0
-        except Exception as e:
-            self.log.error('Can`t change unread_count for bi-grams. User %s. info: %s', owner, e)
-            return None
+    def set_temperature(self, owner: str, bi_gram: str, temperature: float) -> bool:
+        self.db.bi_grams.update_one(
+            {
+                'owner': owner,
+                'tag': bi_gram
+            },
+            {"$set": {"temperature": temperature}}
+        )
 
-    def set_temperatures(self, owner: str, values: dict) -> Optional[bool]:
+        return True
+
+    def set_temperatures(self, owner: str, values: dict) -> bool:
         if not values:
             return True
 
@@ -156,9 +113,7 @@ class RssTagBiGrams:
                 },
                 {"$set": {"temperature": temperature}}
             ))
-        try:
-            self.db.bi_grams.bulk_write(updates, ordered=False)
-            return True
-        except Exception as e:
-            self.log.error('Can`t change unread_count for bi-grams. User %s. info: %s', owner, e)
-            return None
+
+        self.db.bi_grams.bulk_write(updates, ordered=False)
+
+        return True

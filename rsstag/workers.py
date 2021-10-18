@@ -408,8 +408,7 @@ class RSSTagWorker:
                 temp /= f1 + f2
             bi_temps[bi["tag"]] = temp
 
-        if bi_grams.set_temperatures(user_sid, bi_temps) is None:
-            return False
+        bi_grams.set_temperatures(user_sid, bi_temps)
 
         return True
 
@@ -420,7 +419,7 @@ class RSSTagWorker:
         bi_count = bi_grams.count(user_sid)
         if bi_count == 0:
             return False
-        cursor = bi_grams.get_all(user_sid, projection={"tag": True, "posts_count": True}, get_cursor=True)
+        cursor = bi_grams.get_all(user_sid, projection={"tag": True, "posts_count": True})
         for bi in cursor:
             grams = bi["tag"].split(" ")
             for_search = []
@@ -440,8 +439,7 @@ class RSSTagWorker:
             temp = (bi_f / math.log(f1 + f2))
             if grams[0] in self._stopw or grams[1] in self._stopw:
                 temp /= f1 + f2
-            if bi_grams.set_temperature(user_sid, bi["tag"], temp) is None:
-                return False
+            bi_grams.set_temperature(user_sid, bi["tag"], temp)
 
         return True
 
