@@ -10,12 +10,12 @@ from random import randint
 from multiprocessing import Process
 from rsstag.tags_builder import TagsBuilder
 from rsstag.html_cleaner import HTMLCleaner
-from pymongo import MongoClient, UpdateOne, ReplaceOne
+from pymongo import MongoClient, UpdateOne
 from rsstag.providers import BazquxProvider, TelegramProvider
 from rsstag.utils import load_config
 from rsstag.routes import RSSTagRoutes
 from rsstag.users import RssTagUsers
-from rsstag.tasks import TASK_NOOP, TASK_DOWNLOAD, TASK_MARK, TASK_TAGS, TASK_WORDS, TASK_TAGS_GROUP, \
+from rsstag.tasks import TASK_NOOP, TASK_DOWNLOAD, TASK_MARK, TASK_TAGS, TASK_TAGS_GROUP, \
     TAG_NOT_IN_PROCESSING, TASK_LETTERS, TASK_TAGS_SENTIMENT, TASK_W2V, TASK_NER, TASK_CLUSTERING, TASK_BIGRAMS_RANK, TASK_TAGS_RANK
 from rsstag.tasks import RssTagTasks
 from rsstag.letters import RssTagLetters
@@ -226,7 +226,7 @@ class RSSTagWorker:
         all_tags = tags.get_all(owner, projection={'tag': True, 'unread_count': True})
         result = False
         if all_tags:
-            result = letters.sync_with_tags(owner, all_tags, router)
+            letters.sync_with_tags(owner, all_tags, router)
 
         return result
 
@@ -514,76 +514,80 @@ class RSSTagWorker:
         users = RssTagUsers(db)
         tasks = RssTagTasks(db)
         while True:
-            task = tasks.get_task(users)
-            if task['type'] == TASK_NOOP:
-                time.sleep(randint(3, 8))
-                continue
-            if task['type'] == TASK_DOWNLOAD:
-                logging.info('Start downloading for user')
-                if self.clear_user_data(db, task['user']):
-                    provider = providers[task["user"]["provider"]]
-                    posts_n = 0
-                    try:
-                        for posts, feeds in provider.download(task['user']):
-                            posts_n += len(posts)
-                            f_ids = [f['feed_id'] for f in feeds]
-                            c = db.feeds.find(
-                                {
-                                    'owner': task['user']['sid'],
-                                    'feed_id': {'$in': f_ids},
-                                },
-                                projection={'feed_id': True, '_id': False}
-                            )
-                            skip_ids = {fc['feed_id'] for fc in c}
-                            n_feeds = []
-                            for fee in feeds:
-                                if fee['feed_id'] in skip_ids:
-                                    continue
-                                n_feeds.append(fee)
-                            db.posts.insert_many(posts)
-                            if n_feeds:
-                                db.feeds.insert_many(n_feeds)
-                        task_done = True
-                    except Exception as e:
-                        task_done = False
-                        logging.error('Can`t save in db for user %s. Info: %s', task['user']['sid'], e)
-                    logging.info('Saved posts: %s.', posts_n)
+            try:
+                task = tasks.get_task(users)
+                if task['type'] == TASK_NOOP:
+                    time.sleep(randint(3, 8))
+                    continue
+                if task['type'] == TASK_DOWNLOAD:
+                    logging.info('Start downloading for user')
+                    if self.clear_user_data(db, task['user']):
+                        provider = providers[task["user"]["provider"]]
+                        posts_n = 0
+                        try:
+                            for posts, feeds in provider.download(task['user']):
+                                posts_n += len(posts)
+                                f_ids = [f['feed_id'] for f in feeds]
+                                c = db.feeds.find(
+                                    {
+                                        'owner': task['user']['sid'],
+                                        'feed_id': {'$in': f_ids},
+                                    },
+                                    projection={'feed_id': True, '_id': False}
+                                )
+                                skip_ids = {fc['feed_id'] for fc in c}
+                                n_feeds = []
+                                for fee in feeds:
+                                    if fee['feed_id'] in skip_ids:
+                                        continue
+                                    n_feeds.append(fee)
+                                db.posts.insert_many(posts)
+                                if n_feeds:
+                                    db.feeds.insert_many(n_feeds)
+                            task_done = True
+                        except Exception as e:
+                            task_done = False
+                            logging.error('Can`t save in db for user %s. Info: %s', task['user']['sid'], e)
+                        logging.info('Saved posts: %s.', posts_n)
 
-            elif task['type'] == TASK_MARK:
-                provider = providers[task["user"]["provider"]]
-                marked = provider.mark(task['data'], task['user'])
-                if marked is None:
-                    tasks.freeze_tasks(task['user'], task['type'])
-                    users.update_by_sid(task['user']['sid'], {'retoken': True})
-                    task_done = False
-                else:
-                    task_done = marked
-            elif task['type'] == TASK_TAGS:
-                if task['data']:
-                    task_done = self.make_tags(db, task['data'], builder, cleaner)
-                else:
-                    task_done = True
-                    logging.warning('Error while make tags: %s', task)
-            elif task['type'] == TASK_LETTERS:
-                task_done = self.make_letters(db, task['user']['sid'], self._config)
-            elif task['type'] == TASK_NER:
-                task_done = self.make_ner(db, task['user']['sid'])
-            elif task['type'] == TASK_TAGS_SENTIMENT:
-                task_done = self.make_tags_sentiment(db, task['user']['sid'], self._config)
-            elif task['type'] == TASK_CLUSTERING:
-                task_done = self.make_clustering(db, task['user']['sid'])
-            elif task['type'] == TASK_W2V:
-                task_done = self.make_w2v(db, task['user']['sid'], self._config)
-            elif task['type'] == TASK_TAGS_GROUP:
-                task_done = self.make_tags_groups(db, task['user']['sid'], self._config)
-            elif task['type'] == TASK_BIGRAMS_RANK:
-                task_done = self.make_bi_grams_rank(db, task)
-            elif task['type'] == TASK_TAGS_RANK:
-                task_done = self.make_tags_rank(db, task)
-            '''elif task['type'] == TASK_WORDS:
-                task_done = self.process_words(db, task['data'])'''
-            #TODO: add tags_coords, add D2V?
-            if task_done:
-                tasks.finish_task(task)
-                if task['type'] == TASK_TAGS_GROUP:
-                    users.update_by_sid(task['user']['sid'], {'ready': True, 'in_queue': False})
+                elif task['type'] == TASK_MARK:
+                    provider = providers[task["user"]["provider"]]
+                    marked = provider.mark(task['data'], task['user'])
+                    if marked is None:
+                        tasks.freeze_tasks(task['user'], task['type'])
+                        users.update_by_sid(task['user']['sid'], {'retoken': True})
+                        task_done = False
+                    else:
+                        task_done = marked
+                elif task['type'] == TASK_TAGS:
+                    if task['data']:
+                        task_done = self.make_tags(db, task['data'], builder, cleaner)
+                    else:
+                        task_done = True
+                        logging.warning('Error while make tags: %s', task)
+                elif task['type'] == TASK_LETTERS:
+                    task_done = self.make_letters(db, task['user']['sid'], self._config)
+                elif task['type'] == TASK_NER:
+                    task_done = self.make_ner(db, task['user']['sid'])
+                elif task['type'] == TASK_TAGS_SENTIMENT:
+                    task_done = self.make_tags_sentiment(db, task['user']['sid'], self._config)
+                elif task['type'] == TASK_CLUSTERING:
+                    task_done = self.make_clustering(db, task['user']['sid'])
+                elif task['type'] == TASK_W2V:
+                    task_done = self.make_w2v(db, task['user']['sid'], self._config)
+                elif task['type'] == TASK_TAGS_GROUP:
+                    task_done = self.make_tags_groups(db, task['user']['sid'], self._config)
+                elif task['type'] == TASK_BIGRAMS_RANK:
+                    task_done = self.make_bi_grams_rank(db, task)
+                elif task['type'] == TASK_TAGS_RANK:
+                    task_done = self.make_tags_rank(db, task)
+                '''elif task['type'] == TASK_WORDS:
+                    task_done = self.process_words(db, task['data'])'''
+                #TODO: add tags_coords, add D2V?
+                if task_done:
+                    tasks.finish_task(task)
+                    if task['type'] == TASK_TAGS_GROUP:
+                        users.update_by_sid(task['user']['sid'], {'ready': True, 'in_queue': False})
+            except Exception as e:
+                logging.error("worker got exception: {}".format(e))
+                time.sleep(randint(3, 8))
