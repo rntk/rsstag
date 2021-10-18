@@ -224,9 +224,8 @@ class RSSTagWorker:
         letters = RssTagLetters(db)
         tags = RssTagTags(db)
         all_tags = tags.get_all(owner, projection={'tag': True, 'unread_count': True})
-        result = False
-        if all_tags:
-            letters.sync_with_tags(owner, all_tags, router)
+        result = True
+        letters.sync_with_tags(owner, list(all_tags), router)
 
         return result
 
@@ -311,23 +310,22 @@ class RSSTagWorker:
         result = False
         tags_h = RssTagTags(db)
         all_tags = tags_h.get_all(owner, projection={'tag': True})
-        if all_tags:
-            try:
-                learn = W2VLearn(db, config)
-                koef = 0.6
-                top_n = 10
-                groups = learn.make_groups([tag['tag'] for tag in all_tags], top_n, koef)
-                tag_groups = defaultdict(list)
-                for group, tags in groups.items():
-                    if len(tags) > 3:
-                        for tag in tags:
-                            tag_groups[tag].append(group)
-                if tag_groups:
-                    tags_h.add_groups(owner, tag_groups)
-                result = True
-            except Exception as e:
-                result = None
-                logging.error('Can`t group tags. Info: %s', e)
+        try:
+            learn = W2VLearn(db, config)
+            koef = 0.6
+            top_n = 10
+            groups = learn.make_groups([tag['tag'] for tag in all_tags], top_n, koef)
+            tag_groups = defaultdict(list)
+            for group, tags in groups.items():
+                if len(tags) > 3:
+                    for tag in tags:
+                        tag_groups[tag].append(group)
+            if tag_groups:
+                tags_h.add_groups(owner, tag_groups)
+            result = True
+        except Exception as e:
+            result = None
+            logging.error('Can`t group tags. Info: %s', e)
 
         return result
 
@@ -336,44 +334,42 @@ class RSSTagWorker:
             TODO: may be will be need RuSentiLex and WordNetAffectRuRom caching
         """
         result = True
-        tags = RssTagTags(db)
-        all_tags = tags.get_all(owner, projection={'tag': True})
-        if all_tags:
-            try:
-                f = open(config['settings']['sentilex'], 'r', encoding='utf-8')
-                strings = f.read().splitlines()
-                ru_sent = RuSentiLex()
-                wrong = ru_sent.sentiment_validation(strings, ',', '!')
-                i = 0
-                if not wrong:
-                    ru_sent.load(strings, ',', '!')
-                    all_tags = db.tags.find({}, {'tag': True})
-                    wna_dir = config['settings']['lilu_wordnet']
-                    wn_en = WordNetAffectRuRom('en', 4)
-                    wn_en.load_dicts_from_dir(wna_dir)
-                    wn_ru = WordNetAffectRuRom('ru', 4)
-                    wn_ru.load_dicts_from_dir(wna_dir)
-                    conv = SentimentConverter()
-                    for tag in all_tags:
-                        sentiment = ru_sent.get_sentiment(tag['tag'])
-                        if not sentiment:
-                            affects = wn_en.get_affects_by_word(tag['tag'])
-                            '''if not affects:
-                                affects = wn_en.search_affects_by_word(tag['tag'])'''
-                            if not affects:
-                                affects = wn_ru.get_affects_by_word(tag['tag'])
-                            '''if not affects:
-                                affects = wn_ru.search_affects_by_word(tag['tag'])'''
-                            if affects:
-                                sentiment = conv.convert_sentiment(affects)
+        try:
+            f = open(config['settings']['sentilex'], 'r', encoding='utf-8')
+            strings = f.read().splitlines()
+            ru_sent = RuSentiLex()
+            wrong = ru_sent.sentiment_validation(strings, ',', '!')
+            i = 0
+            if not wrong:
+                ru_sent.load(strings, ',', '!')
+                tags = RssTagTags(db)
+                all_tags = tags.get_all(owner, projection={'tag': True})
+                wna_dir = config['settings']['lilu_wordnet']
+                wn_en = WordNetAffectRuRom('en', 4)
+                wn_en.load_dicts_from_dir(wna_dir)
+                wn_ru = WordNetAffectRuRom('ru', 4)
+                wn_ru.load_dicts_from_dir(wna_dir)
+                conv = SentimentConverter()
+                for tag in all_tags:
+                    sentiment = ru_sent.get_sentiment(tag['tag'])
+                    if not sentiment:
+                        affects = wn_en.get_affects_by_word(tag['tag'])
+                        '''if not affects:
+                            affects = wn_en.search_affects_by_word(tag['tag'])'''
+                        if not affects:
+                            affects = wn_ru.get_affects_by_word(tag['tag'])
+                        '''if not affects:
+                            affects = wn_ru.search_affects_by_word(tag['tag'])'''
+                        if affects:
+                            sentiment = conv.convert_sentiment(affects)
 
-                        if sentiment:
-                            i += 1
-                            sentiment = sorted(sentiment)
-                            tags.add_sentiment(owner, tag['tag'], sentiment)
-                    result = True
-            except Exception as e:
-                logging.error('Can`t make tags santiment. Info: %s', e)
+                    if sentiment:
+                        i += 1
+                        sentiment = sorted(sentiment)
+                        tags.add_sentiment(owner, tag['tag'], sentiment)
+                result = True
+        except Exception as e:
+            logging.error('Can`t make tags santiment. Info: %s', e)
 
         return result #Always True. TODO: refactor or replace by somethin
 
@@ -448,7 +444,7 @@ class RSSTagWorker:
         return posts_h.count(owner)
 
     @lru_cache(maxsize=10)
-    def _get_tags_count(self, owner: str, task_id: str) -> Optional[int]:
+    def _get_tags_count(self, owner: str, task_id: str) -> int:
         tags_h = RssTagTags(self._db)
 
         return tags_h.get_tags_sum(owner)
@@ -473,9 +469,7 @@ class RSSTagWorker:
             tag_temps[tag_d["tag"]] = temp
 
         tags_h = RssTagTags(db)
-
-        if tags_h.add_entities(user_sid, tag_temps, replace=True) is None:
-            return False
+        tags_h.add_entities(user_sid, tag_temps, replace=True)
 
         return True
 
@@ -488,9 +482,7 @@ class RSSTagWorker:
             tag_temps[tag_d["tag"]] = tf
 
         tags_h = RssTagTags(db)
-
-        if tags_h.add_entities(task['user']['sid'], tag_temps) is None:
-            return False
+        tags_h.add_entities(task['user']['sid'], tag_temps)
 
         return True
 
