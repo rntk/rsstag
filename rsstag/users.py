@@ -51,68 +51,30 @@ class RssTagUsers:
             user["phone"] = password
             user["telegram_channel"] = login
             user["telegram_limit"] = 5000
-        try:
-            self._db.users.insert_one(user)
-            result = sid
-        except Exception as e:
-            result = None
-            self._log.error('Can`t create user. Info: %s', e)
 
-        return result
+        self._db.users.insert_one(user)
+
+        return sid
 
     def update_by_sid(self, sid: str, data: dict) -> Optional[bool]:
         """
         Update users fields
         TODO: add fields validation, check result of update operation
         """
-        try:
-            self._db.users.update_one({'sid': sid}, {'$set': data})
-            result = True
-        except Exception as e:
-            result = None
-            self._log.error('Can`t update user %s. Info: %s', sid, e)
+        self._db.users.update_one({'sid': sid}, {'$set': data})
 
-        return result
+        return True
 
     def get_by_login_password(self, login: str, password: str) -> Optional[dict]:
         lp_hash = self.hash_login_password(login, password)
-        try:
-            user = self._db.users.find_one({'lp': lp_hash})
-            if user:
-                result = user
-            else:
-                result = {}
-        except Exception as e:
-            result = None
-            self._log.error('Can`t find user by hash. %s', e)
 
-        return result
+        return self._db.users.find_one({'lp': lp_hash})
 
     def get_by_sid(self, sid: str) -> Optional[dict]:
-        try:
-            user = self._db.users.find_one({'sid': sid})
-            if user:
-                result = user
-            else:
-                result = {}
-        except Exception as e:
-            result = None
-            self._log.error('Can`t get user by sid "%s". Info: %s', sid, e)
-
-        return result
+        return self._db.users.find_one({'sid': sid})
 
     def get_by_id(self, user_id: str) -> Optional[dict]:
-        try:
-            user = self._db.users.find_one({'_id': user_id})
-            if user:
-                result = user
-            else:
-                result = {}
-        except Exception as e:
-            result = None
-            self._log.error('Can`t get user by id "%s". Info: %s', user_id, e)
-
-        return result
+        return self._db.users.find_one({'_id': user_id})
 
     def get_validated_settings(self, settings: dict) -> Optional[dict]:
         new_settings = {}
@@ -138,13 +100,8 @@ class RssTagUsers:
     def update_settings(self, sid: str, settings: dict) -> Optional[bool]:
         field = 'settings'
         for_update = {}
-        try:#TODO: check result of update operation
-            for k, v in settings.items():
-                for_update[field + '.' + k] = v
-            self._db.users.update_one({'sid': sid}, {'$set': for_update})
-            result = True
-        except Exception as e:
-            result = None
-            self._log.error('Can`t updat settings for user %s. Info: %s', sid, e)
+        for k, v in settings.items():
+            for_update[field + '.' + k] = v
+        self._db.users.update_one({'sid': sid}, {'$set': for_update})
 
-        return result
+        return True

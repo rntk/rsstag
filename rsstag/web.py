@@ -286,9 +286,6 @@ class RSSTagApplication(object):
             return self.on_login_get(None, request, ["Login or Password can`t be empty"])
 
         user = self.users.get_by_login_password(login, password)
-        if user is None:
-            return self.on_error(None, request, InternalServerError())
-
         err = []
         if user and user["provider"] == "bazqux":
             # login as baszqux user and check token
