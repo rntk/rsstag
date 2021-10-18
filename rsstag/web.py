@@ -239,9 +239,6 @@ class RSSTagApplication(object):
                 else:
                     result = {'error': 'Can`t get speech file'}
                     code = 503
-            elif post is None:
-                result = {'error': 'Database trouble'}
-                code = 500
             else:
                 result = {'error': 'Post not found'}
                 code = 404
@@ -430,11 +427,7 @@ class RSSTagApplication(object):
             err = []
         only_unread = True
         if user and 'provider' in user:
-            stat = self.posts.get_stat(user['sid'])
-            if stat:
-                posts = stat
-            else:
-                posts = {'unread': 0, 'read': 0}
+            posts = self.posts.get_stat(user['sid'])
             sentiments = self.tags.get_sentiments(user['sid'], user['settings']['only_unread'])
             if sentiments is None:
                 sentiments = tuple()
@@ -480,9 +473,6 @@ class RSSTagApplication(object):
             only_unread = None
 
         grouped = self.posts.get_grouped_stat(user['sid'], only_unread)
-        if grouped is None:
-            return self.on_error(user, request, InternalServerError())
-
         by_category = {self.feeds.all_feeds: {
             'unread_count': 0,
             'title': self.feeds.all_feeds,
@@ -542,24 +532,21 @@ class RSSTagApplication(object):
         else:
             only_unread = None
         if cat != self.feeds.all_feeds:
-            db_posts = self.posts.get_by_category(user['sid'], only_unread, cat, projection)
+            db_posts_c = self.posts.get_by_category(user['sid'], only_unread, cat, projection)
         else:
-            db_posts = self.posts.get_all(user['sid'], only_unread, projection)
+            db_posts_c = self.posts.get_all(user['sid'], only_unread, projection)
 
-        if db_posts is None:
-            return self.on_error(user, request, InternalServerError())
+        db_posts = list(db_posts_c)
 
         if user['settings']['similar_posts']:
             clusters = self.posts.get_clusters(db_posts)
-            if clusters:
-                cl_posts = self.posts.get_by_clusters(user['sid'], list(clusters), only_unread, projection)
-                if cl_posts:
-                    for post in cl_posts:
-                        if post['feed_id'] not in by_feed:
-                            feed = self.feeds.get_by_feed_id(user['sid'], post['feed_id'])
-                            if feed:
-                                by_feed[post['feed_id']] = feed
-                    db_posts.extend(cl_posts)
+            cl_posts = self.posts.get_by_clusters(user['sid'], list(clusters), only_unread, projection)
+            for post in cl_posts:
+                if post['feed_id'] not in by_feed:
+                    feed = self.feeds.get_by_feed_id(user['sid'], post['feed_id'])
+                    if feed:
+                        by_feed[post['feed_id']] = feed
+            db_posts.extend(cl_posts)
         posts = []
         pids = set()
         for post in db_posts:
@@ -602,16 +589,13 @@ class RSSTagApplication(object):
             only_unread = user['settings']['only_unread']
         else:
             only_unread = None
-        db_posts = self.posts.get_by_tags(user['sid'], [tag], only_unread, projection)
-        if db_posts is None:
-            return self.on_error(user, request, InternalServerError())
+        db_posts_c = self.posts.get_by_tags(user['sid'], [tag], only_unread, projection)
+        db_posts = list(db_posts_c)
 
         if user['settings']['similar_posts']:
             clusters = self.posts.get_clusters(db_posts)
-            if clusters:
-                cl_posts = self.posts.get_by_clusters(user['sid'], list(clusters), only_unread, projection)
-                if cl_posts:
-                    db_posts.extend(cl_posts)
+            cl_posts = self.posts.get_by_clusters(user['sid'], list(clusters), only_unread, projection)
+            db_posts.extend(cl_posts)
         posts = []
         by_feed = {}
         pids = set()
@@ -655,16 +639,13 @@ class RSSTagApplication(object):
             only_unread = user['settings']['only_unread']
         else:
             only_unread = None
-        db_posts = self.posts.get_by_bi_grams(user['sid'], [bi_gram], only_unread, projection)
-        if db_posts is None:
-            return self.on_error(user, request, InternalServerError())
+        db_posts_c = self.posts.get_by_bi_grams(user['sid'], [bi_gram], only_unread, projection)
+        db_posts = list(db_posts_c)
 
         if user['settings']['similar_posts']:
             clusters = self.posts.get_clusters(db_posts)
-            if clusters:
-                cl_posts = self.posts.get_by_clusters(user['sid'], list(clusters), only_unread, projection)
-                if cl_posts:
-                    db_posts.extend(cl_posts)
+            cl_posts = self.posts.get_by_clusters(user['sid'], list(clusters), only_unread, projection)
+            db_posts.extend(cl_posts)
         posts = []
         by_feed = {}
         pids = set()
@@ -709,22 +690,19 @@ class RSSTagApplication(object):
             only_unread = user['settings']['only_unread']
         else:
             only_unread = None
-        db_posts = self.posts.get_by_feed_id(
+        db_posts_c = self.posts.get_by_feed_id(
             user['sid'],
             current_feed['feed_id'],
             only_unread,
             projection
         )
-        if db_posts is None:
-            return self.on_error(user, request, InternalServerError())
+        db_posts = list(db_posts_c)
 
         posts = []
         if user['settings']['similar_posts']:
             clusters = self.posts.get_clusters(db_posts)
-            if clusters:
-                cl_posts = self.posts.get_by_clusters(user['sid'], list(clusters), only_unread, projection)
-                if cl_posts:
-                    db_posts.extend(cl_posts)
+            cl_posts = self.posts.get_by_clusters(user['sid'], list(clusters), only_unread, projection)
+            db_posts.extend(cl_posts)
         pids = set()
         for post in db_posts:
             post["lemmas"] = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
@@ -774,26 +752,22 @@ class RSSTagApplication(object):
                 post_ids,
                 {'id': True, 'tags': True, 'bi_grams': True, 'read': True}
             )
-            if db_posts is not None:
-                for d in db_posts:
-                    if d['read'] != readed:
-                        for_insert.append({
-                            'user': user['sid'],
-                            'id': d['id'],
-                            'status': readed,
-                            'processing': TASK_NOT_IN_PROCESSING,
-                            'type': TASK_MARK,
-                        })
-                        for t in d['tags']:
-                            tags[t] += 1
-                            if not t:
-                                continue
-                            letters[t[0]] += 1
-                        for bi_g in d['bi_grams']:
-                            bi_grams[bi_g] += 1
-            else:
-                code = 500
-                result = {'error': 'Database error'}
+            for d in db_posts:
+                if d['read'] != readed:
+                    for_insert.append({
+                        'user': user['sid'],
+                        'id': d['id'],
+                        'status': readed,
+                        'processing': TASK_NOT_IN_PROCESSING,
+                        'type': TASK_MARK,
+                    })
+                    for t in d['tags']:
+                        tags[t] += 1
+                        if not t:
+                            continue
+                        letters[t[0]] += 1
+                    for bi_g in d['bi_grams']:
+                        bi_grams[bi_g] += 1
 
             if self.tasks.add_task({'type': TASK_MARK, 'user': user['sid'], 'data': for_insert}):
                 changed = self.posts.change_status(user['sid'], post_ids, readed)
@@ -1297,34 +1271,30 @@ class RSSTagApplication(object):
         else:
             only_unread = None
         posts = self.posts.get_by_tags(user['sid'], [tag], only_unread, {'tags': True})
-        if posts is not None:
-            tags_set = set()
-            for post in posts:
-                for tag in post['tags']:
-                    tags_set.add(tag)
+        tags_set = set()
+        for post in posts:
+            for tag in post['tags']:
+                tags_set.add(tag)
 
-            if tags_set:
-                db_tags = self.tags.get_by_tags(user['sid'], list(tags_set), user['settings']['only_unread'])
-                if db_tags is not None:
-                    for tag in db_tags:
-                        all_tags.append({
-                            'tag': tag['tag'],
-                            'url': tag['local_url'],
-                            'words': tag['words'],
-                            'count': tag['unread_count'] if user['settings']['only_unread'] else tag['posts_count'],
-                            'sentiment': tag['sentiment'] if 'sentiment' in tag else []
-                        })
-                    code = 200
-                    result = {'data': all_tags}
-                else:
-                    code = 500
-                    result = {'error': 'Database trouble'}
-            else:
+        if tags_set:
+            db_tags = self.tags.get_by_tags(user['sid'], list(tags_set), user['settings']['only_unread'])
+            if db_tags is not None:
+                for tag in db_tags:
+                    all_tags.append({
+                        'tag': tag['tag'],
+                        'url': tag['local_url'],
+                        'words': tag['words'],
+                        'count': tag['unread_count'] if user['settings']['only_unread'] else tag['posts_count'],
+                        'sentiment': tag['sentiment'] if 'sentiment' in tag else []
+                    })
                 code = 200
                 result = {'data': all_tags}
+            else:
+                code = 500
+                result = {'error': 'Database trouble'}
         else:
-            code = 500
-            result = {'error': 'Database trouble'}
+            code = 200
+            result = {'data': all_tags}
 
         return Response(
             json.dumps(result),
@@ -1359,6 +1329,7 @@ class RSSTagApplication(object):
             wanted_posts = []
             result = {'error': 'Bad posts ids'}
             code = 400
+
         if wanted_posts:
             projection = {
                 'pid': True,
@@ -1366,22 +1337,20 @@ class RSSTagApplication(object):
                 'attachments': True
             }
             posts = self.posts.get_by_pids(user['sid'], wanted_posts, projection)
-            if posts:
-                posts_content = []
-                for post in posts:
-                    attachments = ''
-                    if post['attachments']:
-                        for href in post['attachments']:
-                            attachments += '<a href="{0}">{0}</a><br />'.format(href)
-                    content = gzip.decompress(post['content']['content']).decode('utf-8', 'replace')
-                    if attachments:
-                        content += '<p>Attachments:<br />{0}<p>'.format(attachments)
-                    posts_content.append({'pos': post['pid'], 'content': content})
+            posts_content = []
+            for post in posts:
+                attachments = ''
+                if post['attachments']:
+                    for href in post['attachments']:
+                        attachments += '<a href="{0}">{0}</a><br />'.format(href)
+                content = gzip.decompress(post['content']['content']).decode('utf-8', 'replace')
+                if attachments:
+                    content += '<p>Attachments:<br />{0}<p>'.format(attachments)
+                posts_content.append({'pos': post['pid'], 'content': content})
+
+            if posts_content:
                 result = {'data': posts_content}
                 code = 200
-            elif posts is None:
-                code = 500
-                result = {'error': 'Database trouble'}
             else:
                 code = 404
                 result = {'error': 'Not found'}
@@ -1431,9 +1400,6 @@ class RSSTagApplication(object):
             else:
                 code = 500
                 result = {'error': 'Server trouble'}
-        elif current_post is None:
-            code = 500
-            result = {'error': 'Database trouble'}
         else:
             code = 404
             result = {'error': 'Not found'}
@@ -1558,39 +1524,36 @@ class RSSTagApplication(object):
             only_unread = user['settings']['only_unread']
         else:
             only_unread = None
-        posts = self.posts.get_by_tags(user['sid'], [tag], only_unread, {'tags': True})
-        if posts is not None:
-            tags_set = set()
-            for post in posts:
-                for tag in post['tags']:
-                    tags_set.add(tag)
-                    for tg in post['tags']:
-                        edges[tag].add(tg)
 
-            if tags_set:
-                db_tags = self.tags.get_by_tags(user['sid'], list(tags_set), user['settings']['only_unread'])
-                if db_tags is not None:
-                    for tag in db_tags:
-                        edges[tag['tag']].remove(tag['tag'])
-                        all_tags.append({
-                            'tag': tag['tag'],
-                            'url': tag['local_url'],
-                            'words': tag['words'],
-                            'count': tag['unread_count'] if user['settings']['only_unread'] else tag['posts_count'],
-                            'edges': list(edges[tag['tag']])[:5],
-                            'sentiment': tag['sentiment'] if 'sentiment' in tag else []
-                        })
-                    code = 200
-                    result = {'data': all_tags}
-                else:
-                    code = 500
-                    result = {'error': 'Database trouble'}
-            else:
+        posts = self.posts.get_by_tags(user['sid'], [tag], only_unread, {'tags': True})
+        tags_set = set()
+        for post in posts:
+            for tag in post['tags']:
+                tags_set.add(tag)
+                for tg in post['tags']:
+                    edges[tag].add(tg)
+
+        if tags_set:
+            db_tags = self.tags.get_by_tags(user['sid'], list(tags_set), user['settings']['only_unread'])
+            if db_tags is not None:
+                for tag in db_tags:
+                    edges[tag['tag']].remove(tag['tag'])
+                    all_tags.append({
+                        'tag': tag['tag'],
+                        'url': tag['local_url'],
+                        'words': tag['words'],
+                        'count': tag['unread_count'] if user['settings']['only_unread'] else tag['posts_count'],
+                        'edges': list(edges[tag['tag']])[:5],
+                        'sentiment': tag['sentiment'] if 'sentiment' in tag else []
+                    })
                 code = 200
                 result = {'data': all_tags}
+            else:
+                code = 500
+                result = {'error': 'Database trouble'}
         else:
-            code = 500
-            result = {'error': 'Database trouble'}
+            code = 200
+            result = {'data': all_tags}
 
         return Response(
             json.dumps(result),
@@ -1654,18 +1617,11 @@ class RSSTagApplication(object):
         if tag:
             if user:
                 cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"unix_date": True})
-                if cursor:
-                    data = []
-                    for dt in cursor:
-                        data.append(dt["unix_date"])
-                    result = {'data': data}
-                    code = 200
-                elif cursor is None:
-                    result = {'error': 'Server in trouble'}
-                    code = 500
-                else:
-                    result = {'error': 'Tag not found'}
-                    code = 404
+                data = []
+                for dt in cursor:
+                    data.append(dt["unix_date"])
+                result = {'data': data}
+                code = 200
             else:
                 result = {'error': 'Not logged'}
                 code = 401
@@ -1683,26 +1639,19 @@ class RSSTagApplication(object):
         if tag:
             if user:
                 cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"unix_date": True, "bi_grams": True})
-                if cursor:
-                    data = {}
-                    for dt in cursor:
-                        d = int(dt["unix_date"])
-                        for bi in dt["bi_grams"]:
-                            if tag not in bi:
-                                continue
-                            if bi not in data:
-                                data[bi] = {}
-                            if d not in data[bi]:
-                                data[bi][d] = 0
-                            data[bi][d] += 1
-                    result = {'data': data}
-                    code = 200
-                elif cursor is None:
-                    result = {'error': 'Server in trouble'}
-                    code = 500
-                else:
-                    result = {'error': 'Tag not found'}
-                    code = 404
+                data = {}
+                for dt in cursor:
+                    d = int(dt["unix_date"])
+                    for bi in dt["bi_grams"]:
+                        if tag not in bi:
+                            continue
+                        if bi not in data:
+                            data[bi] = {}
+                        if d not in data[bi]:
+                            data[bi][d] = 0
+                        data[bi][d] += 1
+                result = {'data': data}
+                code = 200
             else:
                 result = {'error': 'Not logged'}
                 code = 401
@@ -1720,27 +1669,20 @@ class RSSTagApplication(object):
         if tag:
             if user:
                 cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"lemmas": True})
-                if cursor:
-                    data = []
-                    window = 10
-                    for post in cursor:
-                        text = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
-                        words = text.split()
-                        for i, word in enumerate(words):
-                            if word == tag:
-                                start_pos = i - window
-                                if start_pos < 0:
-                                    start_pos = 0
-                                end_pos = i + window
-                                data.append(" ".join(words[start_pos:end_pos]))
-                    result = {'data': data}
-                    code = 200
-                elif cursor is None:
-                    result = {'error': 'Server in trouble'}
-                    code = 500
-                else:
-                    result = {'error': 'Tag not found'}
-                    code = 404
+                data = []
+                window = 10
+                for post in cursor:
+                    text = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
+                    words = text.split()
+                    for i, word in enumerate(words):
+                        if word == tag:
+                            start_pos = i - window
+                            if start_pos < 0:
+                                start_pos = 0
+                            end_pos = i + window
+                            data.append(" ".join(words[start_pos:end_pos]))
+                result = {'data': data}
+                code = 200
             else:
                 result = {'error': 'Not logged'}
                 code = 401
@@ -1806,20 +1748,13 @@ class RSSTagApplication(object):
         if tag:
             if user:
                 cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"lemmas": True})
-                if cursor:
-                    texts = [gzip.decompress(post["lemmas"]).decode('utf-8', 'replace') for post in cursor]
-                    lda = LDA()
-                    topics = lda.topics(texts, top_k=5)
-                    if tag in topics:
-                        topics.remove(tag)
-                    result = {"data": {"texts": texts, "topics": topics}}
-                    code = 200
-                elif cursor is None:
-                    result = {'error': 'Server in trouble'}
-                    code = 500
-                else:
-                    result = {'error': 'Tag not found'}
-                    code = 404
+                texts = [gzip.decompress(post["lemmas"]).decode('utf-8', 'replace') for post in cursor]
+                lda = LDA()
+                topics = lda.topics(texts, top_k=5)
+                if tag in topics:
+                    topics.remove(tag)
+                result = {"data": {"texts": texts, "topics": topics}}
+                code = 200
             else:
                 result = {'error': 'Not logged'}
                 code = 401
@@ -1837,23 +1772,22 @@ class RSSTagApplication(object):
         if user:
             all_tags = []
             cursor = self.posts.get_all(user["sid"], user['settings']['only_unread'], {"lemmas": True})
-            if cursor:
-                texts = [gzip.decompress(post["lemmas"]).decode('utf-8', 'replace') for post in cursor]
-                lda = LDA()
-                topics = lda.topics(texts, top_k=10)
-                tags = self.tags.get_by_tags(user['sid'], topics, user['settings']['only_unread'])
-                if tags:
-                    for tag in tags:
-                        all_tags.append({
-                            'tag': tag['tag'],
-                            'url': tag['local_url'],
-                            'words': tag['words'],
-                            'count': tag['unread_count'] if user['settings']['only_unread'] else tag[
-                                'posts_count'],
-                            'sentiment': tag['sentiment'] if 'sentiment' in tag else [],
-                            'temp': tag['temperature']
-                        })
-                    all_tags.sort(key=lambda t: t["temp"], reverse=True)
+            texts = [gzip.decompress(post["lemmas"]).decode('utf-8', 'replace') for post in cursor]
+            lda = LDA()
+            topics = lda.topics(texts, top_k=10)
+            tags = self.tags.get_by_tags(user['sid'], topics, user['settings']['only_unread'])
+            if tags:
+                for tag in tags:
+                    all_tags.append({
+                        'tag': tag['tag'],
+                        'url': tag['local_url'],
+                        'words': tag['words'],
+                        'count': tag['unread_count'] if user['settings']['only_unread'] else tag[
+                            'posts_count'],
+                        'sentiment': tag['sentiment'] if 'sentiment' in tag else [],
+                        'temp': tag['temperature']
+                    })
+                all_tags.sort(key=lambda t: t["temp"], reverse=True)
             page_count = self.getPageCount(1, user['settings']['tags_on_page'])
             p_number = page_number
             if page_number <= 0:
@@ -1901,54 +1835,47 @@ class RSSTagApplication(object):
         if tag:
             if user:
                 cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"content": True, "tags": True, "bi_grams": True})
-                if cursor:
-                    html_cleaner = HTMLCleaner()
-                    tags_builder = TagsBuilder()
-                    if self.navec is None:
-                        self.navec = Navec.load('./data/navec_news_v1_1B_250K_300d_100q.tar')
-                    if self.ner is None:
-                        self.ner = NER.load('./data/slovnet_ner_news_v1.tar')
-                        self.ner.navec(self.navec)
-                    ners = {}
-                    text_clearing = re.compile("[^\w\d ]")
-                    for post in cursor:
-                        html_cleaner.purge()
-                        txt = post["content"]["title"] + ". " + gzip.decompress(post["content"]["content"]).decode('utf-8', 'replace')
-                        html_cleaner.feed(txt)
-                        txt = html.unescape(" ".join(html_cleaner.get_content()))
-                        markup = self.ner(txt)
-                        if len(markup.spans) == 0:
-                            continue
-                        for span in markup.spans:
-                            n = txt[span.start:span.stop].casefold()
-                            n = text_clearing.sub(" ", n).strip()
-                            if " " in n:
-                                words = n.split(" ")
-                                ns = map(lambda w: tags_builder.process_word(w), words)
-                                n = " ".join(ns)
-                            else:
-                                words = [n]
-                                n = tags_builder.process_word(n)
-                            if n not in ners:
-                                ners[n] = {
-                                    'tag': n,
-                                    'url': "/entity/" + quote(n),
-                                    'words': [],
-                                    'count': 0,
-                                    'sentiment': [],
-                                    'temp': 0
-                                }
-                            ners[n]["count"] += 1
-                            ners[n]["words"] = list(set(ners[n]["words"] + words))
+                html_cleaner = HTMLCleaner()
+                tags_builder = TagsBuilder()
+                if self.navec is None:
+                    self.navec = Navec.load('./data/navec_news_v1_1B_250K_300d_100q.tar')
+                if self.ner is None:
+                    self.ner = NER.load('./data/slovnet_ner_news_v1.tar')
+                    self.ner.navec(self.navec)
+                ners = {}
+                text_clearing = re.compile("[^\w\d ]")
+                for post in cursor:
+                    html_cleaner.purge()
+                    txt = post["content"]["title"] + ". " + gzip.decompress(post["content"]["content"]).decode('utf-8', 'replace')
+                    html_cleaner.feed(txt)
+                    txt = html.unescape(" ".join(html_cleaner.get_content()))
+                    markup = self.ner(txt)
+                    if len(markup.spans) == 0:
+                        continue
+                    for span in markup.spans:
+                        n = txt[span.start:span.stop].casefold()
+                        n = text_clearing.sub(" ", n).strip()
+                        if " " in n:
+                            words = n.split(" ")
+                            ns = map(lambda w: tags_builder.process_word(w), words)
+                            n = " ".join(ns)
+                        else:
+                            words = [n]
+                            n = tags_builder.process_word(n)
+                        if n not in ners:
+                            ners[n] = {
+                                'tag': n,
+                                'url': "/entity/" + quote(n),
+                                'words': [],
+                                'count': 0,
+                                'sentiment': [],
+                                'temp': 0
+                            }
+                        ners[n]["count"] += 1
+                        ners[n]["words"] = list(set(ners[n]["words"] + words))
 
-                    result = {'data': [ners[n] for n in ners]}
-                    code = 200
-                elif cursor is None:
-                    result = {'error': 'Server in trouble'}
-                    code = 500
-                else:
-                    result = {'error': 'Tag not found'}
-                    code = 404
+                result = {'data': [ners[n] for n in ners]}
+                code = 200
             else:
                 result = {'error': 'Not logged'}
                 code = 401
@@ -1969,16 +1896,13 @@ class RSSTagApplication(object):
             only_unread = user['settings']['only_unread']
         else:
             only_unread = None
-        db_posts = self.posts.get_by_tags(user['sid'], tag.split(), only_unread, projection)
-        if db_posts is None:
-            return self.on_error(user, request, InternalServerError())
+        db_posts_c = self.posts.get_by_tags(user['sid'], tag.split(), only_unread, projection)
+        db_posts = list(db_posts_c)
 
         if user['settings']['similar_posts']:
             clusters = self.posts.get_clusters(db_posts)
-            if clusters:
-                cl_posts = self.posts.get_by_clusters(user['sid'], list(clusters), only_unread, projection)
-                if cl_posts:
-                    db_posts.extend(cl_posts)
+            cl_posts = self.posts.get_by_clusters(user['sid'], list(clusters), only_unread, projection)
+            db_posts.extend(cl_posts)
         posts = []
         by_feed = {}
         pids = set()
@@ -2022,59 +1946,52 @@ class RSSTagApplication(object):
         if tag:
             if user:
                 cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"lemmas": True})
-                if cursor:
-                    topics = set()
-                    stopw = set(stopwords.words('english') + stopwords.words('russian'))
-                    texts = [gzip.decompress(post["lemmas"]).decode('utf-8', 'replace') for post in cursor]
-                    freq_d = Counter()
-                    for text in texts:
-                        words = [word for word in text.split() if word not in stopw]
-                        st = set(words)
-                        freq_d.update(st)
-                    for text in texts:
-                        words = [word for word in text.split() if word not in stopw]
-                        tfidf = []
-                        freq = Counter(words)
-                        for word in words:
-                            tf = freq[word] / len(words)
-                            idf = math.log(len(texts) / freq_d[word])
-                            tfidf.append((word, tf * idf))
-                        tfidf.sort(key=lambda x: x[1], reverse=True)
-                        topics.update([ti[0] for ti in tfidf[:5]])
-                    topics.add(tag)
-                    topics = list(topics)
+                topics = set()
+                stopw = set(stopwords.words('english') + stopwords.words('russian'))
+                texts = [gzip.decompress(post["lemmas"]).decode('utf-8', 'replace') for post in cursor]
+                freq_d = Counter()
+                for text in texts:
+                    words = [word for word in text.split() if word not in stopw]
+                    st = set(words)
+                    freq_d.update(st)
+                for text in texts:
+                    words = [word for word in text.split() if word not in stopw]
+                    tfidf = []
+                    freq = Counter(words)
+                    for word in words:
+                        tf = freq[word] / len(words)
+                        idf = math.log(len(texts) / freq_d[word])
+                        tfidf.append((word, tf * idf))
+                    tfidf.sort(key=lambda x: x[1], reverse=True)
+                    topics.update([ti[0] for ti in tfidf[:5]])
+                topics.add(tag)
+                topics = list(topics)
 
-                    tags = self.tags.get_by_tags(user['sid'], topics, user['settings']['only_unread'])
-                    if tags:
-                        t_words = []
-                        for tg in tags:
-                            if tg['tag'] == tag:
-                                t_words = tg["words"]
-                                break
-                        all_tags = []
-                        for tg in tags:
-                            if tg['tag'] == tag:
-                                continue
-                            all_tags.append({
-                                'tag': tag + " " + tg['tag'],
-                                'url': "/entity/" + quote(tag + " " + tg['tag']),
-                                'words': tg['words'] + t_words,
-                                'count': freq_d[tg['tag']],
-                                'sentiment': tg['sentiment'] if 'sentiment' in tg else [],
-                                'temp': tg['temperature'],
-                                'freq': tg['freq']
-                            })
-                            all_tags.sort(key=lambda t: t["count"] / t["freq"], reverse=True)
-                        result = {'data': all_tags}
-                        code = 200
-                    else:
-                        result = {'error': 'Tags not found'}
-                        code = 404
-                elif cursor is None:
-                    result = {'error': 'Server in trouble'}
-                    code = 500
+                tags = self.tags.get_by_tags(user['sid'], topics, user['settings']['only_unread'])
+                if tags:
+                    t_words = []
+                    for tg in tags:
+                        if tg['tag'] == tag:
+                            t_words = tg["words"]
+                            break
+                    all_tags = []
+                    for tg in tags:
+                        if tg['tag'] == tag:
+                            continue
+                        all_tags.append({
+                            'tag': tag + " " + tg['tag'],
+                            'url': "/entity/" + quote(tag + " " + tg['tag']),
+                            'words': tg['words'] + t_words,
+                            'count': freq_d[tg['tag']],
+                            'sentiment': tg['sentiment'] if 'sentiment' in tg else [],
+                            'temp': tg['temperature'],
+                            'freq': tg['freq']
+                        })
+                        all_tags.sort(key=lambda t: t["count"] / t["freq"], reverse=True)
+                    result = {'data': all_tags}
+                    code = 200
                 else:
-                    result = {'error': 'Tag not found'}
+                    result = {'error': 'Tags not found'}
                     code = 404
             else:
                 result = {'error': 'Not logged'}
@@ -2093,37 +2010,30 @@ class RSSTagApplication(object):
         if tag:
             if user:
                 cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"lemmas": True, "pid": True})
-                if cursor:
-                    pids = []
-                    texts = []
-                    for post in  cursor:
-                        texts.append(gzip.decompress(post["lemmas"]).decode('utf-8', 'replace'))
-                        pids.append(post["pid"])
-                    stopw = set(stopwords.words('english') + stopwords.words('russian'))
-                    vectorizer = TfidfVectorizer(stop_words=stopw)
-                    vectorizer.fit(texts)
-                    vectors = vectorizer.transform(texts)
-                    dbs = DBSCAN(eps=0.7, min_samples=2, metric="cosine")
-                    cl = dbs.fit_predict(vectors)
-                    label_txt = {}
-                    for i, label in enumerate(cl):
-                        if label < 0:
-                            continue
-                        label = str(label)
-                        if label not in label_txt:
-                            label_txt[label] = []
-                        label_txt[label].append({
-                            "txt": texts[i],
-                            "pid": pids[i]
-                        })
-                    result = {'data': label_txt}
-                    code = 200
-                elif cursor is None:
-                    result = {'error': 'Server in trouble'}
-                    code = 500
-                else:
-                    result = {'error': 'Tag not found'}
-                    code = 404
+                pids = []
+                texts = []
+                for post in  cursor:
+                    texts.append(gzip.decompress(post["lemmas"]).decode('utf-8', 'replace'))
+                    pids.append(post["pid"])
+                stopw = set(stopwords.words('english') + stopwords.words('russian'))
+                vectorizer = TfidfVectorizer(stop_words=stopw)
+                vectorizer.fit(texts)
+                vectors = vectorizer.transform(texts)
+                dbs = DBSCAN(eps=0.7, min_samples=2, metric="cosine")
+                cl = dbs.fit_predict(vectors)
+                label_txt = {}
+                for i, label in enumerate(cl):
+                    if label < 0:
+                        continue
+                    label = str(label)
+                    if label not in label_txt:
+                        label_txt[label] = []
+                    label_txt[label].append({
+                        "txt": texts[i],
+                        "pid": pids[i]
+                    })
+                result = {'data': label_txt}
+                code = 200
             else:
                 result = {'error': 'Not logged'}
                 code = 401
@@ -2163,16 +2073,13 @@ class RSSTagApplication(object):
         if c_pids:
             pids_i.extend(c_pids)
 
-        db_posts = self.posts.get_by_pids(user['sid'], pids_i, projection)
-        if db_posts is None:
-            return self.on_error(user, request, InternalServerError())
+        db_posts_c = self.posts.get_by_pids(user['sid'], pids_i, projection)
+        db_posts = list(db_posts_c)
 
         if user['settings']['similar_posts']:
             clusters = self.posts.get_clusters(db_posts)
-            if clusters:
-                cl_posts = self.posts.get_by_clusters(user['sid'], list(clusters), only_unread, projection)
-                if cl_posts:
-                    db_posts.extend(cl_posts)
+            cl_posts = self.posts.get_by_clusters(user['sid'], list(clusters), only_unread, projection)
+            db_posts.extend(cl_posts)
         posts = []
         by_feed = {}
         pids = set()
@@ -2212,77 +2119,70 @@ class RSSTagApplication(object):
         if tag:
             if user:
                 cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"lemmas": True})
-                if cursor:
-                    stopw = set(stopwords.words('english') + stopwords.words('russian'))
-                    texts = [gzip.decompress(post["lemmas"]).decode('utf-8', 'replace') for post in cursor]
-                    uniq_words = set()
-                    bigrams = Counter()
-                    bigrams_count = Counter()
-                    window = 5
-                    for text in texts:
-                        words_l = [word for word in text.split() if word not in stopw and word != tag]
-                        uniq_words.update(words_l)
-                        bi_grams = []
-                        for word_pos, word in enumerate(words_l):
-                            for i in range(window):
-                                i += 1
-                                bi_words = []
-                                prev_pos = word_pos - i
-                                if prev_pos >= 0:
-                                    bi_words.append(words_l[prev_pos])
-                                next_pos = word_pos + i
-                                if next_pos < len(words_l):
-                                    bi_words.append(words_l[next_pos])
-                                for bi_word in bi_words:
-                                    if word == bi_word:
-                                        continue
-                                    bi_grams_l = [word, bi_word]
-                                    bi_grams_l.sort()
-                                    bi_gram = " ".join(bi_grams_l)
-                                    bi_grams.append(bi_gram)
-                        bigrams.update(bi_grams)
-                        bigrams_count.update(set(bi_grams))
+                stopw = set(stopwords.words('english') + stopwords.words('russian'))
+                texts = [gzip.decompress(post["lemmas"]).decode('utf-8', 'replace') for post in cursor]
+                uniq_words = set()
+                bigrams = Counter()
+                bigrams_count = Counter()
+                window = 5
+                for text in texts:
+                    words_l = [word for word in text.split() if word not in stopw and word != tag]
+                    uniq_words.update(words_l)
+                    bi_grams = []
+                    for word_pos, word in enumerate(words_l):
+                        for i in range(window):
+                            i += 1
+                            bi_words = []
+                            prev_pos = word_pos - i
+                            if prev_pos >= 0:
+                                bi_words.append(words_l[prev_pos])
+                            next_pos = word_pos + i
+                            if next_pos < len(words_l):
+                                bi_words.append(words_l[next_pos])
+                            for bi_word in bi_words:
+                                if word == bi_word:
+                                    continue
+                                bi_grams_l = [word, bi_word]
+                                bi_grams_l.sort()
+                                bi_gram = " ".join(bi_grams_l)
+                                bi_grams.append(bi_gram)
+                    bigrams.update(bi_grams)
+                    bigrams_count.update(set(bi_grams))
 
-                    tags = self.tags.get_by_tags(user['sid'], list(uniq_words), user['settings']['only_unread'])
-                    if tags:
-                        tags_d = {}
-                        for tg in tags:
-                            tags_d[tg["tag"]] = tg
+                tags = self.tags.get_by_tags(user['sid'], list(uniq_words), user['settings']['only_unread'])
+                if tags:
+                    tags_d = {}
+                    for tg in tags:
+                        tags_d[tg["tag"]] = tg
 
-                        pmis = []
-                        for bi, bi_freq in bigrams.items():
-                            if bi_freq < 2:
-                                continue
-                            bi_words = bi.split(" ")
-                            f1 = tags_d[bi_words[0]]["freq"]
-                            f2 = tags_d[bi_words[1]]["freq"]
-                            pmi = bi_freq / (abs(f1 - f2) + 1)
-                            pmis.append((bi, pmi))
-                        pmis.sort(key=lambda x: x[1], reverse=True)
+                    pmis = []
+                    for bi, bi_freq in bigrams.items():
+                        if bi_freq < 2:
+                            continue
+                        bi_words = bi.split(" ")
+                        f1 = tags_d[bi_words[0]]["freq"]
+                        f2 = tags_d[bi_words[1]]["freq"]
+                        pmi = bi_freq / (abs(f1 - f2) + 1)
+                        pmis.append((bi, pmi))
+                    pmis.sort(key=lambda x: x[1], reverse=True)
 
-                        all_pmis = []
-                        for bi, temp in pmis[:4000]:
-                            bi_words = bi.split(" ")
-                            all_pmis.append({
-                                'tag': bi,
-                                'url': "/entity/" + quote(tag + " " + bi),
-                                'words': tags_d[bi_words[0]]["words"] + tags_d[bi_words[1]]["words"],
-                                'count': bigrams_count[bi],
-                                'sentiment': [],
-                                'temp': temp,
-                                'freq': bigrams[bi]
-                            })
-                        all_pmis.sort(key=lambda x: x["count"], reverse=True)
-                        result = {'data': all_pmis}
-                        code = 200
-                    else:
-                        result = {'error': 'Tags not found'}
-                        code = 404
-                elif cursor is None:
-                    result = {'error': 'Server in trouble'}
-                    code = 500
+                    all_pmis = []
+                    for bi, temp in pmis[:4000]:
+                        bi_words = bi.split(" ")
+                        all_pmis.append({
+                            'tag': bi,
+                            'url': "/entity/" + quote(tag + " " + bi),
+                            'words': tags_d[bi_words[0]]["words"] + tags_d[bi_words[1]]["words"],
+                            'count': bigrams_count[bi],
+                            'sentiment': [],
+                            'temp': temp,
+                            'freq': bigrams[bi]
+                        })
+                    all_pmis.sort(key=lambda x: x["count"], reverse=True)
+                    result = {'data': all_pmis}
+                    code = 200
                 else:
-                    result = {'error': 'Tag not found'}
+                    result = {'error': 'Tags not found'}
                     code = 404
             else:
                 result = {'error': 'Not logged'}
@@ -2309,7 +2209,7 @@ class RSSTagApplication(object):
 
         db_posts = self.posts.get_by_tags(user['sid'], q_tags, only_unread=only_unread)
         db_tags = self.tags.get_by_tags(user['sid'], q_tags, only_unread=only_unread)
-        if (db_posts is None) or (db_tags is None):
+        if db_tags is None:
             return self.on_error(user, request, InternalServerError())
 
         words = set()
@@ -2378,8 +2278,6 @@ class RSSTagApplication(object):
         else:
             only_unread = None
         db_posts = self.posts.get_by_clusters(user['sid'], [cluster], only_unread, projection)
-        if db_posts is None:
-            return self.on_error(user, request, InternalServerError())
 
         posts = []
         by_feed = {}
@@ -2421,8 +2319,6 @@ class RSSTagApplication(object):
         else:
             only_unread = None
         db_posts = self.posts.get_all(user['sid'], only_unread, projection)
-        if db_posts is None:
-            return self.on_error(user, request, InternalServerError())
 
         links = {}
         for post in db_posts:

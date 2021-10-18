@@ -235,20 +235,19 @@ class RSSTagWorker:
         posts = RssTagPosts(db)
         all_posts = posts.get_all(owner, projection={'content': True, 'pid': True})
         count_ent = defaultdict(int)
-        if all_posts:
-            ent_ex = RssTagEntityExtractor()
-            for post in all_posts:
-                text = post['content']['title'] + ' ' + gzip.decompress(post['content']['content']).decode('utf-8', 'ignore')
-                if not text:
+        ent_ex = RssTagEntityExtractor()
+        for post in all_posts:
+            text = post['content']['title'] + ' ' + gzip.decompress(post['content']['content']).decode('utf-8', 'ignore')
+            if not text:
+                continue
+            entities = ent_ex.extract_entities(text)
+            for e_i, entity in enumerate(entities):
+                cl_entity = ent_ex.clean_entity(entity)
+                if not cl_entity:
                     continue
-                entities = ent_ex.extract_entities(text)
-                for e_i, entity in enumerate(entities):
-                    cl_entity = ent_ex.clean_entity(entity)
-                    if not cl_entity:
-                        continue
-                    for word in entity:
-                        if len(word) > 1:
-                            count_ent[word] += 1
+                for word in entity:
+                    if len(word) > 1:
+                        count_ent[word] += 1
 
         if count_ent:
             logging.info('Found %s entities for user %s', len(count_ent), owner)
@@ -264,11 +263,10 @@ class RSSTagWorker:
         clusters = None
         texts_for_vec = []
         post_pids = []
-        if all_posts:
-            for post in all_posts:
-                post_pids.append(post['pid'])
-                text = gzip.decompress(post["lemmas"]).decode('utf-8', 'ignore')
-                texts_for_vec.append(text)
+        for post in all_posts:
+            post_pids.append(post['pid'])
+            text = gzip.decompress(post["lemmas"]).decode('utf-8', 'ignore')
+            texts_for_vec.append(text)
 
         if texts_for_vec:
             vectorizer = TfidfVectorizer(stop_words=self._stopw)
@@ -282,7 +280,7 @@ class RSSTagWorker:
                 del clusters[-1]
 
         if clusters:
-            logging.info('Posts: %s. Clusters: %s. User: %s', len(all_posts), len(clusters), owner)
+            logging.info('Posts: %s. Clusters: %s. User: %s', len(post_pids), len(clusters), owner)
             result = posts.set_clusters(owner, clusters)
 
         return result
@@ -292,11 +290,11 @@ class RSSTagWorker:
         posts = RssTagPosts(db)
         all_posts = posts.get_all(owner, projection={'lemmas': True, 'pid': True})
         tagged_texts = []
-        if all_posts:
-            for post in all_posts:
-                text = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
-                tag = post['pid']
-                tagged_texts.append((text, tag))
+        for post in all_posts:
+            text = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
+            tag = post['pid']
+            tagged_texts.append((text, tag))
+
         if tagged_texts:
             try:
                 learn = W2VLearn(db, config)
