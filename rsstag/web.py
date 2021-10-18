@@ -810,7 +810,8 @@ class RSSTagApplication(object):
                 if changed and bi_grams:
                     changed = self.bi_grams.change_unread(user['sid'], bi_grams, readed)
                 if changed and letters:
-                    changed = self.letters.change_unread(user['sid'], letters, readed)
+                    self.letters.change_unread(user['sid'], letters, readed)
+                    changed = True
                 if changed:
                     code = 200
                     result = {'data': 'ok'}
