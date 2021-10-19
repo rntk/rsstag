@@ -31,6 +31,7 @@ from gensim.models.doc2vec import Doc2Vec
 from gensim.models.word2vec import Word2Vec
 
 import nltk
+from nltk.corpus import stopwords
 
 from werkzeug.wrappers import Response, Request
 from werkzeug.exceptions import HTTPException, NotFound, InternalServerError
@@ -110,8 +111,12 @@ class RSSTagApplication(object):
         )
         self.navec = None
         self.ner = None
-
-        nltk.download('stopwords')
+        try:
+            # ensure stowords are downloaded
+            len(stopwords.words('english') + stopwords.words('russian'))
+        except Exception as e:
+            logging.warning("Try to load nltk stopwords")
+            nltk.download('stopwords')
 
     def close(self):
         logging.info('Goodbye!')
