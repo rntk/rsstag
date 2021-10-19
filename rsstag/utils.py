@@ -5,7 +5,9 @@ from collections import OrderedDict, defaultdict
 from http.client import HTTPSConnection
 import json
 from hashlib import md5
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
+import logging
+import os
 
 def getSortedDictByAlphabet(dct, sort_type=None):
     """Sort dict"""
@@ -77,3 +79,42 @@ def to_dot_format(tags: List[dict], posts: List[dict]) -> str:
     return result
     #return 'graph dinetwork {1 -- 2 [color=red]; subgraph {2 -- 3; 3 -- 4; 4 -- {1 2}}}'
 
+
+def text_to_speech(path: str, api_host: str, api_key: str, text: str) -> Optional[str]:
+    file_format = 'mp3'
+    try:
+        txt_hash = md5(text.encode('utf-8')).hexdigest()
+    except Exception as e:
+        txt_hash = ''
+        logging.error('Can`t encode text to utf-8: %s', e)
+    path = path + os.sep + txt_hash + '.' + file_format
+    if os.path.exists(path):
+        result = txt_hash + '.' + file_format
+    else:
+        conn = HTTPSConnection(api_host, 443)
+        query = {
+            'text': text,
+            'format': file_format,
+            'lang': 'ru‑RU',
+            'speaker': 'jane', #jane, omazh, zahar, ermil
+            'emotion': 'mixed', #mixed, good, neutral, evil
+            #'robot': False,
+            'key': api_key
+        }
+        conn.request('GET', '/generate?' + urlencode(query))
+        resp = conn.getresponse()
+        if resp.status == 200:
+            speech = resp.read()
+            try:
+                f = open(path, 'wb')
+                f.write(speech)
+                f.close()
+                result = txt_hash + '.' + file_format
+            except Exception as e:
+                result = None
+                logging.error('Can`t save speech in file: %s', e)
+        else:
+            result = None
+            logging.error('Can`t get response from yandex api: status: %s, reason: %s', resp.status, resp.reason)
+        conn.close()
+    return result

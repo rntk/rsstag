@@ -1,8 +1,7 @@
 ﻿import os
 import re
 import json
-from urllib.parse import urlencode, quote_plus
-from http import client
+from urllib.parse import quote_plus
 import time
 import gzip
 import logging
@@ -162,45 +161,6 @@ class RSSTagApplication(object):
         logging.info('%s', time.time() - st)
 
         return response(http_env, start_resp)
-
-    def getSpeech(self, text):
-        file_format = 'mp3'
-        try:
-            txt_hash = md5(text.encode('utf-8')).hexdigest()
-        except Exception as e:
-            txt_hash = ''
-            logging.error('Can`t encode text to utf-8: %s', e)
-        path = self.config['settings']['speech_dir'] + os.sep + txt_hash + '.' + file_format
-        if os.path.exists(path):
-            result = txt_hash + '.' + file_format
-        else:
-            conn = client.HTTPSConnection(self.config['yandex']['speech_host'], 443)
-            query = {
-                'text': text,
-                'format': file_format,
-                'lang': 'ru‑RU',
-                'speaker': 'jane', #jane, omazh, zahar, ermil
-                'emotion': 'mixed', #mixed, good, neutral, evil
-                #'robot': False,
-                'key': self.config['yandex']['speech_key']
-            }
-            conn.request('GET', '/generate?' + urlencode(query))
-            resp = conn.getresponse()
-            if resp.status == 200:
-                speech = resp.read()
-                try:
-                    f = open(path, 'wb')
-                    f.write(speech)
-                    f.close()
-                    result = txt_hash + '.' + file_format
-                except Exception as e:
-                    result = None
-                    logging.error('Can`t save speech in file: %s', e)
-            else:
-                result = None
-                logging.error('Can`t get response from yandex api: status: %s, reason: %s', resp.status, resp.reason)
-            conn.close()
-        return result
 
     def on_select_provider_get(self, _: Optional[dict], __: Request) -> Response:
         return users_handlers.on_select_provider_get(self)

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from rsstag.web.app import RSSTagApplication
 from rsstag.tasks import TASK_MARK, TASK_NOT_IN_PROCESSING
+from rsstag.utils import text_to_speech
 
 from werkzeug.wrappers import Request, Response
 from werkzeug.exceptions import NotFound
@@ -26,7 +27,12 @@ def on_post_speech(app: "RSSTagApplication", request: Request) -> Response:
         post = app.posts.get_by_pid(g.user['sid'], post_id)
         if post:
             title = html.unescape(post['content']['title'])
-            speech_file = app.getSpeech(title)
+            speech_file = text_to_speech(
+                app.config['settings']['speech_dir'],
+                app.config['yandex']['speech_host'],
+                app.config['yandex']['speech_key'],
+                title
+            )
             if speech_file:
                 result = {'data': '/static/speech/{}'.format(speech_file)}
             else:
