@@ -178,7 +178,7 @@ class RSSTagApplication(object):
         return posts_handlers.on_post_speech(self, user, request)
 
     def on_login_get(
-        self, _: Optional[dict], request: Request, err: Optional[List[str]]
+        self, _: Optional[dict], request: Request, err: Optional[List[str]] = None
     ) -> Response:
         return users_handlers.on_login_get(self, request, err=err)
 

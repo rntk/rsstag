@@ -13,7 +13,7 @@ from rsstag.html_cleaner import HTMLCleaner
 from pymongo import MongoClient, UpdateOne
 from rsstag.providers import BazquxProvider, TelegramProvider
 from rsstag.utils import load_config
-from rsstag.routes import RSSTagRoutes
+from rsstag.web.routes import RSSTagRoutes
 from rsstag.users import RssTagUsers
 from rsstag.tasks import (
     TASK_NOOP,
@@ -347,7 +347,6 @@ class RSSTagWorker:
         return result
 
     def make_tags_groups(self, db, owner: str, config: dict) -> Optional[bool]:
-        result = False
         tags_h = RssTagTags(db)
         all_tags = tags_h.get_all(owner, projection={"tag": True})
         try:

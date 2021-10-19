@@ -47,7 +47,7 @@ class RssTagTags:
         projection: Optional[dict] = None,
     ) -> Iterator[dict]:
         query = {"owner": owner}
-        if "regexp" in opts:
+        if opts and "regexp" in opts:
             query["tag"] = {"$regex": opts["regexp"], "$options": "i"}
         sort_data = []
         if hot_tags:
@@ -58,9 +58,9 @@ class RssTagTags:
         else:
             sort_data.append(("posts_count", DESCENDING))
         params = {}
-        if "offset" in opts:
+        if opts and "offset" in opts:
             params["skip"] = opts["offset"]
-        if "limit" in opts:
+        if opts and "limit" in opts:
             params["limit"] = opts["limit"]
         if projection:
             params["projection"] = projection
@@ -166,7 +166,7 @@ class RssTagTags:
                 {"sentiment": {"$all": sentiments}},
             ],
         }
-        if "regexp" in opts:
+        if opts and "regexp" in opts:
             query["tag"] = {"$regex": opts["regexp"], "$options": "i"}
         sort_data = []
         if hot_tags:
@@ -177,9 +177,9 @@ class RssTagTags:
         else:
             sort_data.append(("posts_count", DESCENDING))
         params = {}
-        if "offset" in opts:
+        if opts and "offset" in opts:
             params["skip"] = opts["offset"]
-        if "limit" in opts:
+        if opts and "limit" in opts:
             params["limit"] = opts["limit"]
         if projection:
             params["projection"] = projection
@@ -199,7 +199,7 @@ class RssTagTags:
             "owner": owner,
             "$and": [{"groups": {"$exists": True}}, {"groups": {"$all": groups}}],
         }
-        if "regexp" in opts:
+        if opts and "regexp" in opts:
             query["tag"] = {"$regex": opts["regexp"], "$options": "i"}
         sort_data = []
         if hot_tags:
@@ -210,9 +210,9 @@ class RssTagTags:
         else:
             sort_data.append(("posts_count", DESCENDING))
         params = {}
-        if "offset" in opts:
+        if opts and "offset" in opts:
             params["skip"] = opts["offset"]
-        if "limit" in opts:
+        if opts and "limit" in opts:
             params["limit"] = opts["limit"]
         if projection:
             params["projection"] = projection
