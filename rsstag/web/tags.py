@@ -31,7 +31,7 @@ from slovnet import NER
 
 def on_group_by_tags_get(app: "RSSTagApplication", user: dict, page_number: int = 1) -> Response:
     tags_count = app.tags.count(user['sid'], user['settings']['only_unread'])
-    page_count = app.getPageCount(tags_count, user['settings']['tags_on_page'])
+    page_count = app.get_page_count(tags_count, user['settings']['tags_on_page'])
     p_number = page_number
     if page_number <= 0:
         p_number = 1
@@ -95,7 +95,7 @@ def on_group_by_tags_get(app: "RSSTagApplication", user: dict, page_number: int 
 def on_group_by_tags_sentiment(app: "RSSTagApplication", user: dict, sentiment: str, page_number: int=1) -> Response:
     sentiment = sentiment.replace('|', '/')
     tags_count = app.tags.count(user['sid'], user['settings']['only_unread'], sentiments=[sentiment])
-    page_count = app.getPageCount(tags_count, user['settings']['tags_on_page'])
+    page_count = app.get_page_count(tags_count, user['settings']['tags_on_page'])
     p_number = page_number
     if page_number <= 0:
         p_number = 1
@@ -167,7 +167,7 @@ def on_group_by_tags_startwith_get(app: "RSSTagApplication", user: dict, request
         return app.on_error(user, request, NotFound())
 
     tags_count = app.tags.count(user['sid'], user['settings']['only_unread'], '^{}'.format(letter))
-    page_count = app.getPageCount(tags_count, user['settings']['tags_on_page'])
+    page_count = app.get_page_count(tags_count, user['settings']['tags_on_page'])
     p_number = page_number
     if page_number <= 0:
         p_number = 1
@@ -232,7 +232,7 @@ def on_group_by_tags_startwith_get(app: "RSSTagApplication", user: dict, request
 
 def on_group_by_tags_group(app: "RSSTagApplication", user: dict, group: str, page_number=1) -> Response:
     tags_count = app.tags.count(user['sid'], user['settings']['only_unread'], groups=[group])
-    page_count = app.getPageCount(tags_count, user['settings']['tags_on_page'])
+    page_count = app.get_page_count(tags_count, user['settings']['tags_on_page'])
     p_number = page_number
     if page_number <= 0:
         p_number = 1

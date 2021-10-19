@@ -10,7 +10,7 @@ from werkzeug.wrappers import Request, Response
 
 def on_group_by_bigrams_get(app: "RSSTagApplication", user: dict, page_number: int = 1) -> Response:
     tags_count = app.bi_grams.count(user['sid'], only_unread=user['settings']['only_unread'])
-    page_count = app.getPageCount(tags_count, user['settings']['tags_on_page'])
+    page_count = app.get_page_count(tags_count, user['settings']['tags_on_page'])
     p_number = page_number
     if page_number <= 0:
         p_number = 1

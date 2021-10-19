@@ -70,13 +70,13 @@ def on_login_post(app: "RSSTagApplication", request: Request) -> Response:
             provider_h = BazquxProvider(app.config)
             token = provider_h.get_token(login, password)
             if token:
-                user = app.createNewSession(login, password, token, provider)
+                user = app.create_new_session(login, password, token, provider)
             elif token == '':
                 err.append('Wrong login or password')
             else:
                 err.append('Cant` create session. Try later')
         elif provider == "telegram":
-            user = app.createNewSession(login, password, "", provider)
+            user = app.create_new_session(login, password, "", provider)
 
     if err:
         return app.on_login_get(None, request, err)

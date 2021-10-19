@@ -94,7 +94,7 @@ class RSSTagApplication(object):
         self.users.prepare()
         self.routes = RSSTagRoutes(self.config['settings']['host_name'])
         self.endpoints = {}
-        self.updateEndpoints()
+        self.update_endpoints()
         self.tasks = RssTagTasks(self.db)
         self.tasks.prepare()
         self.count_showed_numbers = 4
@@ -118,17 +118,17 @@ class RSSTagApplication(object):
     def close(self):
         logging.info('Goodbye!')
 
-    def updateEndpoints(self):
+    def update_endpoints(self):
         routes = self.routes.get_werkzeug_routes()
         for i in routes.iter_rules():
             self.endpoints[i.endpoint] = getattr(self, i.endpoint)
 
-    def createNewSession(self, login: str, password: str, token: str, provider: str) -> Optional[dict]:
+    def create_new_session(self, login: str, password: str, token: str, provider: str) -> Optional[dict]:
         sid = self.users.create_user(login, password, token, provider)
 
         return self.users.get_by_sid(sid)
 
-    def getPageCount(self, items_count, items_on_page_count):
+    def get_page_count(self, items_count, items_on_page_count):
         page_count = divmod(items_count, items_on_page_count)
         if page_count[1] == 0:
             page_count = page_count[0]
@@ -464,7 +464,7 @@ class RSSTagApplication(object):
     def on_get_groups(self, user: dict, request: Request, page_number=1) -> Response:
         groups = self.tags.get_groups(user['sid'], user['settings']['only_unread'])
         groups_count = len(groups)
-        page_count = self.getPageCount(groups_count, user['settings']['tags_on_page'])
+        page_count = self.get_page_count(groups_count, user['settings']['tags_on_page'])
         p_number = page_number
         if page_number <= 0:
             p_number = 1
@@ -571,7 +571,7 @@ class RSSTagApplication(object):
                 'temp': tag['temperature']
             })
         all_tags.sort(key=lambda t: t["temp"], reverse=True)
-        page_count = self.getPageCount(1, user['settings']['tags_on_page'])
+        page_count = self.get_page_count(1, user['settings']['tags_on_page'])
         p_number = page_number
         if page_number <= 0:
             p_number = 1
