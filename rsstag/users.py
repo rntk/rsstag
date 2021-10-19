@@ -6,18 +6,20 @@ from typing import Optional
 from hashlib import sha256
 from pymongo import MongoClient
 
+
 class RssTagUsers:
-    indexes = ['sid']
+    indexes = ["sid"]
+
     def __init__(self, db: MongoClient) -> None:
         self._db = db
-        self._log = logging.getLogger('users')
+        self._log = logging.getLogger("users")
         self._settings = {
-            'only_unread': True,
-            'tags_on_page': 100,
-            'posts_on_page': 30,
-            'hot_tags': False,
-            'similar_posts': True,
-            "context_n": 5
+            "only_unread": True,
+            "tags_on_page": 100,
+            "posts_on_page": 30,
+            "hot_tags": False,
+            "similar_posts": True,
+            "context_n": 5,
         }
 
     def prepare(self) -> None:
@@ -25,25 +27,29 @@ class RssTagUsers:
             try:
                 self._db.users.create_index(index)
             except Exception as e:
-                self._log.warning('Can`t create index %s. May be already exists. Info: %s', index, e)
+                self._log.warning(
+                    "Can`t create index %s. May be already exists. Info: %s", index, e
+                )
 
     def hash_login_password(self, login: str, password: str) -> str:
-        return sha256((login + password).encode('utf-8')).hexdigest()
+        return sha256((login + password).encode("utf-8")).hexdigest()
 
-    def create_user(self, login: str, password: str, token: str, provider: str) -> Optional[str]:
+    def create_user(
+        self, login: str, password: str, token: str, provider: str
+    ) -> Optional[str]:
         lp = self.hash_login_password(login, password)
         sid = sha256(os.urandom(randint(80, 200))).hexdigest()
         user = {
-            'sid': sid,
-            'token': token,
-            'provider': provider,
-            'settings': self._settings,
-            'ready': False,
-            'message': 'Click on "Refresh posts" to start downloading data',
-            'in_queue':False,
-            'created': datetime.utcnow(),
-            'lp': lp,
-            'retoken': False
+            "sid": sid,
+            "token": token,
+            "provider": provider,
+            "settings": self._settings,
+            "ready": False,
+            "message": 'Click on "Refresh posts" to start downloading data',
+            "in_queue": False,
+            "created": datetime.utcnow(),
+            "lp": lp,
+            "retoken": False,
         }
         if provider == "telegram":
             user["phone"] = password
@@ -59,20 +65,20 @@ class RssTagUsers:
         Update users fields
         TODO: add fields validation, check result of update operation
         """
-        self._db.users.update_one({'sid': sid}, {'$set': data})
+        self._db.users.update_one({"sid": sid}, {"$set": data})
 
         return True
 
     def get_by_login_password(self, login: str, password: str) -> Optional[dict]:
         lp_hash = self.hash_login_password(login, password)
 
-        return self._db.users.find_one({'lp': lp_hash})
+        return self._db.users.find_one({"lp": lp_hash})
 
     def get_by_sid(self, sid: str) -> Optional[dict]:
-        return self._db.users.find_one({'sid': sid})
+        return self._db.users.find_one({"sid": sid})
 
     def get_by_id(self, user_id: str) -> Optional[dict]:
-        return self._db.users.find_one({'_id': user_id})
+        return self._db.users.find_one({"_id": user_id})
 
     def get_validated_settings(self, settings: dict) -> Optional[dict]:
         new_settings = {}
@@ -87,19 +93,19 @@ class RssTagUsers:
                     elif isinstance(old_value, bool):
                         new_settings[k] = bool(v)
                     else:
-                        raise ValueError('Bad settings type')
+                        raise ValueError("Bad settings type")
             result = new_settings
         except Exception as e:
             result = None
-            self._log.warning('Bad settings. Info: %s', e)
+            self._log.warning("Bad settings. Info: %s", e)
 
         return result
 
     def update_settings(self, sid: str, settings: dict) -> Optional[bool]:
-        field = 'settings'
+        field = "settings"
         for_update = {}
         for k, v in settings.items():
-            for_update[field + '.' + k] = v
-        self._db.users.update_one({'sid': sid}, {'$set': for_update})
+            for_update[field + "." + k] = v
+        self._db.users.update_one({"sid": sid}, {"$set": for_update})
 
         return True

@@ -2,8 +2,10 @@
 from html.parser import HTMLParser
 from html import unescape
 
+
 class HTMLCleaner(HTMLParser):
     """Remove all html tags"""
+
     def __init__(self):
         super().__init__()
         _strings = []

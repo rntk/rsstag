@@ -8,38 +8,40 @@ from nltk.stem import PorterStemmer
 from nltk.corpus import stopwords
 from functools import lru_cache
 
+
 class TagsBuilder:
     """Build tags from text. Support languages: english, russian"""
-    def __init__(self, text_clean_re: str="[^\w\d ]") -> None:
+
+    def __init__(self, text_clean_re: str = "[^\w\d ]") -> None:
         self.purge()
-        '''self._text = ''
+        """self._text = ''
         self._prepared_text = ''
         self._words = {}
         self._bi_grams = {}
-        self._bi_grams_words = defaultdict(set)'''
+        self._bi_grams_words = defaultdict(set)"""
         self.text_clearing = re.compile(text_clean_re)
-        self.only_cyrillic = re.compile(r'^[а-яА-ЯёЁ]*$')
-        self.only_latin = re.compile(r'^[a-zA-Z]*$')
-        self.clear_html_esc = re.compile(r'&[#a-zA-Z0-9]*?;')
+        self.only_cyrillic = re.compile(r"^[а-яА-ЯёЁ]*$")
+        self.only_latin = re.compile(r"^[a-zA-Z]*$")
+        self.clear_html_esc = re.compile(r"&[#a-zA-Z0-9]*?;")
         self.latin = PorterStemmer()
         self.cyrillic = pymorphy2.MorphAnalyzer()
         self._stopwords = None
-        self._log = logging.getLogger('TagsBuilder')
+        self._log = logging.getLogger("TagsBuilder")
         self._window = 2
 
     def purge(self) -> None:
         """Clear state"""
-        self._text = ''
+        self._text = ""
         self._tags: defaultdict = defaultdict(int)
         self._words = defaultdict(set)
-        self._prepared_text = ''
+        self._prepared_text = ""
         self._bi_grams = {}
         self._bi_grams_words = defaultdict(set)
 
     def text2words(self, text: str) -> List[str]:
         """Make words list from text"""
-        text = self.clear_html_esc.sub(' ', text)
-        text = self.text_clearing.sub(' ', text)
+        text = self.clear_html_esc.sub(" ", text)
+        text = self.text_clearing.sub(" ", text)
         text = text.strip().casefold()
         words = text.split()
 
@@ -51,7 +53,7 @@ class TagsBuilder:
     @lru_cache(maxsize=5128)
     def process_word_(self, current_word: str) -> str:
         """Make tag/token from gven word"""
-        tag = ''
+        tag = ""
         try:
             word_length = len(current_word)
             if self.only_cyrillic.match(current_word):
@@ -109,7 +111,7 @@ class TagsBuilder:
             for current_word in words[1:]:
                 current_tag = self.process_word(current_word)
                 if current_tag:
-                    bi_gram = prev_tag + ' ' + current_tag
+                    bi_gram = prev_tag + " " + current_tag
                     if bi_gram not in self._bi_grams:
                         self._bi_grams[bi_gram] = {prev_tag, current_tag}
                     self._bi_grams_words[bi_gram].add(prev_word)
@@ -162,13 +164,13 @@ class TagsBuilder:
         """Get text prepared for Doc2Vec"""
         return self._prepared_text
 
-    def prepare_text(self, text: str, ignore_stopwords: bool=False) -> None:
+    def prepare_text(self, text: str, ignore_stopwords: bool = False) -> None:
         """Prepare text for Doc2vec"""
         self._text = text
         words = self.text2words(text)
-        self._prepared_text = ''
+        self._prepared_text = ""
         tags = []
-        self._stopwords = set(stopwords.words('english') + stopwords.words('russian'))
+        self._stopwords = set(stopwords.words("english") + stopwords.words("russian"))
         if ignore_stopwords:
             for current_word in words:
                 tag = self.process_word(current_word)
@@ -179,4 +181,4 @@ class TagsBuilder:
                 tag = self.process_word(current_word)
                 if tag:
                     tags.append(tag)
-        self._prepared_text = ' '.join(tags)
+        self._prepared_text = " ".join(tags)

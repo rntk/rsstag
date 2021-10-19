@@ -5,13 +5,18 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
 from nltk.corpus import stopwords
 
+
 class LDA:
     def __init__(self) -> None:
-        self.log = logging.getLogger('LDA')
+        self.log = logging.getLogger("LDA")
         stopw = ["это"]
-        self._stopwords = set(stopwords.words('english') + stopwords.words('russian') + stopw)
+        self._stopwords = set(
+            stopwords.words("english") + stopwords.words("russian") + stopw
+        )
 
-    def topics(self, texts: List[str], topics_n: int=10, top_k: int = 10) -> List[str]:
+    def topics(
+        self, texts: List[str], topics_n: int = 10, top_k: int = 10
+    ) -> List[str]:
         vectorizer = TfidfVectorizer(stop_words=self._stopwords)
         vectors = vectorizer.fit_transform(texts)
         model = LatentDirichletAllocation(n_components=topics_n)
