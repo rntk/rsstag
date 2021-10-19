@@ -60,7 +60,7 @@ def on_login_post(app: "RSSTagApplication", request: Request) -> Response:
         err = []
         provider = BazquxProvider(app.config)
         is_valid = provider.is_valid_user(user)
-        if is_valid == False:
+        if is_valid is False:
             token = provider.get_token(login, password)
             if token:
                 updated = app.users.update_by_sid(
@@ -73,7 +73,7 @@ def on_login_post(app: "RSSTagApplication", request: Request) -> Response:
                     err.append("Can`t safe new token. Try later.")
             else:
                 err.append("Can`t refresh token. Try later.")
-        elif is_valid == None:
+        elif is_valid is None:
             err.append("Can`t check token status. Try later.")
     elif not user:
         # create new user

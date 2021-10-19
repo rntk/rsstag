@@ -115,7 +115,7 @@ class RSSTagApplication(object):
             # ensure stowords are downloaded
             len(stopwords.words("english") + stopwords.words("russian"))
         except Exception as e:
-            logging.warning("Try to load nltk stopwords")
+            logging.warning("Try to load nltk stopwords %s", e)
             nltk.download("stopwords")
 
     def close(self):
@@ -174,8 +174,8 @@ class RSSTagApplication(object):
     def on_select_provider_post(self, _: Optional[dict], request: Request) -> Response:
         return users_handlers.on_select_provider_post(self, request)
 
-    def on_post_speech(self, _: Optional[dict], request: Request) -> Response:
-        return posts_handlers.on_post_speech(self, request)
+    def on_post_speech(self, user: dict, request: Request) -> Response:
+        return posts_handlers.on_post_speech(self, user, request)
 
     def on_login_get(
         self, _: Optional[dict], request: Request, err: Optional[List[str]]
@@ -502,7 +502,6 @@ class RSSTagApplication(object):
         elif page_number > page_count:
             p_number = page_count
 
-        new_cookie_page_value = p_number
         p_number -= 1
         if p_number < 0:
             p_number = 1

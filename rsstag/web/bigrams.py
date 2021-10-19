@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from rsstag.web.app import RSSTagApplication
 
-from werkzeug.wrappers import Request, Response
+from werkzeug.wrappers import Response
 
 
 def on_group_by_bigrams_get(

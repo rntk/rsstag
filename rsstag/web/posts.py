@@ -17,14 +17,15 @@ from werkzeug.exceptions import NotFound
 from werkzeug.utils import redirect
 
 
-def on_post_speech(app: "RSSTagApplication", request: Request) -> Response:
+def on_post_speech(app: "RSSTagApplication", user: dict, request: Request) -> Response:
     try:
         post_id = int(request.form.get("post_id"))
     except Exception as e:
+        logging.warning("Wrong post_id: %s. %s", request.form.get("post_id"), e)
         post_id = None
     code = 200
     if post_id:
-        post = app.posts.get_by_pid(g.user["sid"], post_id)
+        post = app.posts.get_by_pid(user["sid"], post_id)
         if post:
             title = html.unescape(post["content"]["title"])
             speech_file = text_to_speech(

@@ -398,7 +398,7 @@ def on_get_tag_similar(
                     tags_set.add(sibling[0])
             except Exception as e:
                 logging.warning(
-                    "In %s not found tag %s", app.config["settings"]["d2v_model"], tag
+                    "In %s not found tag %s. %s", app.config["settings"]["d2v_model"], tag, e
                 )
         elif model == app.models["w2v"]:
             st = os.stat(app.config["settings"]["w2v_model"])
@@ -411,7 +411,7 @@ def on_get_tag_similar(
                     tags_set.add(sibling[0])
             except Exception as e:
                 logging.warning(
-                    "In %s not found tag %s", app.config["settings"]["w2v_model"], tag
+                    "In %s not found tag %s. %s", app.config["settings"]["w2v_model"], tag, e
                 )
 
         if tags_set:
@@ -542,8 +542,7 @@ def on_get_tag_pmi(app: "RSSTagApplication", user: dict, tag: str) -> Response:
                 {
                     "tag": bi,
                     "url": "/entity/" + quote(tag + " " + bi),
-                    "words": tags_d[bi_words[0]]["words"]
-                    + tags_d[bi_words[1]]["words"],
+                    "words": tags_d[bi_words[0]]["words"] + tags_d[bi_words[1]]["words"],
                     "count": bigrams_count[bi],
                     "sentiment": [],
                     "temp": temp,
@@ -675,21 +674,17 @@ def on_tag_entities_get(app: "RSSTagApplication", user: dict, tag: str) -> Respo
             app.ner = NER.load("./data/slovnet_ner_news_v1.tar")
             app.ner.navec(app.navec)
         ners = {}
-        text_clearing = re.compile("[^\w\d ]")
+        text_clearing = re.compile(r"[^\w\d ]")
         for post in cursor:
             html_cleaner.purge()
-            txt = (
-                post["content"]["title"]
-                + ". "
-                + gzip.decompress(post["content"]["content"]).decode("utf-8", "replace")
-            )
+            txt = post["content"]["title"] + ". " + gzip.decompress(post["content"]["content"]).decode("utf-8", "replace")
             html_cleaner.feed(txt)
             txt = html.unescape(" ".join(html_cleaner.get_content()))
             markup = app.ner(txt)
             if len(markup.spans) == 0:
                 continue
             for span in markup.spans:
-                n = txt[span.start : span.stop].casefold()
+                n = txt[span.start:span.stop].casefold()
                 n = text_clearing.sub(" ", n).strip()
                 if " " in n:
                     words = n.split(" ")
