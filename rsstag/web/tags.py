@@ -8,7 +8,10 @@ import logging
 from collections import Counter
 from urllib.parse import unquote_plus, quote
 
-from rsstag.web.app import RSSTagApplication
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from rsstag.web.app import RSSTagApplication
 from rsstag.tags_builder import TagsBuilder
 from rsstag.html_cleaner import HTMLCleaner
 from rsstag.lda import LDA
@@ -26,7 +29,7 @@ from sklearn.cluster import DBSCAN
 from navec import Navec
 from slovnet import NER
 
-def on_group_by_tags_get(app: RSSTagApplication, user: dict, page_number: int = 1) -> Response:
+def on_group_by_tags_get(app: "RSSTagApplication", user: dict, page_number: int = 1) -> Response:
     tags_count = app.tags.count(user['sid'], user['settings']['only_unread'])
     page_count = app.getPageCount(tags_count, user['settings']['tags_on_page'])
     p_number = page_number
@@ -89,7 +92,7 @@ def on_group_by_tags_get(app: RSSTagApplication, user: dict, page_number: int = 
         mimetype='text/html'
     )
 
-def on_group_by_tags_sentiment(app: RSSTagApplication, user: dict, sentiment: str, page_number: int=1) -> Response:
+def on_group_by_tags_sentiment(app: "RSSTagApplication", user: dict, sentiment: str, page_number: int=1) -> Response:
     sentiment = sentiment.replace('|', '/')
     tags_count = app.tags.count(user['sid'], user['settings']['only_unread'], sentiments=[sentiment])
     page_count = app.getPageCount(tags_count, user['settings']['tags_on_page'])
@@ -155,7 +158,7 @@ def on_group_by_tags_sentiment(app: RSSTagApplication, user: dict, sentiment: st
         mimetype='text/html'
     )
 
-def on_group_by_tags_startwith_get(app: RSSTagApplication, user: dict, request: Request, letter: str, page_number=1) -> Response:
+def on_group_by_tags_startwith_get(app: "RSSTagApplication", user: dict, request: Request, letter: str, page_number=1) -> Response:
     db_letters = app.letters.get(user['sid'], make_sort=True)
     if db_letters is None:
         return app.on_error(user, request, InternalServerError())
@@ -227,7 +230,7 @@ def on_group_by_tags_startwith_get(app: RSSTagApplication, user: dict, request: 
         mimetype='text/html'
     )
 
-def on_group_by_tags_group(app: RSSTagApplication, user: dict, group: str, page_number=1) -> Response:
+def on_group_by_tags_group(app: "RSSTagApplication", user: dict, group: str, page_number=1) -> Response:
     tags_count = app.tags.count(user['sid'], user['settings']['only_unread'], groups=[group])
     page_count = app.getPageCount(tags_count, user['settings']['tags_on_page'])
     p_number = page_number
@@ -293,7 +296,7 @@ def on_group_by_tags_group(app: RSSTagApplication, user: dict, group: str, page_
         mimetype='text/html'
     )
 
-def on_get_tag_page(app: RSSTagApplication, user: dict, request: Request, tag: str) -> Response:
+def on_get_tag_page(app: "RSSTagApplication", user: dict, request: Request, tag: str) -> Response:
     tag_data = app.tags.get_by_tag(user['sid'], tag)
     if not tag_data:
         return app.on_error(user, request, NotFound())
@@ -316,7 +319,7 @@ def on_get_tag_page(app: RSSTagApplication, user: dict, request: Request, tag: s
         mimetype='text/html'
     )
 
-def on_post_tags_search(app: RSSTagApplication, user: dict, request: Request) -> Response:
+def on_post_tags_search(app: "RSSTagApplication", user: dict, request: Request) -> Response:
     s_request = unquote_plus(request.form.get('req'))
     if s_request:
         search_result = app.tags.get_all(
@@ -347,7 +350,7 @@ def on_post_tags_search(app: RSSTagApplication, user: dict, request: Request) ->
         status=code
     )
 
-def on_get_tag_similar(app: RSSTagApplication, user: dict, model: str, tag: str) -> Response:
+def on_get_tag_similar(app: "RSSTagApplication", user: dict, model: str, tag: str) -> Response:
     tags_set = set()
     all_tags = []
     if model in app.models:
@@ -395,7 +398,7 @@ def on_get_tag_similar(app: RSSTagApplication, user: dict, model: str, tag: str)
         status=code
     )
 
-def on_get_tag_siblings(app: RSSTagApplication, user: dict, tag: str) -> Response:
+def on_get_tag_siblings(app: "RSSTagApplication", user: dict, tag: str) -> Response:
     all_tags = []
     if user['settings']['only_unread']:
         only_unread = user['settings']['only_unread']
@@ -423,7 +426,7 @@ def on_get_tag_siblings(app: RSSTagApplication, user: dict, tag: str) -> Respons
         mimetype="application/json",
     )
 
-def on_get_tag_pmi(app: RSSTagApplication, user: dict, tag: str) -> Response:
+def on_get_tag_pmi(app: "RSSTagApplication", user: dict, tag: str) -> Response:
     if tag:
         cursor = app.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"lemmas": True})
         stopw = set(stopwords.words('english') + stopwords.words('russian'))
@@ -497,7 +500,7 @@ def on_get_tag_pmi(app: RSSTagApplication, user: dict, tag: str) -> Response:
         status=code
     )
 
-def on_tag_tfidf_get(app: RSSTagApplication, user: dict, tag: str) -> Response:
+def on_tag_tfidf_get(app: "RSSTagApplication", user: dict, tag: str) -> Response:
     if tag:
         cursor = app.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"lemmas": True})
         topics = set()
@@ -554,7 +557,7 @@ def on_tag_tfidf_get(app: RSSTagApplication, user: dict, tag: str) -> Response:
         status=code
     )
 
-def on_tag_clusters_get(app: RSSTagApplication, user: dict, tag: str) -> Response:
+def on_tag_clusters_get(app: "RSSTagApplication", user: dict, tag: str) -> Response:
     if tag:
         cursor = app.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"lemmas": True, "pid": True})
         pids = []
@@ -591,7 +594,7 @@ def on_tag_clusters_get(app: RSSTagApplication, user: dict, tag: str) -> Respons
         status=code
     )
 
-def on_tag_entities_get(app: RSSTagApplication, user: dict, tag: str) -> Response:
+def on_tag_entities_get(app: "RSSTagApplication", user: dict, tag: str) -> Response:
     if tag:
         cursor = app.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"content": True, "tags": True, "bi_grams": True})
         html_cleaner = HTMLCleaner()
@@ -645,7 +648,7 @@ def on_tag_entities_get(app: RSSTagApplication, user: dict, tag: str) -> Respons
         status=code
     )
 
-def on_tag_topics_get(app: RSSTagApplication, user: dict, tag: str) -> Response:
+def on_tag_topics_get(app: "RSSTagApplication", user: dict, tag: str) -> Response:
     if tag:
         cursor = app.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"lemmas": True})
         texts = [gzip.decompress(post["lemmas"]).decode('utf-8', 'replace') for post in cursor]
@@ -678,7 +681,7 @@ def on_tag_topics_get(app: RSSTagApplication, user: dict, tag: str) -> Response:
         status=code
     )
 
-def on_tag_dates_get(app: RSSTagApplication, user: dict, tag: str) -> Response:
+def on_tag_dates_get(app: "RSSTagApplication", user: dict, tag: str) -> Response:
     if tag:
         cursor = app.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"unix_date": True})
         data = []

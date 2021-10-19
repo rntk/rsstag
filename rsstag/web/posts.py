@@ -5,7 +5,10 @@ import logging
 from collections import defaultdict
 from urllib.parse import unquote_plus, unquote
 
-from rsstag.web.app import RSSTagApplication
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from rsstag.web.app import RSSTagApplication
 from rsstag.tasks import TASK_MARK, TASK_NOT_IN_PROCESSING
 
 from werkzeug.wrappers import Request, Response
@@ -13,7 +16,7 @@ from werkzeug.exceptions import NotFound
 from werkzeug.utils import redirect
 
 
-def on_post_speech(app: RSSTagApplication, request: Request) -> Response:
+def on_post_speech(app: "RSSTagApplication", request: Request) -> Response:
     try:
         post_id = int(request.form.get('post_id'))
     except Exception as e:
@@ -38,7 +41,7 @@ def on_post_speech(app: RSSTagApplication, request: Request) -> Response:
 
     return Response(json.dumps(result), mimetype="application/json", status=code)
 
-def on_category_get(app: RSSTagApplication, user: dict, request: Request, quoted_category: str) -> Response:
+def on_category_get(app: "RSSTagApplication", user: dict, request: Request, quoted_category: str) -> Response:
     cat = unquote_plus(quoted_category)
     db_feeds = app.feeds.get_by_category(user['sid'], cat)
     by_feed = {}
@@ -97,7 +100,7 @@ def on_category_get(app: RSSTagApplication, user: dict, request: Request, quoted
         mimetype='text/html'
     )
 
-def on_tag_get(app: RSSTagApplication, user: dict, request: Request, quoted_tag: str) -> Response:
+def on_tag_get(app: "RSSTagApplication", user: dict, request: Request, quoted_tag: str) -> Response:
     tag = unquote(quoted_tag)
     current_tag = app.tags.get_by_tag(user['sid'], tag)
     if not current_tag:
@@ -148,7 +151,7 @@ def on_tag_get(app: RSSTagApplication, user: dict, request: Request, quoted_tag:
         mimetype='text/html'
     )
 
-def on_bi_gram_get(app: RSSTagApplication, user: dict, request: Request, bi_gram: str) -> Response:
+def on_bi_gram_get(app: "RSSTagApplication", user: dict, request: Request, bi_gram: str) -> Response:
     current_bi_gram = app.bi_grams.get_by_bi_gram(user['sid'], bi_gram)
     if not current_bi_gram:
         return app.on_error(user, request, NotFound())
@@ -198,7 +201,7 @@ def on_bi_gram_get(app: RSSTagApplication, user: dict, request: Request, bi_gram
         mimetype='text/html'
     )
 
-def on_feed_get(app: RSSTagApplication, user: dict, request: Request, quoted_feed: str) -> Response:
+def on_feed_get(app: "RSSTagApplication", user: dict, request: Request, quoted_feed: str) -> Response:
     feed = unquote_plus(quoted_feed)
     current_feed = app.feeds.get_by_feed_id(user['sid'], feed)
     if not current_feed:
@@ -248,7 +251,7 @@ def on_feed_get(app: RSSTagApplication, user: dict, request: Request, quoted_fee
         mimetype='text/html'
     )
 
-def on_read_posts_post(app: RSSTagApplication, user: dict, request: Request) -> Response:
+def on_read_posts_post(app: "RSSTagApplication", user: dict, request: Request) -> Response:
     try:
         data = json.loads(request.get_data(as_text=True))
         if data['ids'] and isinstance(data['ids'], list):
@@ -311,7 +314,7 @@ def on_read_posts_post(app: RSSTagApplication, user: dict, request: Request) -> 
         status=code
     )
 
-def on_posts_content_post(app: RSSTagApplication, user: dict, request: Request) -> Response:
+def on_posts_content_post(app: "RSSTagApplication", user: dict, request: Request) -> Response:
     try:
         wanted_posts = json.loads(request.get_data(as_text=True))
         if not (isinstance(wanted_posts, list) and wanted_posts):
@@ -353,7 +356,7 @@ def on_posts_content_post(app: RSSTagApplication, user: dict, request: Request) 
         status=code
     )
 
-def on_post_links_get(app: RSSTagApplication, user: dict, post_id: int) -> Response:
+def on_post_links_get(app: "RSSTagApplication", user: dict, post_id: int) -> Response:
     projection = {
         'tags': True,
         'feed_id': True,
@@ -403,7 +406,7 @@ def on_post_links_get(app: RSSTagApplication, user: dict, post_id: int) -> Respo
     )
 
 #TODO: delete or change or something other
-def on_get_posts_with_tags(app: RSSTagApplication, user: dict, s_tags: str) -> Response:
+def on_get_posts_with_tags(app: "RSSTagApplication", user: dict, s_tags: str) -> Response:
     if not s_tags:
         return redirect(app.routes.getUrlByEndpoint('on_root_get'))
 
@@ -452,7 +455,7 @@ def on_get_posts_with_tags(app: RSSTagApplication, user: dict, s_tags: str) -> R
             mimetype='text/html'
         )
 
-def on_entity_get(app: RSSTagApplication, user: dict, quoted_tag: str) -> Response:
+def on_entity_get(app: "RSSTagApplication", user: dict, quoted_tag: str) -> Response:
     tag = unquote(quoted_tag)
     projection = {'_id': False, 'content.content': False}
     if user['settings']['only_unread']:
@@ -504,7 +507,7 @@ def on_entity_get(app: RSSTagApplication, user: dict, quoted_tag: str) -> Respon
         mimetype='text/html'
     )
 
-def on_posts_get(app: RSSTagApplication, user: dict, request: Request, pids: str) -> Response:
+def on_posts_get(app: "RSSTagApplication", user: dict, request: Request, pids: str) -> Response:
     context_n = 0
     ctx_n = None
     if "context" in request.args:
@@ -572,7 +575,7 @@ def on_posts_get(app: RSSTagApplication, user: dict, request: Request, pids: str
         mimetype='text/html'
     )
 
-def on_cluster_get(app: RSSTagApplication, user: dict, cluster: int) -> Response:
+def on_cluster_get(app: "RSSTagApplication", user: dict, cluster: int) -> Response:
     projection = {'_id': False, 'content.content': False}
     if user['settings']['only_unread']:
         only_unread = user['settings']['only_unread']

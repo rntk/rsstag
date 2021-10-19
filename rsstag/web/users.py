@@ -2,14 +2,17 @@ import json
 import logging
 from typing import Optional, List
 
-from rsstag.web.app import RSSTagApplication
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from rsstag.web.app import RSSTagApplication
 from rsstag.providers import BazquxProvider
 from rsstag.tasks import TASK_ALL, TASK_DOWNLOAD
 
 from werkzeug.wrappers import Request, Response
 from werkzeug.utils import redirect
 
-def on_login_get(app: RSSTagApplication, request: Request, err: Optional[List[str]]=None) -> Response:
+def on_login_get(app: "RSSTagApplication", request: Request, err: Optional[List[str]]=None) -> Response:
     provider = request.cookies.get('provider')
     if provider in app.providers:
         # if (provider == 'bazqux') or (provider == 'inoreader') or (provider == 'telegram'):
@@ -33,7 +36,7 @@ def on_login_get(app: RSSTagApplication, request: Request, err: Optional[List[st
 
     return response
 
-def on_login_post(app: RSSTagApplication, request: Request) -> Response:
+def on_login_post(app: "RSSTagApplication", request: Request) -> Response:
     login = request.form.get('login')
     password = request.form.get('password')
 
@@ -84,7 +87,7 @@ def on_login_post(app: RSSTagApplication, request: Request) -> Response:
 
     return response
 
-def on_settings_post(app: RSSTagApplication, user: dict, request: Request) -> Response:
+def on_settings_post(app: "RSSTagApplication", user: dict, request: Request) -> Response:
     try:
         settings = json.loads(request.get_data(as_text=True))
     except Exception as e:
@@ -116,7 +119,7 @@ def on_settings_post(app: RSSTagApplication, user: dict, request: Request) -> Re
         status=code
     )
 
-def on_refresh_get_post(app: RSSTagApplication, user: dict, request: Request) -> Response:
+def on_refresh_get_post(app: "RSSTagApplication", user: dict, request: Request) -> Response:
     if user:
         try:
             updated = False
@@ -143,7 +146,7 @@ def on_refresh_get_post(app: RSSTagApplication, user: dict, request: Request) ->
 
     return redirect(app.routes.getUrlByEndpoint(endpoint="on_root_get"))
 
-def on_status_get(app: RSSTagApplication, user: Optional[dict]) -> Response:
+def on_status_get(app: "RSSTagApplication", user: Optional[dict]) -> Response:
     if user:
         if user['retoken']:
             result = {'data': {
@@ -168,7 +171,7 @@ def on_status_get(app: RSSTagApplication, user: Optional[dict]) -> Response:
         headers={"Pragma": "no-cache"}
     )
 
-def on_select_provider_get(app: RSSTagApplication) -> Response:
+def on_select_provider_get(app: "RSSTagApplication") -> Response:
     page = app.template_env.get_template('provider.html')
     return Response(page.render(
         select_provider_url=app.routes.getUrlByEndpoint(endpoint='on_select_provider_post'),
@@ -176,7 +179,7 @@ def on_select_provider_get(app: RSSTagApplication) -> Response:
         support=app.config['settings']['support']
     ), mimetype='text/html')
 
-def on_select_provider_post(app: RSSTagApplication, request: Request) -> Response:
+def on_select_provider_post(app: "RSSTagApplication", request: Request) -> Response:
     provider = request.form.get('provider')
     if provider:
         response = redirect(app.routes.getUrlByEndpoint(endpoint='on_login_get'))
@@ -187,7 +190,7 @@ def on_select_provider_post(app: RSSTagApplication, request: Request) -> Respons
 
     return response
 
-def on_root_get(app: RSSTagApplication, user: Optional[dict], err: Optional[List[str]]=None) -> Response:
+def on_root_get(app: "RSSTagApplication", user: Optional[dict], err: Optional[List[str]]=None) -> Response:
     if not err:
         err = []
     only_unread = True

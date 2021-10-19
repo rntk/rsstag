@@ -1,10 +1,14 @@
 import json
 
-from rsstag.web.app import RSSTagApplication
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from rsstag.web.app import RSSTagApplication
 
 from werkzeug.wrappers import Request, Response
 
-def on_group_by_bigrams_get(app: RSSTagApplication, user: dict, page_number: int = 1) -> Response:
+
+def on_group_by_bigrams_get(app: "RSSTagApplication", user: dict, page_number: int = 1) -> Response:
     tags_count = app.bi_grams.count(user['sid'], only_unread=user['settings']['only_unread'])
     page_count = app.getPageCount(tags_count, user['settings']['tags_on_page'])
     p_number = page_number
@@ -63,7 +67,8 @@ def on_group_by_bigrams_get(app: RSSTagApplication, user: dict, page_number: int
         mimetype='text/html'
     )
 
-def on_get_tag_bi_grams(app: RSSTagApplication, user: dict, tag: str) -> Response:
+
+def on_get_tag_bi_grams(app: "RSSTagApplication", user: dict, tag: str) -> Response:
     bi_grams = app.bi_grams.get_by_tags(user['sid'], [tag], user['settings']['only_unread'])
     all_bi_grams = []
     for tag in bi_grams:
@@ -80,9 +85,11 @@ def on_get_tag_bi_grams(app: RSSTagApplication, user: dict, tag: str) -> Respons
         mimetype="application/json"
     )
 
-def on_bigrams_dates_get(app: RSSTagApplication, user: dict, tag: str) -> Response:
+
+def on_bigrams_dates_get(app: "RSSTagApplication", user: dict, tag: str) -> Response:
     if tag:
-        cursor = app.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"unix_date": True, "bi_grams": True})
+        cursor = app.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'],
+                                       {"unix_date": True, "bi_grams": True})
         data = {}
         for dt in cursor:
             d = int(dt["unix_date"])
