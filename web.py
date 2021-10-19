@@ -17,7 +17,7 @@ if __name__ == '__main__':
             run_simple(
                 app.config['settings']['host'],
                 int(app.config['settings']['port']),
-                app.setResponse,
+                app.set_response,
                 static_files=static_files,
                 threaded=True
             )

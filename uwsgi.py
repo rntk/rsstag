@@ -6,5 +6,5 @@ print('out appl', __name__)
 
 def application(env, start_response):
     print('in appl', __name__)
-    return app.setResponse(env, start_response)
+    return app.set_response(env, start_response)
 

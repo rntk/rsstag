@@ -136,7 +136,7 @@ class RSSTagApplication(object):
             page_count = page_count[0] + 1
         return page_count
 
-    def setResponse(self, http_env, start_resp):
+    def set_response(self, http_env, start_resp):
         request = Request(http_env)
         st = time.time()
         adapter = self.routes.bind_to_environ(request.environ)
