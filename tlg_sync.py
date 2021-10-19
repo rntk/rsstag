@@ -9,7 +9,8 @@ from rsstag.posts import RssTagPosts
 
 from pymongo import MongoClient
 
-def tlg_sync(cfg: dict, phone: str, sync_ids: List[Tuple[int,int]]) -> None:
+
+def tlg_sync(cfg: dict, phone: str, sync_ids: List[Tuple[int, int]]) -> None:
     if not tlg_ids:
         return
 
@@ -19,7 +20,7 @@ def tlg_sync(cfg: dict, phone: str, sync_ids: List[Tuple[int,int]]) -> None:
         api_hash=t_cfg["app_hash"],
         phone=phone,
         database_encryption_key=t_cfg["encryption_key"],
-        files_directory=t_cfg["db_dir"]
+        files_directory=t_cfg["db_dir"],
     )
     tlg.login(blocking=True)
     for chat_id, msg_id in sync_ids:
@@ -28,6 +29,7 @@ def tlg_sync(cfg: dict, phone: str, sync_ids: List[Tuple[int,int]]) -> None:
     time.sleep(5)
 
     tlg.stop()
+
 
 def view(tlg: Telegram, chat_id: int, ids: List[int]) -> None:
     r = tlg.open_chat(chat_id)
@@ -42,14 +44,15 @@ def view(tlg: Telegram, chat_id: int, ids: List[int]) -> None:
     r.wait()
     print(r.update)
 
+
 if __name__ == "__main__":
-    config_path = './rsscloud.conf'
+    config_path = "./rsscloud.conf"
     if len(sys.argv) > 1:
         config_path = sys.argv[1]
     cfg = load_config(config_path)
 
-    cl = MongoClient(cfg['settings']['db_host'], int(cfg['settings']['db_port']))
-    db = cl[cfg['settings']['db_name']]
+    cl = MongoClient(cfg["settings"]["db_host"], int(cfg["settings"]["db_port"]))
+    db = cl[cfg["settings"]["db_name"]]
     feeds_h = RssTagFeeds(db)
     posts_h = RssTagPosts(db)
     users = db.users.find({})
@@ -62,7 +65,11 @@ if __name__ == "__main__":
         tlg_ids = []
         for feed in feeds:
             feed_id = int(feed["feed_id"])
-            posts = posts_h.get_by_feed_id(user_id, str(feed_id), projection={"id": True, "_id": False, "read": True})
+            posts = posts_h.get_by_feed_id(
+                user_id,
+                str(feed_id),
+                projection={"id": True, "_id": False, "read": True},
+            )
             posts.sort(key=lambda x: x["id"], reverse=False)
             p_id = 0
             n = 0

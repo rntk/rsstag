@@ -3,26 +3,23 @@ import logging
 from werkzeug.serving import run_simple
 from rsstag.web.app import RSSTagApplication
 
-if __name__ == '__main__':
-    config_path = 'rsscloud.conf'
+if __name__ == "__main__":
+    config_path = "rsscloud.conf"
     if len(sys.argv) > 1:
         config_path = sys.argv[1]
     app = RSSTagApplication(config_path)
     if app:
-        static_files = {
-            '/static': 'static',
-            '/favicon.ico': 'static/favicon.ico'
-        }
+        static_files = {"/static": "static", "/favicon.ico": "static/favicon.ico"}
         try:
             run_simple(
-                app.config['settings']['host'],
-                int(app.config['settings']['port']),
+                app.config["settings"]["host"],
+                int(app.config["settings"]["port"]),
                 app.set_response,
                 static_files=static_files,
-                threaded=True
+                threaded=True,
             )
         except Exception as e:
             logging.error(e)
             app.close()
     else:
-        logging.critical('Can`t start server')
+        logging.critical("Can`t start server")

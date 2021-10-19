@@ -12,6 +12,7 @@ from rsstag.tags import RssTagTags
 from pymongo import MongoClient
 from polyglot.text import Text
 
+
 def get_entities_polyglot(pid_text: str) -> list:
     try:
         txt = Text(pid_text[1])
@@ -21,13 +22,14 @@ def get_entities_polyglot(pid_text: str) -> list:
 
     return (pid_text[0], entities)
 
+
 def all_by_rsstag(texts: List[str]) -> List[list]:
     ent_ex = RssTagEntityExtractor()
     all_entities = []
     for i, text in enumerate(texts):
         entities = ent_ex.extract_entities(text)
         all_entities.append(entities)
-    #print(ent_ex._words_stat)
+    # print(ent_ex._words_stat)
     for t_i, entities in enumerate(all_entities):
         for e_i, entity in enumerate(entities):
             cl_entity = ent_ex.clean_entity(entity)
@@ -36,28 +38,34 @@ def all_by_rsstag(texts: List[str]) -> List[list]:
 
     return all_entities
 
+
 def get_texts(db: MongoClient, owner: str, config: dict) -> List[str]:
     posts = RssTagPosts(db)
-    all_posts = posts.get_all(owner, projection={'content': True, 'pid': True})
+    all_posts = posts.get_all(owner, projection={"content": True, "pid": True})
     pids = []
     texts = []
     if all_posts:
         clnr = HTMLCleaner()
         for post in all_posts:
-            pids.append(post['pid'])
-            text = post['content']['title'] + ' ' + gzip.decompress(post['content']['content']).decode('utf-8', 'ignore')
+            pids.append(post["pid"])
+            text = (
+                post["content"]["title"]
+                + " "
+                + gzip.decompress(post["content"]["content"]).decode("utf-8", "ignore")
+            )
             clnr.purge()
             clnr.feed(text)
-            text = ' '.join(clnr.get_content())
-            '''cleaner.purge()
+            text = " ".join(clnr.get_content())
+            """cleaner.purge()
             cleaner.feed(text)
             strings = cleaner.get_content()
             text = ' '.join(strings)
             builder.purge()
-            builder.prepare_text(text, ignore_stopwords=True)'''
+            builder.prepare_text(text, ignore_stopwords=True)"""
             texts.append(text)
 
     return (pids, texts)
+
 
 def all_by_polyglot(pids: List[int], texts: List[str]) -> list:
     pool = Pool(os.cpu_count())
@@ -67,6 +75,7 @@ def all_by_polyglot(pids: List[int], texts: List[str]) -> list:
             all_entities.append(entities)
 
     return all_entities
+
 
 def count_entities_rsstag(all_entities: List[list]) -> dict:
     result = defaultdict(int)
@@ -78,25 +87,26 @@ def count_entities_rsstag(all_entities: List[list]) -> dict:
 
     return result
 
-if __name__ == '__main__':
-    config_path = 'rsscloud.conf'
+
+if __name__ == "__main__":
+    config_path = "rsscloud.conf"
     if len(sys.argv) > 1:
         config_path = sys.argv[1]
     config = load_config(config_path)
-    cl = MongoClient(config['settings']['db_host'], int(config['settings']['db_port']))
-    db = cl[config['settings']['db_name']]
+    cl = MongoClient(config["settings"]["db_host"], int(config["settings"]["db_port"]))
+    db = cl[config["settings"]["db_name"]]
     user = db.users.find_one({})
-    pids, texts = get_texts(db, user['sid'], config)
-    '''f = open('all_posts.txt', 'r')
+    pids, texts = get_texts(db, user["sid"], config)
+    """f = open('all_posts.txt', 'r')
     texts = f.read().splitlines()
     pids = list(range(len(texts)))
-    f.close()'''
-    #all_entities = all_by_polyglot(pids, texts)
+    f.close()"""
+    # all_entities = all_by_polyglot(pids, texts)
 
     all_entities = all_by_rsstag(texts)
     count_ent = count_entities_rsstag(all_entities)
     tags = RssTagTags(db)
-    tags.add_entities(user['sid'], count_ent, replace=True)
-    '''f = open('ent00.txt', 'w')
+    tags.add_entities(user["sid"], count_ent, replace=True)
+    """f = open('ent00.txt', 'w')
     f.write('\n'.join('{} {}'.format(pid, '{}'.format(entities)) for pid, entities in enumerate(all_entities)))
-    f.close()'''
+    f.close()"""
