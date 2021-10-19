@@ -42,7 +42,7 @@ def on_group_by_tags_get(app: "RSSTagApplication", user: dict, page_number: int 
     p_number -= 1
     if p_number < 0:
         p_number = 1
-    pages_map, start_tags_range, end_tags_range = app.calcPagerData(
+    pages_map, start_tags_range, end_tags_range = app.calc_pager_data(
         p_number,
         page_count,
         user['settings']['tags_on_page'],
@@ -106,7 +106,7 @@ def on_group_by_tags_sentiment(app: "RSSTagApplication", user: dict, sentiment: 
     p_number -= 1
     if p_number < 0:
         p_number = 1
-    pages_map, start_tags_range, end_tags_range = app.calcPagerData(
+    pages_map, start_tags_range, end_tags_range = app.calc_pager_data(
         p_number,
         page_count,
         user['settings']['tags_on_page'],
@@ -178,7 +178,7 @@ def on_group_by_tags_startwith_get(app: "RSSTagApplication", user: dict, request
     p_number -= 1
     if p_number < 0:
         p_number = 1
-    pages_map, start_tags_range, end_tags_range = app.calcPagerData(
+    pages_map, start_tags_range, end_tags_range = app.calc_pager_data(
         p_number,
         page_count,
         user['settings']['tags_on_page'],
@@ -243,7 +243,7 @@ def on_group_by_tags_group(app: "RSSTagApplication", user: dict, group: str, pag
     p_number -= 1
     if p_number < 0:
         p_number = 1
-    pages_map, start_tags_range, end_tags_range = app.calcPagerData(
+    pages_map, start_tags_range, end_tags_range = app.calc_pager_data(
         p_number,
         page_count,
         user['settings']['tags_on_page'],

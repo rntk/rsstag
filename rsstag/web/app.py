@@ -6,7 +6,6 @@ import time
 import gzip
 import logging
 from collections import OrderedDict, defaultdict
-from hashlib import md5
 from typing import Optional, List
 
 from rsstag.tasks import RssTagTasks
@@ -268,7 +267,7 @@ class RSSTagApplication(object):
     def on_read_posts_post(self, user: dict, request: Request) -> Response:
         return posts_handlers.on_read_posts_post(self, user, request)
 
-    def calcPagerData(self, p_number, page_count, items_per_page, endpoint, sentiment='', group='', letter=''):
+    def calc_pager_data(self, p_number, page_count, items_per_page, endpoint, sentiment='', group='', letter=''):
         pages_map = {}
         page_count = round(page_count)
         numbers_start_range = p_number - self.count_showed_numbers + 1
@@ -435,7 +434,7 @@ class RSSTagApplication(object):
         p_number -= 1
         if p_number < 0:
             p_number = 1
-        pages_map, start_tags_range, end_tags_range = self.calcPagerData(
+        pages_map, start_tags_range, end_tags_range = self.calc_pager_data(
             p_number,
             page_count,
             user['settings']['tags_on_page'],
@@ -542,7 +541,7 @@ class RSSTagApplication(object):
         p_number -= 1
         if p_number < 0:
             p_number = 1
-        pages_map, start_tags_range, end_tags_range = self.calcPagerData(
+        pages_map, start_tags_range, end_tags_range = self.calc_pager_data(
             p_number,
             page_count,
             user['settings']['tags_on_page'],
