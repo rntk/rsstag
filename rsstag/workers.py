@@ -270,9 +270,7 @@ class RSSTagWorker:
         ent_ex = RssTagEntityExtractor()
         for post in all_posts:
             text = (
-                post["content"]["title"]
-                + " "
-                + gzip.decompress(post["content"]["content"]).decode("utf-8", "ignore")
+                post["content"]["title"] + " " + gzip.decompress(post["content"]["content"]).decode("utf-8", "ignore")
             )
             if not text:
                 continue

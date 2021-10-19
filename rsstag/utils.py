@@ -59,7 +59,7 @@ def get_coords_yandex(
             else:
                 raise Exception("Not found. Country {}. City {}".format(country, city))
     else:
-        raise Exception("HTTP status {}".format(resp.status, resp.reason))
+        raise Exception("HTTP status {}. {}".format(resp.status, resp.reason))
 
     return result
 
@@ -106,7 +106,7 @@ def text_to_speech(path: str, api_host: str, api_key: str, text: str) -> Optiona
             "lang": "ru‑RU",
             "speaker": "jane",  # jane, omazh, zahar, ermil
             "emotion": "mixed",  # mixed, good, neutral, evil
-            #'robot': False,
+            # 'robot': False,
             "key": api_key,
         }
         conn.request("GET", "/generate?" + urlencode(query))

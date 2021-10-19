@@ -293,12 +293,9 @@ class RssTagTasks:
 
             if remove_task:
                 removed = self.remove_task(task["data"]["_id"])
-                if removed and (
-                    (task["type"] == TASK_W2V)
-                    or (task["type"] == TASK_DOWNLOAD)
-                    or (task["type"] == TASK_NER)
-                ):
-                    self.add_next_tasks(task["user"]["sid"], task["type"])
+                if removed:
+                    if (task["type"] == TASK_W2V) or (task["type"] == TASK_DOWNLOAD) or (task["type"] == TASK_NER):
+                        self.add_next_tasks(task["user"]["sid"], task["type"])
 
             result = True
         except Exception as e:

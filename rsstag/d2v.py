@@ -24,9 +24,7 @@ class D2VLearn:
         cleaner = HTMLCleaner()
         for post in cursor:
             text = (
-                post["content"]["title"]
-                + " "
-                + gzip.decompress(post["content"]["content"]).decode("utf-8", "replace")
+                post["content"]["title"] + " " + gzip.decompress(post["content"]["content"]).decode("utf-8", "replace")
             )
             cleaner.purge()
             cleaner.feed(text)

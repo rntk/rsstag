@@ -22,8 +22,7 @@ class RssTagEntityExtractor:
         self._only_latin = re.compile("^[A-z_-]*$")
         self._delimiter = " "
         self._stopwords = set(
-            nltk.corpus.stopwords.words("english")
-            + nltk.corpus.stopwords.words("russian")
+            nltk.corpus.stopwords.words("english") + nltk.corpus.stopwords.words("russian")
         )
         self._words_stat = defaultdict(lambda: {"u": 0, "l": 0})
         self._log = logging.getLogger("RssTagEntityExtractor")
@@ -41,11 +40,7 @@ class RssTagEntityExtractor:
         add_to_token = False
         for letter in text:
             letter_category = unicodedata.category(letter)
-            if (
-                (letter_category == "Ll")
-                or (letter_category == "Lu")
-                or (letter_category == "Nd")
-            ):
+            if (letter_category == "Ll") or (letter_category == "Lu") or (letter_category == "Nd"):
                 add_to_token = True
             elif letter.isspace():
                 delimiter = True

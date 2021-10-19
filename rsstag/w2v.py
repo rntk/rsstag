@@ -3,7 +3,6 @@ import gzip
 import logging
 from collections import defaultdict
 from typing import List
-from pymongo import MongoClient
 from rsstag.tags_builder import TagsBuilder
 from rsstag.html_cleaner import HTMLCleaner
 from gensim.models.word2vec import Word2Vec
@@ -27,9 +26,7 @@ class W2VLearn:
         cleaner = HTMLCleaner()
         for post in cursor:
             text = (
-                post["content"]["title"]
-                + " "
-                + gzip.decompress(post["content"]["content"]).decode("utf-8", "replace")
+                post["content"]["title"] + " " + gzip.decompress(post["content"]["content"]).decode("utf-8", "replace")
             )
             cleaner.purge()
             cleaner.feed(text)
@@ -85,7 +82,7 @@ class W2VLearn:
                         if (val >= koef) and (sim_tag in groups):
                             new_groups[sim_tag].add(tag)
                 except Exception as e:
-                    pass
+                    self._log.warning("Error in w2v.reduce_groups. Info: %s", e)
 
         for tag, tags_set in new_groups.items():
             s = set()

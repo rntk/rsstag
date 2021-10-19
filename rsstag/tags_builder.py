@@ -12,7 +12,7 @@ from functools import lru_cache
 class TagsBuilder:
     """Build tags from text. Support languages: english, russian"""
 
-    def __init__(self, text_clean_re: str = "[^\w\d ]") -> None:
+    def __init__(self, text_clean_re: str = r"[^\w\d ]") -> None:
         self.purge()
         """self._text = ''
         self._prepared_text = ''

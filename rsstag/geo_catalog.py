@@ -73,8 +73,8 @@ class RssTagGeoCatalog:
         self._log.info("Start countries loading")
         try:
             pos = self._langs.index(lang) + 1
-        except:
-            raise Exception("Not supported language: {}".format(lang))
+        except Exception as e:
+            raise Exception("Not supported language: {}. {}".format(lang, e))
         f = open(os.path.abspath(csv_path), "r")
         csv_reader = csv.reader(f, delimiter=delimiter, quotechar=quote_char)
         collection = self._db.countries
@@ -113,8 +113,8 @@ class RssTagGeoCatalog:
         self._log.info("Start regions loading")
         try:
             pos = self._langs.index(lang) + 2
-        except:
-            raise Exception("Not supported language: {}".format(lang))
+        except Exception as e:
+            raise Exception("Not supported language: {}. {}".format(lang, e))
         f = open(os.path.abspath(csv_path), "r")
         csv_reader = csv.reader(f, delimiter=delimiter, quotechar=quote_char)
         collection = self._db.regions
@@ -160,8 +160,8 @@ class RssTagGeoCatalog:
             title_pos = self._langs.index(lang) + 4
             area_pos = title_pos + 1
             region_pos = title_pos + 2
-        except:
-            raise Exception("Not supported language: {}".format(lang))
+        except Exception as e:
+            raise Exception("Not supported language: {}. {}".format(lang, e))
         f = open(os.path.abspath(csv_path), "r")
         csv_reader = csv.reader(f, delimiter=delimiter, quotechar=quote_char)
         collection = self._db.cities

@@ -8,8 +8,8 @@ class HTMLCleaner(HTMLParser):
 
     def __init__(self):
         super().__init__()
-        _strings = []
-        _error = None
+        self._strings = []
+        self._error = None
 
     def handle_data(self, data):
         """Add data to strings"""

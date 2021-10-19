@@ -302,6 +302,7 @@ ME_UNDERLINE = "textEntityTypeUnderline"
 ME_PRE = "textEntityTypePre"
 ME_TEXT_URL = "textEntityTypeTextUrl"
 
+
 # https://core.telegram.org/type/MessageEntity
 # https://core.telegram.org/api/entities
 def tlg_post_to_html(post: dict) -> str:
