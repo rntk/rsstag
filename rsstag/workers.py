@@ -126,7 +126,7 @@ class RSSTagWorker:
                         'tag': tag,
                         'owner': owner,
                         'temperature': 0,
-                        'local_url': routes.getUrlByEndpoint(
+                        'local_url': routes.get_url_by_endpoint(
                             endpoint='on_tag_get',
                             params={'quoted_tag': tag}
                         ),
@@ -146,7 +146,7 @@ class RSSTagWorker:
                         'tag': bi_gram,
                         'owner': owner,
                         'temperature': 0,
-                        'local_url': routes.getUrlByEndpoint(
+                        'local_url': routes.get_url_by_endpoint(
                             endpoint='on_bi_gram_get',
                             params={'bi_gram': bi_gram}
                         ),

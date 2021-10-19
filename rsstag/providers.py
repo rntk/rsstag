@@ -144,11 +144,11 @@ class BazquxProvider:
                             'feed_id': stream_id,
                             'origin_feed_id': post['origin']['streamId'],
                             'category_title': category,
-                            'category_local_url': routes.getUrlByEndpoint(
+                            'category_local_url': routes.get_url_by_endpoint(
                                 endpoint='on_category_get',
                                 params={'quoted_category': category}
                             ),
-                            'local_url': routes.getUrlByEndpoint(
+                            'local_url': routes.get_url_by_endpoint(
                                 endpoint='on_feed_get',
                                 params={'quoted_feed': stream_id}
                             ),
@@ -440,11 +440,11 @@ class TelegramProvider:
                     'feed_id': stream_id,
                     'origin_feed_id': channel["id"],
                     'category_title': self.no_category_name,
-                    'category_local_url': routes.getUrlByEndpoint(
+                    'category_local_url': routes.get_url_by_endpoint(
                         endpoint='on_category_get',
                         params={'quoted_category': self.no_category_name}
                     ),
-                    'local_url': routes.getUrlByEndpoint(
+                    'local_url': routes.get_url_by_endpoint(
                         endpoint='on_feed_get',
                         params={'quoted_feed': stream_id}
                     ),

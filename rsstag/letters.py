@@ -53,7 +53,7 @@ class RssTagLetters:
             letter = tag['tag'][0]
             if letter not in letters:
                 letters[letter]['letter'] = letter
-                letters[letter]['local_url'] = router.getUrlByEndpoint(
+                letters[letter]['local_url'] = router.get_url_by_endpoint(
                     endpoint = 'on_group_by_tags_startwith_get',
                     params = {'letter': letter, 'page_number': 1}
                 )

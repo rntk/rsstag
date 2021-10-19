@@ -381,7 +381,7 @@ def on_post_links_get(app: "RSSTagApplication", user: dict, post_id: int) -> Res
                     'f_url': feed['local_url'],
                     'f_title': feed['title'],
                     'p_url': current_post['url'],
-                    "ctx_url": app.routes.getUrlByEndpoint(
+                    "ctx_url": app.routes.get_url_by_endpoint(
                         endpoint='on_posts_get',
                         params={"pids": post_id, "context": int(user["settings"]["context_n"])}
                     ),
@@ -389,13 +389,13 @@ def on_post_links_get(app: "RSSTagApplication", user: dict, post_id: int) -> Res
                 }
             }
             if "clusters" in current_post:
-                result["data"]["clst_url"] = app.routes.getUrlByEndpoint(
+                result["data"]["clst_url"] = app.routes.get_url_by_endpoint(
                     endpoint='on_cluster_get',
                     params={"cluster": current_post["clusters"][0]}
                 )
             for t in current_post['tags']:
                 result['data']['tags'].append({
-                    'url': app.routes.getUrlByEndpoint(endpoint='on_get_tag_page', params={'tag': t}),
+                    'url': app.routes.get_url_by_endpoint(endpoint='on_get_tag_page', params={'tag': t}),
                     'tag': t
                 })
         else:
@@ -414,7 +414,7 @@ def on_post_links_get(app: "RSSTagApplication", user: dict, post_id: int) -> Res
 #TODO: delete or change or something other
 def on_get_posts_with_tags(app: "RSSTagApplication", user: dict, s_tags: str) -> Response:
     if not s_tags:
-        return redirect(app.routes.getUrlByEndpoint('on_root_get'))
+        return redirect(app.routes.get_url_by_endpoint('on_root_get'))
 
     tags = s_tags.split('-')
     if tags:

@@ -78,11 +78,11 @@ def on_group_by_tags_get(app: "RSSTagApplication", user: dict, page_number: int 
         page.render(
             tags=sorted_tags,
             sort_by_title='tags',
-            sort_by_link=app.routes.getUrlByEndpoint(
+            sort_by_link=app.routes.get_url_by_endpoint(
                 endpoint='on_group_by_tags_get',
                 params={'page_number': new_cookie_page_value}
             ),
-            group_by_link=app.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
+            group_by_link=app.routes.get_url_by_endpoint(endpoint='on_group_by_category_get'),
             pages_map=pages_map,
             current_page=new_cookie_page_value,
             letters=letters,
@@ -144,11 +144,11 @@ def on_group_by_tags_sentiment(app: "RSSTagApplication", user: dict, sentiment: 
         page.render(
             tags=sorted_tags,
             sort_by_title='tags',
-            sort_by_link=app.routes.getUrlByEndpoint(
+            sort_by_link=app.routes.get_url_by_endpoint(
                 endpoint='on_group_by_tags_sentiment',
                 params={'sentiment': sentiment, 'page_number': new_cookie_page_value}
             ),
-            group_by_link=app.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
+            group_by_link=app.routes.get_url_by_endpoint(endpoint='on_group_by_category_get'),
             pages_map=pages_map,
             current_page=new_cookie_page_value,
             letters=letters,
@@ -216,11 +216,11 @@ def on_group_by_tags_startwith_get(app: "RSSTagApplication", user: dict, request
         page.render(
             tags=sorted_tags,
             sort_by_title='tags',
-            sort_by_link=app.routes.getUrlByEndpoint(
+            sort_by_link=app.routes.get_url_by_endpoint(
                 endpoint='on_group_by_tags_get',
                 params={'page_number': new_cookie_page_value}
             ),
-            group_by_link=app.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
+            group_by_link=app.routes.get_url_by_endpoint(endpoint='on_group_by_category_get'),
             pages_map=pages_map,
             current_page=new_cookie_page_value,
             letters=letters,
@@ -282,11 +282,11 @@ def on_group_by_tags_group(app: "RSSTagApplication", user: dict, group: str, pag
         page.render(
             tags=sorted_tags,
             sort_by_title='tags',
-            sort_by_link=app.routes.getUrlByEndpoint(
+            sort_by_link=app.routes.get_url_by_endpoint(
                 endpoint='on_group_by_tags_group',
                 params={'group': group, 'page_number': new_cookie_page_value}
             ),
-            group_by_link=app.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
+            group_by_link=app.routes.get_url_by_endpoint(endpoint='on_group_by_category_get'),
             pages_map=pages_map,
             current_page=new_cookie_page_value,
             letters=letters,
@@ -308,11 +308,11 @@ def on_get_tag_page(app: "RSSTagApplication", user: dict, request: Request, tag:
         page.render(
             tag=tag_data,
             sort_by_title='tags',
-            sort_by_link=app.routes.getUrlByEndpoint(
+            sort_by_link=app.routes.get_url_by_endpoint(
                 endpoint='on_group_by_tags_get',
                 params={'page_number': 1}
             ),
-            group_by_link=app.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
+            group_by_link=app.routes.get_url_by_endpoint(endpoint='on_group_by_category_get'),
             user_settings=user['settings'],
             provider=user['provider']
         ),
@@ -338,7 +338,7 @@ def on_post_tags_search(app: "RSSTagApplication", user: dict, request: Request) 
                 'unread': tag['unread_count'],
                 'all': tag['posts_count'],
                 'url': tag['local_url'],
-                'info_url': app.routes.getUrlByEndpoint('on_get_tag_page', {'tag': tag['tag']})
+                'info_url': app.routes.get_url_by_endpoint('on_get_tag_page', {'tag': tag['tag']})
             })
     else:
         code = 400

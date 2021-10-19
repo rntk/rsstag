@@ -151,7 +151,7 @@ class RSSTagApplication(object):
                 if handler in self.allow_not_logged:
                     response = self.endpoints[handler](user, request, **values)
                 else:
-                    response = redirect(self.routes.getUrlByEndpoint('on_root_get'))
+                    response = redirect(self.routes.get_url_by_endpoint('on_root_get'))
         except Exception as e:
             logging.error("{} - {}".format(request.base_url, e))
             response = self.on_error(user, request, InternalServerError())
@@ -212,7 +212,7 @@ class RSSTagApplication(object):
         by_category = {self.feeds.all_feeds: {
             'unread_count': 0,
             'title': self.feeds.all_feeds,
-            'url': self.routes.getUrlByEndpoint(
+            'url': self.routes.get_url_by_endpoint(
                 endpoint='on_category_get',
                 params={'quoted_category': self.feeds.all_feeds}
             ),
@@ -244,7 +244,7 @@ class RSSTagApplication(object):
         return Response(
             page.render(
                 data=data,
-                group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_tags_get',
+                group_by_link=self.routes.get_url_by_endpoint(endpoint='on_group_by_tags_get',
                                                            params={'page_number': page_number}),
                 user_settings=user['settings'],
                 provider=user['provider'],
@@ -289,19 +289,19 @@ class RSSTagApplication(object):
                 params['page_number'] = i
                 pages_map['middle'].append({
                     'p': i,
-                    'url': self.routes.getUrlByEndpoint(endpoint=endpoint, params=params)
+                    'url': self.routes.get_url_by_endpoint(endpoint=endpoint, params=params)
                 })
             if numbers_start_range > 1:
                 params['page_number'] = 1
                 pages_map['start'] = [{
                     'p': 'first',
-                    'url': self.routes.getUrlByEndpoint(endpoint=endpoint, params=params)
+                    'url': self.routes.get_url_by_endpoint(endpoint=endpoint, params=params)
                 }]
             if numbers_end_range <= (page_count):
                 params['page_number'] = page_count
                 pages_map['end'] = [{
                     'p': 'last',
-                    'url': self.routes.getUrlByEndpoint(endpoint=endpoint, params=params)
+                    'url': self.routes.get_url_by_endpoint(endpoint=endpoint, params=params)
                 }]
         else:
             pages_map['start'] = []
@@ -309,7 +309,7 @@ class RSSTagApplication(object):
                 params['page_number'] = i
                 pages_map['start'].append({
                     'p': i,
-                    'url': self.routes.getUrlByEndpoint(endpoint=endpoint, params=params)
+                    'url': self.routes.get_url_by_endpoint(endpoint=endpoint, params=params)
                 })
         start_tags_range = round(((p_number - 1) * items_per_page) + items_per_page)
         end_tags_range = round(start_tags_range + items_per_page)
@@ -558,11 +558,11 @@ class RSSTagApplication(object):
             page.render(
                 tags=all_tags,
                 sort_by_title='tags',
-                sort_by_link=self.routes.getUrlByEndpoint(
+                sort_by_link=self.routes.get_url_by_endpoint(
                     endpoint='on_group_by_tags_get',
                     params={'page_number': new_cookie_page_value}
                 ),
-                group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
+                group_by_link=self.routes.get_url_by_endpoint(endpoint='on_group_by_category_get'),
                 pages_map=pages_map,
                 current_page=new_cookie_page_value,
                 letters=letters,
@@ -681,7 +681,7 @@ class RSSTagApplication(object):
             for cl in post["clusters"]:
                 if cl not in links:
                     links[cl] = {
-                        "l": self.routes.getUrlByEndpoint(endpoint='on_cluster_get', params={"cluster": cl}),
+                        "l": self.routes.get_url_by_endpoint(endpoint='on_cluster_get', params={"cluster": cl}),
                         "n": 0
                     }
                 links[cl]["n"] += 1

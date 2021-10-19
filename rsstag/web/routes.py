@@ -87,7 +87,7 @@ class RSSTagRoutes:
         """Get werkzeug generated routes"""
         return self._werkzeug_routes
 
-    """def getUrlByEndpoint(self, endpoint=None, params=None, full_url=False):
+    """def get_url_by_endpoint(self, endpoint=None, params=None, full_url=False):
         url = None
         if endpoint:
             if not params:
@@ -99,7 +99,7 @@ class RSSTagRoutes:
                 url = next(self.routes.iter_rules(endpoint=endpoint))
         return url"""
 
-    def getUrlByEndpoint(self, endpoint: str, params: dict = None, full_url: bool = False) -> Optional[str]:
+    def get_url_by_endpoint(self, endpoint: str, params: dict = None, full_url: bool = False) -> Optional[str]:
         """Return url by endpoint"""
         if not endpoint:
             return None

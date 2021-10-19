@@ -53,11 +53,11 @@ def on_group_by_bigrams_get(app: "RSSTagApplication", user: dict, page_number: i
         page.render(
             tags=sorted_tags,
             sort_by_title='tags',
-            sort_by_link=app.routes.getUrlByEndpoint(
+            sort_by_link=app.routes.get_url_by_endpoint(
                 endpoint='on_group_by_bigrams_get',
                 params={'page_number': new_cookie_page_value}
             ),
-            group_by_link=app.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
+            group_by_link=app.routes.get_url_by_endpoint(endpoint='on_group_by_category_get'),
             pages_map=pages_map,
             current_page=new_cookie_page_value,
             letters=letters,

@@ -21,7 +21,7 @@ def on_login_get(app: "RSSTagApplication", request: Request, err: Optional[List[
             err = []
         response = Response(page.render(
             err=err,
-            login_url=app.routes.getUrlByEndpoint(endpoint='on_login_get'),
+            login_url=app.routes.get_url_by_endpoint(endpoint='on_login_get'),
             version=app.config['settings']['version'],
             support=app.config['settings']['support'],
             provider=provider
@@ -81,7 +81,7 @@ def on_login_post(app: "RSSTagApplication", request: Request) -> Response:
     if err:
         return app.on_login_get(None, request, err)
 
-    response = redirect(app.routes.getUrlByEndpoint(endpoint='on_root_get'))
+    response = redirect(app.routes.get_url_by_endpoint(endpoint='on_root_get'))
     if user:
         response.set_cookie('sid', user['sid'], max_age=app.user_ttl, httponly=True)
 
@@ -144,7 +144,7 @@ def on_refresh_get_post(app: "RSSTagApplication", user: dict, request: Request) 
         except Exception as e:
             logging.error('Can`t create refresh task for user %s. Info: %s', user['sid'], e)
 
-    return redirect(app.routes.getUrlByEndpoint(endpoint="on_root_get"))
+    return redirect(app.routes.get_url_by_endpoint(endpoint="on_root_get"))
 
 def on_status_get(app: "RSSTagApplication", user: Optional[dict]) -> Response:
     if user:
@@ -174,7 +174,7 @@ def on_status_get(app: "RSSTagApplication", user: Optional[dict]) -> Response:
 def on_select_provider_get(app: "RSSTagApplication") -> Response:
     page = app.template_env.get_template('provider.html')
     return Response(page.render(
-        select_provider_url=app.routes.getUrlByEndpoint(endpoint='on_select_provider_post'),
+        select_provider_url=app.routes.get_url_by_endpoint(endpoint='on_select_provider_post'),
         version=app.config['settings']['version'],
         support=app.config['settings']['support']
     ), mimetype='text/html')
@@ -182,7 +182,7 @@ def on_select_provider_get(app: "RSSTagApplication") -> Response:
 def on_select_provider_post(app: "RSSTagApplication", request: Request) -> Response:
     provider = request.form.get('provider')
     if provider:
-        response = redirect(app.routes.getUrlByEndpoint(endpoint='on_login_get'))
+        response = redirect(app.routes.get_url_by_endpoint(endpoint='on_login_get'))
         response.set_cookie('provider', provider, max_age=300, httponly=True)
     else:
         page = app.template_env.get_template('error.html')
