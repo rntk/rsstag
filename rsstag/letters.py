@@ -2,7 +2,7 @@ import logging
 from collections import defaultdict
 from typing import Optional, List
 from rsstag.web.routes import RSSTagRoutes
-from rsstag.utils import getSortedDictByAlphabet
+from rsstag.utils import get_sorted_dict_by_alphabet
 from pymongo import MongoClient
 
 class RssTagLetters:
@@ -23,7 +23,7 @@ class RssTagLetters:
         letters = self._db.letters.find_one(query)
         if letters:
             if make_sort:
-                letters['letters'] = getSortedDictByAlphabet(letters['letters'])
+                letters['letters'] = get_sorted_dict_by_alphabet(letters['letters'])
             result = letters
         else:
             result = {}

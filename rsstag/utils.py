@@ -9,7 +9,7 @@ from urllib.parse import quote, urlencode
 import logging
 import os
 
-def getSortedDictByAlphabet(dct, sort_type=None):
+def get_sorted_dict_by_alphabet(dct, sort_type=None):
     """Sort dict"""
     if not sort_type or sort_type == 'k':
         sorted_keys = sorted(dct.keys())

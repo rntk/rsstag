@@ -11,7 +11,7 @@ from typing import Optional, List
 
 from rsstag.tasks import RssTagTasks
 from rsstag.web.routes import RSSTagRoutes
-from rsstag.utils import getSortedDictByAlphabet, load_config
+from rsstag.utils import get_sorted_dict_by_alphabet, load_config
 from rsstag.posts import RssTagPosts
 from rsstag.feeds import RssTagFeeds
 from rsstag.tags import RssTagTags
@@ -235,7 +235,7 @@ class RSSTagApplication(object):
                     'title': by_feed[g['_id']]['title']
                 })
         if len(by_category) > 1:
-            data = getSortedDictByAlphabet(by_category)
+            data = get_sorted_dict_by_alphabet(by_category)
             if self.no_category_name in data:
                 data.move_to_end(self.no_category_name)
         else:
