@@ -1,26 +1,16 @@
 ﻿import os
 import re
 import json
-from urllib.parse import unquote_plus, urlencode, unquote, quote_plus, quote
+from urllib.parse import urlencode, quote_plus
 from http import client
-import html
 import time
 import gzip
 import logging
-import math
-from collections import OrderedDict, defaultdict, Counter
+from collections import OrderedDict, defaultdict
 from hashlib import md5
-from typing import Optional
+from typing import Optional, List
 
-import nltk
-from werkzeug.wrappers import Response, Request
-from werkzeug.exceptions import HTTPException, NotFound, InternalServerError
-from werkzeug.utils import redirect
-from jinja2 import Environment, PackageLoader
-from pymongo import MongoClient
-from gensim.models.doc2vec import Doc2Vec
-from gensim.models.word2vec import Word2Vec
-from rsstag.tasks import RssTagTasks, TASK_DOWNLOAD, TASK_MARK, TASK_NOT_IN_PROCESSING, TASK_ALL
+from rsstag.tasks import RssTagTasks
 from rsstag.web.routes import RSSTagRoutes
 from rsstag.utils import getSortedDictByAlphabet, load_config
 from rsstag.posts import RssTagPosts
@@ -29,18 +19,28 @@ from rsstag.tags import RssTagTags
 from rsstag.letters import RssTagLetters
 from rsstag.bi_grams import RssTagBiGrams
 from rsstag.users import RssTagUsers
-from rsstag.providers import BazquxProvider
 from rsstag.lda import LDA
-from navec import Navec
-from slovnet import NER
-from rsstag.tags_builder import TagsBuilder
 from rsstag.html_cleaner import HTMLCleaner
-from nltk.corpus import stopwords
 
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.cluster import DBSCAN
+import rsstag.web.posts as posts_handlers
+import rsstag.web.users as users_handlers
+import rsstag.web.tags as tags_handlers
+import rsstag.web.bigrams as bigrams_handlers
 
 from razdel import sentenize
+
+from gensim.models.doc2vec import Doc2Vec
+from gensim.models.word2vec import Word2Vec
+
+import nltk
+
+from werkzeug.wrappers import Response, Request
+from werkzeug.exceptions import HTTPException, NotFound, InternalServerError
+from werkzeug.utils import redirect
+
+from jinja2 import Environment, PackageLoader
+
+from pymongo import MongoClient
 
 class RSSTagApplication(object):
     def __init__(self, config_path=None):
@@ -202,215 +202,31 @@ class RSSTagApplication(object):
             conn.close()
         return result
 
+    def on_select_provider_get(self, _: Optional[dict], __: Request) -> Response:
+        return users_handlers.on_select_provider_get(self)
 
-    def on_select_provider_get(self, user: Optional[dict], request: Request) -> Response:
-        page = self.template_env.get_template('provider.html')
-        return Response(page.render(
-            select_provider_url=self.routes.getUrlByEndpoint(endpoint='on_select_provider_post'),
-            version=self.config['settings']['version'],
-            support=self.config['settings']['support']
-        ), mimetype='text/html')
+    def on_select_provider_post(self, _: Optional[dict], request: Request) -> Response:
+        return users_handlers.on_select_provider_post(self, request)
 
+    def on_post_speech(self, _: Optional[dict], request: Request) -> Response:
+        return posts_handlers.on_post_speech(self, request)
 
-    def on_select_provider_post(self, user: Optional[dict], request: Request) -> Response:
-        provider = request.form.get('provider')
-        if provider:
-            response = redirect(self.routes.getUrlByEndpoint(endpoint='on_login_get'))
-            response.set_cookie('provider', provider, max_age=300, httponly=True)
-        else:
-            page = self.template_env.get_template('error.html')
-            response = Response(page.render(err=['Unknown provider']), mimetype='text/html')
+    def on_login_get(self, _: Optional[dict], request: Request, err: Optional[List[str]]) -> Response:
+        return users_handlers.on_login_get(self, request, err=err)
 
-        return response
-
-    def on_post_speech(self, user: dict, request: Request) -> Response:
-        try:
-            post_id = int(request.form.get('post_id'))
-        except Exception as e:
-            post_id = None
-        code = 200
-        if post_id:
-            post = self.posts.get_by_pid(user['sid'], post_id)
-            if post:
-                title = html.unescape(post['content']['title'])
-                speech_file = self.getSpeech(title)
-                if speech_file:
-                    result = {'data': '/static/speech/{}'.format(speech_file)}
-                else:
-                    result = {'error': 'Can`t get speech file'}
-                    code = 503
-            else:
-                result = {'error': 'Post not found'}
-                code = 404
-        else:
-            result = {'error': 'No post id'}
-            code = 400
-
-        response = Response(json.dumps(result), mimetype='application/json')
-        response.status_code = code
-
-        return response
-
-    def on_login_get(self, user: Optional[dict], request: Request, err=None) -> Response:
-        provider = request.cookies.get('provider')
-        if provider in self.providers:
-            #if (provider == 'bazqux') or (provider == 'inoreader') or (provider == 'telegram'):
-            page = self.template_env.get_template('login.html')
-            if not err:
-                err = []
-            response = Response(page.render(
-                err=err,
-                login_url=self.routes.getUrlByEndpoint(endpoint='on_login_get'),
-                version=self.config['settings']['version'],
-                support=self.config['settings']['support'],
-                provider=provider
-            ), mimetype='text/html')
-        else:
-            page = self.template_env.get_template('error.html')
-            response = Response(page.render(
-                err=['Unknown provider'],
-                version=self.config['settings']['version'],
-                support=self.config['settings']['support']
-            ), mimetype='text/html')
-
-        return response
-
-    def on_login_post(self, user_: Optional[dict], request: Request) -> Response:
-        login = request.form.get('login')
-        password = request.form.get('password')
-
-        if not login or not password:
-            return self.on_login_get(None, request, ["Login or Password can`t be empty"])
-
-        user = self.users.get_by_login_password(login, password)
-        err = []
-        if user and user["provider"] == "bazqux":
-            # login as baszqux user and check token
-            err = []
-            provider = BazquxProvider(self.config)
-            is_valid = provider.is_valid_user(user)
-            if is_valid == False:
-                token = provider.get_token(login, password)
-                if token:
-                    updated = self.users.update_by_sid(user['sid'], {'token': token, 'retoken': False})
-                    if updated:
-                        user['token'] = token
-                        self.tasks.unfreeze_tasks(user, TASK_ALL)
-                    else:
-                        err.append('Can`t safe new token. Try later.')
-                else:
-                    err.append('Can`t refresh token. Try later.')
-            elif is_valid == None:
-                err.append('Can`t check token status. Try later.')
-        elif not user:
-            # create new user
-            provider = request.cookies.get("provider")
-            if (provider == 'bazqux') or (provider == 'inoreader'):
-                provider_h = BazquxProvider(self.config)
-                token = provider_h.get_token(login, password)
-                if token:
-                    user = self.createNewSession(login, password, token, provider)
-                elif token == '':
-                    err.append('Wrong login or password')
-                else:
-                    err.append('Cant` create session. Try later')
-            elif provider == "telegram":
-                user = self.createNewSession(login, password, "", provider)
-
-        if err:
-            return self.on_login_get(None, request, err)
-
-        response = redirect(self.routes.getUrlByEndpoint(endpoint='on_root_get'))
-        if user:
-            response.set_cookie('sid', user['sid'], max_age=self.user_ttl, httponly=True)
-
-        return response
+    def on_login_post(self, _: Optional[dict], request: Request) -> Response:
+        return users_handlers.on_login_post(self, request)
 
     def on_refresh_get_post(self, user: dict, request: Request) -> Response:
-        if user:
-            try:
-                updated = False
-                if not user['in_queue']:
-                    added = self.tasks.add_task({
-                        'type': TASK_DOWNLOAD,
-                        'user': user['sid'],
-                        'host': request.environ['HTTP_HOST']
-                    })
-                    if added:
-                        updated = self.users.update_by_sid(
-                            user['sid'],
-                            {'ready': False, 'in_queue': True, 'message': 'Downloading data, please wait'}
-                        )
-                else:
-                    updated = self.users.update_by_sid(
-                        user['sid'],
-                        {'message': 'You already in queue, please wait'}
-                    )
-                if not updated:
-                    logging.error('Cant update data of user %s while create "posts update" task', user['sid'])
-            except Exception as e:
-                logging.error('Can`t create refresh task for user %s. Info: %s', user['sid'], e)
+        return users_handlers.on_refresh_get_post(self, user, request)
 
-        return redirect(self.routes.getUrlByEndpoint(endpoint="on_root_get"))
-
-    def on_status_get(self, user: Optional[dict], request: Request) -> Response:
-        if user:
-            if user['retoken']:
-                result = {'data': {
-                    'is_ok': False,
-                    'msgs': ['Need refresh token. Click me for relogin']
-                }}
-            else :
-                task_titles = self.tasks.get_current_tasks_titles(user['sid'])
-                result = {'data': {
-                    'is_ok': True,
-                    'msgs': task_titles
-                }}
-        else:
-            result = {'data': {
-                'is_ok': False,
-                'msgs': ['Looks like you are not logged in']
-            }}
-
-        return Response(
-            json.dumps(result),
-            mimetype="text/html",
-            headers={"Pragma": "no-cache"}
-        )
+    def on_status_get(self, user: Optional[dict], _: Request) -> Response:
+        return users_handlers.on_status_get(self, user)
 
     def on_settings_post(self, user: dict, request: Request) -> Response:
-        try:
-            settings = json.loads(request.get_data(as_text=True))
-        except Exception as e:
-            logging.warning('Can`t json load settings. Cause: %s', e)
-            settings = {}
-        if settings:
-            settings = self.users.get_validated_settings(settings)
-            if settings:
-                updated = self.users.update_settings(user['sid'], settings)
-                if updated:
-                    result = {'data': 'ok'}
-                    code = 200
-                elif updated is None:
-                    result = {'error': 'Server in trouble'}
-                    code = 500
-                else:
-                    result = {'error': 'User not found'}
-                    code = 404
-            else:
-                result = {'error': 'Something wrong with settings'}
-                code = 400
-        else:
-            result = {'error': 'Something wrong with settings'}
-            code = 400
+        return users_handlers.on_settings_post(self, user, request)
 
-        return Response(
-            json.dumps(result),
-            mimetype="application/json",
-            status=code
-        )
-
-    def on_error(self, user: Optional[dict], request: Request, e: HTTPException) -> Response:
+    def on_error(self, _: Optional[dict], __: Request, e: HTTPException) -> Response:
         page = self.template_env.get_template('error.html')
         return Response(
             page.render(title='ERROR', body='Error: {0}, {1}'.format(e.code, e.description)),
@@ -418,41 +234,8 @@ class RSSTagApplication(object):
             status = e.code
         )
 
-    def on_root_get(self, user: Optional[dict], request: Request, err=None) -> Response:
-        if not err:
-            err = []
-        only_unread = True
-        if user and 'provider' in user:
-            posts = self.posts.get_stat(user['sid'])
-            sentiments = self.tags.get_sentiments(user['sid'], user['settings']['only_unread'])
-            page = self.template_env.get_template('root-logged.html')
-            response = Response(
-                page.render(
-                    err=err,
-                    support=self.config['settings']['support'],
-                    version=self.config['settings']['version'],
-                    user_settings=user['settings'],
-                    provider=user['provider'],
-                    posts=posts,
-                    sentiments=sentiments
-                ),
-                mimetype='text/html'
-            )
-        else:
-            provider = 'Not selected'
-            page = self.template_env.get_template('root.html')
-            response = Response(
-                page.render(
-                    err=err,
-                    only_unread=only_unread,
-                    provider=provider,
-                    support=self.config['settings']['support'],
-                    version=self.config['settings']['version']
-                ),
-                mimetype='text/html'
-            )
-
-        return response
+    def on_root_get(self, user: Optional[dict], _: Request, err: Optional[List[str]]=None) -> Response:
+        return users_handlers.on_root_get(self, user, err)
 
     def on_group_by_category_get(self, user: dict, request: Request) -> Response:
         page_number = 1
@@ -510,277 +293,20 @@ class RSSTagApplication(object):
             mimetype='text/html'
         )
 
-    def on_category_get(self, user: dict, request: Request, quoted_category=None) -> Response:
-        cat = unquote_plus(quoted_category)
-        db_feeds = self.feeds.get_by_category(user['sid'], cat)
-        by_feed = {}
-        for f in db_feeds:
-            by_feed[f['feed_id']] = f
+    def on_category_get(self, user: dict, request: Request, quoted_category: str) -> Response:
+        return posts_handlers.on_category_get(self, user, request, quoted_category)
 
-        if not by_feed:
-            return self.on_error(user, request, NotFound())
+    def on_tag_get(self, user: dict, request: Request, quoted_tag: str) -> Response:
+        return posts_handlers.on_tag_get(self, user, request, quoted_tag)
 
-        projection = {'_id': False, 'content.content': False}
-        if user['settings']['only_unread']:
-            only_unread = user['settings']['only_unread']
-        else:
-            only_unread = None
-        if cat != self.feeds.all_feeds:
-            db_posts_c = self.posts.get_by_category(user['sid'], only_unread, cat, projection)
-        else:
-            db_posts_c = self.posts.get_all(user['sid'], only_unread, projection)
+    def on_bi_gram_get(self, user: dict, request: Request, bi_gram: str) -> Response:
+        return posts_handlers.on_bi_gram_get(self, user, request, bi_gram)
 
-        db_posts = list(db_posts_c)
-
-        if user['settings']['similar_posts']:
-            clusters = self.posts.get_clusters(db_posts)
-            cl_posts = self.posts.get_by_clusters(user['sid'], list(clusters), only_unread, projection)
-            for post in cl_posts:
-                if post['feed_id'] not in by_feed:
-                    feed = self.feeds.get_by_feed_id(user['sid'], post['feed_id'])
-                    if feed:
-                        by_feed[post['feed_id']] = feed
-            db_posts.extend(cl_posts)
-        posts = []
-        pids = set()
-        for post in db_posts:
-            post["lemmas"] = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
-            if post['pid'] not in pids:
-                pids.add(post['pid'])
-                if post['feed_id'] in by_feed:
-                    posts.append({
-                        'post': post,
-                        'pos': post['pid'],
-                        'category_title': by_feed[post['feed_id']]['category_title'],
-                        'feed_title': by_feed[post['feed_id']]['title'],
-                        'favicon': by_feed[post['feed_id']]['favicon']
-                    })
-        page = self.template_env.get_template('posts.html')
-
-        return Response(
-            page.render(
-                posts=posts,
-                tag=cat,
-                group='category',
-                words=[],
-                user_settings=user['settings'],
-                provider=user['provider']
-            ),
-            mimetype='text/html'
-        )
-
-    def on_tag_get(self, user: dict, request: Request, quoted_tag=None) -> Response:
-        tag = unquote(quoted_tag)
-        current_tag = self.tags.get_by_tag(user['sid'], tag)
-        if not current_tag:
-            return self.on_error(user, request, NotFound())
-
-        projection = {'_id': False, 'content.content': False}
-        if user['settings']['only_unread']:
-            only_unread = user['settings']['only_unread']
-        else:
-            only_unread = None
-        db_posts_c = self.posts.get_by_tags(user['sid'], [tag], only_unread, projection)
-        db_posts = list(db_posts_c)
-
-        if user['settings']['similar_posts']:
-            clusters = self.posts.get_clusters(db_posts)
-            cl_posts = self.posts.get_by_clusters(user['sid'], list(clusters), only_unread, projection)
-            db_posts.extend(cl_posts)
-        posts = []
-        by_feed = {}
-        pids = set()
-        for post in db_posts:
-            post["lemmas"] = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
-            if post['pid'] not in pids:
-                pids.add(post['pid'])
-                if post['feed_id'] not in by_feed:
-                    feed = self.feeds.get_by_feed_id(user['sid'], post['feed_id'])
-                    if feed:
-                        by_feed[post['feed_id']] = feed
-                if post['feed_id']in by_feed:
-                    posts.append({
-                        'post': post,
-                        'pos': post['pid'],
-                        'category_title': by_feed[post['feed_id']]['category_title'],
-                        'feed_title': by_feed[post['feed_id']]['title'],
-                        'favicon': by_feed[post['feed_id']]['favicon']
-                    })
-        page = self.template_env.get_template('posts.html')
-
-        return Response(
-            page.render(
-                posts=posts,
-                tag=tag,
-                group='tag',
-                words=current_tag['words'],
-                user_settings=user['settings'],
-                provider=user['provider']
-            ),
-            mimetype='text/html'
-        )
-
-    def on_bi_gram_get(self, user: dict, request: Request, bi_gram='') -> Response:
-        current_bi_gram = self.bi_grams.get_by_bi_gram(user['sid'], bi_gram)
-        if not current_bi_gram:
-            return self.on_error(user, request, NotFound())
-
-        projection = {'_id': False, 'content.content': False}
-        if user['settings']['only_unread']:
-            only_unread = user['settings']['only_unread']
-        else:
-            only_unread = None
-        db_posts_c = self.posts.get_by_bi_grams(user['sid'], [bi_gram], only_unread, projection)
-        db_posts = list(db_posts_c)
-
-        if user['settings']['similar_posts']:
-            clusters = self.posts.get_clusters(db_posts)
-            cl_posts = self.posts.get_by_clusters(user['sid'], list(clusters), only_unread, projection)
-            db_posts.extend(cl_posts)
-        posts = []
-        by_feed = {}
-        pids = set()
-        for post in db_posts:
-            post["lemmas"] = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
-            if post['pid'] not in pids:
-                pids.add(post['pid'])
-                if post['feed_id'] not in by_feed:
-                    feed = self.feeds.get_by_feed_id(user['sid'], post['feed_id'])
-                    if feed:
-                        by_feed[post['feed_id']] = feed
-                if post['feed_id'] in by_feed:
-                    posts.append({
-                        'post': post,
-                        'pos': post['pid'],
-                        'category_title': by_feed[post['feed_id']]['category_title'],
-                        'feed_title': by_feed[post['feed_id']]['title'],
-                        'favicon': by_feed[post['feed_id']]['favicon']
-                    })
-        page = self.template_env.get_template('posts.html')
-
-        return Response(
-            page.render(
-                posts=posts,
-                tag=bi_gram,
-                group='tag',
-                words=current_bi_gram['words'],
-                user_settings=user['settings'],
-                provider=user['provider']
-            ),
-            mimetype='text/html'
-        )
-
-    def on_feed_get(self, user: dict, request: Request, quoted_feed=None) -> Response:
-        feed = unquote_plus(quoted_feed)
-        current_feed = self.feeds.get_by_feed_id(user['sid'], feed)
-        if not current_feed:
-            return self.on_error(user, request, NotFound())
-
-        projection = {'_id': False, 'content.content': False}
-        if user['settings']['only_unread']:
-            only_unread = user['settings']['only_unread']
-        else:
-            only_unread = None
-        db_posts_c = self.posts.get_by_feed_id(
-            user['sid'],
-            current_feed['feed_id'],
-            only_unread,
-            projection
-        )
-        db_posts = list(db_posts_c)
-
-        posts = []
-        if user['settings']['similar_posts']:
-            clusters = self.posts.get_clusters(db_posts)
-            cl_posts = self.posts.get_by_clusters(user['sid'], list(clusters), only_unread, projection)
-            db_posts.extend(cl_posts)
-        pids = set()
-        for post in db_posts:
-            post["lemmas"] = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
-            if post['pid'] not in pids:
-                pids.add(post['pid'])
-                posts.append({
-                    'post': post,
-                    'category_title': current_feed['category_title'],
-                    'pos': post['pid'],
-                    'feed_title': current_feed['title'],
-                    'favicon': current_feed['favicon']
-                })
-        page = self.template_env.get_template('posts.html')
-        return Response(
-            page.render(
-                posts=posts,
-                tag=current_feed['title'],
-                group='feed',
-                words=[],
-                user_settings=user['settings'],
-                provider=user['provider']
-            ),
-            mimetype='text/html'
-        )
+    def on_feed_get(self, user: dict, request: Request, quoted_feed: str) -> Response:
+        return posts_handlers.on_feed_get(self, user, request, quoted_feed)
 
     def on_read_posts_post(self, user: dict, request: Request) -> Response:
-        try:
-            data = json.loads(request.get_data(as_text=True))
-            if data['ids'] and isinstance(data['ids'], list):
-                post_ids = data['ids']
-            else:
-                raise Exception('Bad ids for posts status')
-            readed = bool(data['readed'])
-        except Exception as e:
-            logging.warning('Send wrond data for read posts. Cause: %s', e)
-            post_ids = None
-            result = {'error': 'Bad ids or status'}
-            code = 400
-
-        if post_ids:
-            tags = defaultdict(int)
-            bi_grams = defaultdict(int)
-            letters = defaultdict(int)
-            for_insert = []
-            db_posts = self.posts.get_by_pids(
-                user['sid'],
-                post_ids,
-                {'id': True, 'tags': True, 'bi_grams': True, 'read': True}
-            )
-            for d in db_posts:
-                if d['read'] != readed:
-                    for_insert.append({
-                        'user': user['sid'],
-                        'id': d['id'],
-                        'status': readed,
-                        'processing': TASK_NOT_IN_PROCESSING,
-                        'type': TASK_MARK,
-                    })
-                    for t in d['tags']:
-                        tags[t] += 1
-                        if not t:
-                            continue
-                        letters[t[0]] += 1
-                    for bi_g in d['bi_grams']:
-                        bi_grams[bi_g] += 1
-
-            if self.tasks.add_task({'type': TASK_MARK, 'user': user['sid'], 'data': for_insert}):
-                changed = self.posts.change_status(user['sid'], post_ids, readed)
-                if changed and tags:
-                    changed = self.tags.change_unread(user['sid'], tags, readed)
-                if changed and bi_grams:
-                    changed = self.bi_grams.change_unread(user['sid'], bi_grams, readed)
-                if changed and letters:
-                    self.letters.change_unread(user['sid'], letters, readed)
-                    changed = True
-                if changed:
-                    code = 200
-                    result = {'data': 'ok'}
-                else:
-                    code = 500
-                    result = {'error': 'Database error'}
-
-        return Response(
-            json.dumps(result),
-            mimetype="application/json",
-            status=code
-        )
+        return posts_handlers.on_read_posts_post(self, user, request)
 
     def calcPagerData(self, p_number, page_count, items_per_page, endpoint, sentiment='', group='', letter=''):
         pages_map = {}
@@ -830,619 +356,45 @@ class RSSTagApplication(object):
         end_tags_range = round(start_tags_range + items_per_page)
         return (pages_map, start_tags_range, end_tags_range)
 
-    def on_get_tag_page(self, user: dict, request: Request, tag='') -> Response:
-        tag_data = self.tags.get_by_tag(user['sid'], tag)
-        if not tag_data:
-            return self.on_error(user, request, NotFound())
+    def on_get_tag_page(self, user: dict, request: Request, tag: str) -> Response:
+        return tags_handlers.on_get_tag_page(self, user, request, tag)
 
-        del tag_data['_id']
-        page = self.template_env.get_template('tag-info.html')
+    def on_group_by_tags_get(self, user: dict, _: Request, page_number: int=1) -> Response:
+        return tags_handlers.on_group_by_tags_get(self, user, page_number)
 
-        return Response(
-            page.render(
-                tag=tag_data,
-                sort_by_title='tags',
-                sort_by_link=self.routes.getUrlByEndpoint(
-                    endpoint='on_group_by_tags_get',
-                    params={'page_number': 1}
-                ),
-                group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
-                user_settings=user['settings'],
-                provider=user['provider']
-            ),
-            mimetype='text/html'
-        )
+    def on_group_by_bigrams_get(self, user: dict, _: Request, page_number: int=1) -> Response:
+        return bigrams_handlers.on_group_by_bigrams_get(self, user, page_number)
 
-    def on_group_by_tags_get(self, user: dict, request: Request, page_number: int=1) -> Response:
-        tags_count = self.tags.count(user['sid'], user['settings']['only_unread'])
-        page_count = self.getPageCount(tags_count, user['settings']['tags_on_page'])
-        p_number = page_number
-        if page_number <= 0:
-            p_number = 1
-        elif page_number > page_count:
-            p_number = page_count
+    def on_group_by_tags_sentiment(self, user: dict, _: Request, sentiment:str, page_number: int=1) -> Response:
+        return tags_handlers.on_group_by_tags_sentiment(self, user, sentiment, page_number)
 
-        new_cookie_page_value = p_number
-        p_number -= 1
-        if p_number < 0:
-            p_number = 1
-        pages_map, start_tags_range, end_tags_range = self.calcPagerData(
-            p_number,
-            page_count,
-            user['settings']['tags_on_page'],
-            'on_group_by_tags_get'
-        )
-        sorted_tags = []
-        tags = self.tags.get_all(
-            user['sid'],
-            user['settings']['only_unread'],
-            user['settings']['hot_tags'],
-            opts={
-                'offset': start_tags_range,
-                'limit': user['settings']['tags_on_page']
-            }
-        )
+    def on_group_by_tags_startwith_get(self, user: dict, request: Request, letter: str, page_number: int=1) -> Response:
+        return tags_handlers.on_group_by_tags_startwith_get(self, user, request, letter, page_number)
 
-        for t in tags:
-            sorted_tags.append({
-                'tag': t['tag'],
-                'url': t['local_url'],
-                'words': t['words'],
-                'count': t['unread_count'] if user['settings']['only_unread'] else t['posts_count'],
-                'sentiment': t['sentiment'] if 'sentiment' in t else []
-            })
-        db_letters = self.letters.get(user['sid'], make_sort=True)
-        if db_letters:
-            letters = self.letters.to_list(db_letters, user['settings']['only_unread'])
-        else:
-            letters = []
-        page = self.template_env.get_template('group-by-tag.html')
+    def on_group_by_tags_group(self, user: dict, group: str, page_number: int=1) -> Response:
+        return tags_handlers.on_group_by_tags_group(self, user, group, page_number)
 
-        return Response(
-            page.render(
-                tags=sorted_tags,
-                sort_by_title='tags',
-                sort_by_link=self.routes.getUrlByEndpoint(
-                    endpoint='on_group_by_tags_get',
-                    params={'page_number': new_cookie_page_value}
-                ),
-                group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
-                pages_map=pages_map,
-                current_page=new_cookie_page_value,
-                letters=letters,
-                user_settings=user['settings'],
-                provider=user['provider']
-            ),
-            mimetype='text/html'
-        )
+    def on_get_tag_similar(self, user: dict, _: Request, model: str, tag: str) -> Response:
+        return tags_handlers.on_get_tag_similar(self, user, model, tag)
 
-    def on_group_by_bigrams_get(self, user: dict, request: Request, page_number: int=1) -> Response:
-        tags_count = self.bi_grams.count(user['sid'], only_unread=user['settings']['only_unread'])
-        page_count = self.getPageCount(tags_count, user['settings']['tags_on_page'])
-        p_number = page_number
-        if page_number <= 0:
-            p_number = 1
-        elif page_number > page_count:
-            p_number = page_count
+    def on_get_tag_siblings(self, user: dict, _: Request, tag: str) -> Response:
+        return tags_handlers.on_get_tag_siblings(self, user, tag)
 
-        new_cookie_page_value = p_number
-        p_number -= 1
-        if p_number < 0:
-            p_number = 1
-        pages_map, start_tags_range, end_tags_range = self.calcPagerData(
-            p_number,
-            page_count,
-            user['settings']['tags_on_page'],
-            'on_group_by_bigrams_get'
-        )
-        sorted_tags = []
-        tags = self.bi_grams.get_all(
-            user['sid'],
-            user['settings']['only_unread'],
-            user['settings']['hot_tags'],
-            opts={
-                'offset': start_tags_range,
-                'limit': user['settings']['tags_on_page']
-            }
-        )
-
-        for t in tags:
-            sorted_tags.append({
-                'tag': t['tag'],
-                'url': t['local_url'],
-                'words': t['words'],
-                'count': t['unread_count'] if user['settings']['only_unread'] else t['posts_count'],
-                'sentiment': []
-            })
-        letters = []
-        page = self.template_env.get_template('group-by-tag.html')
-
-        return Response(
-            page.render(
-                tags=sorted_tags,
-                sort_by_title='tags',
-                sort_by_link=self.routes.getUrlByEndpoint(
-                    endpoint='on_group_by_bigrams_get',
-                    params={'page_number': new_cookie_page_value}
-                ),
-                group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
-                pages_map=pages_map,
-                current_page=new_cookie_page_value,
-                letters=letters,
-                user_settings=user['settings'],
-                provider=user['provider']
-            ),
-            mimetype='text/html'
-        )
-
-    def on_group_by_tags_sentiment(self, user: dict, request: Request, sentiment:str, page_number: int=1) -> Response:
-        sentiment = sentiment.replace('|', '/')
-        tags_count = self.tags.count(user['sid'], user['settings']['only_unread'], sentiments=[sentiment])
-        page_count = self.getPageCount(tags_count, user['settings']['tags_on_page'])
-        p_number = page_number
-        if page_number <= 0:
-            p_number = 1
-        elif page_number > page_count:
-            p_number = page_count
-
-        new_cookie_page_value = p_number
-        p_number -= 1
-        if p_number < 0:
-            p_number = 1
-        pages_map, start_tags_range, end_tags_range = self.calcPagerData(
-            p_number,
-            page_count,
-            user['settings']['tags_on_page'],
-            'on_group_by_tags_sentiment',
-            sentiment=sentiment
-        )
-        sorted_tags = []
-        tags = self.tags.get_by_sentiment(
-            user['sid'],
-            [sentiment],
-            user['settings']['only_unread'],
-            user['settings']['hot_tags'],
-            opts={
-                'offset': start_tags_range,
-                'limit': user['settings']['tags_on_page']
-            }
-        )
-
-        for t in tags:
-            sorted_tags.append({
-                'tag': t['tag'],
-                'url': t['local_url'],
-                'words': t['words'],
-                'count': t['unread_count'] if user['settings']['only_unread'] else t['posts_count'],
-                'sentiment': t['sentiment'] if 'sentiment' in t else []
-            })
-        db_letters = self.letters.get(user['sid'], make_sort=True)
-        if db_letters:
-            letters = self.letters.to_list(db_letters, user['settings']['only_unread'])
-        else:
-            letters = []
-        page = self.template_env.get_template('group-by-tag.html')
-
-        return Response(
-            page.render(
-                tags=sorted_tags,
-                sort_by_title='tags',
-                sort_by_link=self.routes.getUrlByEndpoint(
-                    endpoint='on_group_by_tags_sentiment',
-                    params={'sentiment': sentiment, 'page_number': new_cookie_page_value}
-                ),
-                group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
-                pages_map=pages_map,
-                current_page=new_cookie_page_value,
-                letters=letters,
-                user_settings=user['settings'],
-                provider=user['provider']
-            ),
-            mimetype='text/html'
-        )
-
-    def on_group_by_tags_startwith_get(self, user: dict, request: Request, letter='', page_number=1) -> Response:
-        db_letters = self.letters.get(user['sid'], make_sort=True)
-        if db_letters is None:
-            return self.on_error(user, request, InternalServerError())
-
-        if letter not in db_letters['letters']:
-            return self.on_error(user, request, NotFound())
-
-        tags_count = self.tags.count(user['sid'], user['settings']['only_unread'], '^{}'.format(letter))
-        page_count = self.getPageCount(tags_count, user['settings']['tags_on_page'])
-        p_number = page_number
-        if page_number <= 0:
-            p_number = 1
-        elif page_number > page_count:
-            p_number = page_count
-
-        new_cookie_page_value = p_number
-        p_number -= 1
-        if p_number < 0:
-            p_number = 1
-        pages_map, start_tags_range, end_tags_range = self.calcPagerData(
-            p_number,
-            page_count,
-            user['settings']['tags_on_page'],
-            'on_group_by_tags_startwith_get',
-            letter=letter
-        )
-        sorted_tags = []
-        tags = self.tags.get_all(
-            user['sid'],
-            user['settings']['only_unread'],
-            user['settings']['hot_tags'],
-            opts={
-                'offset': start_tags_range,
-                'limit': user['settings']['tags_on_page'],
-                'regexp': '^{}'.format(letter)
-            }
-        )
-
-        for t in tags:
-            sorted_tags.append({
-                'tag': t['tag'],
-                'url': t['local_url'],
-                'words': t['words'],
-                'count': t['unread_count'] if user['settings']['only_unread'] else t['posts_count'],
-                'sentiment': t['sentiment'] if 'sentiment' in t else []
-            })
-        if db_letters:
-            letters = self.letters.to_list(db_letters, user['settings']['only_unread'])
-        else:
-            letters = []
-        self.users.update_by_sid(user['sid'], {'letter': letter})
-        page = self.template_env.get_template('group-by-tag.html')
-
-        return Response(
-            page.render(
-                tags=sorted_tags,
-                sort_by_title='tags',
-                sort_by_link=self.routes.getUrlByEndpoint(
-                    endpoint='on_group_by_tags_get',
-                    params={'page_number': new_cookie_page_value}
-                ),
-                group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
-                pages_map=pages_map,
-                current_page=new_cookie_page_value,
-                letters=letters,
-                user_settings=user['settings'],
-                provider=user['provider']
-            ),
-            mimetype='text/html'
-        )
-
-    def on_group_by_tags_group(self, user: dict, request: Request, group='', page_number=1) -> Response:
-        tags_count = self.tags.count(user['sid'], user['settings']['only_unread'], groups=[group])
-        page_count = self.getPageCount(tags_count, user['settings']['tags_on_page'])
-        p_number = page_number
-        if page_number <= 0:
-            p_number = 1
-        elif page_number > page_count:
-            p_number = page_count
-
-        new_cookie_page_value = p_number
-        p_number -= 1
-        if p_number < 0:
-            p_number = 1
-        pages_map, start_tags_range, end_tags_range = self.calcPagerData(
-            p_number,
-            page_count,
-            user['settings']['tags_on_page'],
-            'on_group_by_tags_group',
-            group=group
-        )
-        sorted_tags = []
-        tags = self.tags.get_by_group(
-            user['sid'],
-            [group],
-            user['settings']['only_unread'],
-            user['settings']['hot_tags'],
-            opts={
-                'offset': start_tags_range,
-                'limit': user['settings']['tags_on_page']
-            }
-        )
-
-        for t in tags:
-            sorted_tags.append({
-                'tag': t['tag'],
-                'url': t['local_url'],
-                'words': t['words'],
-                'count': t['unread_count'] if user['settings']['only_unread'] else t['posts_count'],
-                'sentiment': t['sentiment'] if 'sentiment' in t else []
-            })
-        db_letters = self.letters.get(user['sid'], make_sort=True)
-        if db_letters:
-            letters = self.letters.to_list(db_letters, user['settings']['only_unread'])
-        else:
-            letters = []
-
-        page = self.template_env.get_template('group-by-tag.html')
-
-        return Response(
-            page.render(
-                tags=sorted_tags,
-                sort_by_title='tags',
-                sort_by_link=self.routes.getUrlByEndpoint(
-                    endpoint='on_group_by_tags_group',
-                    params={'group': group, 'page_number': new_cookie_page_value}
-                ),
-                group_by_link=self.routes.getUrlByEndpoint(endpoint='on_group_by_category_get'),
-                pages_map=pages_map,
-                current_page=new_cookie_page_value,
-                letters=letters,
-                user_settings=user['settings'],
-                provider=user['provider']
-            ),
-            mimetype='text/html'
-        )
-
-    def on_get_tag_similar(self, user: dict, request: Request, model='', tag='') -> Response:
-        tags_set = set()
-        all_tags = []
-        if model in self.models:
-            if (model == self.models['d2v']) and self.d2v:
-                try:
-                    siblings = self.d2v.dv.similar_by_word(tag, topn=30)
-                    for sibling in siblings:
-                        tags_set.add(sibling[0])
-                except Exception as e:
-                    logging.warning('In %s not found tag %s', self.config['settings']['d2v_model'], tag)
-            elif model == self.models['w2v']:
-                st = os.stat(self.config['settings']['w2v_model'])
-                if (st.st_mtime != self.w2v_mod_date) or not self.w2v:
-                    self.w2v = Word2Vec.load(self.config['settings']['w2v_model'])
-                    self.w2v_mod_date = st.st_mtime
-                try:
-                    siblings = self.w2v.wv.similar_by_word(tag, topn=30)
-                    for sibling in siblings:
-                        tags_set.add(sibling[0])
-                except Exception as e:
-                    logging.warning('In %s not found tag %s', self.config['settings']['w2v_model'], tag)
-
-            if tags_set:
-                db_tags = self.tags.get_by_tags(user['sid'], list(tags_set), user['settings']['only_unread'])
-                for tag in db_tags:
-                    all_tags.append({
-                        'tag': tag['tag'],
-                        'url': tag['local_url'],
-                        'words': tag['words'],
-                        'count': tag['unread_count'] if user['settings']['only_unread'] else tag['posts_count'],
-                        'sentiment': tag['sentiment'] if 'sentiment' in tag else []
-                    })
-                code = 200
-                result = {'data': all_tags}
-            else:
-                code = 200
-                result = {'data': all_tags}
-        else:
-            code = 404
-            result = {'error': 'Unknown model'}
-
-        return Response(
-            json.dumps(result),
-            mimetype="application/json",
-            status=code
-        )
-
-    def on_get_tag_siblings(self, user: dict, request: Request, tag='') -> Response:
-        all_tags = []
-        if user['settings']['only_unread']:
-            only_unread = user['settings']['only_unread']
-        else:
-            only_unread = None
-        posts = self.posts.get_by_tags(user['sid'], [tag], only_unread, {'tags': True})
-        tags_set = set()
-        for post in posts:
-            for tag in post['tags']:
-                tags_set.add(tag)
-
-        if tags_set:
-            db_tags = self.tags.get_by_tags(user['sid'], list(tags_set), user['settings']['only_unread'])
-            for tag in db_tags:
-                all_tags.append({
-                    'tag': tag['tag'],
-                    'url': tag['local_url'],
-                    'words': tag['words'],
-                    'count': tag['unread_count'] if user['settings']['only_unread'] else tag['posts_count'],
-                    'sentiment': tag['sentiment'] if 'sentiment' in tag else []
-                })
-
-        return Response(
-            json.dumps({'data': all_tags}),
-            mimetype="application/json",
-        )
-
-    def on_get_tag_bi_grams(self, user: dict, request: Request, tag='') -> Response:
-        bi_grams = self.bi_grams.get_by_tags(user['sid'], [tag], user['settings']['only_unread'])
-        all_bi_grams = []
-        for tag in bi_grams:
-            all_bi_grams.append({
-                'tag': tag['tag'],
-                'url': tag['local_url'],
-                'words': tag['words'],
-                'count': tag['unread_count'] if user['settings']['only_unread'] else tag['posts_count'],
-                'sentiment': tag['sentiment'] if 'sentiment' in tag else []
-            })
-
-        return Response(
-            json.dumps({"data": all_bi_grams}),
-            mimetype="application/json"
-        )
+    def on_get_tag_bi_grams(self, user: dict, _: Request, tag: str) -> Response:
+        return bigrams_handlers.on_get_tag_bi_grams(self, user, tag)
 
     def on_posts_content_post(self, user: dict, request: Request) -> Response:
-        try:
-            wanted_posts = json.loads(request.get_data(as_text=True))
-            if not (isinstance(wanted_posts, list) and wanted_posts):
-                raise Exception('Empty list of ids for post content')
-        except Exception as e:
-            logging.warning('Send bad posts ids for posts content. Cause: %s', e)
-            wanted_posts = []
-            result = {'error': 'Bad posts ids'}
-            code = 400
+        return posts_handlers.on_posts_content_post(self, user, request)
 
-        if wanted_posts:
-            projection = {
-                'pid': True,
-                'content': True,
-                'attachments': True
-            }
-            posts = self.posts.get_by_pids(user['sid'], wanted_posts, projection)
-            posts_content = []
-            for post in posts:
-                attachments = ''
-                if post['attachments']:
-                    for href in post['attachments']:
-                        attachments += '<a href="{0}">{0}</a><br />'.format(href)
-                content = gzip.decompress(post['content']['content']).decode('utf-8', 'replace')
-                if attachments:
-                    content += '<p>Attachments:<br />{0}<p>'.format(attachments)
-                posts_content.append({'pos': post['pid'], 'content': content})
+    def on_post_links_get(self, user: dict, _: Request, post_id: int) -> Response:
+        return posts_handlers.on_post_links_get(self, user, post_id)
 
-            if posts_content:
-                result = {'data': posts_content}
-                code = 200
-            else:
-                code = 404
-                result = {'error': 'Not found'}
-
-        return Response(
-            json.dumps(result),
-            mimetype="application/json",
-            status=code
-        )
-
-    def on_post_links_get(self, user: dict, request: Request, post_id: int) -> Response:
-        projection = {
-            'tags': True,
-            'feed_id': True,
-            'url': True,
-            'clusters': True
-        }
-        current_post = self.posts.get_by_pid(user['sid'], post_id, projection)
-        if current_post:
-            feed = self.feeds.get_by_feed_id(user['sid'], current_post['feed_id'])
-            if feed:
-                code = 200
-                result = {
-                    'data': {
-                        'c_url': feed['category_local_url'],
-                        'c_title': feed['category_title'],
-                        'f_url': feed['local_url'],
-                        'f_title': feed['title'],
-                        'p_url': current_post['url'],
-                        "ctx_url": self.routes.getUrlByEndpoint(
-                            endpoint='on_posts_get',
-                            params={"pids": post_id, "context": int(user["settings"]["context_n"])}
-                        ),
-                        'tags': []
-                    }
-                }
-                if "clusters" in current_post:
-                    result["data"]["clst_url"] = self.routes.getUrlByEndpoint(
-                        endpoint='on_cluster_get',
-                        params={"cluster": current_post["clusters"][0]}
-                    )
-                for t in current_post['tags']:
-                    result['data']['tags'].append({
-                        'url': self.routes.getUrlByEndpoint(endpoint='on_get_tag_page', params={'tag': t}),
-                        'tag': t
-                    })
-            else:
-                code = 500
-                result = {'error': 'Server trouble'}
-        else:
-            code = 404
-            result = {'error': 'Not found'}
-
-        return Response(
-            json.dumps(result),
-            mimetype="application/json",
-            status=code
-        )
-
-    def on_get_posts_with_tags(self, user: dict, request: Request, s_tags: str) -> Response:#TODO: delete or change or something other
-        if s_tags:
-            tags = s_tags.split('-')
-            if tags:
-                result = {}
-                query = {'owner': user['sid'], 'tag': {'$in': tags}}
-                tags_cursor = self.db.tags.find(query, {'_id': 0, 'tag': 1, 'words': 1})
-                for tag in tags_cursor:
-                    result[tag['tag']] = {'words': ', '.join(tag['words']), 'posts': []}
-
-                query = {'owner': user['sid'], 'tags': {'$in': tags}}
-                if user['settings']['only_unread']:
-                    query['read'] = False
-                posts_cursor = self.db.posts.find(query, {'content.content': 0})
-                feeds = {}
-                posts = {}
-                for post in posts_cursor:
-                    posts[post['id']] = post
-                    if post['feed_id'] not in feeds:
-                        feeds[post['feed_id']] = {}
-                feeds_cursor = self.db.feeds.find({'owner': user['sid'], 'feed_id': {'$in': list(feeds.keys())}})
-                for feed in feeds_cursor:
-                    feeds[feed['feed_id']] = feed
-                for tag in tags:
-                    posts_for_delete = []
-                    for p_id in posts:
-                        if tag in posts[p_id]['tags']:
-                            posts[p_id]['feed_title'] = feeds[posts[p_id]['feed_id']]['title']
-                            posts[p_id]['category_title'] = feeds[posts[p_id]['feed_id']]['category_title']
-                            result[tag]['posts'].append(posts[p_id])
-                            posts_for_delete.append(p_id)
-                    for p_id in posts_for_delete:
-                        del posts[p_id]
-                    result[tag]['posts'] = sorted(result[tag]['posts'], key=lambda p: p['feed_id'])
-                page = self.template_env.get_template('tags-posts.html')
-                response = Response(
-                    page.render(
-                        tags=result,
-                        selected_tags=','.join(tags),
-                        group='tag',
-                        user_settings=user['settings'],
-                        provider=user['provider']
-                    ),
-                    mimetype='text/html'
-                )
-        else:
-            response = redirect(self.routes.getUrlByEndpoint('on_root_get'))
-
-        return response
+    # TODO: delete or change or something other
+    def on_get_posts_with_tags(self, user: dict, _: Request, s_tags: str) -> Response:
+        return posts_handlers.on_get_posts_with_tags(self, user, s_tags)
 
     def on_post_tags_search(self, user: dict, request: Request) -> Response:
-        s_request = unquote_plus(request.form.get('req'))
-        if s_request:
-            search_result = self.tags.get_all(
-                user['sid'],
-                only_unread=user['settings']['only_unread'],
-                opts={
-                    'regexp': '^{}.*'.format(s_request),
-                    'limit': 10
-                }
-            )
-            code = 200
-            result = {'data': []}
-            for tag in search_result:
-                result['data'].append({
-                    'tag': tag['tag'],
-                    'unread': tag['unread_count'],
-                    'all': tag['posts_count'],
-                    'url': tag['local_url'],
-                    'info_url': self.routes.getUrlByEndpoint('on_get_tag_page', {'tag': tag['tag']})
-                })
-        else:
-            code = 400
-            result = {'error': 'Request can`t be empty'}
-
-        return Response(
-            json.dumps(result),
-            mimetype="application/json",
-            status=code
-        )
+        return tags_handlers.on_post_tags_search(self, user, request)
 
     def on_get_map(self, user: dict, request: Request) -> Response:
         projection = {'_id': False}
@@ -1545,49 +497,11 @@ class RSSTagApplication(object):
             mimetype='text/html'
         )
 
-    def on_tag_dates_get(self, user: dict, request: Request, tag: str) -> Response:
-        if tag:
-            cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"unix_date": True})
-            data = []
-            for dt in cursor:
-                data.append(dt["unix_date"])
-            result = {'data': data}
-            code = 200
-        else:
-            result = {'error': 'Something wrong with request'}
-            code = 400
+    def on_tag_dates_get(self, user: dict, _: Request, tag: str) -> Response:
+        return tags_handlers.on_tag_dates_get(self, user, tag)
 
-        return Response(
-            json.dumps(result),
-            mimetype="application/json",
-            status=code
-        )
-
-    def on_bigrams_dates_get(self, user: dict, request: Request, tag: str) -> Response:
-        if tag:
-            cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"unix_date": True, "bi_grams": True})
-            data = {}
-            for dt in cursor:
-                d = int(dt["unix_date"])
-                for bi in dt["bi_grams"]:
-                    if tag not in bi:
-                        continue
-                    if bi not in data:
-                        data[bi] = {}
-                    if d not in data[bi]:
-                        data[bi][d] = 0
-                    data[bi][d] += 1
-            result = {'data': data}
-            code = 200
-        else:
-            result = {'error': 'Something wrong with request'}
-            code = 400
-
-        return Response(
-            json.dumps(result),
-            mimetype="application/json",
-            status=code
-        )
+    def on_bigrams_dates_get(self, user: dict, _: Request, tag: str) -> Response:
+        return bigrams_handlers.on_bigrams_dates_get(self, user, tag)
 
     def on_wordtree_texts_get(self, user: dict, request: Request, tag: str) -> Response:
         if tag:
@@ -1616,38 +530,8 @@ class RSSTagApplication(object):
             status=code
         )
 
-    def on_tag_topics_get(self, user: dict, request: Request, tag: str) -> Response:
-        if tag:
-            cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"lemmas": True})
-            texts = [gzip.decompress(post["lemmas"]).decode('utf-8', 'replace') for post in cursor]
-            lda = LDA()
-            topics = lda.topics(texts, top_k=5)
-            if tag in topics:
-                topics.remove(tag)
-            tags = self.tags.get_by_tags(user['sid'], topics, user['settings']['only_unread'])
-            all_tags = []
-            for tag in tags:
-                all_tags.append({
-                    'tag': tag['tag'],
-                    'url': tag['local_url'],
-                    'words': tag['words'],
-                    'count': tag['unread_count'] if user['settings']['only_unread'] else tag[
-                        'posts_count'],
-                    'sentiment': tag['sentiment'] if 'sentiment' in tag else [],
-                    'temp': tag['temperature']
-                })
-                all_tags.sort(key=lambda t: t["temp"], reverse=True)
-            result = {'data': all_tags}
-            code = 200
-        else:
-            result = {'error': 'Something wrong with request'}
-            code = 400
-
-        return Response(
-            json.dumps(result),
-            mimetype="application/json",
-            status=code
-        )
+    def on_tag_topics_get(self, user: dict, _: Request, tag: str) -> Response:
+        return tags_handlers.on_tag_topics_get(self, user, tag)
 
     def on_topics_texts_get(self, user: dict, request: Request, tag: str) -> Response:
         if tag:
@@ -1729,347 +613,23 @@ class RSSTagApplication(object):
             mimetype='text/html'
         )
 
-    def on_tag_entities_get(self, user: dict, request: Request, tag: str) -> Response:
-        if tag:
-            cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"content": True, "tags": True, "bi_grams": True})
-            html_cleaner = HTMLCleaner()
-            tags_builder = TagsBuilder()
-            if self.navec is None:
-                self.navec = Navec.load('./data/navec_news_v1_1B_250K_300d_100q.tar')
-            if self.ner is None:
-                self.ner = NER.load('./data/slovnet_ner_news_v1.tar')
-                self.ner.navec(self.navec)
-            ners = {}
-            text_clearing = re.compile("[^\w\d ]")
-            for post in cursor:
-                html_cleaner.purge()
-                txt = post["content"]["title"] + ". " + gzip.decompress(post["content"]["content"]).decode('utf-8', 'replace')
-                html_cleaner.feed(txt)
-                txt = html.unescape(" ".join(html_cleaner.get_content()))
-                markup = self.ner(txt)
-                if len(markup.spans) == 0:
-                    continue
-                for span in markup.spans:
-                    n = txt[span.start:span.stop].casefold()
-                    n = text_clearing.sub(" ", n).strip()
-                    if " " in n:
-                        words = n.split(" ")
-                        ns = map(lambda w: tags_builder.process_word(w), words)
-                        n = " ".join(ns)
-                    else:
-                        words = [n]
-                        n = tags_builder.process_word(n)
-                    if n not in ners:
-                        ners[n] = {
-                            'tag': n,
-                            'url': "/entity/" + quote(n),
-                            'words': [],
-                            'count': 0,
-                            'sentiment': [],
-                            'temp': 0
-                        }
-                    ners[n]["count"] += 1
-                    ners[n]["words"] = list(set(ners[n]["words"] + words))
+    def on_tag_entities_get(self, user: dict, _: Request, tag: str) -> Response:
+        return tags_handlers.on_tag_entities_get(self, user, tag)
 
-            result = {'data': [ners[n] for n in ners]}
-            code = 200
-        else:
-            result = {'error': 'Something wrong with request'}
-            code = 400
+    def on_entity_get(self, user: dict, _: Request, quoted_tag=None) -> Response:
+        return posts_handlers.on_entity_get(self, user, quoted_tag)
 
-        return Response(
-            json.dumps(result),
-            mimetype="application/json",
-            status=code
-        )
+    def on_tag_tfidf_get(self, user: dict, _: Request, tag: str) -> Response:
+        return tags_handlers.on_tag_tfidf_get(self, user, tag)
 
-    def on_entity_get(self, user: dict, request: Request, quoted_tag=None) -> Response:
-        tag = unquote(quoted_tag)
-        projection = {'_id': False, 'content.content': False}
-        if user['settings']['only_unread']:
-            only_unread = user['settings']['only_unread']
-        else:
-            only_unread = None
-        db_posts_c = self.posts.get_by_tags(user['sid'], tag.split(), only_unread, projection)
-        db_posts = list(db_posts_c)
-
-        if user['settings']['similar_posts']:
-            clusters = self.posts.get_clusters(db_posts)
-            cl_posts = self.posts.get_by_clusters(user['sid'], list(clusters), only_unread, projection)
-            db_posts.extend(cl_posts)
-        posts = []
-        by_feed = {}
-        pids = set()
-        for post in db_posts:
-            post["lemmas"] = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
-            if post['pid'] not in pids:
-                pids.add(post['pid'])
-                if post['feed_id'] not in by_feed:
-                    feed = self.feeds.get_by_feed_id(user['sid'], post['feed_id'])
-                    if feed:
-                        by_feed[post['feed_id']] = feed
-                if post['feed_id']in by_feed:
-                    posts.append({
-                        'post': post,
-                        'pos': post['pid'],
-                        'category_title': by_feed[post['feed_id']]['category_title'],
-                        'feed_title': by_feed[post['feed_id']]['title'],
-                        'favicon': by_feed[post['feed_id']]['favicon']
-                    })
-        tags_cur = self.tags.get_by_tags(user["sid"], tag.split(), only_unread=only_unread)
-        words = set()
-        for tg in tags_cur:
-            words.update(tg["words"])
-
-        page = self.template_env.get_template('posts.html')
-
-        return Response(
-            page.render(
-                posts=posts,
-                tag=tag,
-                group='tag',
-                words=list(words),
-                user_settings=user['settings'],
-                provider=user['provider']
-            ),
-            mimetype='text/html'
-        )
-
-    def on_tag_tfidf_get(self, user: dict, request: Request, tag: str) -> Response:
-        if tag:
-            cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"lemmas": True})
-            topics = set()
-            stopw = set(stopwords.words('english') + stopwords.words('russian'))
-            texts = [gzip.decompress(post["lemmas"]).decode('utf-8', 'replace') for post in cursor]
-            freq_d = Counter()
-            for text in texts:
-                words = [word for word in text.split() if word not in stopw]
-                st = set(words)
-                freq_d.update(st)
-            for text in texts:
-                words = [word for word in text.split() if word not in stopw]
-                tfidf = []
-                freq = Counter(words)
-                for word in words:
-                    tf = freq[word] / len(words)
-                    idf = math.log(len(texts) / freq_d[word])
-                    tfidf.append((word, tf * idf))
-                tfidf.sort(key=lambda x: x[1], reverse=True)
-                topics.update([ti[0] for ti in tfidf[:5]])
-            topics.add(tag)
-            topics = list(topics)
-
-            tags_c = self.tags.get_by_tags(user['sid'], topics, user['settings']['only_unread'])
-            tags = list(tags_c)
-            t_words = []
-            for tg in tags:
-                if tg['tag'] == tag:
-                    t_words = tg["words"]
-                    break
-            all_tags = []
-            for tg in tags:
-                if tg['tag'] == tag:
-                    continue
-                all_tags.append({
-                    'tag': tag + " " + tg['tag'],
-                    'url': "/entity/" + quote(tag + " " + tg['tag']),
-                    'words': tg['words'] + t_words,
-                    'count': freq_d[tg['tag']],
-                    'sentiment': tg['sentiment'] if 'sentiment' in tg else [],
-                    'temp': tg['temperature'],
-                    'freq': tg['freq']
-                })
-                all_tags.sort(key=lambda t: t["count"] / t["freq"], reverse=True)
-            result = {'data': all_tags}
-            code = 200
-        else:
-            result = {'error': 'Something wrong with request'}
-            code = 400
-
-        return Response(
-            json.dumps(result),
-            mimetype="application/json",
-            status=code
-        )
-
-    def on_tag_clusters_get(self, user: dict, request: Request, tag: str) -> Response:
-        if tag:
-            cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"lemmas": True, "pid": True})
-            pids = []
-            texts = []
-            for post in  cursor:
-                texts.append(gzip.decompress(post["lemmas"]).decode('utf-8', 'replace'))
-                pids.append(post["pid"])
-            stopw = set(stopwords.words('english') + stopwords.words('russian'))
-            vectorizer = TfidfVectorizer(stop_words=stopw)
-            vectorizer.fit(texts)
-            vectors = vectorizer.transform(texts)
-            dbs = DBSCAN(eps=0.7, min_samples=2, metric="cosine")
-            cl = dbs.fit_predict(vectors)
-            label_txt = {}
-            for i, label in enumerate(cl):
-                if label < 0:
-                    continue
-                label = str(label)
-                if label not in label_txt:
-                    label_txt[label] = []
-                label_txt[label].append({
-                    "txt": texts[i],
-                    "pid": pids[i]
-                })
-            result = {'data': label_txt}
-            code = 200
-        else:
-            result = {'error': 'Something wrong with request'}
-            code = 400
-
-        return Response(
-            json.dumps(result),
-            mimetype='application/json',
-            status=code
-        )
+    def on_tag_clusters_get(self, user: dict, _: Request, tag: str) -> Response:
+        return tags_handlers.on_tag_clusters_get(self, user, tag)
 
     def on_posts_get(self, user: dict, request: Request, pids: str) -> Response:
-        context_n = 0
-        ctx_n = None
-        if "context" in request.args:
-            ctx_n = request.args["context"]
-        if ctx_n:
-            context_n = int(ctx_n)
-        projection = {'_id': False, 'content.content': False}
-        if user['settings']['only_unread']:
-            only_unread = user['settings']['only_unread']
-        else:
-            only_unread = None
-        pids_i = [int(p) for p in pids.split("_")]
-        c_pids = set()
-        if context_n > 0:
-            only_unread = None
-            for pid_i in pids_i:
-                for i in range(context_n):
-                    i += 1
-                    pd = pid_i - i
-                    if pd >= 0:
-                        c_pids.add(pd)
-                    c_pids.add(pid_i + i)
-        if c_pids:
-            pids_i.extend(c_pids)
+        return posts_handlers.on_posts_get(self, user, request, pids)
 
-        db_posts_c = self.posts.get_by_pids(user['sid'], pids_i, projection)
-        db_posts = list(db_posts_c)
-
-        if user['settings']['similar_posts']:
-            clusters = self.posts.get_clusters(db_posts)
-            cl_posts = self.posts.get_by_clusters(user['sid'], list(clusters), only_unread, projection)
-            db_posts.extend(cl_posts)
-        posts = []
-        by_feed = {}
-        pids = set()
-        for post in db_posts:
-            post["lemmas"] = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
-            if post['pid'] not in pids:
-                pids.add(post['pid'])
-                if post['feed_id'] not in by_feed:
-                    feed = self.feeds.get_by_feed_id(user['sid'], post['feed_id'])
-                    if feed:
-                        by_feed[post['feed_id']] = feed
-                if post['feed_id'] in by_feed:
-                    posts.append({
-                        'post': post,
-                        'pos': post['pid'],
-                        'category_title': by_feed[post['feed_id']]['category_title'],
-                        'feed_title': by_feed[post['feed_id']]['title'],
-                        'favicon': by_feed[post['feed_id']]['favicon']
-                    })
-        page = self.template_env.get_template('posts.html')
-        if context_n:
-            posts.sort(key=lambda p: p["pos"], reverse=True)
-
-        return Response(
-            page.render(
-                posts=posts,
-                tag="NoTag",
-                group='tag',
-                words=[],
-                user_settings=user['settings'],
-                provider=user['provider']
-            ),
-            mimetype='text/html'
-        )
-
-    def on_get_tag_pmi(self, user: dict, request: Request, tag: str) -> Response:
-        if tag:
-            cursor = self.posts.get_by_tags(user["sid"], [tag], user['settings']['only_unread'], {"lemmas": True})
-            stopw = set(stopwords.words('english') + stopwords.words('russian'))
-            texts = [gzip.decompress(post["lemmas"]).decode('utf-8', 'replace') for post in cursor]
-            uniq_words = set()
-            bigrams = Counter()
-            bigrams_count = Counter()
-            window = 5
-            for text in texts:
-                words_l = [word for word in text.split() if word not in stopw and word != tag]
-                uniq_words.update(words_l)
-                bi_grams = []
-                for word_pos, word in enumerate(words_l):
-                    for i in range(window):
-                        i += 1
-                        bi_words = []
-                        prev_pos = word_pos - i
-                        if prev_pos >= 0:
-                            bi_words.append(words_l[prev_pos])
-                        next_pos = word_pos + i
-                        if next_pos < len(words_l):
-                            bi_words.append(words_l[next_pos])
-                        for bi_word in bi_words:
-                            if word == bi_word:
-                                continue
-                            bi_grams_l = [word, bi_word]
-                            bi_grams_l.sort()
-                            bi_gram = " ".join(bi_grams_l)
-                            bi_grams.append(bi_gram)
-                bigrams.update(bi_grams)
-                bigrams_count.update(set(bi_grams))
-
-            tags = self.tags.get_by_tags(user['sid'], list(uniq_words), user['settings']['only_unread'])
-            tags_d = {}
-            for tg in tags:
-                tags_d[tg["tag"]] = tg
-
-            pmis = []
-            for bi, bi_freq in bigrams.items():
-                if bi_freq < 2:
-                    continue
-                bi_words = bi.split(" ")
-                f1 = tags_d[bi_words[0]]["freq"]
-                f2 = tags_d[bi_words[1]]["freq"]
-                pmi = bi_freq / (abs(f1 - f2) + 1)
-                pmis.append((bi, pmi))
-            pmis.sort(key=lambda x: x[1], reverse=True)
-
-            all_pmis = []
-            for bi, temp in pmis[:4000]:
-                bi_words = bi.split(" ")
-                all_pmis.append({
-                    'tag': bi,
-                    'url': "/entity/" + quote(tag + " " + bi),
-                    'words': tags_d[bi_words[0]]["words"] + tags_d[bi_words[1]]["words"],
-                    'count': bigrams_count[bi],
-                    'sentiment': [],
-                    'temp': temp,
-                    'freq': bigrams[bi]
-                })
-            all_pmis.sort(key=lambda x: x["count"], reverse=True)
-            result = {'data': all_pmis}
-            code = 200
-        else:
-            result = {'error': 'Something wrong with request'}
-            code = 400
-
-        return Response(
-            json.dumps(result),
-            mimetype="application/json",
-            status=code
-        )
+    def on_get_tag_pmi(self, user: dict, _: Request, tag: str) -> Response:
+        return tags_handlers.on_get_tag_pmi(self, user, tag)
 
     def on_get_sentences_with_tags(self, user: dict, request: Request, s_tags: str) -> Response:
         if not s_tags:
@@ -2143,46 +703,8 @@ class RSSTagApplication(object):
             mimetype='text/html'
         )
 
-    def on_cluster_get(self, user: dict, request: Request, cluster: int) -> Response:
-        projection = {'_id': False, 'content.content': False}
-        if user['settings']['only_unread']:
-            only_unread = user['settings']['only_unread']
-        else:
-            only_unread = None
-        db_posts = self.posts.get_by_clusters(user['sid'], [cluster], only_unread, projection)
-
-        posts = []
-        by_feed = {}
-        pids = set()
-        for post in db_posts:
-            post["lemmas"] = gzip.decompress(post["lemmas"]).decode('utf-8', 'replace')
-            if post['pid'] not in pids:
-                pids.add(post['pid'])
-                if post['feed_id'] not in by_feed:
-                    feed = self.feeds.get_by_feed_id(user['sid'], post['feed_id'])
-                    if feed:
-                        by_feed[post['feed_id']] = feed
-                if post['feed_id'] in by_feed:
-                    posts.append({
-                        'post': post,
-                        'pos': post['pid'],
-                        'category_title': by_feed[post['feed_id']]['category_title'],
-                        'feed_title': by_feed[post['feed_id']]['title'],
-                        'favicon': by_feed[post['feed_id']]['favicon']
-                    })
-        page = self.template_env.get_template('posts.html')
-
-        return Response(
-            page.render(
-                posts=posts,
-                tag="NoTag",
-                group='tag',
-                words=[],
-                user_settings=user['settings'],
-                provider=user['provider']
-            ),
-            mimetype='text/html'
-        )
+    def on_cluster_get(self, user: dict, _: Request, cluster: int) -> Response:
+        return posts_handlers.on_cluster_get(self, user, cluster)
 
     def on_clusters_get(self, user: dict, request: Request) -> Response:
         projection = {'_id': False, 'clusters': True}
