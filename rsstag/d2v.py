@@ -20,7 +20,7 @@ class D2VLearn:
 
     def fetch_texts(self) -> None:
         cursor = self.db.posts.find({})
-        builder = TagsBuilder(self._config["settings"]["replacement"])
+        builder = TagsBuilder()
         cleaner = HTMLCleaner()
         for post in cursor:
             text = (

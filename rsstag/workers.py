@@ -543,7 +543,7 @@ class RSSTagWorker:
             "bazqux": BazquxProvider(self._config),
             "telegram": TelegramProvider(self._config),
         }
-        builder = TagsBuilder(self._config["settings"]["replacement"])
+        builder = TagsBuilder()
         cleaner = HTMLCleaner()
         users = RssTagUsers(db)
         tasks = RssTagTasks(db)

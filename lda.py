@@ -35,7 +35,7 @@ class LDATopics:
 
     def fetch_texts(self) -> None:
         cursor = self.db.posts.find({})
-        builder = TagsBuilder(self._config["settings"]["replacement"])
+        builder = TagsBuilder()
         cleaner = HTMLCleaner()
         for post in cursor:
             # self._texts.append(post['content']['title'] + ' ' + gzip.decompress(post['content']['content']).decode('utf-8', 'replace'))

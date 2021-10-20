@@ -15,7 +15,7 @@ def get_texts(all_posts: List[dict], config) -> None:
     texts_for_vec = []
     post_pids = []
     if all_posts:
-        builder = TagsBuilder(config["settings"]["replacement"])
+        builder = TagsBuilder()
         cleaner = HTMLCleaner()
         for post in all_posts:
             post_pids.append(post["pid"])

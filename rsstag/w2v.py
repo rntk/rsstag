@@ -22,7 +22,7 @@ class W2VLearn:
 
     def fetch_texts(self) -> None:  # TODO remove or change
         cursor = self._db.posts.find({})
-        builder = TagsBuilder(self._config["settings"]["replacement"])
+        builder = TagsBuilder()
         cleaner = HTMLCleaner()
         for post in cursor:
             text = (
