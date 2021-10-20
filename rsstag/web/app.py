@@ -27,7 +27,6 @@ import rsstag.web.bigrams as bigrams_handlers
 
 from razdel import sentenize
 
-from gensim.models.doc2vec import Doc2Vec
 from gensim.models.word2vec import Word2Vec
 
 import nltk
@@ -49,8 +48,6 @@ class RSSTagApplication(object):
         self.no_category_name = "NotCategorized"
         if self.config["settings"]["no_category_name"]:
             self.no_category_name = self.config["settings"]["no_category_name"]
-        if os.path.exists(self.config["settings"]["d2v_model"]):
-            self.d2v = Doc2Vec.load(self.config["settings"]["d2v_model"])
         if os.path.exists(self.config["settings"]["w2v_model"]):
             self.w2v = Word2Vec.load(self.config["settings"]["w2v_model"])
             st = os.stat(self.config["settings"]["w2v_model"])

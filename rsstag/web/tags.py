@@ -391,16 +391,7 @@ def on_get_tag_similar(
     tags_set = set()
     all_tags = []
     if model in app.models:
-        if (model == app.models["d2v"]) and app.d2v:
-            try:
-                siblings = app.d2v.dv.similar_by_word(tag, topn=30)
-                for sibling in siblings:
-                    tags_set.add(sibling[0])
-            except Exception as e:
-                logging.warning(
-                    "In %s not found tag %s. %s", app.config["settings"]["d2v_model"], tag, e
-                )
-        elif model == app.models["w2v"]:
+        if model == app.models["w2v"]:
             st = os.stat(app.config["settings"]["w2v_model"])
             if (st.st_mtime != app.w2v_mod_date) or not app.w2v:
                 app.w2v = Word2Vec.load(app.config["settings"]["w2v_model"])
