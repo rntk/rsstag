@@ -4,7 +4,6 @@ nbproject
 *.bat
 .idea
 log
-data
 *.log
 rsscloud.conf
 jquery*

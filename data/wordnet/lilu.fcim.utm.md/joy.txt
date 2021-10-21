@@ -1,0 +1,207 @@
+﻿a#00019699	established by authority; given authoritative approval	approved sanctioned	одобряемый одобренный принятый утверждённый санкционированный	recunoscut aprobat
+a#00168250	capturing interest as if by a spell	bewitching captivating enchanting enthralling entrancing fascinating	заколдовывающий очаровывающий захватывающий чарующий обворожительный очаровательный пленительный	fermecător seducător captivant hipnotizant fascinant cuceritor încântător încîntător răpitor
+a#00207781	having a benefice	beneficed	извлекающий_пользу извлекающий_выгоду	beneficiar
+a#00220367	doing or producing good	beneficent	благодетельный благотворный полезный	binefăcător benefic
+a#00220542	exerting a favorable or beneficent influence	benefic	счастливый благотворный благоприятный	binefăcător prielnic
+a#00221152	having or showing or arising from a desire to promote the welfare or happiness of others	benevolent good	благотворный хороший выгодный полезный	bun generos binevoitor plăcut
+a#00287715	like or characteristic of or befitting a brother	brotherly brotherlike fraternal	братский	frăţeşte fratern
+a#00351663	being full of or promoting cheer; having or showing good spirits	cheerful	радостный веселый живой энергичный неунывающий	voios agreabil plăcut bucuros vesel
+a#00352106	cheerful and bright	beaming glad	сияющий лучезарный радостный жизнерадостный яркий светлый сияющий_от_радости	bucuros fericit mulţumit vesel
+a#00353055	bright and pleasant; promoting a feeling of cheer	cheery gay sunny	радостный веселый живой оживлённый беззаботный беспечный жизнерадостный	vioi vesel frumos însorit
+a#00420393	close in relevance or relationship	close	близкий	apropiat	apropiat ca relevanţă sau legătură
+a#00446819	free from stress or conducive to mental ease; having or affording peace of mind	comfortable	расслабленный спокойный ненапряжённый	comod confortabil mângâietor mîngîietor reconfortant
+a#00486658	zealous in devotion or affection	devoted	преданный верный	devotat fidel
+a#00527965	able to exist and perform in harmonious or agreeable combination	compatible	совместимый соответствующий гармоничный	simpatic agreabil nostim plăcut
+a#00556147	satisfied or showing satisfaction with things as they are	contented content	довольный удовлетворённый	mulţumit dispus satisfăcut împăcat bucuros
+a#00556568	contented to a fault with oneself or one's actions	complacent self-satisfied	самодовольный самоуверенный самоуспокоенный	complezenţă
+a#00556743	satisfied; enjoying well-being and contentment	content happy	счастливый довольный	mulţumit dispus fericit satisfăcut încântat încîntat
+a#00557087	filled with satisfaction	satisfied	удовлетворенный довольный	satisfăcut mulţumit
+a#00557191	marked by excessive complacency or self-satisfaction	smug self-satisfied	самодовольный удовлетворённый самоуспокоенный	îngust_la_minte
+a#00670286	exultantly proud and joyful; in high spirits	elated	воодушевлённый ликующий	entuziasmat
+a#00670575	joyful and proud especially because of triumph or success	exultant exulting jubilant prideful rejoicing triumphal triumphant	ликующий торжествующий гордый празднующий триумфальный победоносный победный победивший	vesel triumfal radios mândru mîndru bucuros glorios victorios
+a#00670851	made joyful	gladdened exhilarated	радостный весёлый	bucurat voios bucuros înveselit
+a#00813947	characterized by emotion	affectional affective emotive	эмоциональный волнующий	afectiv emoţional
+a#00824085	filled with wonder and delight	beguiled captivated charmed delighted enthralled entranced	восхищённый очарованный околдованный	sedus captivat încântat bucuros fermecat vrăjit
+a#00842521	having or showing great excitement and interest	enthusiastic	восторженный увлечённый	entuziasmat
+a#00843026	marked by active interest and enthusiasm	avid great eager zealous	жаждущий рьяный усердный	lacom avid râvnitor rîvnitor dornic însetat zelos înfocat
+a#00859179	deserving of the highest esteem or admiration	admirable	восхитительный поразительный превосходный	admirabil minunat splendid
+a#00863471	exaggerated feeling of well-being or elation	euphoric happy	эйфористический счастливый	euforic fericit mulţumit încântat încîntat
+a#00863650	tending to produce euphoria	euphoriant	эйфориант	euforizant
+a#00872975	feeling mild pleasurable excitement	teased titillated	возбуждённый взволнованный	excitat
+a#00873571	creating or arousing excitement	exciting	возбуждающий волнующий захватывающий	emoţionant tulburător
+a#00874095	making lively and joyful	elating exhilarating	веселящий бодрящий возбуждающий воодушевляющий	încântător încîntător fascinant seducător amuzant desfătător mângâietor mîngîietor plăcut
+a#00874850	pleasantly and superficially exciting	titillating	возбуждающий волнующий	excitant
+a#00943564	encouraging or approving or pleasing	favorable favourable	благоприятный благоприятствующий благосклонный расположенный симпатизирующий доброжелательный любезный одобрительный	favorabil
+a#00943914	expressing or manifesting praise or approval	approving approbative approbatory	одобряющий одобрительный санкционирующий похвальный	aprobator apreciativ
+a#01098277	showing or causing joy and pleasure; especially made happy	glad	счастливый радостный веселый	bucuros fericit mulţumit vesel
+a#01099314	enjoying or showing or marked by joy or pleasure or good fortune	happy	счастливый довольный весёлый удачный благоприятный	fericit	Care se află într-o stare de deplină mulţumire sufletească, plin de bucurie
+a#01100759	full of or suggesting exultant happiness	joyful joyous	радостный счастливый довольный ликующий торжествующий	vesel bucuros
+a#01111155	easily moved to pity or sorrow	softhearted soft-boiled	мягкосердечный отзывчивый добрый	blajin îngăduitor milos moale
+a#01195116	characterized by friendship and good will	amicable	дружелюбный дружеский дружественный товарищеский	prietenesc amical
+a#01195320	characteristic of or befitting a friend	friendly	дружелюбный доброжелательный дружественный дружеский	prietenesc prietenos binevoitor
+a#01215015	marked by or causing boisterous merriment or convulsive laughter	hilarious screaming uproarious	шумный оживленный уморительный смешной увеселительный развлекательный	vesel comic gălăgios
+a#01302744	making lively and cheerful	exhilarating stimulating	веселящий бодрящий возбуждающий стимулирующий	amuzant stimulator
+a#01308059	feeling happy appreciation	glad	счастливый довольный удовлетворенный благодарный	bucuros fericit mulţumit vesel
+a#01308350	experiencing or expressing gladness or joy	gladsome	весёлый радостный довольный счастливый	plăcut vesel
+a#01308490	experiencing pleasure or joy	happy pleased	счастливый довольный радостный весёлый	fericit mulţumit satisfăcut încântat încîntat
+a#01310561	full of or producing joy	joyful	радостный счастливый довольный жизнерадостный	vesel bucuros
+a#01313944	full of high-spirited delight	elated gleeful joyful jubilant	весёлый радостный счастливый довольный ликующий торжествующий	entuziasmat vesel voios bucuros triumfător radios
+a#01314056	offering fun and gaiety	gala gay festal festive merry	праздничный весёлый радостный торжественный парадный	vesel triumfător radios festiv bucuros
+a#01314288	full of or showing high-spirited merriment	gay jocund jolly jovial merry mirthful	жизнерадостный весёлый радостный общительный бодрый живой оживлённый счастливый жизнелюбивый	vesel jovial amuzant distractiv
+a#01319150	showing or motivated by sympathy and understanding and generosity	charitable kindly sympathetic	великодушный благородный доброжелательный терпимый снисходительный добродушный благожелательный сочувственный сочувствующий_	generos caritabil darnic amabil binefăcător
+a#01319594	having or proceeding from an innately kind disposition	kindhearted kind-hearted	добросердечный мягкосердечный добрый милый славный	bun_la_inimă milos
+a#01401011	easy to like; agreeable	likable likeable	приятный привлекательный милый	atrăgător plăcut simpatic
+a#01403478	feeling or showing love and affection	loving	любящий преданный влюбленный верный	iubitor
+a#01404342	having or displaying warmth or affection	affectionate caring fond lovesome tender warm	любящий нежный тёплый мягкий ласкающий ласковый сердечный внимательный заботливый	călduros afectuos grijuliu iubitor tandru bun delicat dulce blând blînd grijuliu atent cordial pasionat
+a#01404669	inclined toward or displaying love	amative amorous	любовный влюбчивый влюблённый	senzual drăgăstos îndrăgostit amoros
+a#01404786	expressive of or exciting sexual love or romance	amatory amorous romantic	любовный амурный романтичный романтический	erotic amoros drăgăstos romantic
+a#01405004	strongly attracted	captivated charmed	завоёванный очарованный покорённый	încântat încîntat bucuros fermecat
+a#01735655	inspiring admiration or approval	admirable	восхитительный замечательный	admirabil	vrednic de a fi admirat
+a#01940830	showing adoration	adoring worshipful	преклоняющийся обожающий поклоняющийся почитающий боготворящий	adorabil
+a#01944086	giving pleasure or satisfaction	appreciated gratifying pleasing satisfying	удовлетворяющий ценящий радующий приятный доставляющий_удовольствие	plăcut agreabil satisfăcător mulţumitor îndestulător
+a#01999937	capable of being sated	satiable satisfiable	удовлетворяемый	saturabil care_poate_fi_satisfăcut
+a#02001946	giving satisfaction	satisfactory	удовлетворительный достаточный	satisfăcător
+a#02002844	providing freedom from worry	comforting cheering satisfying	утешительный утешающий успокаивающий ободряющий расслабляющий удовлетворяющий	mângiitor mîngiitor alinător încurajator satisfăcător mulţumitor îndestulător
+a#02168904	joyously unrestrained	ebullient exuberant high-spirited	взволнованный возбуждённый разгорячённый кипучий неудержимый бурный пылкий	exuberant optimistic expansiv
+a#02263541	expressing or feeling or resulting from sympathy or compassion or friendly fellow feelings; disposed toward	sympathetic	благожелательный сочувственный сочувствующий	care_arată_simpatie care_arată_înţelegere simpatic
+a#02264046	showing empathy or ready comprehension of others' states	empathic empathetic	эмпатический сопереживающий чуткий сочувствующий	empatic
+a#02290470	characterized by or causing suspense	cliff-hanging suspenseful suspensive	неопределенный тревожный ожидаемый неизвестный беспокойный	care_provoacă_suspans caracterizat_de_suspans
+a#02329300	showing a care	caring protective	внимательный заботливый защищающий оберегающий	grijuliu ocrotitor protector
+a#02340900	free of trouble and worry and care	carefree unworried	беззаботный беспечный легкомысленный	liniştit
+a#02411442	marked by warmth of feeling like kindness and sympathy and generosity	warmhearted	сердечный участливый добрый доброжелательный великодушный	binevoitor cordial
+n#07481375	feelings of great warmth and intensity	ardor ardour fervor fervour fervency fire fervidness	пыл жар рвение страсть пылкость энтузиазм	ardoare	Sentiment de căldură şi intensitate mare
+n#05569706	vigorous and enthusiastic enjoyment	gusto relish zest zestfulness	удовольствие вкус смак пикантность интерес привлекательность	plăcere entuziasm farmec atracţie chef satisfacţie mulţumire ardoare savoare
+n#05573285	a feeling of pleasure and enjoyment	liking	симпатия расположение	plăcere delectare încântare încîntare	sentiment sau senzaţie de mulţumire, de bucurie, provocate de ceva care satisface gustul sau dorinţa noastră
+n#05573609	a predisposition to like something	fondness fancy partiality	любовь склонность пристрастие	iubire afecţiune dispoziţie înclinare îngăduinţă toleranţă
+n#05573752	a feeling of great liking for something wonderful and unusual	captivation enchantment enthrallment fascination	очарованность увлечённость восхищение	fascinaţie încântare încîntare	sentiment de mare plăcere generat de ceva minunat sau neobişnuit
+n#05573914	a strong liking	preference penchant predilection taste	предпочтение расположение склонность любовь пристрастие	preferinţă înclinaţie slăbiciune predilecţie
+n#05574157	a penchant for something even though it might not be good for you	weakness	слабость склонность пристрастие	slăbiciune
+n#05574913	a feeling of liking for another person; enjoyment in their company	friendliness	дружелюбие дружелюбность дружественность	prietenie	Sentiment de simpatie, de stimă, de respect, de ataşament reciproc care leagă două persoane
+n#05575110	a disinclination to quarrel	amicability amicableness	дружелюбие дружелюбность	prietenie bunăvoinţă
+n#05575210	the friendly hope that something will succeed	good_will goodwill	доброжелательность благосклонность расположение добрая_воля	bunăvoinţă zel
+n#05575322	the feeling that men should treat one another like brothers	brotherhood	братство братские_отношения	frăţie fraternitate solidaritate	Legătură strânsă între persoane; frăţie, frăţietate
+n#05575439	a feeling of liking something or someone good	approval	одобрение	aprobare acceptare admitere consimțire încuviințare
+n#05575676	a feeling of favorable regard	favor favour	благосклонность расположение уважение	favoare bunăvoinţă
+n#05575841	a feeling of delighted approval and liking	admiration esteem	восторг восхищение пиетет почтение уважение	admiraţie apreciere stimă
+n#05576115	a feeling of profound love and admiration	worship adoration	поклонение почитание обожание благоговение	veneraţie adorare cult
+n#05576222	admiration for great men (or their memory)	hero_worship	восхищение преклонение культ	cultul_eroilor
+n#05578595	a feeling of sympathy for someone or something	concern	интерес участие	grijă interes	sentiment de simpatie faţă de cineva sau ceva
+n#05579029	a feeling of concern for the welfare of someone (especially someone defenseless)	softheartedness tenderness	забота участие заинтересованность нежность ласка доброта чуткость отзывчивость	grijă atenţie interes	Interes deosebit, preocupare pentru cineva sau ceva, atenţie acordată unei fiinţe, unei probleme etc.
+n#05583387	pleasurable expectation	anticipation expectancy	предвкушение надежда ожидание предчувствие	anticipare	o aşteptare plăcută
+n#05595732	emotions experienced when in a state of well-being	happiness	счастье радость	fericire	Stare de mulţumire sufletească intensă şi deplină
+n#05596018	(French) happiness and good humor	bonheur	счастье благополучие	fericire
+n#05596105	experiencing joy and pleasure	gladness gladfulness gladsomeness	радость счастье восторг удовольствие веселье	bucurie voioşie
+n#05596218	the emotion of great happiness	joy joyousness joyfulness	радость счастье удовольствие восторг	bucurie desfătare	Sentiment de mulţumire vie, de satisfacţie sufletească
+n#05596414	a feeling of joy and pride	elation high_spirits lightness	весёлость веселье хорошее_настроение	exaltare mândrie mîndrie optimism încredere
+n#05596527	a feeling of extreme joy	exultation jubilance jubilancy jubilation	ликование торжество восторг	bucurie veselie jubilare veselie triumf
+n#05596663	the exultation of victory	triumph	триумф успех победа торжество	triumf
+n#05596742	the feeling of lively and cheerful joy	exhilaration excitement	возбуждение волнение оживление	voioşie voie_bună	stare de fericire, de beatitudine
+n#05596946	the swift release of a store of affective force	bang charge rush flush thrill kick	трепет возбуждение кайф острые_ощущения	emoţie plăcere	Stare caracterizată de o eliberare puternică a unei cantităţi de forţă afectivă
+n#05597153	a tingling feeling of excitement (as from teasing or tickling)	titillation	щекотка возбуждение	gidilare gidilitura excitare excitaţie
+n#05597250	a feeling of great (usually exaggerated) elation	euphoria	эйфория	euforie
+n#05597371	a gay feeling	gaiety merriment	веселье весёлость развлечение радость празднество	veselie amuzament
+n#05597503	great merriment	hilarity mirth mirthfulness glee gleefulness	веселье весёлость радость увеселение развлечение ликование	veselie ilaritate bucurie voioşie
+n#05597617	a feeling of great happiness	rejoicing	веселье ликование восторг	bucurie veselie voioșie
+n#05597701	a feeling facetious merriment	jocundity jocularity	веселье весёлость жизнерадостность шутливость	veselie jovialitate
+n#05597799	happiness felt in a secure relationship	belonging	спокойствие	siguranţă	Calm, linişte sufletească
+n#05597982	a feeling of being at ease in a relationship	comfortableness	уют уютность	confort
+n#05598089	a feeling of being intimate and belonging together	closeness intimacy	близость интимность	intimitate apropiere	Legătură puternică, unire strânsă
+n#05598269	affectionate closeness	togetherness	близость единство духовное_единение	împreunare unire
+n#05598350	a feeling of spontaneous good spirits	cheerfulness blitheness	весёлость жизнерадостность	veselie voioşie zburdălnicie
+n#05598559	cheerfulness that bubbles to the surface	buoyancy perkiness	жизнерадостность оптимизм позитивный_настрой	voioşie optimism dezinvoltura
+n#05598666	the cheerful feeling you have when nothing is troubling you	carefreeness insouciance lightheartedness lightsomeness	беззаботность безмятежность беспечность	nepăsare indiferenţă voioşie
+n#05598833	happiness with one's situation in life	contentment	удовлетворённость довольство	mulţumire satisfacţie	Sentiment de mulţumire faţă de situaţia pe care o are cineva în viaţă
+n#05598965	the contentment one feels when one has fulfilled a desire, need, or expectation	satisfaction	удовлетворение удовлетворённость	satisfacţie mulţumire plăcere
+n#05599226	satisfaction with your (or another's) achievements	pride	гордость самолюбие	mândrie mîndrie satisfacţie	Sentiment de mulţumire, de satisfacţie, de plăcere, de bucurie; ceea ce produce mulţumire, satisfacţie, plăcere, bucurie; sentiment de demnitate, de încredere în calităţile proprii
+n#05599367	the feeling you have when you are satisfied with yourself	complacency complacence self-complacency self-satisfaction	удовлетворённость самоуспокоенность самодовольство	mulţumire vanitate automulţumire complezenţă
+n#05599598	an excessive feeling of self-satisfaction	smugness	самодовольство самоуспокоенность	îngâmfare îngîmfare suficienţă automulţumire
+n#05599694	a feeling of satisfaction at having achieved your desires	fulfillment fulfilment	удовлетворение реализованность	implinire realizare
+n#05599822	malicious satisfaction	gloat gloating glee schadenfreude	злорадство	bucurie haz
+n#05607724	a strong positive emotion of regard and affection	love	любовь приязнь симпатия привязанность	amor dragoste iubire	Sentiment de afecţiune pentru cineva sau ceva
+n#05608042	intense feeling of love	ardor ardour	пыл жар рвение страсть пылкость энтузиазм	iubire amor dragoste patimă ardoare
+n#05608126	a feeling of love or fondness	amorousness enamoredness	влюблённость нежность очарованность	senzualitate senzualitate sentimentalism
+n#05608223	temporary love of an adolescent	puppy_love calf_love crush infatuation	увлечение страсть влюблённость детская_влюблённость юношеское_увлечение	pasiune dragoste_nebună zăpăcire
+n#05608345	feelings of ardent love	devotion devotedness	преданность верность страсть	devotament devoţiune	Iubire sinceră faţă de o persoană şi hotărârea de a o servi în orice împrejurare şi fără rezerve
+n#05608483	a positive feeling of liking	affection affectionateness fondness tenderness heart warmheartedness	любовь нежность симпатия расположение привязанность	afecţiune	Sentiment de afecţiune pentru cineva sau ceva
+n#05608793	a feeling of affection for a person or an institution	attachment fond_regard	любовь обожание верность преданность привязанность	afecţiune ataşament simpatie
+n#05608917	a feeling of protective affection	protectiveness	защита покровительство	grijă protecţie
+n#05609011	a feeling of friendship and esteem	regard respect	внимание расположение уважение пиетет почтение	consideraţie stimă respect	sentiment de prietenie şi consideraţie
+n#05609172	a sentimental affection	soft_spot	слабость симпатия привязанность	afecţiune
+n#05609295	disposition to do good	benevolence	благожелательность доброжелательность	bunăvoinţă binefacere
+n#05609411	doing good; feeling beneficent	beneficence	благотворительность филантропия милосердие доброта доброжелательность	mila caritate binefacere milostenie
+n#05609517	a loving feeling	lovingness caring	любовь нежность внимание забота	afectivitate sensibilitate
+n#05609617	a warmhearted feeling	warmheartedness warmth	сердечность душевность участие доброта	bunătate cordialitate căldură
+n#05609709	feelings of allegiance	loyalty	лояльность верность преданность	loialitate lealitate	Sentimente de supunere, credinţă sau loialitate faţă de cineva
+n#05614225	feeling jolly and jovial and full of good humor	jollity joviality	веселье общительность весёлость праздничность наслаждение	jovialitate voioşie
+n#05615127	sharing the feelings of others (especially feelings of sorrow or anguish)	sympathy fellow_feeling	сочувствие сострадание симпатия расположение участие	înţelegere bunătate bunăvoinţă milă	faptul de a împărtăşi sentimentele altora
+n#05615380	sympathy arising from a kind heart	kindheartedness kind-heartedness	добросердечность добросердечие	bunătate blândețe blîndețe amabilitate
+n#05616177	a feeling of sympathetic understanding	compatibility rapport	взаимопонимание понимание согласие совместимость	compatibilitate
+n#05616285	understanding and entering into another's feelings	empathy	эмпатия сочувствие сопереживание	empatie	înţelegerea sentimentelor celorlalţi
+n#05616407	the attribution to yourself of the characteristics of others	identification feeling_of_identity	отождествление опознавание	identificare recunoaştere	Acţiunea de a recunoaşte ceva din memorie. \"Această boală presupune imposibilitatea de a recunoaşte feţele cunoscute.\"
+n#05616611	a feeling of excitement	enthusiasm	воодушевление энтузиазм	entuziasm	Stare de însufleţire puternică
+n#05616745	a positive feeling of wanting to push ahead with something	eagerness avidity avidness keenness	пыл рвение старание	zel râvnă rîvnă aviditate	Imbold lăuntric puternic, pornire aprinsă spre ceva, însufleţire în muncă
+n#05616909	a feeling of strong eagerness (usually in favor of a person or cause)	ardor ardour elan zeal	пыл рвение старание усердие	ardoare elan zel	Imbold lăuntric puternic, pornire aprinsă spre ceva
+n#05617136	joyful enthusiasm	exuberance	воодушевление энтузиазм	exuberanţă
+r#00150972	in mental comfort; without stress	comfortably	спокойно безмятежно невозмутимо	comod liniștit tihnit ușor
+r#00014198	in a satisfactory manner	satisfactorily	удовлетворительно достаточно	satisfăcător	în manieră mulţumitoare
+r#00048845	in a joyous manner	happily merrily mirthfully gayly blithely jubilantly with_happiness	радостно счастливо успешно удачно весело оживлённо жизнерадостно ликующе ликуя	vesel voios jubilând jubilînd
+r#00150972	in physical comfort	comfortably	удобно уютно комфортабельно	confortabil comod
+r#00178680	in a hilarious manner	hilariously uproariously	весело оживлённо шумно	ilar vesel zgomotos
+r#00179505	in a gratifying manner	gratifyingly satisfyingly	приятно удовлетворительно	cu_plăcere cu_mulţumire cu_satisfacere
+r#00185177	with enthusiasm; in an enthusiastic manner	enthusiastically	восторженно восхищённо с_энтузиазмом	cu_entuziasm	în mod entuziast
+r#00186262	in a proud manner	proudly with_pride	гордо величаво величественно	cu_mândrie cu_mîndrie
+r#00188539	in a sympathetic manner	sympathetically empathetically with_sympathy with_empathy	сочувственно сострадательно благожелательно одобрительно чутко	cu_înţelegere	manifestând înţelegere
+r#00191539	in a triumphant manner	triumphantly	победно триумфально торжествующе ликующе	triumfător	în mod triumfător
+r#00197382	with eagerness; in an eager manner	eagerly thirstily	нетерпеливо горячо пылко страстно жаждуще	cu_nerăbdare cu_sete	în manieră plină de nerăbdare
+r#00207812	in a protective manner	protectively giving_protection offering_protection	покровительственно защитно	în_mod_protector
+r#00215267	in an admirable manner	admirably laudably praiseworthily commendable	восхитительно замечательно поразительно превосходно похвально	admirabil lăudabil
+r#00223740	in an exultant manner	exultantly exultingly	ликующе торжествующе	jubilând jubilînd
+r#00225391	with fondness; with love	fondly lovingly	любовно нежно ласково любя	iubitor drăgăstos afectuos
+r#00226872	showing approval	favorably favourably	одобряюще снисходительно любезно милостиво благосклонно	favorabil binevoitor amabil
+r#00227177	in a cheerful manner	cheerfully	бодро энергично радостно весело с_удовольствием	voios
+r#00257643	in an amicable manner	amicably	дружески дружественно дружелюбно	amical prieteneşte paşnic
+r#00260705	in an adorable manner	adorably endearingly	мило восхитительно очаровательно	adorabil
+r#00273738	in a beneficial manner	beneficially	благотворно доброжелательно полезно	benefic
+r#00282876	with compatibility	compatibly	совместимо сочетаемо	compatibil
+r#00319405	in an ebullient manner	ebulliently exuberantly expansively	взволнованно возбуждённо разгорячённо экспрессивно	clocotitor debordant exuberant expansiv
+r#00330011	in an exuberant manner	exuberantly riotously	неудержимо буйно бурно обильно	cu_exuberanţă din_abundenţă turbulent tumultuos imoral gălăgios exaltat dezordonat dezmăţat desfrânat desfrînat zgomotos
+r#00342819	in a joyous and gleeful manner	gleefully joyously joyfully	весело ликующе радостно	vesel voios fericit bucuros
+r#00343284	in a gloating manner	gloatingly	злорадно ехидно	lacom avid
+r#00389425	in a benevolent manner	benevolently	благожелательно благосклонно великодушно	benevol
+r#00403897	near in time or place or relationship	near nigh close	близко	aproape	la distanţă mică în spaţiu sau în timp sau ca relaţie
+v#01822979	fill or meet a want or need	meet satisfy fill fulfill fulfil	соответствовать удовлетворять оправдывать	satisface împlini îndeplini	a împlini o dorinţă, o rugăminte
+v#00454501	judge to be right or commendable; think well of	approve	одобрять поощрять	aproba	A considera corect sau vrednic de laudă
+v#00467782	consider (oneself) as similar to somebody else	identify	отождествляться солидаризироваться	[se]_identifica	A se transpune în situaţia cuiva, a simţi sau a acţiona aşa cum ar face-o altul, a deveni acelaşi cu...
+v#00467945	consider as the favorite	favor favour	проявлять_расположение проявлять_благосклонность поддерживать одобрять	a_favoriza	A acorda cuiva un avantaj cu preferinţă faţă de alţii
+v#00580082	be silly or tease one another	kid chaff jolly banter	подшучивать поддразнивать подтрунивать	face_haz	a face glumiţe
+v#00582048	to express great joy	exult rejoice triumph jubilate	ликовать радоваться торжествовать	exulta jubila	A-şi manifesta sentimentele de admiraţie, de bucurie, de entuziasm faţă de o persoană sau faţă de un eveniment
+v#00582462	show approval or good wishes by shouting	cheer	поощряющее_восклицать	ovaţiona aclama	A manifesta aprobare sau entuziasm pentru o persoană, o idee, o acţiune etc., prin urale sau aplauze
+v#00582621	urge on or encourage especially by shouts	cheer inspire urge barrack urge_on exhort pep_up	ободрять подбодрить воодушевлять приветствовать поощрять поддерживать побуждать	aclama ovaţiona	a aproba, a încuraja o persoană, o idee, o acţiune etc., mai ales prin strigăte
+v#00582840	become cheerful	cheer cheer_up chirk_up	развеселиться оживиться обрадоваться развлечься развеяться взбодриться	[se]_înveseli [se]_bucura [se]_binedispune	A simţi bucurie, a fi cuprins de bucurie
+v#00582994	cause (somebody) to feel happier or more cheerful	cheer cheer_up jolly_along jolly_up	развеселить обрадовать развлечь взбодрить утешить успокоить	înveseli binedispune bucura	a deveni sau a face să fie vesel, voios, bine dispus
+v#00598839	pride or congratulate (oneself) for an achievement	preen pride congratulate	гордиться поздравлять	se_mândri se_mîndri se_lăuda felicita
+v#00812241	satisfy in a limited way	content	ограничиваться обходиться довольствоваться удовлетворяться	mulţumi satisface
+v#01206630	have an emotional or cognitive impact upon	affect impress move strike	влиять воздействовать впечатлять производить_впечатление	atinge emoţiona impresiona mişca pătrunde tulbura	A impresiona sufleteşte
+v#01211759	be enamored or in love with	love	полюбить влюбиться очароваться любить	iubi	A fi îndrăgostit, a simţi o mare afecţiune pentru o persoană
+v#01212004	have a great affection or liking for	love	любить симпатизировать пристраститься привязаться	iubi îndrăgi plăcea ţine	A ţine extrem de mult la cineva sau ceva
+v#01213205	be fond of	like	увлекаться	plăcea	A ţine extrem de mult la cineva sau ceva
+v#01213391	find enjoyable or agreeable	like	полюбиться приглянуться нравиться	plăcea	a-i fi agreabil, a-i fi pe plac
+v#01231091	be excited or anxious about	anticipate look_for look_to	ожидать предвидеть предчувствовать предвкушать	premerge grăbi folosi precipita sconta bănui prevedea anticipa întrece;
+v#01232387	attract; cause to be enamored	capture enamour trance catch becharm enamor captivate beguile charm fascinate bewitch entrance enchant	привлекать влюблять очаровывать очаровать обезоруживать овладевать пленять покорять увлекать обаять околдовывать восхищать	atrage captiva cuceri desfăta fascina încânta încînta răpi subjuga vrăji	(figurativ) A exercita asupra cuiva o influenţă, o atracţie covârşitoare
+v#01236227	fill with high spirits; fill with optimism	elate lift_up uplift pick_up intoxicate	воодушевлять подбодрять ободрять поднимать_настроение	încânta încînta extazia fascina fermeca vrăji	A produce o stare de bucurie, de mulţumire, de entuziasm, de satisfacţie
+v#01236581	fill with sublime emotion; tickle pink (exhilarate is obsolete in this usage)	exhilarate thrill exalt	волновать потрясать впечатлять захватывать	[se]_îmbăta [se]_ameţi înnebuni	A (se) umple de o mare bucurie, emoţie, satisfacţie
+v#01237013	become glad or happy	gladden	обрадоваться развеселиться	a_se_înveseli a_se_îmbucura
+v#01237403	make glad or happy	gladden joy	радовать веселить осчастливливать осчастливить	a_înveseli a_îmbucura
+v#01237518	feel extreme happiness or elation	exult walk_on_air be_on_cloud_nine jump_for_joy	восторгаться ликовать радоваться торжествовать быть_вне_себя_от_счастья быть_на_седьмом_небе прыгать_от_радости	exulta sări_de_bucurie fi_în_al_nouălea_cer	A simţi o mare bucurie, satisfacţie, a fi foarte fericit
+v#01237680	feel happiness or joy	rejoice joy	радоваться веселиться	[se]_bucura fi_bucuros	A simţi bucurie, a fi cuprins de bucurie
+v#01238399	give moral or emotional strength to	comfort soothe console solace	утешать успокаивать умиротворять подбадривать поддерживать поддержать	alina consola îmbărbăta încuraja mângâia mîngîia	a insufla tărie morală sau emoţională
+v#01239069	touch (a body part) lightly so as to excite the surface nerves and cause uneasiness, laughter, or spasmodic movements	tickle titillate	щекотать возбуждать	[se]_gâdila [se]_gîdila	A produce, prin atingeri uşoare asupra unor părţi ale corpului, o senzaţie particulară, care provoacă cuiva un râs convulsiv nestăpânit
+v#01239189	make happy or satisfied	satisfy gratify	удовлетворять радовать	satisface face_pe_plac	A mulţumi pe cineva îndeplinindu-i o dorinţă, o necesitate, o exigenţă
+v#01239476	make content	content	удовлетворять	satisface
+v#01240173	give encouragement to	cheer hearten recreate embolden	ободрять поощрять подбодрить поддерживать поддержать воодушевлять вдохновлять содействовать стимулировать	încuraja înveseli înviora însufleţi
+v#01244174	be ecstatic with joy	revel wallow rejoice triumph	ликовать торжествовать восторгаться наслаждаться праздновать	[se]_extazia	A fi în extaz de fericire
+v#01247189	feel admiration for	admire look_up_to	восхищаться восторгаться любоваться изумляться	admira
+v#01247684	get pleasure from	love enjoy	любить наслаждаться	plăcea	A avea un sentiment de satisfacţie, de mulţumire, de delectare
+v#01822979	fulfil the requirements or expectations of	satisfy fulfill fulfil live_up_to	соответствовать удовлетворять оправдывать	satisface	A fi conform cu anumite norme, criterii, exigenţe, dorinţe; a se potrivi, a corespunde
+v#01827420	be on the mind of	concern interest occupy worry	интересоваться заниматься заботиться	preocupa interesa	a se gândi la ceva
+

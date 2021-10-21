@@ -1,0 +1,27 @@
+﻿n#05582577	the feeling aroused by something strange and surprising	wonder wonderment admiration	удивление изумление восторг восхищение	minunare uimire	Mirare, admiraţie, emoţie profundă (şi neaşteptată)
+n#05582875	the astonishment you feel when something totally unexpected happens to you	surprise	неожиданность сюрприз	surprindere	uimirea simţită când ţi se întâmplă ceva cu totul neaşteptat
+n#05583004	a feeling of stupefied astonishment	stupefaction	изумление остолбенение оцепенение ступор	consternare perplexitate stupefacţie stupoare	uimire, nedumerire amestecată cu mâhnire şi cu indignare
+n#05582729	an overwhelming feeling of wonder or admiration	awe	страх трепет благоговение	veneraţie groază_îmbinată_cu_respect evlavie sentiment înfiorare veneraţie
+n#05582358	the feeling that accompanies something extremely surprising	astonishment amazement	изумление удивление	minunare stupefiere uimire uluială uluire	sentiment, stare de uimire, de uluire
+a#11230203	so surprisingly impressive as to stun or overwhelm	astonishing astounding staggering stupefying	поразительный ошеломительный ошеломляющий потрясающий шокирующий	uimitor uluitor ametitor zguduitor stupefiant năucitor surprinzător
+a#02248624	surprising greatly	amazing astonishing	изумительный ошеломительный поразительный удивительный	uluitor uimitor
+a#02246844	filled with the emotional impact of overwhelming surprise or shock	amazed astonied astonished astounded stunned	изумлённый поражённый удивлённый ошеломлённый шокированный потрясённый	uluit zăpăcit împietrit mirat
+a#01943022	having or showing a feeling of mixed reverence and respect and wonder and dread	awed awestruck awestricken in_awe_of	почтительный благоговеющий трепещущий перепуганный	speriat înspăimântat înspăimîntat îngrozitor excepţional groaznic grozav teribil
+a#01940914	inspired by a feeling of fearful wonderment or reverence	awed awful	страшный ужасный величественный	excepţional grozav
+a#00195880	shocking with surprise and consternation	stupefying	поражающий ошеломляющий оглушающий	stupefiant
+a#00405649	in a state of mental numbness especially as resulting from shock	dazed stunned stupefied stupid	онемелый оцепенелый ошеломлённый потрясённый шокированный оцепеневший остолбеневший оглушённый	uluit zăpăcit năuc năucit buimac uimit stupefiat
+a#02247311	as if struck dumb with astonishment and surprise	dumbfounded dumfounded flabbergasted stupefied thunderstruck	изумленный ошарашенный ошеломлённый потрясённый онемевший	uluit stupefiat trăsnit
+a#02248299	causing surprise or wonder or amazement	surprising	неожиданный внезапный непредсказуемый поразительный удивительный	surprinzător
+a#02246531	taken unawares or suddenly and feeling wonder or astonishment	surprised	удивленный изумленный	mirat surprins
+a#01617066	extraordinarily good or great ; used especially as intensifiers	fantastic howling marvelous rattling terrific tremendous wonderful wondrous	фантастический изумительный великолепный превосходный потрясающий замечательный невиданный ошеломляющий восхитительный необычайный колоссальный	minunat excepţional extraordinar	foarte bun; folosit în special ca intensificator
+v#00491471	affect with wonder	amaze astonish astound	изумлять поражать удивлять поразить удивить изумить	 uimi ului surprinde mira	A stârni, a provoca o mare (şi neaşteptată) mirare, admiraţie, emoţie
+v#01214954	inspire awe in	awe	пугать внушать_страх благоговение	îngrozi
+v#00183525	make senseless or dizzy by or as if by a blow	stun stupefy stupify	оглушить ошеломить шокировать	buimăci zăpăci	A face să devină buimac.
+v#00421500	be a mystery or bewildering to	perplex get puzzle mystify baffle beat bewilder flummox stupefy nonplus gravel amaze dumbfound trounce	смущать озадачивать удивлять ошарашить ошеломить потрясти запутывать мистифицировать ошарашить ошеломить потрясти	nedumeri lăsa_perplex pune_în_încurcătură	A face să nu înţeleagă ceva
+v#01447978	make dull or stupid or muddle with drunkenness or infatuation	besot stupefy stupify	опьянить одурманивать	păcăli prosti purta duce	A induce pe cineva în eroare, printr-o viclenie sau printr-o minciună, pentru a trage un folos sau pentru a se amuza
+v#00491581	cause to be surprised	surprise	изумлять поражать удивлять	surprinde lua_prin_surprindere lua_pe_neaşteptate	A găsi pe cineva nepregătit, neprevenit.
+v#00626227	be amazed at	wonder marvel	интересоваться любопытствовать	a_se_mira a_fi_surprins a_se_minuna
+r#00209555	in an amazing manner; to everyone's surprise	аmazingly surprisingly astonishingly	удивительно поразительно неожиданно	uimitor surprinzător	spre surprinderea tuturor
+r#00141302	in a surprising manner	surprisingly	удивительно поразительно неожиданно	surprinzător	în manieră surprinzătoare
+r#00466103	in the manner of one who is surprised	surprisedly	удивлённо поражённо ошеломлённо ошарашено изумлённо	cu_surprindere surprins
+
