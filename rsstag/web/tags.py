@@ -392,17 +392,18 @@ def on_get_tag_similar(
     all_tags = []
     if model in app.models:
         if model == app.models["w2v"]:
-            st = os.stat(app.config["settings"]["w2v_model"])
-            if (st.st_mtime != app.w2v_mod_date) or not app.w2v:
-                app.w2v = Word2Vec.load(app.config["settings"]["w2v_model"])
-                app.w2v_mod_date = st.st_mtime
+            w2v = None
+            path = os.path.join(app.config["settings"]["w2v_dir"], user["w2v"])
+            if os.path.exists(path):
+                w2v = Word2Vec.load(path)
+
             try:
-                siblings = app.w2v.wv.similar_by_word(tag, topn=30)
+                siblings = w2v.wv.similar_by_word(tag, topn=30)
                 for sibling in siblings:
                     tags_set.add(sibling[0])
             except Exception as e:
                 logging.warning(
-                    "In %s not found tag %s. %s", app.config["settings"]["w2v_model"], tag, e
+                    "In %s not found tag %s. %s", path, tag, e
                 )
 
         if tags_set:

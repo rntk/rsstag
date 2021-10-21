@@ -1,47 +1,23 @@
 import os
-import gzip
 import logging
 from collections import defaultdict
-from typing import List
-from rsstag.tags_builder import TagsBuilder
-from rsstag.html_cleaner import HTMLCleaner
+from typing import List, Tuple
 from gensim.models.word2vec import Word2Vec
 
 
 class W2VLearn:
-    _tagged_texts = []
-
-    def __init__(self, db, config: dict) -> None:
-        self._config = config
-        self._db = db
-        self._log = logging.getLogger("W2V")
-        if os.path.exists(self._config["settings"]["w2v_model"]):
-            self._model = Word2Vec.load(self._config["settings"]["w2v_model"])
+    def __init__(self, path: str) -> None:
+        self._log = logging.getLogger("W2VLearn")
+        self._path = path
+        if os.path.exists(self._path):
+            self._model = Word2Vec.load(self._path)
         else:
             self._model = None
 
-    def fetch_texts(self) -> None:  # TODO remove or change
-        cursor = self._db.posts.find({})
-        builder = TagsBuilder()
-        cleaner = HTMLCleaner()
-        for post in cursor:
-            text = (
-                post["content"]["title"] + " " + gzip.decompress(post["content"]["content"]).decode("utf-8", "replace")
-            )
-            cleaner.purge()
-            cleaner.feed(text)
-            strings = cleaner.get_content()
-            text = " ".join(strings)
-            builder.purge()
-            builder.prepare_text(text)
-            # tag = 'post_'.format(post['pid'])
-            tag = post["pid"]
-            self._tagged_texts.append((builder.get_prepared_text(), tag))
-
-    def learn(self):
+    def learn(self, texts: List[Tuple[str, int]]):
         words = []
         n_epochs = 30
-        for i, tagged_text in enumerate(self._tagged_texts):
+        for i, tagged_text in enumerate(texts):
             words.append(tagged_text[0].split())
 
         if self._model:
@@ -55,7 +31,7 @@ class W2VLearn:
                 min_count=0,
                 workers=os.cpu_count(),
             )
-        self._model.save(self._config["settings"]["w2v_model"])
+        self._model.save(self._path)
 
     def make_groups(self, tags: List[str], top_n: int = 10, koef: float = 0.3):
         groups = defaultdict(set)
@@ -91,3 +67,4 @@ class W2VLearn:
             reduced["tag"] = s
 
         return reduced
+

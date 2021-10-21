@@ -39,6 +39,7 @@ class RssTagUsers:
     ) -> Optional[str]:
         lp = self.hash_login_password(login, password)
         sid = sha256(os.urandom(randint(80, 200))).hexdigest()
+        created = datetime.utcnow()
         user = {
             "sid": sid,
             "token": token,
@@ -47,9 +48,10 @@ class RssTagUsers:
             "ready": False,
             "message": 'Click on "Refresh posts" to start downloading data',
             "in_queue": False,
-            "created": datetime.utcnow(),
+            "created": created,
             "lp": lp,
             "retoken": False,
+            "w2v": "{}_{}.w2v".format(created.timestamp(), randint(0, 999999))
         }
         if provider == "telegram":
             user["phone"] = password

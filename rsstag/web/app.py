@@ -44,14 +44,9 @@ from pymongo import MongoClient
 class RSSTagApplication(object):
     def __init__(self, config_path=None):
         self.config = load_config(config_path)
-        self.w2v_mod_date = None
         self.no_category_name = "NotCategorized"
         if self.config["settings"]["no_category_name"]:
             self.no_category_name = self.config["settings"]["no_category_name"]
-        if os.path.exists(self.config["settings"]["w2v_model"]):
-            self.w2v = Word2Vec.load(self.config["settings"]["w2v_model"])
-            st = os.stat(self.config["settings"]["w2v_model"])
-            self.w2v_mod_date = st.st_mtime
 
         try:
             logging.basicConfig(
@@ -94,8 +89,6 @@ class RSSTagApplication(object):
         self.tasks = RssTagTasks(self.db)
         self.tasks.prepare()
         self.count_showed_numbers = 4
-        self.d2v = None
-        self.w2v = None
         self.models = {"d2v": "d2v", "w2v": "w2v"}
         self.allow_not_logged = (
             "on_root_get",

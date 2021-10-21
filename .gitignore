@@ -10,6 +10,8 @@ rsscloud.conf
 jquery*
 *.map
 *.model
+*.w2v
+*.npy
 node_modules
 bundle.js
 .ipynb_checkpoints

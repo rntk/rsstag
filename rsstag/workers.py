@@ -1,5 +1,6 @@
 """RSSTag workers"""
 import logging
+import os.path
 import time
 import gzip
 import math
@@ -335,10 +336,15 @@ class RSSTagWorker:
             tagged_texts.append((text, tag))
 
         if tagged_texts:
+            users_h = RssTagUsers(db)
+            user = users_h.get_by_sid(owner)
+            if not user:
+                return False
+
+            path = os.path.join(config["settings"]["w2v_dir"], user["w2v"])
             try:
-                learn = W2VLearn(db, config)
-                learn._tagged_texts = tagged_texts
-                learn.learn()
+                learn = W2VLearn(path)
+                learn.learn(tagged_texts)
                 result = True
             except Exception as e:
                 result = None
@@ -350,7 +356,13 @@ class RSSTagWorker:
         tags_h = RssTagTags(db)
         all_tags = tags_h.get_all(owner, projection={"tag": True})
         try:
-            learn = W2VLearn(db, config)
+            users_h = RssTagUsers(db)
+            user = users_h.get_by_sid(owner)
+            if not user:
+                return False
+
+            path = os.path.join(config["settings"]["w2v_dir"], user["w2v"])
+            learn = W2VLearn(path)
             koef = 0.6
             top_n = 10
             groups = learn.make_groups([tag["tag"] for tag in all_tags], top_n, koef)
