@@ -1,11 +1,14 @@
 import os
 import logging
+import time
 from datetime import datetime
 from random import randint
 from typing import Optional
 from hashlib import sha256
 from pymongo import MongoClient
 
+
+TELEGRAM_CODE_FIELD = "telegram_code"
 
 class RssTagUsers:
     indexes = ["sid"]
@@ -111,3 +114,29 @@ class RssTagUsers:
         self._db.users.update_one({"sid": sid}, {"$set": for_update})
 
         return True
+
+class TelegramCode:
+    def __init__(self, db: MongoClient, sid: str):
+        self._db = db
+        self._sid = sid
+
+    def get_code(self, phone: str) -> str:
+        users_h = RssTagUsers(self._db)
+        user = users_h.get_by_sid(self._sid)
+        field_name = TELEGRAM_CODE_FIELD
+        if not user:
+            raise Exception("User not found: " + self._sid)
+        users_h.update_by_sid(self._sid, {field_name: ""})
+        while True:
+            user = users_h.get_by_sid(self._sid)
+            if not user:
+                raise Exception("User not found: " + self._sid)
+            if field_name not in user:
+                raise Exception("User field not '{}' found not found: {}".format(field_name, self._sid))
+            if user[field_name] == "":
+                time.sleep(2)
+                continue
+
+            return user[field_name]
+
+        return ""

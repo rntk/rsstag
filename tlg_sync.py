@@ -2,13 +2,18 @@ import sys
 import time
 from typing import List, Tuple
 
-from telegram.client import Telegram
 from rsstag.utils import load_config
 from rsstag.feeds import RssTagFeeds
 from rsstag.posts import RssTagPosts
 
+from telegram.client import Telegram
+from telegram.queries import open_chat, close_chat, view_messages
+
 from pymongo import MongoClient
 
+
+def get_code() -> str:
+    return input("Code: ")
 
 def tlg_sync(cfg: dict, phone: str, sync_ids: List[Tuple[int, int]]) -> None:
     if not tlg_ids:
@@ -16,33 +21,31 @@ def tlg_sync(cfg: dict, phone: str, sync_ids: List[Tuple[int, int]]) -> None:
 
     t_cfg = cfg["telegram"]
     tlg = Telegram(
-        api_id=t_cfg["app_id"],
-        api_hash=t_cfg["app_hash"],
+        app_id=t_cfg["app_id"],
+        app_hash=t_cfg["app_hash"],
         phone=phone,
-        database_encryption_key=t_cfg["encryption_key"],
-        files_directory=t_cfg["db_dir"],
+        db_key=t_cfg["encryption_key"],
+        db_path=t_cfg["db_dir"]
     )
-    tlg.login(blocking=True)
+    if not tlg.login(get_code):
+        return
     for chat_id, msg_id in sync_ids:
         print(chat_id, msg_id)
         view(tlg, chat_id, [msg_id])
     time.sleep(5)
 
-    tlg.stop()
+    tlg.close()
 
 
 def view(tlg: Telegram, chat_id: int, ids: List[int]) -> None:
-    r = tlg.open_chat(chat_id)
-    r.wait()
-    print(r.update)
+    r = tlg.request(open_chat(chat_id))
+    print(r)
 
-    res = tlg.view_messages(chat_id, ids)
-    res.wait()
-    print(res.update)
+    res = tlg.request(view_messages(chat_id, ids))
+    print(res)
 
-    r = tlg.close_chat(chat_id)
-    r.wait()
-    print(r.update)
+    r = tlg.request(close_chat(chat_id))
+    print(r)
 
 
 if __name__ == "__main__":

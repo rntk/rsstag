@@ -9,10 +9,10 @@ export default class GlobalStatus extends React.Component{
             msgs: [],
             is_ok: true
         }
+        this.ES = props.ES;
         this.timeout_handler = 0;
         this.immediatlyCheck = this.checkStatusAfter.bind(this, 50);
     }
-
 
     checkStatusAfter(timeout) {
         if (this.timeout_handler) {
@@ -39,12 +39,26 @@ export default class GlobalStatus extends React.Component{
                         is_ok: data.data.is_ok,
                         msgs: data.data.msgs
                     });
+                    if (data.data.telegram_code) {
+                        this.getTelegramCode();
+                    }
                 }
             }
         }).catch(err => {
             console.log('Can`t fetch status.', err);
         });
         this.checkStatusAfter(60000);
+    }
+
+    getTelegramCode() {
+        let code = "";
+        while (true) {
+            code = prompt("Telegram code:");
+            if (code) {
+                break;
+            }
+        }
+        this.ES.trigger(this.ES.SAVE_TELEGRAM_CODE, code);
     }
 
     componentDidMount() {

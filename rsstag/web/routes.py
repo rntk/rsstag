@@ -208,6 +208,11 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {"url": "/clusters", "endpoint": "on_clusters_get", "methods": ["GET"]},
+            {
+                "url": "/telegram-code",
+                "endpoint": "on_telegram_code_post",
+                "methods": ["POST"],
+            }
         ]
 
         self._rules = []

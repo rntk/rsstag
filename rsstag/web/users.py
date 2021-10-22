@@ -8,6 +8,7 @@ if TYPE_CHECKING:
     from rsstag.web.app import RSSTagApplication
 from rsstag.providers import BazquxProvider
 from rsstag.tasks import TASK_ALL, TASK_DOWNLOAD
+from rsstag.users import TELEGRAM_CODE_FIELD
 
 from werkzeug.wrappers import Request, Response
 from werkzeug.utils import redirect
@@ -183,6 +184,8 @@ def on_status_get(app: "RSSTagApplication", user: Optional[dict]) -> Response:
         else:
             task_titles = app.tasks.get_current_tasks_titles(user["sid"])
             result = {"data": {"is_ok": True, "msgs": task_titles}}
+            if (TELEGRAM_CODE_FIELD in user) and (user[TELEGRAM_CODE_FIELD] == ""):
+                result["data"]["telegram_code"] = True
     else:
         result = {
             "data": {"is_ok": False, "msgs": ["Looks like you are not logged in"]}
@@ -258,3 +261,15 @@ def on_root_get(
         )
 
     return response
+
+def on_telegram_code_post(app: "RSSTagApplication", user: dict, request: Request) -> Response:
+    tlg_code = json.loads(request.get_data(as_text=True))
+    if tlg_code and tlg_code["code"]:
+        app.users.update_by_sid(user["sid"], {TELEGRAM_CODE_FIELD: tlg_code["code"]})
+        result = {"data": "ok"}
+        code = 200
+    else:
+        result = {"error": "Something wrong with telegram code"}
+        code = 400
+
+    return Response(json.dumps(result), mimetype="application/json", status=code)

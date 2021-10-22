@@ -99,6 +99,9 @@ class RSSTagApplication(object):
             "on_status_get",
             "on_refresh_get_post",
         )
+        self.allow_not_ready = {
+            "on_telegram_code_post"
+        }
         self.navec = None
         self.ner = None
         try:
@@ -142,7 +145,7 @@ class RSSTagApplication(object):
         try:
             handler, values = adapter.match()
             logging.info("%s", handler)
-            if user and user["ready"]:
+            if user and (user["ready"] or handler in self.allow_not_ready):
                 response = self.endpoints[handler](user, request, **values)
             else:
                 if handler in self.allow_not_logged:
@@ -773,3 +776,6 @@ class RSSTagApplication(object):
             ),
             mimetype="text/html",
         )
+
+    def on_telegram_code_post(self, user: dict, request: Request) -> Response:
+        return users_handlers.on_telegram_code_post(self, user, request)

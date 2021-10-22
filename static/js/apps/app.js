@@ -97,7 +97,7 @@ window.onload = () => {
     let path = document.location.pathname;
 
     ReactDOM.render(
-        <GlobalStatus/>,
+        <GlobalStatus ES={window.EVSYS}/>,
         document.getElementById('global_status')
     )
     if (path === '/') {

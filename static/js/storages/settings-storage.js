@@ -8,7 +8,8 @@ export default class SettingsStorage {
             showed: false
         };
         this.urls = {
-            save_settings: '/settings'
+            save_settings: '/settings',
+            save_telegram_code: '/telegram-code'
         }
     }
 
@@ -34,6 +35,7 @@ export default class SettingsStorage {
     bindEvents() {
         this.ES.bind(this.ES.UPDATE_SETTINGS, this.saveSettings.bind(this));
         this.ES.bind(this.ES.CHANGE_SETTINGS_WINDOW_STATE, this.changeSettingsWindowState.bind(this));
+        this.ES.bind(this.ES.SAVE_TELEGRAM_CODE, this.saveTelegramCode.bind(this));
     }
 
     changeSettingsWindowState(offset) {
@@ -68,6 +70,22 @@ export default class SettingsStorage {
                 }
             });
             this.changeSettingsWindowState();
+        }).catch(err => {
+            this.errorMessage('Error. Try later');
+        });
+    }
+
+    saveTelegramCode(code) {
+        fetch(
+            this.urls.save_telegram_code,
+            {
+                method: 'POST',
+                credentials: 'include',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({code: code})
+            }
+        ).then(response => {
+            return;
         }).catch(err => {
             this.errorMessage('Error. Try later');
         });

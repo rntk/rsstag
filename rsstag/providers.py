@@ -16,10 +16,14 @@ import unicodedata
 
 from rsstag.tasks import POST_NOT_IN_PROCESSING
 from rsstag.web.routes import RSSTagRoutes
+from rsstag.users import TelegramCode
 
 import aiohttp
 
+from pymongo import MongoClient
+
 from telegram.client import Telegram
+from telegram.queries import get_message_link, get_chat, get_chats, get_chat_history, search_channel
 
 NOT_CATEGORIZED = "NotCategorized"
 
@@ -387,8 +391,9 @@ def tlg_post_to_html(post: dict) -> str:
 
 
 class TelegramProvider:
-    def __init__(self, config: dict):
+    def __init__(self, config: dict, db: MongoClient):
         self._config = config
+        self._db = db
         if self._config["settings"]["no_category_name"]:
             self.no_category_name = self._config["settings"]["no_category_name"]
         else:
@@ -398,23 +403,24 @@ class TelegramProvider:
         provider = user["provider"]
         all_channels = user["telegram_channel"].lower() == "all"
         self._tlg: Telegram = Telegram(
-            api_id=self._config[provider]["app_id"],
-            api_hash=self._config[provider]["app_hash"],
+            app_id=self._config[provider]["app_id"],
+            app_hash=self._config[provider]["app_hash"],
             phone=user["phone"],
-            database_encryption_key=self._config[provider]["encryption_key"],
-            files_directory=self._config[provider]["db_dir"],
+            db_key=self._config[provider]["encryption_key"],
+            db_path=self._config[provider]["db_dir"],
         )
-        self._tlg.login(blocking=True)
+        tlg_code = TelegramCode(self._db, user["sid"])
+        if not self._tlg.login(tlg_code.get_code):
+            raise Exception("Telegram login failed")
         channels = []
         if all_channels:
             list_offset = 9223372036854775807
             prev_chat_id = 0
             uniq_chat_ids = set()
             while True:
-                r = self._tlg.get_chats(
+                r = self._tlg.request(get_chats(
                     offset_order=list_offset, offset_chat_id=prev_chat_id
-                )
-                r.wait()
+                ))
                 ids = r.update
                 if not ids:
                     break
@@ -426,23 +432,20 @@ class TelegramProvider:
                 for c_id in ids["chat_ids"]:
                     if c_id in uniq_chat_ids:
                         continue
-                    r = self._tlg.get_chat(c_id)
-                    r.wait()
+                    r = self._tlg.request(get_chat(c_id))
                     channels.append(r.update)
                 prev_chat_id = ids["chat_ids"][-1]
                 uniq_chat_ids.update(ids["chat_ids"])
-                r = self._tlg.get_chat(prev_chat_id)
-                r.wait()
+                r = self._tlg.request(get_chat(prev_chat_id))
                 chat_d = r.update
                 list_offset = chat_d["positions"][0]["order"]
                 time.sleep(1)
         else:
             telegram_channel = user["telegram_channel"]
-            channel_req = self._tlg.search_channel(telegram_channel)
-            channel_req.wait()
-            if not channel_req:
+            channel_req = self._tlg.request(search_channel(telegram_channel))
+            if not channel_req.update:
                 logging.warning("No channel: %s", telegram_channel)
-                self._tlg.stop()
+                self._tlg.close()
                 return ([], [])
             channels.append(channel_req.update)
         posts = []
@@ -489,10 +492,12 @@ class TelegramProvider:
                 }
             telegram_channel = channel["id"]
             while has_posts and posts_n < max_limit:
-                posts_req = self._tlg.get_chat_history(
+                if limit <= 0:
+                    has_posts = False
+                    continue
+                posts_req = self._tlg.request(get_chat_history(
                     channel["id"], limit=limit, from_message_id=from_id
-                )
-                posts_req.wait()
+                ))
                 posts_data = posts_req.update
                 if (not posts_req.update) or (len(posts_data["messages"]) == 0):
                     has_posts = False
@@ -523,8 +528,7 @@ class TelegramProvider:
                         if "type" in entity and "url" in entity["type"]:
                             attachments_list.append(entity["type"]["url"])
 
-                    resp = self._tlg.get_message_link(post["chat_id"], post["id"])
-                    resp.wait()
+                    resp = self._tlg.request(get_message_link(post["chat_id"], post["id"]))
                     t_link = resp.update["link"]
                     posts.append(
                         {
@@ -555,7 +559,7 @@ class TelegramProvider:
                     time.sleep(randint(1, 2))
             logging.info("Downloaded: %s - %s", telegram_channel, posts_n)
 
-        self._tlg.stop()
+        self._tlg.close()
 
         yield (posts, list(feeds.values()))
 

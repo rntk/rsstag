@@ -553,7 +553,7 @@ class RSSTagWorker:
 
         providers = {
             "bazqux": BazquxProvider(self._config),
-            "telegram": TelegramProvider(self._config),
+            "telegram": TelegramProvider(self._config, self._db),
         }
         builder = TagsBuilder()
         cleaner = HTMLCleaner()

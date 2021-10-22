@@ -14,4 +14,4 @@ jquery*
 node_modules
 bundle.js
 .ipynb_checkpoints
-*.so
+
