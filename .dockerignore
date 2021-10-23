@@ -1,0 +1,11 @@
+node_modules
+data
+.git
+notebooks
+tlg
+tmp
+.vscode
+geo
+rsscloud.conf
+log.log
+l.txt
