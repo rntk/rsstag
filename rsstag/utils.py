@@ -28,6 +28,12 @@ def load_config(config_path: str) -> Optional[dict]:
     c = ConfigParser()
     c.read(config_path, encoding="utf-8")
     result = c
+    host = os.environ.get("DB_HOST")
+    if host:
+        c["settings"]["db_host"] = host
+    port = os.environ.get("DB_PORT")
+    if port:
+        c["settings"]["db_port"] = port
 
     return result
 
