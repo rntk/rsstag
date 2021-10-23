@@ -450,7 +450,7 @@ class TelegramProvider:
             channels.append(channel_req.update)
         posts = []
         feeds = {}
-        max_limit = user["telegram_limit"]
+        max_limit = user["settings"]["telegram_limit"]
         pid = 0
         for channel in channels:
             limit = channel["unread_count"]
@@ -465,7 +465,13 @@ class TelegramProvider:
                     logging.warning("Skip no is_channel: %s", channel)
                     continue
             else:
-                if limit <= 0:
+                if max_limit == 0:
+                    if limit <= 0:
+                        # no unread posts
+                        continue
+                    # load only unreaded posts
+                    max_limit = limit
+                else:
                     limit = max_limit
             posts_n = 0
             has_posts = True

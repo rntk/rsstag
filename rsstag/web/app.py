@@ -100,7 +100,8 @@ class RSSTagApplication(object):
             "on_refresh_get_post",
         )
         self.allow_not_ready = {
-            "on_telegram_code_post"
+            "on_telegram_code_post",
+            "on_settings_post"
         }
         self.navec = None
         self.ner = None

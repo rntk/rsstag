@@ -28,7 +28,7 @@ export default class SettingsMenu extends React.Component{
         let value = parseInt(e.target.value),
             name = e.target.id;
 
-        if (!isNaN(value) && (value > 0)) {
+        if (!isNaN(value) && (value >= 0)) {
             this.state.settings[name] = value;
             this.setState(this.state);
             return(true);
@@ -70,6 +70,14 @@ export default class SettingsMenu extends React.Component{
                     <div id="tags_per_page">
                         <label htmlFor="tags_on_page">tags per page</label><br />
                         <input id="tags_on_page" name="tags_on_page" type="text" value={this.state.settings.tags_on_page} onChange={this.changeIntSettings} />
+                    </div>
+                    <div id="context_n_">
+                        <label htmlFor="context_n">context size</label><br />
+                        <input id="context_n" name="context_n" type="text" value={this.state.settings.context_n} onChange={this.changeIntSettings} />
+                    </div>
+                    <div id="telegram_limit_">
+                        <label htmlFor="telegram_limit">telegram limit (0 for only unread)</label><br />
+                        <input id="telegram_limit" name="telegram_limit" type="text" value={this.state.settings.telegram_limit} onChange={this.changeIntSettings} />
                     </div>
                     <div>
                         <label htmlFor="only_unread">

@@ -23,6 +23,7 @@ class RssTagUsers:
             "hot_tags": False,
             "similar_posts": True,
             "context_n": 5,
+            "telegram_limit": 1000
         }
 
     def prepare(self) -> None:
@@ -59,7 +60,6 @@ class RssTagUsers:
         if provider == "telegram":
             user["phone"] = password
             user["telegram_channel"] = login
-            user["telegram_limit"] = 5000
 
         self._db.users.insert_one(user)
 
