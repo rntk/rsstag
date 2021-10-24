@@ -71,4 +71,4 @@ export default class PostsWordTree {
     start() {
         this.bindEvents();
     }
-};
+}

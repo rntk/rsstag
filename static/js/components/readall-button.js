@@ -7,7 +7,7 @@ export default class ReadAllButton extends React.Component{
         this.state = {
             ids: [],
             readed: false
-        }
+        };
         this.changePostsStatus = this.changePostsStatus.bind(this);
         this.updatePosts = this.updatePosts.bind(this);
     }

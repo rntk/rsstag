@@ -1,8 +1,6 @@
 ﻿'use strict';
 import React from 'react';
 import PostItem from '../components/post-item.js';
-import TagItem from '../components/tag-item.js';
-import {stopwords} from "../libs/stopwords";
 
 export class PostsList extends React.Component{
     constructor(props) {
@@ -29,7 +27,7 @@ export class PostsList extends React.Component{
     render() {
         return PostsListS(this.state, this.props.ES);
     }
-};
+}
 
 export function PostsListS(state, ev_sys) {
     if (state) {

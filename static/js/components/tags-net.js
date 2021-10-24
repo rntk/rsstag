@@ -5,7 +5,7 @@ export default class TagsNet {
             tags: new Map(),
             main_tag: '',
             selected_tag: ''
-        }
+        };
         this._container = document.getElementById(container_id);
         this._network = null;
         this._colors = new Map();

@@ -8,7 +8,7 @@ export default class GlobalStatus extends React.Component{
         this.state = {
             msgs: [],
             is_ok: true
-        }
+        };
         this.ES = props.ES;
         this.timeout_handler = 0;
         this.immediatlyCheck = this.checkStatusAfter.bind(this, 50);

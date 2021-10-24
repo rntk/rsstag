@@ -13,7 +13,7 @@ export default class SearchInput extends React.Component{
         this.debounce_t = 800;
         this.urls = {
             tags_search: '/tags-search'
-        }
+        };
         this.changeSearchRequest = this.changeSearchRequest.bind(this);
     }
 

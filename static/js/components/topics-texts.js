@@ -20,7 +20,7 @@ export default class TopicsTexts {
                         let st_pos = Math.max(i - window, 0);
                         let end_pos = i + window;
                         if (end_pos > words.length) {
-                            end_pos = words.length
+                            end_pos = words.length;
                         }
                         texts.push(words.slice(st_pos, end_pos).join(" "));
                     }
@@ -60,4 +60,4 @@ export default class TopicsTexts {
     start() {
         this.bindEvents();
     }
-};
+}

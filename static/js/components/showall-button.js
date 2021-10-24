@@ -7,7 +7,7 @@ export default class ShowAllButton extends React.Component{
         this.state = {
             ids: [],
             showed: false
-        }
+        };
         this.changePostsContentState = this.changePostsContentState.bind(this);
         this.updatePosts = this.updatePosts.bind(this);
     }

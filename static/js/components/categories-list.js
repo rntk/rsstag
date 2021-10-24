@@ -6,7 +6,7 @@ export default class CategoriesList extends React.Component{
         super(props);
         this.state = {
             cats: window.initial_cats_list
-        }
+        };
     }
 
     changeFeedsState(cat_name) {
@@ -54,4 +54,4 @@ export default class CategoriesList extends React.Component{
             return(<p>No categories</p>);
         }
     }
-};
+}

@@ -31,9 +31,9 @@ export default class SettingsMenu extends React.Component{
         if (!isNaN(value) && (value >= 0)) {
             this.state.settings[name] = value;
             this.setState(this.state);
-            return(true);
+            return true;
         } else {
-            return(false);
+            return false;
         }
     }
 
@@ -43,7 +43,7 @@ export default class SettingsMenu extends React.Component{
         this.state.settings[name] = e.target.checked;
         this.setState(this.state);
 
-        return(true);
+        return true;
     }
 
     componentWillUnmount() {
@@ -52,7 +52,7 @@ export default class SettingsMenu extends React.Component{
     }
 
     render() {
-        let button = <SettingsMenuButton ES={this.props.ES} src='/static/img/menu.png'/>
+        let button = <SettingsMenuButton ES={this.props.ES} src='/static/img/menu.png' />
         if (this.state && (this.state.showed === true)) {
             let style = {
                 top: this.state.offset.top,

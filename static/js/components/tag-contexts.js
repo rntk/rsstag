@@ -9,7 +9,7 @@ export default class TagContexts extends React.Component {
     }
 
     updateState(state) {
-        this.setState(state)
+        this.setState(state);
     }
 
     componentDidMount() {

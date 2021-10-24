@@ -99,7 +99,7 @@ window.onload = () => {
     ReactDOM.render(
         <GlobalStatus ES={window.EVSYS}/>,
         document.getElementById('global_status')
-    )
+    );
     if (path === '/') {
         ;
     } else if (path === '/group/category') {

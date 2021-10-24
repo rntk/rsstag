@@ -198,4 +198,4 @@ export default class BiGramsMentionsChart {
     start() {
         this.bindEvents();
     }
-};
+}

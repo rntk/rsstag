@@ -44,4 +44,4 @@ export default class WordTree {
         google.charts.load('current', {packages:['wordtree']});
         this.bindEvents();
     }
-};
+}

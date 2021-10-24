@@ -117,7 +117,7 @@ export default class PostsItem extends React.Component{
                 let clst_link = null;
                 if (post.links.clst_url) {
                     clst_link = <span><a href={post.links.clst_url}>Cluster</a><br /></span>;
-                };
+                }
                 links = (
                     <div>
                         <a href={post.links.c_url}>{post.links.c_title}</a>&nbsp;| &nbsp;

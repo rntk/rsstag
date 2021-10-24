@@ -32,7 +32,7 @@ export default class TagMentionsChart {
                 k = `${d.getFullYear()}-${this.prettyDate(d.getMonth())}-${this.prettyDate(d.getDate())}`;
             }
             if (!(k in mp)) {
-                mp[k] = 0
+                mp[k] = 0;
             }
             mp[k]++;
         }
@@ -42,7 +42,7 @@ export default class TagMentionsChart {
             labels.push(k);
             values.push(mp[k]);
         }
-        this.renderChart(tag, labels, values)
+        this.renderChart(tag, labels, values);
     }
 
     prettyDate(n) {
@@ -64,7 +64,7 @@ export default class TagMentionsChart {
                 label: tag,
                 data: values
             }]
-        }
+        };
         this._container.innerHTML = "";
         let ctx = document.createElement("canvas");
         this._container.appendChild(ctx);
@@ -85,4 +85,4 @@ export default class TagMentionsChart {
     start() {
         this.bindEvents();
     }
-};
+}
