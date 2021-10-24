@@ -10,7 +10,7 @@ export default class TagsClustersStorage {
         };
         this.urls = {
             get_tag_siblings: "/tag-clusters"
-        }
+        };
     }
 
     getState() {
@@ -28,7 +28,7 @@ export default class TagsClustersStorage {
 
     changeTagClustersState(event_data) {
         if (event_data.hide_list) {
-            let state = this.getState()
+            let state = this.getState();
             state.clusters = new Map();
             this.setState(state);
             return;
@@ -55,7 +55,7 @@ export default class TagsClustersStorage {
                 }
             }).catch(err => {
                 this.errorMessage('Error. Try later. ' + err);
-            })
+            });
         }
     }
 

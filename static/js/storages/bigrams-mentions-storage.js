@@ -10,7 +10,7 @@ export default class BiGramsMetionsStorage {
         };
         this.urls = {
             get_tag_dates: '/bigrams-dates'
-        }
+        };
         this.changeMentionsState = this.changeMentionsState.bind(this);
     }
 
@@ -43,7 +43,7 @@ export default class BiGramsMetionsStorage {
             }
         ).then(data => {
             if (data.data) {
-                let state = this.getState()
+                let state = this.getState();
                 state.bigrams = data.data;
                 this.setState(state);
             } else {
@@ -66,4 +66,4 @@ export default class BiGramsMetionsStorage {
     start() {
         this.bindEvents();
     }
-};
+}

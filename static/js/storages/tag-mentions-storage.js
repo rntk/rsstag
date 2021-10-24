@@ -10,7 +10,7 @@ export default class TagMetionsStorage {
         };
         this.urls = {
             get_tag_dates: '/tag-dates'
-        }
+        };
         this.changeMentionsState = this.changeMentionsState.bind(this);
     }
 
@@ -25,7 +25,7 @@ export default class TagMetionsStorage {
 
     changeMentionsState(event_data) {
         if (event_data.hide_list) {
-            let state = this.getState()
+            let state = this.getState();
             state.dates = [];
             this.setState(state);
             return;
@@ -43,7 +43,7 @@ export default class TagMetionsStorage {
             }
         ).then(data => {
             if (data.data) {
-                let state = this.getState()
+                let state = this.getState();
                 state.dates = data.data;
                 this.setState(state);
             } else {
@@ -66,4 +66,4 @@ export default class TagMetionsStorage {
     start() {
         this.bindEvents();
     }
-};
+}

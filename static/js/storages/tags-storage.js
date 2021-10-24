@@ -11,7 +11,7 @@ export default class TagsStorage {
         };
         this.urls = {
             get_tag_siblings: url
-        }
+        };
     }
 
     normalizedTags(tags) {
@@ -49,7 +49,7 @@ export default class TagsStorage {
 
     changeTagSiblingsState(event_data) {
         if (event_data.hide_list) {
-            let state = this.getState()
+            let state = this.getState();
             state.tags = new Map();
             this.setState(state);
             return;
@@ -89,7 +89,7 @@ export default class TagsStorage {
                 }
             }).catch(err => {
                 this.errorMessage('Error. Try later');
-            })
+            });
         }
     }
 

@@ -9,7 +9,7 @@ export default class GeoTagsStorage {
             cities: new Map(),
             show_countries: false,
             show_cities: false
-        }
+        };
     }
 
     normalizedTags(tags) {
@@ -52,11 +52,11 @@ export default class GeoTagsStorage {
 
         if (visibility_state) {
             if (visibility_state.show_cities !==  state.show_cities) {
-                state.show_cities = visibility_state.show_cities
+                state.show_cities = visibility_state.show_cities;
                 changed = true;
             }
             if (visibility_state.show_countries !==  state.show_countries) {
-                state.show_countries = visibility_state.show_countries
+                state.show_countries = visibility_state.show_countries;
                 changed = true;
             }
         }

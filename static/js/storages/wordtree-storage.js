@@ -10,7 +10,7 @@ export default class WordTreeStorage {
         };
         this.urls = {
             get_wordtree_texts: '/wordtree-texts'
-        }
+        };
         this.changeState = this.changeState.bind(this);
     }
 
@@ -20,7 +20,7 @@ export default class WordTreeStorage {
 
     changeState(event_data) {
         if (event_data.hide_list) {
-            let state = this.getState()
+            let state = this.getState();
             state.texts = [];
             this.setState(state);
             return;
@@ -43,7 +43,7 @@ export default class WordTreeStorage {
             }
         ).then(data => {
             if (data.data) {
-                let state = this.getState()
+                let state = this.getState();
                 state.texts = data.data;
                 this.setState(state);
             } else {
@@ -66,4 +66,4 @@ export default class WordTreeStorage {
     start() {
         this.bindEvents();
     }
-};
+}

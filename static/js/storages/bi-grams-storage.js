@@ -11,7 +11,7 @@ export default class BiGramsStorage {
         };
         this.urls = {
             get_tag_siblings: '/bi-grams-siblings'
-        }
+        };
     }
 
     normalizedTags(tags) {
@@ -47,15 +47,15 @@ export default class BiGramsStorage {
         this.ES.bind(this.ES.CHANGE_TAGS_LOAD_BUTTON_STATE, this.changeTagBigramsState.bind(this));
     }
 
-    changeTagBigramsState(event_Data) {
+    changeTagBigramsState(event_data) {
         if (event_data.hide_list) {
-            let state = this.getState()
+            let state = this.getState();
             state.tags = new Map();
             this.setState(state);
             return;
         }
         if (this._state.tags.has(event_data.tag)) {
-            this.fetchTagBigrams(event_datatag);
+            this.fetchTagBigrams(event_data.tag);
         }
     }
 
@@ -97,7 +97,7 @@ export default class BiGramsStorage {
                 }
             }).catch(err => {
                 this.errorMessage('Error. Try later');
-            })
+            });
         }
     }
 

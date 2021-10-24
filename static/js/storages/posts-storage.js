@@ -15,7 +15,7 @@ export default class PostsStorage {
             fetch_content: '/posts-content',
             fetch_links: '/post-links',
             read_posts: '/read/posts'
-        }
+        };
     }
 
     normalizePosts(posts) {
@@ -96,7 +96,7 @@ export default class PostsStorage {
             }
         }
         if (changed) {
-            this.setState(state)
+            this.setState(state);
         }
 
     }
@@ -212,7 +212,7 @@ export default class PostsStorage {
                         changed = false;
 
                     data.ids.forEach(post_id => {
-                        let id = +post_id
+                        let id = +post_id;
 
                         if (state.posts.has(id)) {
                             let post = state.posts.get(id);
@@ -265,7 +265,7 @@ export default class PostsStorage {
                             }
                         });
                     }
-                    post.links = data.data
+                    post.links = data.data;
                     state.posts.set(post_id, post);
                     this.setState(state);
                 }

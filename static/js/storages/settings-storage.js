@@ -10,7 +10,7 @@ export default class SettingsStorage {
         this.urls = {
             save_settings: '/settings',
             save_telegram_code: '/telegram-code'
-        }
+        };
     }
 
     fetchSettings() {

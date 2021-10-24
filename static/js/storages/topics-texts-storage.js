@@ -11,7 +11,7 @@ export default class TopicsTextsStorage {
         };
         this.urls = {
             get_wordtree_texts: '/topics-texts'
-        }
+        };
     }
 
     getState() {
@@ -33,7 +33,7 @@ export default class TopicsTextsStorage {
             }
         ).then(data => {
             if (data.data) {
-                let state = this.getState()
+                let state = this.getState();
                 state.texts = data.data.texts;
                 state.topics = data.data.topics;
                 this.setState(state);
@@ -54,4 +54,4 @@ export default class TopicsTextsStorage {
         let state = this.getState();
         this.fetchWordTreeTexts(state.tag);
     }
-};
+}

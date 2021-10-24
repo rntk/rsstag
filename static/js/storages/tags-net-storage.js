@@ -11,7 +11,7 @@ export default class TagsNetStorage {
         };
         this.urls = {
             get_tag_net: '/api/tag-net'
-        }
+        };
         this.fetchTagsNet = this.fetchTagsNet.bind(this);
         this.selectTag = this.selectTag.bind(this);
         this.changeTagSettings = this.changeTagSettings.bind(this);
@@ -81,7 +81,7 @@ export default class TagsNetStorage {
                 new_tag.edges = new Set(new_tag.edges);
                 tags.set(new_tag.tag, new_tag);
             }
-        })
+        });
         old_state.tags = tags;
         return old_state;
     }
