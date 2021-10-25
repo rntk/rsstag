@@ -761,3 +761,47 @@ def on_tag_dates_get(app: "RSSTagApplication", user: dict, tag: str) -> Response
         code = 400
 
     return Response(json.dumps(result), mimetype="application/json", status=code)
+
+def on_tag_specific_get(app: "RSSTagApplication", user: dict, tag: str) -> Response:
+    if tag:
+        tag = tag.casefold()
+        cursor = app.posts.get_all(
+            user["sid"], user["settings"]["only_unread"], projection={"lemmas": True}
+        )
+        tag_words = set()
+        other_words = set()
+        for post in cursor:
+            txt = gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
+            words = set(txt.split(" "))
+            if tag in words:
+                tag_words.update(words)
+                continue
+            other_words.update(words)
+        spec = tag_words - other_words
+        spec.remove(tag)
+        del tag_words
+        del other_words
+        cursor = app.tags.get_by_tags(user["sid"], list(spec), user["settings"]["only_unread"], projection={"_id": False})
+        all_tags = []
+        for tag in cursor:
+            all_tags.append(
+                {
+                    "tag": tag["tag"],
+                    "url": tag["local_url"],
+                    "words": tag["words"],
+                    "count": tag["unread_count"]
+                    if user["settings"]["only_unread"]
+                    else tag["posts_count"],
+                    "sentiment": tag["sentiment"] if "sentiment" in tag else [],
+                    "temp": tag["temperature"],
+                }
+            )
+        all_tags.sort(key=lambda x: x["count"], reverse=True)
+
+        result = {"data": all_tags}
+        code = 200
+    else:
+        result = {"error": "Something wrong with request"}
+        code = 400
+
+    return Response(json.dumps(result), mimetype="application/json", status=code)

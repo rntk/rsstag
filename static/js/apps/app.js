@@ -284,6 +284,18 @@ window.onload = () => {
             document.getElementById('load_tfidf')
         );
         tag_tfidf_storage.start();
+
+        const tag_specific_evsys = new EventsSystem();
+        const tag_specific_storage = new TagsStorage(tag_specific_evsys, '/tag-specific');
+        ReactDOM.render(
+            <TagsList ES={tag_specific_evsys} />,
+            document.getElementById('tag_specific')
+        );
+        ReactDOM.render(
+            <TagButton ES={tag_specific_evsys} title="specific" tag={tag} />,
+            document.getElementById('load_specific')
+        );
+        tag_specific_storage.start();
         /*const topics_texts_evsys = new EventsSystem();
         const topics_texts_chart = new TopicsTexts("#topics_texts", topics_texts_evsys);
         const topics_texts_storage = new TopicsTextsStorage(tag.tag, topics_texts_evsys);
