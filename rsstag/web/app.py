@@ -7,6 +7,7 @@ import gzip
 import logging
 from collections import OrderedDict, defaultdict
 from typing import Optional, List
+import traceback
 
 from rsstag.tasks import RssTagTasks
 from rsstag.web.routes import RSSTagRoutes
@@ -26,8 +27,6 @@ import rsstag.web.tags as tags_handlers
 import rsstag.web.bigrams as bigrams_handlers
 
 from razdel import sentenize
-
-from gensim.models.word2vec import Word2Vec
 
 import nltk
 from nltk.corpus import stopwords
@@ -154,7 +153,7 @@ class RSSTagApplication(object):
                 else:
                     response = redirect(self.routes.get_url_by_endpoint("on_root_get"))
         except Exception as e:
-            logging.error("{} - {}".format(request.base_url, e))
+            logging.error("{} - {}. {}".format(request.base_url, e, traceback.format_exc()))
             response = self.on_error(user, request, InternalServerError())
         request.close()
         response.headers["X-Frame-Options"] = "SAMEORIGIN"
@@ -383,7 +382,7 @@ class RSSTagApplication(object):
         )
 
     def on_group_by_tags_group(
-        self, user: dict, group: str, page_number: int = 1
+        self, user: dict, _: Request, group: str, page_number: int = 1
     ) -> Response:
         return tags_handlers.on_group_by_tags_group(self, user, group, page_number)
 
