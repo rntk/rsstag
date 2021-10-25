@@ -1,13 +1,14 @@
 import os
 import logging
-from typing import List
+from typing import List, Optional
 from collections import namedtuple, defaultdict
-from xml.sax import parse, ContentHandler
+from xml.sax import parse
+from xml.sax.handler import ContentHandler
 
 
 class LabinformSenseHandler(ContentHandler):
-    def __init__(self, **params):
-        super().__init__(**params)
+    def __init__(self):
+        super().__init__()
         self._data = {}
         self._log = logging.getLogger("SAX")
 
@@ -38,8 +39,8 @@ class LabinformSenseHandler(ContentHandler):
 
 
 class LabinformRelationHandler(ContentHandler):
-    def __init__(self, **params):
-        super().__init__(**params)
+    def __init__(self):
+        super().__init__()
         self._data = defaultdict(lambda: {"childs": set(), "parents": set()})
         self._log = logging.getLogger("SAX")
 
@@ -59,8 +60,8 @@ class LabinformRelationHandler(ContentHandler):
 
 
 class LabinformSynsetHandler(ContentHandler):
-    def __init__(self, **params):
-        super().__init__(**params)
+    def __init__(self):
+        super().__init__()
         self._data = defaultdict(lambda: set())
         self._log = logging.getLogger("SAX")
         self._synset_id = ""
@@ -172,18 +173,31 @@ class WordNetLabinform:
             self._synsets[synset_id] = tuple(sorted(self._synsets[synset_id]))
         del handler
 
-    def get_parents(self, word: str, chain: set = set()) -> List[str]:
+    def get_parents(self, word: str) -> List[str]:
+        return self._get_parents(word)
+
+    def _get_parents(self, word: str, chain: Optional[set] = None) -> List[str]:
         hypernyms = []
-        if word in self._senses:
-            synset_id = self._senses[word]["synset_id"]
-            if self._relations[synset_id]["parents"]:
-                for _id, rel in self._relations[synset_id]["parents"]:
-                    if rel == self._relation_names.hypernym and _id not in chain:
-                        chain.add(_id)
-                        for syn_word in self._synsets[_id]:
-                            if syn_word not in chain:
-                                chain.add(syn_word)
-                                hypernyms.append(syn_word)
-                                hypernyms += self.get_parents(syn_word, chain)
+        if not chain:
+            chain = set()
+        if word not in self._senses:
+            return []
+        synset_id = self._senses[word]["synset_id"]
+
+        if not self._relations[synset_id]["parents"]:
+            return []
+
+        for _id, rel in self._relations[synset_id]["parents"]:
+            print(_id, rel)
+            if (rel != self._relation_names.hypernym) or _id in chain:
+                continue
+
+            chain.add(_id)
+            for syn_word in self._synsets[_id]:
+                if syn_word in chain:
+                    continue
+                chain.add(syn_word)
+                hypernyms.append(syn_word)
+                hypernyms += self._get_parents(syn_word, chain)
 
         return hypernyms
