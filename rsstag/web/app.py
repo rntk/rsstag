@@ -686,7 +686,7 @@ class RSSTagApplication(object):
         sentences = []
         html_c = HTMLCleaner()
         w_cond = "|".join(words)
-        w_reg = re.compile(".*({}).*".format(w_cond), re.I)
+        w_reg = re.compile(".*({}).*".format(w_cond), re.I|re.S)
         for post in db_posts:
             txt = gzip.decompress(post["content"]["content"]).decode("utf-8", "replace")
             if post["content"]["title"]:
