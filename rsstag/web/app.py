@@ -704,7 +704,8 @@ class RSSTagApplication(object):
                 t = snt.text.strip()
                 if not t:
                     continue
-                if w_reg.match(t) is None:
+                mtch = w_reg.match(t)
+                if mtch is None:
                     continue
                 if len(t) < 200:
                     pos = i - 1
@@ -713,6 +714,7 @@ class RSSTagApplication(object):
                     pos = i + 1
                     if pos < len(sz_sents):
                         t += " " + sz_sents[pos].text
+                t = t.replace(mtch.group(1), "<b>{}</b>".format(mtch.group(1)))
                 sents.append(t)
             if not sents:
                 continue
