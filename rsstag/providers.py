@@ -464,6 +464,7 @@ class TelegramProvider:
                 else:
                     logging.warning("Skip no is_channel: %s", channel)
                     continue
+                max_limit = limit
             else:
                 if max_limit == 0:
                     if limit <= 0:
