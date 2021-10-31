@@ -1,6 +1,8 @@
 {% macro getName(provider_id='') -%}
 {% if provider_id == 'telegram' %}
     Telegram
+{% elif provider_id == 'textfile' %}
+    Text file (local)
 {% else %}
     {% if provider_id == 'bazqux' %}
         BazQux

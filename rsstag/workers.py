@@ -12,7 +12,7 @@ from multiprocessing import Process
 from rsstag.tags_builder import TagsBuilder
 from rsstag.html_cleaner import HTMLCleaner
 from pymongo import MongoClient, UpdateOne
-from rsstag.providers import BazquxProvider, TelegramProvider
+from rsstag.providers import BazquxProvider, TelegramProvider, TextFileProvider
 from rsstag.utils import load_config
 from rsstag.web.routes import RSSTagRoutes
 from rsstag.users import RssTagUsers
@@ -561,6 +561,7 @@ class RSSTagWorker:
         providers = {
             "bazqux": BazquxProvider(self._config),
             "telegram": TelegramProvider(self._config, self._db),
+            "textfile": TextFileProvider(self._config)
         }
         builder = TagsBuilder()
         cleaner = HTMLCleaner()

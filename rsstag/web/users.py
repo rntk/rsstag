@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 from typing import Optional, List
 
 from typing import TYPE_CHECKING
@@ -90,6 +91,11 @@ def on_login_post(app: "RSSTagApplication", request: Request) -> Response:
                 err.append("Cant` create session. Try later")
         elif provider == "telegram":
             user = app.create_new_session(login, password, "", provider)
+        elif provider == "textfile":
+            if os.path.exists(login):
+                user = app.create_new_session(login, password, "", provider)
+            else:
+                err.append("File not exists")
 
     if err:
         return app.on_login_get(None, request, err)

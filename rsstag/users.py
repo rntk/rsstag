@@ -61,6 +61,9 @@ class RssTagUsers:
             user["phone"] = password
             user["telegram_channel"] = login
 
+        if provider == "textfile":
+            user["text_file"] = login
+
         self._db.users.insert_one(user)
 
         return sid
