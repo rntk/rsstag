@@ -291,10 +291,12 @@ class RSSTagWorker:
                     if len(word) > 1:
                         count_ent[word] += 1
 
-        if count_ent:
-            logging.info("Found %s entities for user %s", len(count_ent), owner)
-            tags = RssTagTags(db)
-            result = tags.add_entities(owner, count_ent)
+        if not count_ent:
+            return True
+
+        logging.info("Found %s entities for user %s", len(count_ent), owner)
+        tags = RssTagTags(db)
+        result = tags.add_entities(owner, count_ent)
 
         return result
 
