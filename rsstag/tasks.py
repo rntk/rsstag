@@ -2,7 +2,7 @@ import logging
 import time
 from typing import Optional, List
 from rsstag.users import RssTagUsers
-from pymongo import MongoClient
+from pymongo import MongoClient, UpdateOne
 
 TASK_ALL = -1
 TASK_NOOP = 0
@@ -263,11 +263,13 @@ class RssTagTasks:
         try:
             if task["type"] == TASK_TAGS:
                 remove_task = False
+                updates = []
                 for post in task["data"]:
-                    self._db.posts.find_one_and_update(
+                    updates.append(UpdateOne(
                         {"_id": post["_id"]},
                         {"$set": {"processing": POST_NOT_IN_PROCESSING}},
-                    )
+                    ))
+                self._db.posts.bulk_write(updates, ordered=False)
                 """elif task['type'] == TASK_WORDS:
                     self._db.tags.find_one_and_update(
                         {'_id': task['data']['_id']},
@@ -278,19 +280,22 @@ class RssTagTasks:
                     )"""
             elif task["type"] == TASK_BIGRAMS_RANK:
                 remove_task = False
+                updates = []
                 for bigram in task["data"]:
-                    self._db.bi_grams.find_one_and_update(
+                    updates.append(UpdateOne(
                         {"_id": bigram["_id"]},
                         {"$set": {"processing": BIGRAM_NOT_IN_PROCESSING}},
-                    )
+                    ))
+                self._db.bi_grams.bulk_write(updates, ordered=False)
             elif task["type"] == TASK_TAGS_RANK:
                 remove_task = False
+                updates = []
                 for tag in task["data"]:
-                    self._db.tags.find_one_and_update(
+                    updates.append(UpdateOne(
                         {"_id": tag["_id"]},
                         {"$set": {"processing": TAG_NOT_IN_PROCESSING}},
-                    )
-
+                    ))
+                self._db.tags.bulk_write(updates, ordered=False)
             if remove_task:
                 removed = self.remove_task(task["data"]["_id"])
                 if removed:
