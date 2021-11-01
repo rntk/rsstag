@@ -34,13 +34,13 @@ class RssTagTasks:
         TASK_DOWNLOAD: [TASK_TAGS],
         TASK_TAGS: [
             TASK_BIGRAMS_RANK,
-            TASK_NER,
             TASK_TAGS_RANK,
             TASK_LETTERS,
             TASK_TAGS_SENTIMENT,
-            TASK_CLUSTERING,
         ],  # TASK_TAGS_COORDS
-        TASK_NER: [TASK_W2V],
+        TASK_BIGRAMS_RANK: [TASK_NER],
+        TASK_NER: [TASK_CLUSTERING],
+        TASK_CLUSTERING: [TASK_W2V],
         TASK_W2V: [TASK_TAGS_GROUP],
     }
     _delete_tasks = {
@@ -202,6 +202,9 @@ class RssTagTasks:
                         else:
                             task["type"] = TASK_NOOP
                             self._db.tasks.remove({"_id": user_task["_id"]})
+                            self.add_next_tasks(
+                                task["user"]["sid"], user_task["type"]
+                            )
                     elif user_task["type"] == TASK_TAGS_RANK:
                         data = []
                         tags_dt = self._db.tags.find(
@@ -228,6 +231,9 @@ class RssTagTasks:
                         else:
                             task["type"] = TASK_NOOP
                             self._db.tasks.remove({"_id": user_task["_id"]})
+                            self.add_next_tasks(
+                                task["user"]["sid"], user_task["type"]
+                            )
 
                     """if task_type == TASK_WORDS:
                         if task['type'] == TASK_NOOP:
@@ -299,8 +305,7 @@ class RssTagTasks:
             if remove_task:
                 removed = self.remove_task(task["data"]["_id"])
                 if removed:
-                    if (task["type"] == TASK_W2V) or (task["type"] == TASK_DOWNLOAD) or (task["type"] == TASK_NER):
-                        self.add_next_tasks(task["user"]["sid"], task["type"])
+                    self.add_next_tasks(task["user"]["sid"], task["type"])
 
             result = True
         except Exception as e:
