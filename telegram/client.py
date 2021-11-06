@@ -1,10 +1,14 @@
 import os
 import json
+import queue
 import time
 import datetime
 import logging
 from ctypes import *
 from typing import Callable, Dict, Any, Optional
+from queue import Queue
+from threading import Thread, Event
+from random import randint
 
 from .queries import (
     set_log_verbosity_level,
@@ -23,7 +27,29 @@ class Result:
     def __str__(self) -> str:
         return "Data: {}\nError: {}".format(self.update, self.error)
 
+class ResponseEvent(Event):
+    def __init__(self, req_id: str):
+        super().__init__()
+        self.__ev_data: Optional[Result] = None
+        self.__req_id = req_id
+
+    def set_data(self, data: Result):
+        if self.is_set():
+            raise Exception("Event already is set")
+
+        self.__ev_data = data
+        self.set()
+
+    def get_data(self) -> Optional[Result]:
+        return self.__ev_data
+
+    @property
+    def request_id(self) -> str:
+        return self.__req_id
+
+
 # TODO: refactor
+# WARNING: absolutely silly and naive implementation
 class Telegram:
     def __init__(self, app_id: int, app_hash: str, phone: str, db_path: str, db_key: str, tdjson_path: str = ""):
         self._app_id = app_id
@@ -35,6 +61,11 @@ class Telegram:
         self._tdjson_path = tdjson_path
         self._get_code_fn = None
         self._db_key = db_key
+        self._auth = False
+        self._responser = None
+        self._queue = Queue()
+        self._stopped = False
+        self._auth = False
 
         self._log: logging.Logger = logging.getLogger("telegram")
         self._tdjson = CDLL(tdjson_path)
@@ -42,10 +73,6 @@ class Telegram:
         self._td_create_client_id = self._tdjson.td_create_client_id
         self._td_create_client_id.restype = c_int
         self._td_create_client_id.argtypes = []
-
-        self._td_json_client_destroy = self._tdjson.td_json_client_destroy
-        self._td_json_client_destroy.restype = None
-        self._td_json_client_destroy.argtypes = [c_int]
 
         self._td_execute = self._tdjson.td_execute
         self._td_execute.restype = c_char_p
@@ -69,6 +96,35 @@ class Telegram:
 
         self._client_id = None
 
+    def _listen_responses(self):
+        events: Dict[str, ResponseEvent] = {}
+        while self._auth and not self._stopped:
+            r = self._receive()
+            if not r:
+                time.sleep(1)
+                continue
+
+            extra = r.get("@extra", None)
+            if extra is None:
+                continue
+
+            r_id = extra.get("req_id", None)
+            if r_id is None:
+                continue
+            try:
+                while not self._queue.empty():
+                    ev: Optional[ResponseEvent] = self._queue.get_nowait()
+                    self._queue.task_done()
+                    events[ev.request_id] = ev
+            except queue.Empty:
+                pass
+
+            ev = events.pop(r_id, None)
+            if ev is None:
+                continue
+
+            ev.set_data(Result(r, None))
+
     def _on_log_message_callback(self, verbosity_level: int, message: str):
         if verbosity_level == 0:
             self._log.critical("TDLib message: %s", message)
@@ -86,58 +142,49 @@ class Telegram:
     def request(self, query: dict) -> Result:
         if not self._client_id:
             return Result(data=None, error={"error": "not logged in"})
-        r_id = datetime.datetime.utcnow().timestamp()
+        if self._stopped:
+            return Result(None, error={"error": "client is stopped"})
+
+        r_id = "{}_{}".format(datetime.datetime.utcnow().timestamp(), randint(0, 99999))
         query["@extra"] = {"req_id": r_id}
+        ev = ResponseEvent(r_id)
+        self._queue.put_nowait(ev)
         self._send(query)
-        while True:
-            resp = self._td_receive(1.0)
-            if not resp:
-                time.sleep(1)
-                continue
+        ev.wait()
+        r = ev.get_data()
+        if r.error:
+            return r
 
-            r = json.loads(resp.decode("utf-8"))
-            if "@type" not in r:
-                return Result(None, r)
+        if "@type" not in r.update:
+            return Result(None, r.update)
 
-            if r["@type"] == "error":
-                return Result(None, r)
+        if r.update["@type"] == "error":
+            return Result(None, r.update)
 
-            if "@extra" not in r:
-                continue
-
-            if r["@extra"].get("req_id") == r_id:
-                return Result(r, None)
-
-    def _execute(self, query: dict) -> Optional[dict]:
-        if not self._client_id:
-            return None
-
-        q = json.dumps(query).encode("utf-8")
-        result = self._td_execute(q)
-        if result:
-            result = json.loads(result.decode("utf-8"))
-
-        return result
+        return r
 
     def _send(self, query: Dict[str, Any]):
-        if not self._client_id:
-            return
         q = json.dumps(query).encode("utf-8")
         self._td_send(self._client_id, q)
 
     def close(self):
         if not self._client_id:
             return
-        self.request({"@type": "close"})
+        if self._stopped:
+            return
+        self._auth = False
+        self._stopped = True
+        self._responser.join()
+        self._responser = None
+        self._send({"@type": "close"})
         self._send(get_authorization_state())
         while True:
-            raw_event = self._td_receive(1.0)
-            if not raw_event:
+            event = self._receive()
+            if not event:
                 continue
-            event = json.loads(raw_event.decode("utf-8"))
             if "@type" in event:
                 if event["@type"] == "error":
-                    self._log.error("Got error from TDlib: %s", raw_event)
+                    self._log.error("Got error from TDlib: %s", event)
                     break
             if "authorization_state" not in event:
                 continue
@@ -150,17 +197,17 @@ class Telegram:
 
     def login(self, get_code: Callable[[str], str]) -> bool:
         self._client_id = self._td_create_client_id()
-        self._execute(set_log_verbosity_level(1))
+        self._td_execute(json.dumps(set_log_verbosity_level(2)).encode("utf-8"))
         self._get_code_fn = get_code
         self._send(get_authorization_state())
         while True:
-            raw_event = self._td_receive(1.0)
-            if not raw_event:
+            event = self._receive()
+            if not event:
                 continue
-            event = json.loads(raw_event.decode("utf-8"))
+
             if "@type" in event:
                 if event["@type"] == "error":
-                    self._log.error("Got error from TDlib: %s", raw_event)
+                    self._log.error("Got error from TDlib: %s", event)
                     return False
 
             if "authorization_state" not in event:
@@ -202,6 +249,7 @@ class Telegram:
                 return False
 
             if state == "authorizationStateReady":
+                self._auth = True
                 return True
 
             self._log.critical("Unknown auth state: %s. %s", state, event)
@@ -209,3 +257,15 @@ class Telegram:
             break
 
         return False
+
+    def _receive(self) -> Optional[Dict]:
+        resp = self._td_receive(1.0)
+        if not resp:
+            return resp
+
+        return json.loads(resp.decode("utf-8"))
+
+    def run(self):
+        self._stopped = False
+        self._responser = Thread(target=self._listen_responses)
+        self._responser.start()
