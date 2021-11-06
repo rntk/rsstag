@@ -9,6 +9,7 @@ from collections import defaultdict
 from typing import Optional, List
 from random import randint
 from multiprocessing import Process
+import traceback
 from rsstag.tags_builder import TagsBuilder
 from rsstag.html_cleaner import HTMLCleaner
 from pymongo import MongoClient, UpdateOne
@@ -604,9 +605,10 @@ class RSSTagWorker:
                         except Exception as e:
                             task_done = False
                             logging.error(
-                                "Can`t save in db for user %s. Info: %s",
+                                "Can`t save in db for user %s. Info: %s. %s",
                                 task["user"]["sid"],
                                 e,
+                                traceback.format_exc()
                             )
                         logging.info("Saved posts: %s.", posts_n)
 
@@ -655,5 +657,5 @@ class RSSTagWorker:
                             task["user"]["sid"], {"ready": True, "in_queue": False}
                         )
             except Exception as e:
-                logging.error("worker got exception: {}".format(e))
+                logging.error("worker got exception: {}. {}".format(e, traceback.format_exc()))
                 time.sleep(randint(3, 8))
