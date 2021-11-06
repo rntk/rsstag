@@ -13,6 +13,8 @@ from typing import Tuple, List, Optional, Iterator
 from collections import defaultdict
 from io import StringIO
 import unicodedata
+from threading import Thread
+from queue import Queue, Empty
 
 from rsstag.tasks import POST_NOT_IN_PROCESSING
 from rsstag.web.routes import RSSTagRoutes
@@ -399,6 +401,72 @@ class TelegramProvider:
         else:
             self.no_category_name = NOT_CATEGORIZED
 
+    def _fetch(self, tasks_q: Queue, results_q: Queue):
+        while not tasks_q.empty():
+            try:
+                dt = tasks_q.get_nowait()
+            except Empty:
+                return
+            all_channels, max_limit, channel = dt
+
+            if all_channels:
+                if "is_channel" in channel["type"]:
+                    if not channel["type"]["is_channel"]:
+                        logging.warning("Skip not channel %s: ", channel)
+                        tasks_q.task_done()
+                        continue
+                else:
+                    logging.warning("Skip no is_channel: %s", channel)
+                    tasks_q.task_done()
+                    continue
+            limit = channel["unread_count"]
+            if max_limit == 0:
+                if limit <= 0:
+                    tasks_q.task_done()
+                    # no unread posts
+                    continue
+                # load only unreaded posts
+                max_limit = limit
+            else:
+                limit = max_limit
+
+            from_id = 0
+            posts_n = 0
+            has_posts = True
+            while has_posts and posts_n < max_limit:
+                if limit <= 0:
+                    has_posts = False
+                    continue
+                posts_req = self._tlg.request(get_chat_history(
+                    channel["id"], limit=limit, from_message_id=from_id
+                ))
+                posts_data = posts_req.update
+                if (not posts_req.update) or (len(posts_data["messages"]) == 0):
+                    has_posts = False
+                    continue
+                logging.info(
+                    "Batch loaded. Channel %s from %s. Posts - %s. All Posts - %s",
+                    channel["id"],
+                    from_id,
+                    len(posts_data["messages"]),
+                    posts_n,
+                )
+                if len(posts_data["messages"]) > 0:
+                    from_id = posts_data["messages"][-1]["id"]
+                    limit -= len(posts_data["messages"])
+                posts_n += len(posts_data["messages"])
+                posts_links = []
+                for post in posts_data["messages"]:
+                    resp = self._tlg.request(get_message_link(post["chat_id"], post["id"]))
+                    posts_links.append(resp.update["link"])
+
+                results_q.put_nowait((channel["id"], posts_data, posts_links))
+                time.sleep(randint(0, 3))
+
+            tasks_q.task_done()
+            logging.info("Downloaded: %s - %s", channel["title"], posts_n)
+            time.sleep(1)
+
     def download(self, user: dict) -> Tuple[List, List]:
         provider = user["provider"]
         all_channels = user["telegram_channel"].lower() == "all"
@@ -412,6 +480,7 @@ class TelegramProvider:
         tlg_code = TelegramCode(self._db, user["sid"])
         if not self._tlg.login(tlg_code.get_code):
             raise Exception("Telegram login failed")
+        self._tlg.run()
         channels = []
         if all_channels:
             list_offset = 9223372036854775807
@@ -448,36 +517,13 @@ class TelegramProvider:
                 self._tlg.close()
                 return ([], [])
             channels.append(channel_req.update)
-        posts = []
-        feeds = {}
+        tasks_q = Queue()
+        results_q = Queue()
         max_limit = user["settings"]["telegram_limit"]
-        pid = 0
+        feeds = {}
+        routes = RSSTagRoutes(self._config["settings"]["host_name"])
         for channel in channels:
-            limit = channel["unread_count"]
-            if all_channels:
-                if limit <= 0:
-                    continue
-                if "is_channel" in channel["type"]:
-                    if not channel["type"]["is_channel"]:
-                        logging.warning("Skip not channel %s: ", channel)
-                        continue
-                else:
-                    logging.warning("Skip no is_channel: %s", channel)
-                    continue
-                max_limit = limit
-            else:
-                if max_limit == 0:
-                    if limit <= 0:
-                        # no unread posts
-                        continue
-                    # load only unreaded posts
-                    max_limit = limit
-                else:
-                    limit = max_limit
-            posts_n = 0
-            has_posts = True
-            from_id = 0
-            routes = RSSTagRoutes(self._config["settings"]["host_name"])
+            tasks_q.put_nowait((all_channels, max_limit, channel))
             stream_id = str(channel["id"])
             if stream_id not in feeds:
                 feeds[stream_id] = {
@@ -497,74 +543,84 @@ class TelegramProvider:
                     ),
                     "favicon": "",
                 }
-            telegram_channel = channel["id"]
-            while has_posts and posts_n < max_limit:
-                if limit <= 0:
-                    has_posts = False
-                    continue
-                posts_req = self._tlg.request(get_chat_history(
-                    channel["id"], limit=limit, from_message_id=from_id
-                ))
-                posts_data = posts_req.update
-                if (not posts_req.update) or (len(posts_data["messages"]) == 0):
-                    has_posts = False
-                    continue
-                logging.info(
-                    "Batch loaded %s. Channel %s from %s. Posts - %s, ",
-                    telegram_channel,
-                    from_id,
-                    len(posts_data["messages"]),
-                    posts_n,
+        workers = []
+        workers_n = int(self._config["settings"]["downloaders_count"])
+        if not workers_n:
+            workers_n = 1
+        if len(channels) == 1:
+            workers_n = 1
+        for i in range(workers_n):
+            t = Thread(target=self._fetch, args=(tasks_q, results_q))
+            t.start()
+            workers.append(t)
+
+        posts = []
+        pid = 0
+        while True:
+            try:
+                data = results_q.get(timeout=1)
+                stream_id, posts_data, posts_links = data
+                results_q.task_done()
+            except Empty:
+                if tasks_q.empty():
+                    if results_q.empty():
+                        has_worker = False
+                        for w in workers:
+                            if w.is_alive():
+                                has_worker = True
+                                break
+
+                        if has_worker:
+                            continue
+                        if results_q.empty():
+                            break
+                continue
+            for post_i, post in enumerate(posts_data["messages"]):
+                p_date = date.fromtimestamp(int(post["date"])).strftime("%x")
+                pu_date = post["date"]
+
+                attachments_list = []
+                entities = []
+                post_text = tlg_post_to_html(post)
+                if "caption" in post["content"]:
+                    entities = post["content"]["caption"]["entities"]
+                elif "text" in post["content"]:
+                    entities = post["content"]["text"]["entities"]
+                for entity in entities:
+                    if "type" in entity and "url" in entity["type"]:
+                        attachments_list.append(entity["type"]["url"])
+
+                t_link = posts_links[post_i]
+                posts.append(
+                    {
+                        "content": {
+                            "title": "",
+                            "content": gzip.compress(
+                                post_text.encode("utf-8", "replace")
+                            ),
+                        },
+                        "feed_id": stream_id,
+                        "category_id": self.no_category_name,
+                        "id": post["id"],
+                        "url": t_link,
+                        "date": p_date,
+                        "unix_date": pu_date,
+                        "read": False,
+                        "favorite": False,
+                        "attachments": attachments_list,
+                        "tags": [],
+                        "bi_grams": [],
+                        "pid": pid,
+                        "owner": user["sid"],
+                        "processing": POST_NOT_IN_PROCESSING,
+                    }
                 )
-                if len(posts_data["messages"]) > 0:
-                    from_id = posts_data["messages"][-1]["id"]
-                    limit -= len(posts_data["messages"])
-                posts_n += len(posts_data["messages"])
-                for post in posts_data["messages"]:
-                    p_date = date.fromtimestamp(int(post["date"])).strftime("%x")
-                    pu_date = post["date"]
-
-                    attachments_list = []
-                    entities = []
-                    post_text = tlg_post_to_html(post)
-                    if "caption" in post["content"]:
-                        entities = post["content"]["caption"]["entities"]
-                    elif "text" in post["content"]:
-                        entities = post["content"]["text"]["entities"]
-                    for entity in entities:
-                        if "type" in entity and "url" in entity["type"]:
-                            attachments_list.append(entity["type"]["url"])
-
-                    resp = self._tlg.request(get_message_link(post["chat_id"], post["id"]))
-                    t_link = resp.update["link"]
-                    posts.append(
-                        {
-                            "content": {
-                                "title": "",
-                                "content": gzip.compress(
-                                    post_text.encode("utf-8", "replace")
-                                ),
-                            },
-                            "feed_id": stream_id,
-                            "category_id": self.no_category_name,
-                            "id": post["id"],
-                            "url": t_link,
-                            "date": p_date,
-                            "unix_date": pu_date,
-                            "read": False,
-                            "favorite": False,
-                            "attachments": attachments_list,
-                            "tags": [],
-                            "bi_grams": [],
-                            "pid": pid,
-                            "owner": user["sid"],
-                            "processing": POST_NOT_IN_PROCESSING,
-                        }
-                    )
-                    pid += 1
-                if randint(0, 1) == 0:
-                    time.sleep(randint(1, 2))
-            logging.info("Downloaded: %s - %s", telegram_channel, posts_n)
+                pid += 1
+            if len(posts) > 5000:
+                yield (posts, list(feeds.values()))
+                posts = []
+            if randint(0, 1) == 0:
+                time.sleep(randint(1, 2))
 
         self._tlg.close()
 
