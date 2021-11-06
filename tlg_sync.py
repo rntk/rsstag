@@ -29,6 +29,7 @@ def tlg_sync(cfg: dict, phone: str, sync_ids: List[Tuple[int, int]]) -> None:
     )
     if not tlg.login(get_code):
         return
+    tlg.run()
     for chat_id, msg_id in sync_ids:
         print(chat_id, msg_id)
         view(tlg, chat_id, [msg_id])
@@ -68,11 +69,11 @@ if __name__ == "__main__":
         tlg_ids = []
         for feed in feeds:
             feed_id = int(feed["feed_id"])
-            posts = posts_h.get_by_feed_id(
+            posts = list(posts_h.get_by_feed_id(
                 user_id,
                 str(feed_id),
                 projection={"id": True, "_id": False, "read": True},
-            )
+            ))
             posts.sort(key=lambda x: x["id"], reverse=False)
             p_id = 0
             n = 0
