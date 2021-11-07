@@ -610,7 +610,7 @@ class TelegramProvider:
                                 post_text.encode("utf-8", "replace")
                             ),
                         },
-                        "feed_id": stream_id,
+                        "feed_id": str(stream_id),
                         "category_id": self.no_category_name,
                         "id": post["id"],
                         "url": t_link,
