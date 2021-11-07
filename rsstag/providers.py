@@ -15,6 +15,7 @@ from io import StringIO
 import unicodedata
 from threading import Thread
 from queue import Queue, Empty
+import traceback
 
 from rsstag.tasks import POST_NOT_IN_PROCESSING
 from rsstag.web.routes import RSSTagRoutes
@@ -319,8 +320,12 @@ def tlg_post_to_html(post: dict) -> str:
         entities = post["content"]["caption"]["entities"]
         post_text = post["content"]["caption"]["text"]
     elif "text" in post["content"]:
-        entities = post["content"]["text"]["entities"]
-        post_text = post["content"]["text"]["text"]
+        t = post["content"].get("@type", "")
+        if t != "messageCustomServiceAction":
+            entities = post["content"]["text"]["entities"]
+            post_text = post["content"]["text"]["text"]
+        else:
+            post_text = post["content"]["text"]
     starts = defaultdict(list)
     ends = defaultdict(list)
     for ent in entities:
@@ -581,11 +586,17 @@ class TelegramProvider:
 
                 attachments_list = []
                 entities = []
-                post_text = tlg_post_to_html(post)
-                if "caption" in post["content"]:
-                    entities = post["content"]["caption"]["entities"]
-                elif "text" in post["content"]:
-                    entities = post["content"]["text"]["entities"]
+                try:
+                    post_text = tlg_post_to_html(post)
+                    if "caption" in post["content"]:
+                        entities = post["content"]["caption"]["entities"]
+                    elif "text" in post["content"]:
+                        t = post["content"].get("@type", "")
+                        if t != "messageCustomServiceAction":
+                            entities = post["content"]["text"]["entities"]
+                except Exception as e:
+                    logging.error("tlg_post_to_html: {}. {}. {}".format(post, e, traceback.format_exc()))
+                    continue
                 for entity in entities:
                     if "type" in entity and "url" in entity["type"]:
                         attachments_list.append(entity["type"]["url"])
