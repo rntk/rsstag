@@ -36,7 +36,7 @@ class RssTagPosts:
         else:
             sort = [("unix_date", DESCENDING)]
 
-        return self._db.posts.find(query, projection=projection).sort(sort)
+        return self._db.posts.find(query, projection=projection).allow_disk_use(True).sort(sort)
 
     def get_all(
         self,
@@ -85,7 +85,7 @@ class RssTagPosts:
             query["read"] = not only_unread
         sort_data = [("feed_id", DESCENDING), ("unix_date", DESCENDING)]
 
-        return self._db.posts.find(query, projection=projection).sort(sort_data)
+        return self._db.posts.find(query, projection=projection).allow_disk_use(True).sort(sort_data)
 
     def get_by_bi_grams(
         self,
@@ -99,7 +99,7 @@ class RssTagPosts:
             query["read"] = not only_unread
         sort_data = [("feed_id", DESCENDING), ("unix_date", DESCENDING)]
 
-        return self._db.posts.find(query, projection=projection).sort(sort_data)
+        return self._db.posts.find(query, projection=projection).allow_disk_use(True).sort(sort_data)
 
     def get_by_feed_id(
         self,
@@ -115,7 +115,7 @@ class RssTagPosts:
         else:
             sort = [("unix_date", DESCENDING)]
 
-        return self._db.posts.find(query, projection=projection).sort(sort)
+        return self._db.posts.find(query, projection=projection).allow_disk_use(True).sort(sort)
 
     def get_by_pid(
         self, owner: str, pid: int, projection: Optional[dict] = None
@@ -183,7 +183,7 @@ class RssTagPosts:
             query["read"] = not only_unread
         sort_data = [("feed_id", DESCENDING), ("unix_date", DESCENDING)]
 
-        return self._db.posts.find(query, projection=projection).sort(sort_data)
+        return self._db.posts.find(query, projection=projection).allow_disk_use(True).sort(sort_data)
 
     def get_clusters(self, posts: List[dict]) -> set:
         result = set()

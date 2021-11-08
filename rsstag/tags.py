@@ -65,7 +65,7 @@ class RssTagTags:
         if projection:
             params["projection"] = projection
 
-        return self._db.tags.find(query, **params).sort(sort_data)
+        return self._db.tags.find(query, **params).allow_disk_use(True).sort(sort_data)
 
     def count(
         self,
@@ -184,7 +184,7 @@ class RssTagTags:
         if projection:
             params["projection"] = projection
 
-        return self._db.tags.find(query, **params).sort(sort_data)
+        return self._db.tags.find(query, **params).allow_disk_use(True).sort(sort_data)
 
     def get_by_group(
         self,
@@ -217,7 +217,7 @@ class RssTagTags:
         if projection:
             params["projection"] = projection
 
-        return self._db.tags.find(query, **params).sort(sort_data)
+        return self._db.tags.find(query, **params).allow_disk_use(True).sort(sort_data)
 
     def add_groups(self, owner: str, tags_groups: dict) -> bool:
         updates = []
