@@ -168,6 +168,18 @@ window.onload = () => {
         );
         similar_w2v_storage.start();
 
+        const similar_fasttext_evsys = new EventsSystem();
+        const similar_fasttext_storage = new TagsStorage(similar_fasttext_evsys, '/tag-similar/fasttext');
+        ReactDOM.render(
+            <TagsList ES={similar_fasttext_evsys} />,
+            document.getElementById('similar_fasttext_tags')
+        );
+        ReactDOM.render(
+            <TagButton ES={similar_fasttext_evsys} title="FastText" tag={tag} />,
+            document.getElementById('load_similar_fasttext')
+        );
+        similar_fasttext_storage.start();
+
         const siblings_evsys = new EventsSystem();
         const siblings_storage = new TagsStorage(siblings_evsys, '/tag-siblings');
         ReactDOM.render(

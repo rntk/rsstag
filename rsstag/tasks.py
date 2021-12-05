@@ -20,6 +20,7 @@ TASK_TAGS_GROUP = 11
 TASK_TAGS_COORDS = 12
 TASK_BIGRAMS_RANK = 13
 TASK_TAGS_RANK = 14
+TASK_FASTTEXT = 15
 
 POST_NOT_IN_PROCESSING = 0
 BIGRAM_NOT_IN_PROCESSING = 0
@@ -42,6 +43,7 @@ class RssTagTasks:
         TASK_NER: [TASK_CLUSTERING],
         TASK_CLUSTERING: [TASK_W2V],
         TASK_W2V: [TASK_TAGS_GROUP],
+        TASK_TAGS_GROUP: [TASK_FASTTEXT]
     }
     _delete_tasks = {
         TASK_LETTERS,
@@ -346,6 +348,7 @@ class RssTagTasks:
             TASK_CLUSTERING: "Posts clusterization",
             TASK_W2V: "Learning Word2Vec",
             TASK_D2V: "Learning Doc2Vec",
+            TASK_FASTTEXT: "Learning FastText",
             TASK_TAGS_SENTIMENT: "Tags sentiment",
             TASK_TAGS_GROUP: "Tags groups searching",
             TASK_TAGS_COORDS: "Searching geo objects in tags",

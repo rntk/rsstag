@@ -31,6 +31,7 @@ from rsstag.tasks import (
     TASK_CLUSTERING,
     TASK_BIGRAMS_RANK,
     TASK_TAGS_RANK,
+    TASK_FASTTEXT
 )
 from rsstag.tasks import RssTagTasks
 from rsstag.letters import RssTagLetters
@@ -39,6 +40,7 @@ from rsstag.bi_grams import RssTagBiGrams
 from rsstag.posts import RssTagPosts
 from rsstag.entity_extractor import RssTagEntityExtractor
 from rsstag.w2v import W2VLearn
+from rsstag.fasttext import FastTextLearn
 from rsstag.sentiment import RuSentiLex, WordNetAffectRuRom, SentimentConverter
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import DBSCAN
@@ -362,6 +364,33 @@ class RSSTagWorker:
 
         return result
 
+    def make_fasttext(self, db, owner: str, config: dict) -> Optional[bool]:
+        result = False
+        posts = RssTagPosts(db)
+        all_posts = posts.get_all(owner, projection={"lemmas": True, "pid": True})
+        tagged_texts = []
+        for post in all_posts:
+            text = gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
+            tag = post["pid"]
+            tagged_texts.append((text, tag))
+
+        if tagged_texts:
+            users_h = RssTagUsers(db)
+            user = users_h.get_by_sid(owner)
+            if not user:
+                return False
+
+            path = os.path.join(config["settings"]["fasttext_dir"], user["fasttext"])
+            try:
+                learn = FastTextLearn(path)
+                learn.learn(tagged_texts)
+                result = True
+            except Exception as e:
+                result = None
+                logging.error("Can`t FastText. Info: %s", e)
+
+        return result
+
     def make_tags_groups(self, db, owner: str, config: dict) -> Optional[bool]:
         tags_h = RssTagTags(db)
         all_tags = tags_h.get_all(owner, projection={"tag": True})
@@ -639,6 +668,8 @@ class RSSTagWorker:
                     task_done = self.make_clustering(db, task["user"]["sid"])
                 elif task["type"] == TASK_W2V:
                     task_done = self.make_w2v(db, task["user"]["sid"], self._config)
+                elif task["type"] == TASK_FASTTEXT:
+                    task_done = self.make_fasttext(db, task["user"]["sid"], self._config)
                 elif task["type"] == TASK_TAGS_GROUP:
                     task_done = self.make_tags_groups(
                         db, task["user"]["sid"], self._config

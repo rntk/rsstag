@@ -55,7 +55,8 @@ class RssTagUsers:
             "created": created,
             "lp": lp,
             "retoken": False,
-            "w2v": "{}_{}.w2v".format(created.timestamp(), randint(0, 999999))
+            "w2v": "{}_{}.w2v".format(created.timestamp(), randint(0, 999999)),
+            "fasttext": "{}_{}.fasttext".format(created.timestamp(), randint(0, 999999))
         }
         if provider == "telegram":
             user["phone"] = password

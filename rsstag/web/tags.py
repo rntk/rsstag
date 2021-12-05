@@ -7,6 +7,7 @@ import html
 import logging
 from collections import Counter
 from urllib.parse import unquote_plus, quote
+from typing import Optional
 
 from typing import TYPE_CHECKING
 
@@ -17,6 +18,7 @@ from rsstag.html_cleaner import HTMLCleaner
 from rsstag.lda import LDA
 
 from gensim.models.word2vec import Word2Vec
+from gensim.models.fasttext import FastText
 
 from werkzeug.wrappers import Request, Response
 from werkzeug.exceptions import NotFound, InternalServerError
@@ -405,6 +407,20 @@ def on_get_tag_similar(
                 logging.warning(
                     "In %s not found tag %s. %s", path, tag, e
                 )
+        elif model == app.models["fasttext"]:
+            ft: Optional[FastText] = None
+            path = os.path.join(app.config["settings"]["fasttext_dir"], user["fasttext"])
+            if os.path.exists(path):
+                ft = FastText.load(path)
+
+            try:
+                siblings = ft.wv.similar_by_word(tag, topn=30)
+                for sibling in siblings:
+                    tags_set.add(sibling[0])
+            except Exception as e:
+                logging.warning(
+                    "In %s not found tag %s. %s", path, tag, e
+                )
 
         if tags_set:
             db_tags = app.tags.get_by_tags(
@@ -432,7 +448,6 @@ def on_get_tag_similar(
         result = {"error": "Unknown model"}
 
     return Response(json.dumps(result), mimetype="application/json", status=code)
-
 
 def on_get_tag_siblings(app: "RSSTagApplication", user: dict, tag: str) -> Response:
     all_tags = []

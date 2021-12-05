@@ -88,7 +88,7 @@ class RSSTagApplication(object):
         self.tasks = RssTagTasks(self.db)
         self.tasks.prepare()
         self.count_showed_numbers = 4
-        self.models = {"d2v": "d2v", "w2v": "w2v"}
+        self.models = {"d2v": "d2v", "w2v": "w2v", "fasttext": "fasttext"}
         self.allow_not_logged = (
             "on_root_get",
             "on_login_get",
