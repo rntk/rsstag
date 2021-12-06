@@ -37,7 +37,7 @@ from rsstag.tasks import RssTagTasks
 from rsstag.letters import RssTagLetters
 from rsstag.tags import RssTagTags
 from rsstag.bi_grams import RssTagBiGrams
-from rsstag.posts import RssTagPosts
+from rsstag.posts import RssTagPosts, PostLemmaSentence
 from rsstag.entity_extractor import RssTagEntityExtractor
 from rsstag.w2v import W2VLearn
 from rsstag.fasttext import FastTextLearn
@@ -338,56 +338,44 @@ class RSSTagWorker:
         return result
 
     def make_w2v(self, db, owner: str, config: dict) -> Optional[bool]:
-        result = False
-        posts = RssTagPosts(db)
-        all_posts = posts.get_all(owner, projection={"lemmas": True, "pid": True})
-        tagged_texts = []
-        for post in all_posts:
-            text = gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
-            tag = post["pid"]
-            tagged_texts.append((text, tag))
+        l_sent = PostLemmaSentence(db, owner, split=True)
+        if l_sent.count() == 0:
+            return True
 
-        if tagged_texts:
-            users_h = RssTagUsers(db)
-            user = users_h.get_by_sid(owner)
-            if not user:
-                return False
+        users_h = RssTagUsers(db)
+        user = users_h.get_by_sid(owner)
+        if not user:
+            return False
 
-            path = os.path.join(config["settings"]["w2v_dir"], user["w2v"])
-            try:
-                learn = W2VLearn(path)
-                learn.learn(tagged_texts)
-                result = True
-            except Exception as e:
-                result = None
-                logging.error("Can`t W2V. Info: %s", e)
+        path = os.path.join(config["settings"]["w2v_dir"], user["w2v"])
+        try:
+            learn = W2VLearn(path)
+            learn.learn(l_sent)
+            result = True
+        except Exception as e:
+            result = None
+            logging.error("Can`t W2V. Info: %s", e)
 
         return result
 
     def make_fasttext(self, db, owner: str, config: dict) -> Optional[bool]:
-        result = False
-        posts = RssTagPosts(db)
-        all_posts = posts.get_all(owner, projection={"lemmas": True, "pid": True})
-        tagged_texts = []
-        for post in all_posts:
-            text = gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
-            tag = post["pid"]
-            tagged_texts.append((text, tag))
+        l_sent = PostLemmaSentence(db, owner, split=True)
+        if l_sent.count() == 0:
+            return True
 
-        if tagged_texts:
-            users_h = RssTagUsers(db)
-            user = users_h.get_by_sid(owner)
-            if not user:
-                return False
+        users_h = RssTagUsers(db)
+        user = users_h.get_by_sid(owner)
+        if not user:
+            return False
 
-            path = os.path.join(config["settings"]["fasttext_dir"], user["fasttext"])
-            try:
-                learn = FastTextLearn(path)
-                learn.learn(tagged_texts)
-                result = True
-            except Exception as e:
-                result = None
-                logging.error("Can`t FastText. Info: %s", e)
+        path = os.path.join(config["settings"]["fasttext_dir"], user["fasttext"])
+        try:
+            learn = FastTextLearn(path)
+            learn.learn(l_sent)
+            result = True
+        except Exception as e:
+            result = None
+            logging.error("Can`t FastText. Info: %s", e)
 
         return result
 

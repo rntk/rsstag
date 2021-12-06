@@ -1,5 +1,7 @@
 import logging
 from typing import Optional, List, Iterator
+import gzip
+
 from pymongo import MongoClient, DESCENDING, UpdateMany
 
 
@@ -196,3 +198,25 @@ class RssTagPosts:
 
     def count(self, owner: str) -> int:
         return self._db.posts.count_documents({"owner": owner})
+
+
+class PostLemmaSentence:
+    def __init__(self, db: MongoClient, owner: str, split: bool = False):
+        self.__db = db
+        self.__owner = owner
+        self.__split = split
+
+    def __iter__(self):
+            cursor = self.__db.posts.find(
+                {"owner": self.__owner},
+                projection={"lemmas": True}
+            )
+            if self.__split:
+                for p in cursor:
+                    yield gzip.decompress(p["lemmas"]).decode("utf-8", "replace").split()
+            else:
+                for p in cursor:
+                    yield gzip.decompress(p["lemmas"]).decode("utf-8", "replace")
+
+    def count(self) -> int:
+        return self.__db.posts.count_documents({"owner": self.__owner})
