@@ -478,7 +478,7 @@ class RSSTagWorker:
             temp = bi_f / math.log(f1 + f2)
             if grams[0] in self._stopw or grams[1] in self._stopw:
                 temp /= f1 + f2
-            bi_temps[bi["tag"]] = temp
+            bi_temps[bi["tag"]] = temp + 0.01
 
         bi_grams.set_temperatures(user_sid, bi_temps)
 
@@ -561,7 +561,7 @@ class RSSTagWorker:
             tf = tag_d["posts_count"] / math.log(1 + tag_d["freq"])
             if tag_d["tag"] in self._stopw:
                 tf /= tag_d["freq"]
-            tag_temps[tag_d["tag"]] = tf
+            tag_temps[tag_d["tag"]] = tf + 0.01
 
         tags_h = RssTagTags(db)
         tags_h.add_entities(task["user"]["sid"], tag_temps)
