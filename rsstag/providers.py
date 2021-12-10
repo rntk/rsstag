@@ -466,7 +466,7 @@ class TelegramProvider:
                     posts_links.append(resp.update["link"])
 
                 results_q.put_nowait((channel["id"], posts_data, posts_links))
-                time.sleep(uniform(0.2,3))
+                time.sleep(uniform(1,3))
 
             tasks_q.task_done()
             logging.info("Downloaded: %s - %s", channel["title"], posts_n)
