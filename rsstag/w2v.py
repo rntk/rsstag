@@ -17,7 +17,7 @@ class W2VLearn:
             self._model = None
 
         self.__n_epochs = 30
-        self.__window = 15
+        self.__window = 5
 
     def learn(self, texts: Union[List[Tuple[str, int]], PostLemmaSentence]):
         if isinstance(texts, PostLemmaSentence):
