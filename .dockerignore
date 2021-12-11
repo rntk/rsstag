@@ -9,3 +9,7 @@ geo
 rsscloud.conf
 log.log
 l.txt
+*.model
+*.w2v
+*.npy
+*.fasttext
