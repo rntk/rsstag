@@ -309,10 +309,35 @@ ME_UNDERLINE = "textEntityTypeUnderline"
 ME_PRE = "textEntityTypePre"
 ME_TEXT_URL = "textEntityTypeTextUrl"
 
+def tlg_poll_to_html(post: dict) -> str:
+    if post["content"]["poll"]["@type"] != "poll":
+        return ""
+
+    result_html = StringIO()
+    result_html.write(
+        "<p>" +
+        post["content"]["poll"]["question"] +
+        "</p><ol>"
+    )
+    for opt in post["content"]["poll"]["options"]:
+        if opt["@type"] != "pollOption":
+            continue
+
+        result_html.write(
+            "<li>" +
+            opt["text"] +
+            "</li>"
+        )
+    result_html.write("</ol>")
+
+    return result_html.getvalue()
 
 # https://core.telegram.org/type/MessageEntity
 # https://core.telegram.org/api/entities
 def tlg_post_to_html(post: dict) -> str:
+    if post["content"]["@type"] == "messagePoll":
+        return tlg_poll_to_html(post)
+
     result_html = StringIO()
     entities = []
     post_text = ""
