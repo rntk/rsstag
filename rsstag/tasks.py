@@ -21,6 +21,7 @@ TASK_TAGS_COORDS = 12
 TASK_BIGRAMS_RANK = 13
 TASK_TAGS_RANK = 14
 TASK_FASTTEXT = 15
+TASK_CLEAN_BIGRAMS = 16
 
 POST_NOT_IN_PROCESSING = 0
 BIGRAM_NOT_IN_PROCESSING = 0
@@ -33,7 +34,8 @@ class RssTagTasks:
     indexes = ["user", "processing"]
     _tasks_after = {
         TASK_DOWNLOAD: [TASK_TAGS],
-        TASK_TAGS: [
+        TASK_TAGS: [TASK_CLEAN_BIGRAMS],
+        TASK_CLEAN_BIGRAMS: [
             TASK_BIGRAMS_RANK,
             TASK_TAGS_RANK,
             TASK_LETTERS,
@@ -354,6 +356,7 @@ class RssTagTasks:
             TASK_TAGS_COORDS: "Searching geo objects in tags",
             TASK_BIGRAMS_RANK: "Bi-grams ranking",
             TASK_TAGS_RANK: "Tags ranking",
+            TASK_CLEAN_BIGRAMS: "Clean bi-grams"
         }
 
         if task_type in task_titles:

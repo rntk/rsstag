@@ -133,3 +133,10 @@ class RssTagBiGrams:
         self.db.bi_grams.bulk_write(updates, ordered=False)
 
         return True
+
+    def remove_by_count(self, owner: str, n: int) -> bool:
+        query = {"owner": owner, "posts_count": n}
+        r = self.db.bi_grams.delete_many(query)
+        self.log.info("Deleted bigrams: %d for %s", r.deleted_count, owner)
+
+        return True

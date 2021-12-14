@@ -31,7 +31,8 @@ from rsstag.tasks import (
     TASK_CLUSTERING,
     TASK_BIGRAMS_RANK,
     TASK_TAGS_RANK,
-    TASK_FASTTEXT
+    TASK_FASTTEXT,
+    TASK_CLEAN_BIGRAMS
 )
 from rsstag.tasks import RssTagTasks
 from rsstag.letters import RssTagLetters
@@ -173,6 +174,13 @@ class RSSTagWorker:
                 )
             )
         for bi_gram, bi_d in sum_bigrams.items():
+            has_stop = False
+            for bi_t in bi_d["tags"]:
+                if bi_t in self._stopw:
+                    has_stop = True
+                    break
+            if has_stop:
+                continue
             bi_grams_updates.append(
                 UpdateOne(
                     {"owner": owner, "tag": bi_gram},
@@ -568,6 +576,10 @@ class RSSTagWorker:
 
         return True
 
+    def make_clean_bigrams(self, db: MongoClient, task: dict) -> bool:
+        bi_grams = RssTagBiGrams(db)
+        return bi_grams.remove_by_count(task["user"]["sid"], 1)
+
     def worker(self):
         """Worker for bazqux.com"""
         cl = MongoClient(
@@ -666,6 +678,8 @@ class RSSTagWorker:
                     task_done = self.make_bi_grams_rank(db, task)
                 elif task["type"] == TASK_TAGS_RANK:
                     task_done = self.make_tags_rank(db, task)
+                elif task["type"] == TASK_CLEAN_BIGRAMS:
+                    task_done = self.make_clean_bigrams(db, task)
                 """elif task['type'] == TASK_WORDS:
                     task_done = self.process_words(db, task['data'])"""
                 # TODO: add tags_coords, add D2V?
