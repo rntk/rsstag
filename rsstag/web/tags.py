@@ -455,11 +455,28 @@ def on_get_tag_siblings(app: "RSSTagApplication", user: dict, tag: str) -> Respo
         only_unread = user["settings"]["only_unread"]
     else:
         only_unread = None
-    posts = app.posts.get_by_tags(user["sid"], [tag], only_unread, {"tags": True})
+    posts = app.posts.get_by_tags(user["sid"], [tag], only_unread, {"lemmas": True})
     tags_set = set()
+    window = 5
+    stopw = set(stopwords.words("english") + stopwords.words("russian"))
     for post in posts:
-        for tag in post["tags"]:
-            tags_set.add(tag)
+        txt = gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
+        words = txt.split()
+        words_ln = len(words)
+        for i, w in enumerate(words):
+            if w != tag:
+                continue
+            for j in range(1, window):
+                pos = i - j
+                if pos >= 0:
+                    sw = words[pos]
+                    if sw not in stopw:
+                        tags_set.add(sw)
+                pos = i + j
+                if pos < words_ln:
+                    sw = words[pos]
+                    if sw not in stopw:
+                        tags_set.add(sw)
 
     if tags_set:
         db_tags = app.tags.get_by_tags(
