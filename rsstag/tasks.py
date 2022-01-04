@@ -238,6 +238,44 @@ class RssTagTasks:
                             self.add_next_tasks(
                                 task["user"]["sid"], user_task["type"]
                             )
+                    elif user_task["type"] == TASK_NER:
+                        data = []
+                        ps = self._db.posts.find(
+                            {
+                                "owner": task["user"]["sid"],
+                                "ner": {"$exists": False},
+                                "processing": POST_NOT_IN_PROCESSING,
+                            }
+                        ).limit(self._posts_bath_size)
+                        ids = []
+                        for p in ps:
+                            data.append(p)
+                            ids.append(p["_id"])
+                        unlock_task = True
+                        if ids:
+                            self._db.posts.update_many(
+                                {"_id": {"$in": ids}},
+                                {"$set": {"processing": time.time()}},
+                            )
+                        else:
+                            task["type"] = TASK_NOOP
+                            psc = self._db.posts.count_documents(
+                                {
+                                    "owner": task["user"]["sid"],
+                                    "ner": {"$exists": False}
+                                }
+                            )
+                            if psc == 0:
+                                if self.add_next_tasks(
+                                    task["user"]["sid"], user_task["type"]
+                                ):
+                                    self._db.tasks.remove({"_id": user_task["_id"]})
+                                    unlock_task = False
+                        if unlock_task:
+                            self._db.tasks.update_one(
+                                {"_id": user_task["_id"]},
+                                {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
+                            )
 
                     """if task_type == TASK_WORDS:
                         if task['type'] == TASK_NOOP:
@@ -306,6 +344,15 @@ class RssTagTasks:
                         {"$set": {"processing": TAG_NOT_IN_PROCESSING}},
                     ))
                 self._db.tags.bulk_write(updates, ordered=False)
+            elif task["type"] == TASK_NER:
+                remove_task = False
+                updates = []
+                for post in task["data"]:
+                    updates.append(UpdateOne(
+                        {"_id": post["_id"]},
+                        {"$set": {"processing": POST_NOT_IN_PROCESSING, "ner": 1}},
+                    ))
+                self._db.posts.bulk_write(updates, ordered=False)
             if remove_task:
                 removed = self.remove_task(task["data"]["_id"])
                 if removed:

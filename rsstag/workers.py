@@ -281,17 +281,17 @@ class RSSTagWorker:
 
         return result
 
-    def make_ner(self, db, owner: str) -> Optional[bool]:
-        result = False
-        posts = RssTagPosts(db)
-        all_posts = posts.get_all(owner, projection={"content": True, "pid": True})
+    def make_ner(self, db, all_posts: List[dict]) -> Optional[bool]:
+        if not all_posts:
+            return True
+        owner = all_posts[0]["owner"]
         count_ent = defaultdict(int)
         ent_ex = RssTagEntityExtractor()
         for post in all_posts:
             text = (
                 post["content"]["title"] + " " + gzip.decompress(post["content"]["content"]).decode("utf-8", "ignore")
             )
-            if not text:
+            if not text.strip():
                 continue
             entities = ent_ex.extract_entities(text)
             for e_i, entity in enumerate(entities):
@@ -659,7 +659,7 @@ class RSSTagWorker:
                 elif task["type"] == TASK_LETTERS:
                     task_done = self.make_letters(db, task["user"]["sid"], self._config)
                 elif task["type"] == TASK_NER:
-                    task_done = self.make_ner(db, task["user"]["sid"])
+                    task_done = self.make_ner(db, task["data"])
                 elif task["type"] == TASK_TAGS_SENTIMENT:
                     task_done = self.make_tags_sentiment(
                         db, task["user"]["sid"], self._config
