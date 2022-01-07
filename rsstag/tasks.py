@@ -47,15 +47,6 @@ class RssTagTasks:
         TASK_W2V: [TASK_TAGS_GROUP],
         TASK_TAGS_GROUP: [TASK_FASTTEXT]
     }
-    _delete_tasks = {
-        TASK_LETTERS,
-        TASK_TAGS_SENTIMENT,
-        TASK_NER,
-        TASK_CLUSTERING,
-        TASK_TAGS_COORDS,
-        TASK_W2V,
-        TASK_TAGS_GROUP,
-    }
 
     def __init__(self, db: MongoClient) -> None:
         self._db = db
