@@ -540,13 +540,17 @@ class TelegramProvider:
                 list_offset = chat_d["positions"][0]["order"]
                 time.sleep(1)
         else:
-            telegram_channel = user["telegram_channel"]
-            channel_req = self._tlg.request(search_channel(telegram_channel))
-            if not channel_req.update:
-                logging.warning("No channel: %s", telegram_channel)
-                self._tlg.close()
-                return ([], [])
-            channels.append(channel_req.update)
+            telegram_channels = user["telegram_channel"].split(",")
+            for telegram_channel in telegram_channels:
+                telegram_channel = telegram_channel.strip()
+                if not telegram_channel:
+                    continue
+                channel_req = self._tlg.request(search_channel(telegram_channel))
+                if not channel_req.update:
+                    logging.warning("No channel: %s", telegram_channel)
+                    self._tlg.close()
+                    return ([], [])
+                channels.append(channel_req.update)
         tasks_q = Queue()
         results_q = Queue()
         max_limit = user["settings"]["telegram_limit"]
