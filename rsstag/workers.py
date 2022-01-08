@@ -206,9 +206,12 @@ class RSSTagWorker:
                 )
             )
         try:
-            db.posts.bulk_write(posts_updates, ordered=False)
-            db.tags.bulk_write(tags_updates, ordered=False)
-            db.bi_grams.bulk_write(bi_grams_updates, ordered=False)
+            if posts_updates:
+                db.posts.bulk_write(posts_updates, ordered=False)
+            if tags_updates:
+                db.tags.bulk_write(tags_updates, ordered=False)
+            if bi_grams_updates:
+                db.bi_grams.bulk_write(bi_grams_updates, ordered=False)
             result = True
         except Exception as e:
             result = False
