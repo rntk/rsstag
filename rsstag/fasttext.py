@@ -30,7 +30,7 @@ class FastTextLearn:
 
         if self._model:
             self._model.build_vocab(corpus_iterable=words, update=True)
-            self._model.train(sentences=words, total_examples=total, epochs=self.__n_epochs)
+            self._model.train(corpus_iterable=words, total_examples=total, epochs=self.__n_epochs)
         else:
             self._model = FastText(
                 sentences=words,
