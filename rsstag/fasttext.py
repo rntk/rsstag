@@ -29,7 +29,7 @@ class FastTextLearn:
             total = len(words)
 
         if self._model:
-            self._model.build_vocab(sentences=words)
+            self._model.build_vocab(corpus_iterable=words, update=True)
             self._model.train(sentences=words, total_examples=total, epochs=self.__n_epochs)
         else:
             self._model = FastText(
