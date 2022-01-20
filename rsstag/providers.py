@@ -538,7 +538,7 @@ class TelegramProvider:
                 r = self._tlg.request(get_chat(prev_chat_id))
                 chat_d = r.update
                 list_offset = chat_d["positions"][0]["order"]
-                time.sleep(1)
+                time.sleep(randint(1,2))
         else:
             telegram_channels = user["telegram_channel"].split(",")
             for telegram_channel in telegram_channels:
@@ -659,8 +659,7 @@ class TelegramProvider:
             if len(posts) > 5000:
                 yield (posts, list(feeds.values()))
                 posts = []
-            if randint(0, 1) == 0:
-                time.sleep(randint(1, 2))
+            time.sleep(randint(1, 2))
 
         self._tlg.close()
 
