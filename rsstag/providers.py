@@ -419,7 +419,11 @@ def tlg_post_to_html(post: dict) -> str:
 
         i += 1
 
-    return result_html.getvalue()
+    s = result_html.getvalue().strip()
+    if s == "":
+        s = post["content"]["@type"]
+
+    return s
 
 
 class TelegramProvider:
