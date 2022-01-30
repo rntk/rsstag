@@ -784,3 +784,6 @@ class RSSTagApplication(object):
 
     def on_tag_specific_get(self, user: dict, _: Request, tag: str):
         return tags_handlers.on_tag_specific_get(self, user, tag)
+
+    def on_get_context_tags(self, user: dict, request: Request, tags: str):
+        return tags_handlers.on_get_context_tags(self, user, request, tags)

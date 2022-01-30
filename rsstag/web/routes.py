@@ -140,6 +140,11 @@ class RSSTagRoutes:
                 "endpoint": "on_get_tag_page",
                 "methods": ["GET"],
             },
+            {
+                "url": "/context-tags/<string:tags>",
+                "endpoint": "on_get_context_tags",
+                "methods": ["GET"],
+            },
             {"url": "/map", "endpoint": "on_get_map", "methods": ["GET"]},
             {
                 "url": "/api/tag-net/<string:tag>",

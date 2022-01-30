@@ -342,6 +342,7 @@ def on_get_tag_page(
     return Response(
         page.render(
             tag=tag_data,
+            posts_link=tag_data["local_url"],
             sort_by_title="tags",
             sort_by_link=app.routes.get_url_by_endpoint(
                 endpoint="on_group_by_tags_get", params={"page_number": 1}
@@ -388,10 +389,11 @@ def on_post_tags_search(
 
 
 def on_get_tag_similar(
-    app: "RSSTagApplication", user: dict, model: str, tag: str
+    app: "RSSTagApplication", user: dict, model: str, tags: str
 ) -> Response:
     tags_set = set()
     all_tags = []
+    tags_l = tags.split()
     if model in app.models:
         if model == app.models["w2v"]:
             w2v = None
@@ -400,12 +402,15 @@ def on_get_tag_similar(
                 w2v = Word2Vec.load(path)
 
             try:
-                siblings = w2v.wv.similar_by_word(tag, topn=30)
+                if len(tags_l) > 1:
+                    siblings = w2v.wv.most_similar(tags_l, topn=30)
+                else:
+                    siblings = w2v.wv.similar_by_word(tags, topn=30)
                 for sibling in siblings:
                     tags_set.add(sibling[0])
             except Exception as e:
                 logging.warning(
-                    "In %s not found tag %s. %s", path, tag, e
+                    "In %s not found tag %s. %s", path, tags, e
                 )
         elif model == app.models["fasttext"]:
             ft: Optional[FastText] = None
@@ -414,12 +419,15 @@ def on_get_tag_similar(
                 ft = FastText.load(path)
 
             try:
-                siblings = ft.wv.similar_by_word(tag, topn=30)
+                if len(tags_l) > 1:
+                    siblings = ft.wv.most_similar(tags_l, topn=30)
+                else:
+                    siblings = ft.wv.similar_by_word(tags, topn=30)
                 for sibling in siblings:
                     tags_set.add(sibling[0])
             except Exception as e:
                 logging.warning(
-                    "In %s not found tag %s. %s", path, tag, e
+                    "In %s not found tag %s. %s", path, tags, e
                 )
 
         if tags_set:
@@ -449,22 +457,24 @@ def on_get_tag_similar(
 
     return Response(json.dumps(result), mimetype="application/json", status=code)
 
-def on_get_tag_siblings(app: "RSSTagApplication", user: dict, tag: str) -> Response:
+def on_get_tag_siblings(app: "RSSTagApplication", user: dict, tags: str) -> Response:
+    req_tags = tags.split()
     all_tags = []
     if user["settings"]["only_unread"]:
         only_unread = user["settings"]["only_unread"]
     else:
         only_unread = None
-    posts = app.posts.get_by_tags(user["sid"], [tag], only_unread, {"lemmas": True})
+    posts = app.posts.get_by_tags(user["sid"], req_tags, only_unread, {"lemmas": True})
     tags_set = set()
     window = 5
     stopw = set(stopwords.words("english") + stopwords.words("russian"))
+    req_tags_s = set(req_tags)
     for post in posts:
         txt = gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
         words = txt.split()
         words_ln = len(words)
         for i, w in enumerate(words):
-            if w != tag:
+            if w not in req_tags_s:
                 continue
             for j in range(1, window):
                 pos = i - j
@@ -503,8 +513,9 @@ def on_get_tag_siblings(app: "RSSTagApplication", user: dict, tag: str) -> Respo
 
 def on_get_tag_pmi(app: "RSSTagApplication", user: dict, tag: str) -> Response:
     if tag:
+        req_tags = set(tag.split())
         cursor = app.posts.get_by_tags(
-            user["sid"], [tag], user["settings"]["only_unread"], {"lemmas": True}
+            user["sid"], list(req_tags), user["settings"]["only_unread"], {"lemmas": True}
         )
         stopw = set(stopwords.words("english") + stopwords.words("russian"))
         texts = [
@@ -517,7 +528,7 @@ def on_get_tag_pmi(app: "RSSTagApplication", user: dict, tag: str) -> Response:
         window = 5
         for text in texts:
             words_l = [
-                word for word in text.split() if word not in stopw and word != tag
+                word for word in text.split() if word not in stopw and word not in req_tags
             ]
             uniq_words.update(words_l)
             bi_grams = []
@@ -585,8 +596,9 @@ def on_get_tag_pmi(app: "RSSTagApplication", user: dict, tag: str) -> Response:
 
 def on_tag_tfidf_get(app: "RSSTagApplication", user: dict, tag: str) -> Response:
     if tag:
+        req_tags_s = set(tag.split())
         cursor = app.posts.get_by_tags(
-            user["sid"], [tag], user["settings"]["only_unread"], {"lemmas": True}
+            user["sid"], list(req_tags_s), user["settings"]["only_unread"], {"lemmas": True}
         )
         topics = set()
         stopw = set(stopwords.words("english") + stopwords.words("russian"))
@@ -609,7 +621,7 @@ def on_tag_tfidf_get(app: "RSSTagApplication", user: dict, tag: str) -> Response
                 tfidf.append((word, tf * idf))
             tfidf.sort(key=lambda x: x[1], reverse=True)
             topics.update([ti[0] for ti in tfidf[:5]])
-        topics.add(tag)
+        topics.update(req_tags_s)
         topics = list(topics)
 
         tags_c = app.tags.get_by_tags(
@@ -618,12 +630,12 @@ def on_tag_tfidf_get(app: "RSSTagApplication", user: dict, tag: str) -> Response
         tags = list(tags_c)
         t_words = []
         for tg in tags:
-            if tg["tag"] == tag:
-                t_words = tg["words"]
+            if tg["tag"] in req_tags_s:
+                t_words += tg["words"]
                 break
         all_tags = []
         for tg in tags:
-            if tg["tag"] == tag:
+            if tg["tag"] in req_tags_s:
                 continue
             all_tags.append(
                 {
@@ -650,7 +662,7 @@ def on_tag_clusters_get(app: "RSSTagApplication", user: dict, tag: str) -> Respo
     if tag:
         cursor = app.posts.get_by_tags(
             user["sid"],
-            [tag],
+            tag.split(),
             user["settings"]["only_unread"],
             {"lemmas": True, "pid": True},
         )
@@ -686,7 +698,7 @@ def on_tag_entities_get(app: "RSSTagApplication", user: dict, tag: str) -> Respo
     if tag:
         cursor = app.posts.get_by_tags(
             user["sid"],
-            [tag],
+            tag.split(),
             user["settings"]["only_unread"],
             {"content": True, "tags": True, "bi_grams": True},
         )
@@ -738,10 +750,11 @@ def on_tag_entities_get(app: "RSSTagApplication", user: dict, tag: str) -> Respo
     return Response(json.dumps(result), mimetype="application/json", status=code)
 
 
-def on_tag_topics_get(app: "RSSTagApplication", user: dict, tag: str) -> Response:
-    if tag:
+def on_tag_topics_get(app: "RSSTagApplication", user: dict, tags: str) -> Response:
+    if tags:
+        req_tags = tags.split()
         cursor = app.posts.get_by_tags(
-            user["sid"], [tag], user["settings"]["only_unread"], {"lemmas": True}
+            user["sid"], req_tags, user["settings"]["only_unread"], {"lemmas": True}
         )
         texts = [
             gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
@@ -749,8 +762,9 @@ def on_tag_topics_get(app: "RSSTagApplication", user: dict, tag: str) -> Respons
         ]
         lda = LDA()
         topics = lda.topics(texts, top_k=5)
-        if tag in topics:
-            topics.remove(tag)
+        for tg in req_tags:
+            if tg in topics:
+                topics.remove(tg)
         tags = app.tags.get_by_tags(
             user["sid"], topics, user["settings"]["only_unread"]
         )
@@ -781,7 +795,7 @@ def on_tag_topics_get(app: "RSSTagApplication", user: dict, tag: str) -> Respons
 def on_tag_dates_get(app: "RSSTagApplication", user: dict, tag: str) -> Response:
     if tag:
         cursor = app.posts.get_by_tags(
-            user["sid"], [tag], user["settings"]["only_unread"], {"unix_date": True}
+            user["sid"], tag.split(), user["settings"]["only_unread"], {"unix_date": True}
         )
         data = []
         for dt in cursor:
@@ -794,9 +808,10 @@ def on_tag_dates_get(app: "RSSTagApplication", user: dict, tag: str) -> Response
 
     return Response(json.dumps(result), mimetype="application/json", status=code)
 
-def on_tag_specific_get(app: "RSSTagApplication", user: dict, tag: str) -> Response:
-    if tag:
-        tag = tag.casefold()
+def on_tag_specific_get(app: "RSSTagApplication", user: dict, tags: str) -> Response:
+    if tags:
+        tags = tags.casefold()
+        req_tags_s = set(tags.split())
         cursor = app.posts.get_all(
             user["sid"], user["settings"]["only_unread"], projection={"lemmas": True}
         )
@@ -805,12 +820,13 @@ def on_tag_specific_get(app: "RSSTagApplication", user: dict, tag: str) -> Respo
         for post in cursor:
             txt = gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
             words = set(txt.split(" "))
-            if tag in words:
+            diff_s = words.difference(req_tags_s)
+            if len(diff_s) == len(req_tags_s):
                 tag_words.update(words)
                 continue
             other_words.update(words)
         spec = tag_words - other_words
-        spec.remove(tag)
+        #spec.remove(tags)
         del tag_words
         del other_words
         cursor = app.tags.get_by_tags(user["sid"], list(spec), user["settings"]["only_unread"], projection={"_id": False})
@@ -837,3 +853,58 @@ def on_tag_specific_get(app: "RSSTagApplication", user: dict, tag: str) -> Respo
         code = 400
 
     return Response(json.dumps(result), mimetype="application/json", status=code)
+
+def on_get_context_tags(
+    app: "RSSTagApplication", user: dict, request: Request, tags: str
+) -> Response:
+    tags_l = tags.split()
+    cursor = app.tags.get_by_tags(user["sid"], tags_l, projection={"_id": False})
+    tag_data = None
+    for t in cursor:
+        if tag_data is None:
+            tag_data = t
+            continue
+        tag_data["tag"] += " " + t["tag"]
+        tag_data["words"] += t["words"]
+
+    if not tag_data:
+        return app.on_error(user, request, NotFound())
+
+    cursor = app.posts.get_by_tags(user["sid"], tags_l, projection={"read": True})
+    n_r = 0
+    n_ur = 0
+    for p in cursor:
+        if p["read"]:
+            n_r += 1
+        else:
+            n_ur += 1
+    tag_data["unread_count"] = n_ur
+    tag_data["posts_count"] = n_ur + n_r
+
+    page = app.template_env.get_template("tag-info.html")
+
+    if len(tags_l) > 1:
+        posts_link = app.routes.get_url_by_endpoint(
+            endpoint="on_entity_get", params={"quoted_tag": tag_data["tag"]}
+        )
+    else:
+        posts_link = app.routes.get_url_by_endpoint(
+            endpoint="on_tag_get", params={"quoted_tag": tag_data["tag"]}
+        )
+
+    return Response(
+        page.render(
+            tag=tag_data,
+            posts_link=posts_link,
+            sort_by_title="tags",
+            sort_by_link=app.routes.get_url_by_endpoint(
+                endpoint="on_group_by_tags_get", params={"page_number": 1}
+            ),
+            group_by_link=app.routes.get_url_by_endpoint(
+                endpoint="on_group_by_category_get"
+            ),
+            user_settings=user["settings"],
+            provider=user["provider"],
+        ),
+        mimetype="text/html",
+    )

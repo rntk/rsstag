@@ -313,7 +313,138 @@ window.onload = () => {
         const topics_texts_storage = new TopicsTextsStorage(tag.tag, topics_texts_evsys);
         topics_texts_chart.start();
         topics_texts_storage.start();*/
+    } else if (/\/context-tags\/.*/.test(path)) {
+        let tag = window.initial_tag;
 
+        const similar_w2v_evsys = new EventsSystem();
+        const similar_w2v_storage = new TagsStorage(similar_w2v_evsys, '/tag-similar/w2v');
+        ReactDOM.render(
+            <TagsList ES={similar_w2v_evsys} />,
+            document.getElementById('similar_w2v_tags')
+        );
+        ReactDOM.render(
+            <TagButton ES={similar_w2v_evsys} title="Word2Vec" tag={tag} />,
+            document.getElementById('load_similar_w2v')
+        );
+        similar_w2v_storage.start();
+
+        const similar_fasttext_evsys = new EventsSystem();
+        const similar_fasttext_storage = new TagsStorage(similar_fasttext_evsys, '/tag-similar/fasttext');
+        ReactDOM.render(
+            <TagsList ES={similar_fasttext_evsys} />,
+            document.getElementById('similar_fasttext_tags')
+        );
+        ReactDOM.render(
+            <TagButton ES={similar_fasttext_evsys} title="FastText" tag={tag} />,
+            document.getElementById('load_similar_fasttext')
+        );
+        similar_fasttext_storage.start();
+
+        const siblings_evsys = new EventsSystem();
+        const siblings_storage = new TagsStorage(siblings_evsys, '/tag-siblings');
+        ReactDOM.render(
+            <TagsList ES={siblings_evsys} />,
+            document.getElementById('siblings_tags')
+        );
+        ReactDOM.render(
+            <TagButton ES={siblings_evsys} title="siblings" tag={tag} />,
+            document.getElementById('load_siblings')
+        );
+        siblings_storage.start();
+
+        const clusters_evsys = new EventsSystem();
+        const clusters_storage = new TagsClustersStorage(clusters_evsys);
+        ReactDOM.render(
+            <TagsClustersList ES={clusters_evsys} tag={tag.tag} />,
+            document.getElementById('tag_clusters')
+        );
+        ReactDOM.render(
+            <TagButton ES={clusters_evsys} title="clusters" tag={tag} />,
+            document.getElementById('load_clusters')
+        );
+        clusters_storage.start();
+
+        const bi_grams_evsys = new EventsSystem();
+        const bi_grams_storage = new TagsStorage(bi_grams_evsys, '/tag-bi-grams');
+        ReactDOM.render(
+            <TagsList ES={bi_grams_evsys} is_bigram={true} />,
+            document.getElementById('bi_grams')
+        );
+        ReactDOM.render(
+            <TagButton ES={bi_grams_evsys} title="bi-grams" tag={tag} />,
+            document.getElementById('load_bi_grams')
+        );
+        bi_grams_storage.start();
+
+        const pmi_evsys = new EventsSystem();
+        const pmi_storage = new TagsStorage(pmi_evsys, '/tag-pmi');
+        ReactDOM.render(
+            <TagsList ES={pmi_evsys} is_bigram={true} />,
+            document.getElementById('pmi')
+        );
+        ReactDOM.render(
+            <TagButton ES={pmi_evsys} title="PMI" tag={tag} />,
+            document.getElementById('load_pmi')
+        );
+        pmi_storage.start();
+
+        const tag_topics_evsys = new EventsSystem();
+        const tag_topics_storage = new TagsStorage(tag_topics_evsys, '/tag-topics');
+        ReactDOM.render(
+            <TagsList ES={tag_topics_evsys} />,
+            document.getElementById('tag_topics')
+        );
+        ReactDOM.render(
+            <TagButton ES={tag_topics_evsys} title="topics" tag={tag} />,
+            document.getElementById('load_topics')
+        );
+        tag_topics_storage.start();
+
+        const tag_mentions_evsys = new EventsSystem();
+        const tag_mentions_chart = new TagMentionsChart("#mentions_chart", tag_mentions_evsys);
+        const tag_mentions_storage = new TagMentionsStorage(tag.tag, tag_mentions_evsys);
+        ReactDOM.render(
+            <TagButton ES={tag_mentions_evsys} title="mentions" tag={tag} />,
+            document.getElementById('load_mentions')
+        );
+        tag_mentions_chart.start();
+        tag_mentions_storage.start();
+
+        const tag_entities_evsys = new EventsSystem();
+        const tag_entities_storage = new TagsStorage(tag_entities_evsys, '/tag-entities');
+        ReactDOM.render(
+            <TagsList ES={tag_entities_evsys} is_entities={true} />,
+            document.getElementById('tag_entities')
+        );
+        ReactDOM.render(
+            <TagButton ES={tag_entities_evsys} title="entities" tag={tag} />,
+            document.getElementById('load_entities')
+        );
+        tag_entities_storage.start();
+
+        const tag_tfidf_evsys = new EventsSystem();
+        const tag_tfidf_storage = new TagsStorage(tag_tfidf_evsys, '/tag-tfidf');
+        ReactDOM.render(
+            <TagsList ES={tag_tfidf_evsys} is_entities={true} />,
+            document.getElementById('tag_tfidf')
+        );
+        ReactDOM.render(
+            <TagButton ES={tag_tfidf_evsys} title="TFIDF" tag={tag} />,
+            document.getElementById('load_tfidf')
+        );
+        tag_tfidf_storage.start();
+
+        const tag_specific_evsys = new EventsSystem();
+        const tag_specific_storage = new TagsStorage(tag_specific_evsys, '/tag-specific');
+        ReactDOM.render(
+            <TagsList ES={tag_specific_evsys} />,
+            document.getElementById('tag_specific')
+        );
+        ReactDOM.render(
+            <TagButton ES={tag_specific_evsys} title="specific" tag={tag} />,
+            document.getElementById('load_specific')
+        );
+        tag_specific_storage.start();
     } else if (/^\/map$/.test(path)) {
         let map_handler = new RssTagYMap('map', window.EVSYS);
         let prom = rsstag_utils.waitFor(map_handler.isReadyToStart);
