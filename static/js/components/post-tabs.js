@@ -4,17 +4,20 @@ import {PostsListS} from "./posts-list.js";
 import WordTree from './wordtree.js';
 import PostsWordsCloud from "./posts-wordscloud.js";
 import {PostsBigrams} from "./post-bigrams.js";
+import {PostsTags} from "./post-tags.js";
 
 const TAB_POSTS = "posts";
 const TAB_WORDSTREE = "wordstree";
 const TAB_BIGRAMS = "bigrams";
 const TAB_WORDSCLOUD = "wordscloud";
+const TAB_TAGS = "tags";
 
 export class PostTabs extends React.Component {
     constructor(props) {
         super(props);
         this.tabs = new Map();
         this.tabs.set(TAB_POSTS, "Posts");
+        this.tabs.set(TAB_TAGS, "Tags");
         this.tabs.set(TAB_WORDSTREE, "Wordtree");
         this.tabs.set(TAB_BIGRAMS, "Bi-grams");
         this.tabs.set(TAB_WORDSCLOUD, "Wordcloud");
@@ -62,6 +65,9 @@ export class PostTabs extends React.Component {
         }
         if (this.state.current === TAB_BIGRAMS) {
             el = PostsBigrams(this.state.posts);
+        }
+        if (this.state.current === TAB_TAGS) {
+            el = PostsTags(this.state.posts);
         }
         let res_el = (<div>
             <ul className="post_tabs_list">{tabs}</ul>
