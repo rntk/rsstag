@@ -9,7 +9,7 @@ from datetime import date, datetime
 from random import randint, uniform
 from urllib.parse import quote_plus, urlencode
 from http import client
-from typing import Tuple, List, Optional, Iterator
+from typing import Tuple, List, Optional, Iterator, Dict, Any
 from collections import defaultdict
 from io import StringIO
 import unicodedata
@@ -26,6 +26,7 @@ import aiohttp
 from pymongo import MongoClient
 
 from telegram.client import Telegram
+from telegram.client import Result as TelegramResult
 from telegram.queries import get_message_link, get_chat, get_chats, get_chat_history, search_channel
 
 NOT_CATEGORIZED = "NotCategorized"
@@ -471,12 +472,18 @@ class TelegramProvider:
                 if limit <= 0:
                     has_posts = False
                     continue
-                posts_req = self._tlg.request(get_chat_history(
+                posts_req = self.__requests_repeater(get_chat_history(
                     channel["id"], limit=limit, from_message_id=from_id
                 ))
                 posts_data = posts_req.update
                 if (not posts_req.update) or (len(posts_data["messages"]) == 0):
                     has_posts = False
+                    if posts_req.error:
+                        logging.warning(
+                            "Channel history error %s: %s",
+                            channel["id"],
+                            posts_req.error
+                        )
                     continue
                 logging.info(
                     "Batch loaded. Channel %s from %s. Posts - %s. All Posts - %s",
@@ -491,7 +498,7 @@ class TelegramProvider:
                 posts_n += len(posts_data["messages"])
                 posts_links = []
                 for post in posts_data["messages"]:
-                    resp = self._tlg.request(get_message_link(post["chat_id"], post["id"]))
+                    resp = self.__requests_repeater(get_message_link(post["chat_id"], post["id"]))
                     posts_links.append(resp.update["link"])
 
                 results_q.put_nowait((channel["id"], posts_data, posts_links))
@@ -500,6 +507,29 @@ class TelegramProvider:
             tasks_q.task_done()
             logging.info("Downloaded: %s - %s", channel["title"], posts_n)
             time.sleep(1)
+
+    def __requests_repeater(self, query: Dict[str, Any]) -> TelegramResult:
+        on_error_repeats = 3
+        repeats = 0
+        all_repeats = 0
+        r = None
+        while True:
+            if all_repeats > 0:
+                logging.warning("Repeat telegram request: %d. %s. %s", all_repeats, query, r)
+            all_repeats += 1
+            r = self._tlg.request(query)
+            if r.update is not None:
+                return r
+            if r.error:
+                #example: {'@type': 'error', 'code': 429, 'message': 'Too Many Requests: retry after 77616', '@extra': {'req_id': '1643864060.31774_9523'}, '@client_id': 1}
+                if "code" in r.error and r.error["code"] == 429:
+                    time.sleep(randint(7, 20))
+                    continue
+                repeats += 1
+                if repeats > on_error_repeats:
+                    return r
+
+            time.sleep(randint(5, 10))
 
     def download(self, user: dict) -> Tuple[List, List]:
         provider = user["provider"]
@@ -521,7 +551,7 @@ class TelegramProvider:
             prev_chat_id = 0
             uniq_chat_ids = set()
             while True:
-                r = self._tlg.request(get_chats(
+                r = self.__requests_repeater(get_chats(
                     offset_order=list_offset, offset_chat_id=prev_chat_id
                 ))
                 ids = r.update
@@ -535,11 +565,11 @@ class TelegramProvider:
                 for c_id in ids["chat_ids"]:
                     if c_id in uniq_chat_ids:
                         continue
-                    r = self._tlg.request(get_chat(c_id))
+                    r = self.__requests_repeater(get_chat(c_id))
                     channels.append(r.update)
                 prev_chat_id = ids["chat_ids"][-1]
                 uniq_chat_ids.update(ids["chat_ids"])
-                r = self._tlg.request(get_chat(prev_chat_id))
+                r = self.__requests_repeater(get_chat(prev_chat_id))
                 chat_d = r.update
                 list_offset = chat_d["positions"][0]["order"]
                 time.sleep(randint(1,2))
@@ -549,11 +579,12 @@ class TelegramProvider:
                 telegram_channel = telegram_channel.strip()
                 if not telegram_channel:
                     continue
-                channel_req = self._tlg.request(search_channel(telegram_channel))
+                channel_req = self.__requests_repeater(search_channel(telegram_channel))
                 if not channel_req.update:
-                    logging.warning("No channel: %s", telegram_channel)
-                    self._tlg.close()
-                    return ([], [])
+                    logging.warning("No channel: %s. %s", telegram_channel, channel_req.error)
+                    continue
+                    #self._tlg.close()
+                    #return ([], [])
                 channels.append(channel_req.update)
         tasks_q = Queue()
         results_q = Queue()
