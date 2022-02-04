@@ -125,6 +125,11 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/tag-similar-tags/<string:tags>",
+                "endpoint": "on_get_tag_similar_tags",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/tags-search",
                 "endpoint": "on_post_tags_search",
                 "methods": ["POST"],

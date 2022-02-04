@@ -313,6 +313,18 @@ window.onload = () => {
         const topics_texts_storage = new TopicsTextsStorage(tag.tag, topics_texts_evsys);
         topics_texts_chart.start();
         topics_texts_storage.start();*/
+
+        const similar_words_evsys = new EventsSystem();
+        const similar_words_storage = new TagsStorage(similar_words_evsys, '/tag-similar-tags');
+        ReactDOM.render(
+            <TagsList ES={similar_words_evsys} />,
+            document.getElementById('similar_words_tags')
+        );
+        ReactDOM.render(
+            <TagButton ES={similar_words_evsys} title="Words" tag={tag} />,
+            document.getElementById('load_similar_words')
+        );
+        similar_words_storage.start();
     } else if (/\/context-tags\/.*/.test(path)) {
         let tag = window.initial_tag;
 
@@ -445,6 +457,18 @@ window.onload = () => {
             document.getElementById('load_specific')
         );
         tag_specific_storage.start();
+
+        const similar_words_evsys = new EventsSystem();
+        const similar_words_storage = new TagsStorage(similar_words_evsys, '/tag-similar-tags');
+        ReactDOM.render(
+            <TagsList ES={similar_words_evsys} />,
+            document.getElementById('similar_words_tags')
+        );
+        ReactDOM.render(
+            <TagButton ES={similar_words_evsys} title="Words" tag={tag} />,
+            document.getElementById('load_similar_words')
+        );
+        similar_words_storage.start();
     } else if (/^\/map$/.test(path)) {
         let map_handler = new RssTagYMap('map', window.EVSYS);
         let prom = rsstag_utils.waitFor(map_handler.isReadyToStart);

@@ -25,8 +25,10 @@ from werkzeug.exceptions import NotFound, InternalServerError
 
 from nltk.corpus import stopwords
 
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.cluster import DBSCAN
+from sklearn.metrics import pairwise_distances
+import numpy as np
 
 from navec import Navec
 from slovnet import NER
@@ -908,3 +910,45 @@ def on_get_context_tags(
         ),
         mimetype="text/html",
     )
+
+def on_get_tag_similar_tags(app: "RSSTagApplication", user: dict, tag: str) -> Response:
+    if tag:
+        tags_words = set(tag.split())
+        cursor = app.tags.get_all(user["sid"], user["settings"]["only_unread"], projection={"tag": True})
+        words = [t["tag"] for t in cursor if t["tag"] not in tags_words]
+        similar = set()
+        vect = CountVectorizer(ngram_range=(2,2), analyzer="char")
+        vects = vect.fit_transform(words)
+        tag_vec = vect.transform(tags_words)
+        dists = pairwise_distances(tag_vec, vects, metric="cosine")
+        _, ys = np.where(dists < 0.4)
+        for y in ys:
+            similar.add(words[y])
+
+        cursor = app.tags.get_by_tags(
+            user["sid"], list(similar), user["settings"]["only_unread"], projection={"_id": False}
+        )
+        tags = [t for t in cursor]
+
+        tags.sort(key=lambda t: t["unread_count"], reverse=True)
+        all_tags = []
+        for tg in tags:
+            all_tags.append(
+                {
+                    "tag": tg["tag"],
+                    "url": "/tag/" + quote(tag),
+                    "words": tg["words"],
+                    "count": tg["unread_count"],
+                    "sentiment": tg["sentiment"] if "sentiment" in tg else [],
+                    "temp": tg["temperature"],
+                    "freq": tg["freq"],
+                }
+            )
+
+        result = {"data": all_tags}
+        code = 200
+    else:
+        result = {"error": "Something wrong with request"}
+        code = 400
+
+    return Response(json.dumps(result), mimetype="application/json", status=code)
