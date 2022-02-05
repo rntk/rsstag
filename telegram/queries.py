@@ -11,11 +11,18 @@ def set_log_verbosity_level(level: int) -> Dict[str, Any]:
 def get_chat(chat_id: int) -> Dict[str, Any]:
     return {"@type": "getChat", "chat_id": chat_id}
 
-def get_chats(offset_order: int = 0, offset_chat_id: int = 0, limit: int = 100) -> Dict[str, Any]:
+def get_chats_(offset_order: int = 0, offset_chat_id: int = 0, limit: int = 100) -> Dict[str, Any]:
     return {
         "@type": "getChats",
         "offset_order": offset_order,
         "offset_chat_id": offset_chat_id,
+        "limit": limit,
+    }
+
+def get_chats(limit: int = 100) -> Dict[str, Any]:
+    return {
+        "@type": "getChats",
+        "chat_list": None,
         "limit": limit,
     }
 
@@ -92,4 +99,3 @@ def set_authentication_phone_number(phone: str) -> Dict[str, Any]:
     return {"@type": "setAuthenticationPhoneNumber", "phone_number": phone}
 
 #login
-

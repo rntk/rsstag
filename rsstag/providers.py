@@ -547,32 +547,20 @@ class TelegramProvider:
         self._tlg.run()
         channels = []
         if all_channels:
-            list_offset = 9223372036854775807
-            prev_chat_id = 0
             uniq_chat_ids = set()
-            while True:
-                r = self.__requests_repeater(get_chats(
-                    offset_order=list_offset, offset_chat_id=prev_chat_id
-                ))
-                ids = r.update
-                if not ids:
-                    break
-                if not ids["chat_ids"]:
-                    break
-                chats_n = ids["total_count"]
-                if chats_n <= len(channels):
-                    break
+            r = self.__requests_repeater(get_chats(limit=1000))
+            ids = r.update
+            if ids and ids["chat_ids"]:
                 for c_id in ids["chat_ids"]:
                     if c_id in uniq_chat_ids:
                         continue
+                    uniq_chat_ids.add(c_id)
                     r = self.__requests_repeater(get_chat(c_id))
+                    time.sleep(randint(2, 4))
+                    if not r.update:
+                        continue
+                    logging.info("Loading chat data: %d", c_id)
                     channels.append(r.update)
-                prev_chat_id = ids["chat_ids"][-1]
-                uniq_chat_ids.update(ids["chat_ids"])
-                r = self.__requests_repeater(get_chat(prev_chat_id))
-                chat_d = r.update
-                list_offset = chat_d["positions"][0]["order"]
-                time.sleep(randint(2,4))
         else:
             telegram_channels = user["telegram_channel"].split(",")
             for telegram_channel in telegram_channels:
