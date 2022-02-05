@@ -502,7 +502,7 @@ class TelegramProvider:
                     posts_links.append(resp.update["link"])
 
                 results_q.put_nowait((channel["id"], posts_data, posts_links))
-                time.sleep(uniform(1,3))
+                time.sleep(uniform(2,4))
 
             tasks_q.task_done()
             logging.info("Downloaded: %s - %s", channel["title"], posts_n)
@@ -572,7 +572,7 @@ class TelegramProvider:
                 r = self.__requests_repeater(get_chat(prev_chat_id))
                 chat_d = r.update
                 list_offset = chat_d["positions"][0]["order"]
-                time.sleep(randint(1,2))
+                time.sleep(randint(2,4))
         else:
             telegram_channels = user["telegram_channel"].split(",")
             for telegram_channel in telegram_channels:
@@ -694,7 +694,7 @@ class TelegramProvider:
             if len(posts) > 5000:
                 yield (posts, list(feeds.values()))
                 posts = []
-            time.sleep(randint(1, 2))
+            time.sleep(randint(2, 4))
 
         self._tlg.close()
 
