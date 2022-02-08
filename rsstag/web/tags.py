@@ -936,7 +936,7 @@ def on_get_tag_similar_tags(app: "RSSTagApplication", user: dict, tag: str) -> R
             all_tags.append(
                 {
                     "tag": tg["tag"],
-                    "url": "/tag/" + quote(tag),
+                    "url": "/tag/" + quote(tg["tag"]),
                     "words": tg["words"],
                     "count": tg["unread_count"],
                     "sentiment": tg["sentiment"] if "sentiment" in tg else [],
