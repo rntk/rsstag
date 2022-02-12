@@ -502,7 +502,7 @@ class TelegramProvider:
                     posts_links.append(resp.update["link"])
 
                 results_q.put_nowait((channel["id"], posts_data, posts_links))
-                time.sleep(uniform(2,4))
+                time.sleep(uniform(3,10))
 
             tasks_q.task_done()
             logging.info("Downloaded: %s - %s", channel["title"], posts_n)
@@ -556,7 +556,7 @@ class TelegramProvider:
                         continue
                     uniq_chat_ids.add(c_id)
                     r = self.__requests_repeater(get_chat(c_id))
-                    time.sleep(randint(2, 4))
+                    time.sleep(randint(2, 7))
                     if not r.update:
                         continue
                     logging.info("Loading chat data: %d", c_id)
@@ -682,7 +682,7 @@ class TelegramProvider:
             if len(posts) > 5000:
                 yield (posts, list(feeds.values()))
                 posts = []
-            time.sleep(randint(2, 4))
+            time.sleep(randint(2, 7))
 
         self._tlg.close()
 
