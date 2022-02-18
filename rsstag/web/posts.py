@@ -278,7 +278,7 @@ def on_feed_get(
     return Response(
         page.render(
             posts=posts,
-            tag=current_feed["title"],
+            tag=current_feed["title"].replace("'", "`"),
             group="feed",
             words=[],
             user_settings=user["settings"],
