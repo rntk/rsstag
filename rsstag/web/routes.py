@@ -223,6 +223,7 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {"url": "/clusters", "endpoint": "on_clusters_get", "methods": ["GET"]},
+            {"url": "/clusters-dyn", "endpoint": "on_clusters_dyn_get", "methods": ["GET"]},
             {
                 "url": "/telegram-code",
                 "endpoint": "on_telegram_code_post",

@@ -39,6 +39,9 @@ from jinja2 import Environment, PackageLoader
 
 from pymongo import MongoClient
 
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
+from sklearn.cluster import DBSCAN
+
 
 class RSSTagApplication(object):
     def __init__(self, config_path=None):
@@ -767,6 +770,51 @@ class RSSTagApplication(object):
                         "n": 0,
                     }
                 links[cl]["n"] += 1
+
+        lnks = [(cl, links[cl]["l"], links[cl]["n"]) for cl in links]
+        lnks.sort(key=lambda x: x[2], reverse=True)
+        page = self.template_env.get_template("clusters.html")
+
+        return Response(
+            page.render(
+                links=lnks, user_settings=user["settings"], provider=user["provider"]
+            ),
+            mimetype="text/html",
+        )
+
+    def on_clusters_dyn_get(self, user: dict, request: Request) -> Response:
+        projection = {"_id": False, "lemmas": True, "pid": True}
+        if user["settings"]["only_unread"]:
+            only_unread = user["settings"]["only_unread"]
+        else:
+            only_unread = None
+        db_posts = self.posts.get_all(user["sid"], only_unread, projection)
+
+        texts = []
+        pids = []
+        for post in db_posts:
+            texts.append(gzip.decompress(post["lemmas"]).decode("utf-8", "replace"))
+            pids.append(post["pid"])
+
+        stopw = set(stopwords.words("english") + stopwords.words("russian"))
+        vectorizer = TfidfVectorizer(stop_words=stopw)
+        vectorizer.fit(texts)
+        vectors = vectorizer.transform(texts)
+        dbs = DBSCAN(eps=0.7, min_samples=2, metric="cosine")
+        cl = dbs.fit_predict(vectors)
+        label_pids = defaultdict(list)
+        for i, label in enumerate(cl):
+            if label < 0:
+                continue
+            label_pids[label].append(str(pids[i]))
+        links = {}
+        for label, pids in label_pids.items():
+            links[label] = {
+                "l": self.routes.get_url_by_endpoint(
+                    endpoint="on_posts_get", params={"pids": "_".join(pids)}
+                ),
+                "n": len(pids),
+            }
 
         lnks = [(cl, links[cl]["l"], links[cl]["n"]) for cl in links]
         lnks.sort(key=lambda x: x[2], reverse=True)
