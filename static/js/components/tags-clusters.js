@@ -1,7 +1,7 @@
 ﻿'use strict';
 import React from 'react';
 
-export default class TagsClustersList extends React.Component{
+export class TagsClustersTxtList extends React.Component{
     constructor(props) {
         super(props);
         this.updateTags = this.updateTags.bind(this);
@@ -70,5 +70,58 @@ export default class TagsClustersList extends React.Component{
         } else {
             return(<p>No tags</p>);
         }
+    }
+}
+
+export default class TagsClustersList extends React.Component{
+    constructor(props) {
+        super(props);
+        this.updateTags = this.updateTags.bind(this);
+    }
+
+    updateTags(state) {
+        this.setState(state);
+    }
+
+    componentDidMount() {
+        this.props.ES.bind(this.props.ES.TAGS_CLUSTERS_UPDATED, this.updateTags);
+        //subscribe
+    }
+
+    componentWillUnmount() {
+        this.props.ES.unbind(this.props.ES.TAGS_CLUSTERS_UPDATED, this.updateTags);
+        //unsubscribe
+    }
+
+    render() {
+        if (!this.state || !this.state.clusters) {
+            return(<p>No clusters</p>);
+        }
+        let pids_labels = [];
+        for (let label in this.state.clusters) {
+            let pids = [];
+            for (let cl of this.state.clusters[label]) {
+                pids.push(cl.pid);
+            }
+            pids_labels.push({
+                lbl: label,
+                pids: pids,
+            });
+        }
+        pids_labels = pids_labels.sort((a, b) => {
+            return b.pids.length - a.pids.length;
+        });
+        let clust_links = [];
+        for (let pids_l of pids_labels) {
+            let pids_s = pids_l.pids.join("_");
+            clust_links.push(
+                <a href={`/posts/${pids_s}`} className="cluster_link" key={"cluster_" + pids_l.lbl}>{`${pids_l.lbl} (${pids_l.pids.length})`}</a>
+            );
+        }
+        return(
+            <div className="cloud">
+                {clust_links}
+            </div>
+        );
     }
 };
