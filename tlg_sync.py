@@ -33,6 +33,7 @@ def tlg_sync(cfg: dict, phone: str, sync_ids: List[Tuple[int, int]]) -> None:
     for chat_id, msg_id in sync_ids:
         print(chat_id, msg_id)
         view(tlg, chat_id, [msg_id])
+        time.sleep(1)
     time.sleep(60)
 
     tlg.close()

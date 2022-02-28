@@ -545,6 +545,7 @@ class TelegramProvider:
         if not self._tlg.login(tlg_code.get_code):
             raise Exception("Telegram login failed")
         self._tlg.run()
+        time.sleep(60)
         channels = []
         if all_channels:
             uniq_chat_ids = set()
