@@ -125,7 +125,7 @@ window.onload = () => {
             document.getElementById('search_tools')
         );
         tags_storage.start();
-    } else if (/\/group\/bi-grams\/.*/.test(path)) {
+    } else if (/\/group\/(bi-grams|bi-grams-dyn)\/.*/.test(path)) {
         const bi_grams_storage = new BiGramsStorage(window.EVSYS);
         ReactDOM.render(
             <TagsList ES={window.EVSYS} is_bigram={true} />,

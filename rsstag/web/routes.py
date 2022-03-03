@@ -33,6 +33,11 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/group/bi-grams-dyn/<int:page_number>",
+                "endpoint": "on_group_by_bigrams_dyn_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/group/tag/startwith/<string(length: 1):letter>/<int:page_number>",
                 "endpoint": "on_group_by_tags_startwith_get",
                 "methods": ["GET"],
