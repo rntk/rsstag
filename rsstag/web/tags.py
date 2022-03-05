@@ -856,6 +856,69 @@ def on_tag_specific_get(app: "RSSTagApplication", user: dict, tags: str) -> Resp
 
     return Response(json.dumps(result), mimetype="application/json", status=code)
 
+def on_tag_specific1_get(app: "RSSTagApplication", user: dict, tags: str) -> Response:
+    if tags:
+        only_unread = user["settings"]["only_unread"]
+        tags = tags.casefold()
+        req_tags_s = set(tags.split())
+        cursor = app.posts.get_by_tags(
+            user["sid"],
+            list(req_tags_s),
+            user["settings"]["only_unread"],
+            projection={"lemmas": True}
+        )
+        tag_fr = Counter()
+        for post in cursor:
+            txt = gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
+            tag_fr.update(txt.split())
+
+        cursor = app.tags.get_all(user["sid"], projection={"_id": False})
+        tag_c = []
+        for tag in cursor:
+            tg = tag["tag"]
+            if tg in req_tags_s:
+                continue
+            if tg not in tag_fr:
+                continue
+            if only_unread and tag["unread_count"] == 0:
+                continue
+            fr = tag_fr[tg]
+            not_tag_fr = tag["freq"] - fr
+            if not_tag_fr == 0:
+                not_tag_fr = 1
+            c = fr / not_tag_fr
+            tag_c.append((tag, c))
+
+        tag_c.sort(key=lambda x: x[1], reverse=True)
+        words_n = 200
+        all_tags = []
+        #TODO: fix unread count
+        for tag, _ in tag_c[:words_n]:
+            all_tags.append(
+                {
+                    "tag": tag["tag"],
+                    "url": app.routes.get_url_by_endpoint(
+                        endpoint="on_entity_get", params={"quoted_tag": quote(tags + " " + tag["tag"])}
+                    ),
+                    "words": tag["words"],
+                    "count": tag["unread_count"]
+                    if user["settings"]["only_unread"]
+                    else tag["posts_count"],
+                    "sentiment": tag["sentiment"] if "sentiment" in tag else [],
+                    "temp": tag["temperature"],
+                }
+            )
+        all_tags.sort(key=lambda x: x["count"], reverse=True)
+
+        result = {"data": all_tags}
+        code = 200
+    else:
+        result = {"error": "Something wrong with request"}
+        code = 400
+
+    return Response(json.dumps(result), mimetype="application/json", status=code)
+
+
 def on_get_context_tags(
     app: "RSSTagApplication", user: dict, request: Request, tags: str
 ) -> Response:

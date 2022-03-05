@@ -308,6 +308,19 @@ window.onload = () => {
             document.getElementById('load_specific')
         );
         tag_specific_storage.start();
+
+        const tag_specific1_evsys = new EventsSystem();
+        const tag_specific1_storage = new TagsStorage(tag_specific1_evsys, '/tag-specific1');
+        ReactDOM.render(
+            <TagsList ES={tag_specific1_evsys} />,
+            document.getElementById('tag_specific1')
+        );
+        ReactDOM.render(
+            <TagButton ES={tag_specific1_evsys} title="specific1" tag={tag} />,
+            document.getElementById('load_specific1')
+        );
+        tag_specific1_storage.start();
+
         /*const topics_texts_evsys = new EventsSystem();
         const topics_texts_chart = new TopicsTexts("#topics_texts", topics_texts_evsys);
         const topics_texts_storage = new TopicsTextsStorage(tag.tag, topics_texts_evsys);
@@ -457,6 +470,18 @@ window.onload = () => {
             document.getElementById('load_specific')
         );
         tag_specific_storage.start();
+
+        const tag_specific1_evsys = new EventsSystem();
+        const tag_specific1_storage = new TagsStorage(tag_specific1_evsys, '/tag-specific1');
+        ReactDOM.render(
+            <TagsList ES={tag_specific1_evsys} />,
+            document.getElementById('tag_specific1')
+        );
+        ReactDOM.render(
+            <TagButton ES={tag_specific1_evsys} title="specific1" tag={tag} />,
+            document.getElementById('load_specific1')
+        );
+        tag_specific1_storage.start();
 
         const similar_words_evsys = new EventsSystem();
         const similar_words_storage = new TagsStorage(similar_words_evsys, '/tag-similar-tags');

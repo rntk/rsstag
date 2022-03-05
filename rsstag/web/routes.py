@@ -188,6 +188,11 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/tag-specific1/<string:tag>",
+                "endpoint": "on_tag_specific1_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/tag-topics/<string:tag>",
                 "endpoint": "on_tag_topics_get",
                 "methods": ["GET"],
