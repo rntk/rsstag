@@ -452,6 +452,30 @@ def tlg_post_to_html(post: dict) -> str:
 
     return s
 
+def tlg_forward_to_query(post: dict) -> Optional[dict]:
+    if "forward_info" not in post:
+        return None
+
+    fi = post["forward_info"]
+    if fi.get("@type", "") != "messageForwardInfo":
+        return None
+
+    if "origin" not in fi:
+        return None
+
+    orig = fi["origin"]
+    if orig.get("@type", "") != "messageForwardOriginChannel":
+        return None
+
+    chat_id = orig.get("chat_id", None)
+    if not chat_id:
+        return None
+
+    msg_id = orig.get("message_id", None)
+    if not msg_id:
+        return None
+
+    return {"chat_id": chat_id, "message_id": msg_id}
 
 class TelegramProvider:
     def __init__(self, config: dict, db: MongoClient):
@@ -525,7 +549,15 @@ class TelegramProvider:
                 posts_links = []
                 for post in posts_data["messages"]:
                     resp = self.__requests_repeater(get_message_link(post["chat_id"], post["id"]))
-                    posts_links.append(resp.update["link"])
+                    frw_q = tlg_forward_to_query(post)
+                    post_l = resp.update["link"]
+                    if frw_q:
+                        resp = self.__requests_repeater(get_message_link(frw_q["chat_id"], frw_q["message_id"]))
+                        if resp.update:
+                            # TODO: refactor may be add link as additional field
+                            post_l += "\n" + resp.update["link"]
+
+                    posts_links.append(post_l)
 
                 results_q.put_nowait((channel["id"], posts_data, posts_links))
                 time.sleep(uniform(3,10))
@@ -665,6 +697,12 @@ class TelegramProvider:
 
                 attachments_list = []
                 entities = []
+                t_link = posts_links[post_i]
+                if "\n" in t_link:
+                    # TODO: refactor may be add link as additional field
+                    parts = t_link.split("\n")
+                    t_link = parts[0]
+                    attachments_list.append(parts[1])
                 try:
                     post_text = tlg_post_to_html(post)
                     if "caption" in post["content"]:
@@ -680,7 +718,6 @@ class TelegramProvider:
                     if "type" in entity and "url" in entity["type"]:
                         attachments_list.append(entity["type"]["url"])
 
-                t_link = posts_links[post_i]
                 posts.append(
                     {
                         "content": {
