@@ -352,7 +352,7 @@ def tlg_webpage_to_html(post: dict) -> str:
     if "description" in wp:
         html_s += wp["description"].get("text", "") + "<br />"
 
-    html_s = '<a href="{}">{}</a>'.format(link, html_s)
+    html_s = '<br /><p><a href="{}">{}</a></p>'.format(link, html_s)
 
     return html_s
 
@@ -444,7 +444,7 @@ def tlg_post_to_html(post: dict) -> str:
         i += 1
     webpage = tlg_webpage_to_html(post)
     if webpage != "":
-        result_html.write(webpage)
+        result_html.write(" " + webpage)
 
     s = result_html.getvalue().strip()
     if s == "":
