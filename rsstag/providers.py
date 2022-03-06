@@ -333,6 +333,29 @@ def tlg_poll_to_html(post: dict) -> str:
 
     return result_html.getvalue()
 
+def tlg_webpage_to_html(post: dict) -> str:
+    if "content" not in post:
+        return ""
+    cont = post["content"]
+    if "web_page" not in cont:
+        return ""
+    wp = cont["web_page"]
+    link = wp.get("url", "")
+    if wp.get("@type", "") != "webPage":
+        return "UNKNOWN_WEB_PAGE"
+
+    html_s = ""
+    if "site_name" in wp:
+        html_s += wp["site_name"] + "<br />"
+    if "title" in wp:
+        html_s += wp["title"] + "<br />"
+    if "description" in wp:
+        html_s += wp["description"].get("text", "") + "<br />"
+
+    html_s = '<a href="{}">{}</a>'.format(link, html_s)
+
+    return html_s
+
 # https://core.telegram.org/type/MessageEntity
 # https://core.telegram.org/api/entities
 def tlg_post_to_html(post: dict) -> str:
@@ -419,6 +442,9 @@ def tlg_post_to_html(post: dict) -> str:
                 continue
 
         i += 1
+    webpage = tlg_webpage_to_html(post)
+    if webpage != "":
+        result_html.write(webpage)
 
     s = result_html.getvalue().strip()
     if s == "":
