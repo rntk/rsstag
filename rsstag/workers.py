@@ -315,7 +315,6 @@ class RSSTagWorker:
         return result
 
     def make_clustering(self, db, owner: str) -> Optional[bool]:
-        result = False
         posts = RssTagPosts(db)
         all_posts = posts.get_all(owner, projection={"lemmas": True, "pid": True})
         clusters = None
@@ -344,9 +343,10 @@ class RSSTagWorker:
                 len(clusters),
                 owner,
             )
-            result = posts.set_clusters(owner, clusters)
 
-        return result
+            return posts.set_clusters(owner, clusters)
+
+        return True
 
     def make_w2v(self, db, owner: str, config: dict) -> Optional[bool]:
         l_sent = PostLemmaSentence(db, owner, split=True)
