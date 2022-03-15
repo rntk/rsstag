@@ -552,15 +552,16 @@ class TelegramProvider:
                     frw_q = tlg_forward_to_query(post)
                     post_l = resp.update["link"]
                     if frw_q:
-                        resp = self.__requests_repeater(get_message_link(frw_q["chat_id"], frw_q["message_id"]))
-                        if resp.update:
+                        #resp = self.__requests_repeater(get_message_link(frw_q["chat_id"], frw_q["message_id"]))
+                        #if resp.update:
                             # TODO: refactor may be add link as additional field
-                            post_l += "\n" + resp.update["link"]
+                        #    post_l += "\n" + resp.update["link"]
+                        post_l += "\n" + "https://t.me/{}/{}".format(frw_q["chat_id"], frw_q["message_id"])
 
                     posts_links.append(post_l)
 
                 results_q.put_nowait((channel["id"], posts_data, posts_links))
-                time.sleep(uniform(3,10))
+                time.sleep(uniform(1,3))
 
             tasks_q.task_done()
             logging.info("Downloaded: %s - %s", channel["title"], posts_n)
@@ -615,7 +616,7 @@ class TelegramProvider:
                         continue
                     uniq_chat_ids.add(c_id)
                     r = self.__requests_repeater(get_chat(c_id))
-                    time.sleep(randint(2, 7))
+                    time.sleep(randint(1, 3))
                     if not r.update:
                         continue
                     logging.info("Loading chat data: %d", c_id)
@@ -660,7 +661,7 @@ class TelegramProvider:
                     "favicon": "",
                 }
         workers = []
-        workers_n = int(self._config["settings"]["downloaders_count"])
+        workers_n = 1 #int(self._config["settings"]["downloaders_count"])
         if not workers_n:
             workers_n = 1
         if len(channels) == 1:
@@ -746,7 +747,7 @@ class TelegramProvider:
             if len(posts) > 5000:
                 yield (posts, list(feeds.values()))
                 posts = []
-            time.sleep(randint(2, 7))
+            time.sleep(randint(1, 3))
 
         self._tlg.close()
 
