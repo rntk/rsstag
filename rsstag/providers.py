@@ -111,7 +111,7 @@ class BazquxProvider:
         if subscriptions:
             routes = RSSTagRoutes(self._config["settings"]["host_name"])
             by_category = {}
-            loop = asyncio.new_event_loop()
+            loop = asyncio.get_event_loop()
             futures = []
             for feed in subscriptions["subscriptions"]:
                 if len(feed["categories"]) > 0:
@@ -147,7 +147,7 @@ class BazquxProvider:
                                 loop,
                             )
                         )
-            future = asyncio.gather(*futures, loop=loop)
+            future = asyncio.gather(*futures)
             loop.run_until_complete(future)
             cats_data = future.result()
             loop.close()
