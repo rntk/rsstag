@@ -64,7 +64,7 @@ if __name__ == "__main__":
     for user in users:
         if user["provider"] != "telegram":
             print("Not telegram provider")
-            exit()
+            continue
         user_id = user["sid"]
         feeds = feeds_h.get_all(user_id)
         tlg_ids = []
