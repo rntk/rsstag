@@ -77,11 +77,11 @@ class RSSTagWorker:
 
     def clear_user_data(self, db: object, user: dict):
         try:
-            db.posts.remove({"owner": user["sid"]})
-            db.feeds.remove({"owner": user["sid"]})
-            db.tags.remove({"owner": user["sid"]})
-            db.bi_grams.remove({"owner": user["sid"]})
-            db.letters.remove({"owner": user["sid"]})
+            db.posts.delete_many({"owner": user["sid"]})
+            db.feeds.delete_many({"owner": user["sid"]})
+            db.tags.delete_many({"owner": user["sid"]})
+            db.bi_grams.delete_many({"owner": user["sid"]})
+            db.letters.delete_many({"owner": user["sid"]})
             result = True
         except Exception as e:
             logging.error("Can`t clear user data %s. Info: %s", user["sid"], e)
@@ -605,6 +605,7 @@ class RSSTagWorker:
         while True:
             try:
                 task = tasks.get_task(users)
+                task_done = False
                 if task["type"] == TASK_NOOP:
                     time.sleep(randint(3, 8))
                     continue

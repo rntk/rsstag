@@ -91,7 +91,7 @@ class RssTagTags:
                 {"groups": {"$all": groups}},
             ]
 
-        return self._db.tags.count(query)
+        return self._db.tags.count_documents(query)
 
     def change_unread(self, owner: str, tags: dict, readed: bool) -> bool:
         updates = []
@@ -126,7 +126,7 @@ class RssTagTags:
         return self._db.tags.find(query, projection=projection)
 
     def add_sentiment(self, owner: str, tag: str, sentiment: List[str]) -> bool:
-        self._db.tags.update(
+        self._db.tags.update_one(
             {"owner": owner, "tag": tag}, {"$set": {"sentiment": sentiment}}
         )
 

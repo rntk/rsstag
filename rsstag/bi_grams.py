@@ -79,7 +79,7 @@ class RssTagBiGrams:
                 {"groups": {"$all": groups}},
             ]
 
-        return self.db.bi_grams.count(query)
+        return self.db.bi_grams.count_documents(query)
 
     def get_all(
         self,

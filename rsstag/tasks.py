@@ -69,7 +69,7 @@ class RssTagTasks:
         if data and "type" in data:
             try:
                 if data["type"] == TASK_DOWNLOAD:  # TODO: check insertion results
-                    self._db.tasks.update(
+                    self._db.tasks.update_one(
                         {"user": data["user"]},
                         {
                             "$set": {
@@ -167,7 +167,7 @@ class RssTagTasks:
                     )
                     if psc == 0:
                         if self.add_next_tasks(task["user"]["sid"], user_task["type"]):
-                            self._db.tasks.remove({"_id": user_task["_id"]})
+                            self._db.tasks.delete_one({"_id": user_task["_id"]})
                             unlock_task = False
                 if unlock_task:
                     self._db.tasks.update_one(
@@ -199,7 +199,7 @@ class RssTagTasks:
                     )
                 else:
                     task["type"] = TASK_NOOP
-                    self._db.tasks.remove({"_id": user_task["_id"]})
+                    self._db.tasks.delete_one({"_id": user_task["_id"]})
                     self.add_next_tasks(
                         task["user"]["sid"], user_task["type"]
                     )
@@ -228,7 +228,7 @@ class RssTagTasks:
                     )
                 else:
                     task["type"] = TASK_NOOP
-                    self._db.tasks.remove({"_id": user_task["_id"]})
+                    self._db.tasks.delete_one({"_id": user_task["_id"]})
                     self.add_next_tasks(
                         task["user"]["sid"], user_task["type"]
                     )
@@ -261,7 +261,7 @@ class RssTagTasks:
                     )
                     if psc == 0:
                         if self.add_next_tasks(task["user"]["sid"], user_task["type"]):
-                            self._db.tasks.remove({"_id": user_task["_id"]})
+                            self._db.tasks.delete_one({"_id": user_task["_id"]})
                             unlock_task = False
                 if unlock_task:
                     self._db.tasks.update_one(
@@ -290,7 +290,7 @@ class RssTagTasks:
 
     def remove_task(self, _id: str) -> Optional[bool]:
         try:
-            self._db.tasks.remove({"_id": _id})  # TODO: check result?
+            self._db.tasks.delete_one({"_id": _id})  # TODO: check result?
             result = True
         except Exception as e:
             result = None
