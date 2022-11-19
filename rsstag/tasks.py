@@ -44,8 +44,9 @@ class RssTagTasks:
         TASK_BIGRAMS_RANK: [TASK_NER],
         TASK_NER: [TASK_CLUSTERING],
         TASK_CLUSTERING: [TASK_W2V],
-        TASK_W2V: [TASK_TAGS_GROUP],
-        TASK_TAGS_GROUP: [TASK_FASTTEXT]
+        TASK_W2V: [TASK_FASTTEXT],
+        #TASK_W2V: [TASK_TAGS_GROUP],
+        #TASK_TAGS_GROUP: [TASK_FASTTEXT]
     }
 
     def __init__(self, db: MongoClient) -> None:
