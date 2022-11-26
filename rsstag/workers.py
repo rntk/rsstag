@@ -689,7 +689,7 @@ class RSSTagWorker:
                 # TODO: add tags_coords, add D2V?
                 if task_done:
                     tasks.finish_task(task)
-                    if task["type"] == TASK_TAGS_GROUP:
+                    if task["type"] == TASK_CLUSTERING:
                         users.update_by_sid(
                             task["user"]["sid"], {"ready": True, "in_queue": False}
                         )
