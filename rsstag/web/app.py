@@ -844,3 +844,6 @@ class RSSTagApplication(object):
 
     def on_group_by_bigrams_dyn_get(self, user: dict, _: Request, page_number: int):
         return bigrams_handlers.on_group_by_bigrams_dyn_get(self, user, page_number)
+
+    def on_mark_telegram_posts_post(self, user: dict, request: Request):
+        return posts_handlers.on_mark_telegram_posts_post(self, user, request)

@@ -238,6 +238,11 @@ class RSSTagRoutes:
                 "url": "/telegram-code",
                 "endpoint": "on_telegram_code_post",
                 "methods": ["POST"],
+            },
+            {
+                "url": "/telegram-mark",
+                "endpoint": "on_mark_telegram_posts_post",
+                "methods": ["POST"],
             }
         ]
 

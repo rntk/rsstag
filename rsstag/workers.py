@@ -21,6 +21,7 @@ from rsstag.tasks import (
     TASK_NOOP,
     TASK_DOWNLOAD,
     TASK_MARK,
+    TASK_MARK_TELEGRAM,
     TASK_TAGS,
     TASK_TAGS_GROUP,
     TAG_NOT_IN_PROCESSING,
@@ -648,6 +649,15 @@ class RSSTagWorker:
                 elif task["type"] == TASK_MARK:
                     provider = providers[task["user"]["provider"]]
                     marked = provider.mark(task["data"], task["user"])
+                    if marked is None:
+                        tasks.freeze_tasks(task["user"], task["type"])
+                        users.update_by_sid(task["user"]["sid"], {"retoken": True})
+                        task_done = False
+                    else:
+                        task_done = marked
+                elif task["type"] == TASK_MARK_TELEGRAM:
+                    provider: TelegramProvider = providers["telegram"]
+                    marked = provider.mark_all(task["data"], task["user"])
                     if marked is None:
                         tasks.freeze_tasks(task["user"], task["type"])
                         users.update_by_sid(task["user"]["sid"], {"retoken": True})

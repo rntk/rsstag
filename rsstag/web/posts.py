@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from rsstag.web.app import RSSTagApplication
-from rsstag.tasks import TASK_MARK, TASK_NOT_IN_PROCESSING
+from rsstag.tasks import TASK_MARK, TASK_MARK_TELEGRAM, TASK_NOT_IN_PROCESSING
 from rsstag.utils import text_to_speech
 
 from werkzeug.wrappers import Request, Response
@@ -353,6 +353,23 @@ def on_read_posts_post(
 
     return Response(json.dumps(result), mimetype="application/json", status=code)
 
+def on_mark_telegram_posts_post(
+        app: "RSSTagApplication", user: dict, _: Request
+) -> Response:
+    for_insert = [
+        {
+            "user": user["sid"],
+            "id": "",
+            "processing": TASK_NOT_IN_PROCESSING,
+            "type": TASK_MARK_TELEGRAM,
+        }
+    ]
+    if not app.tasks.add_task(
+            {"type": TASK_MARK_TELEGRAM, "user": user["sid"], "data": for_insert}
+    ):
+        logging.error("Can't add task for mark telegram posts: %s", for_insert)
+
+    return redirect(app.routes.get_url_by_endpoint("on_root_get"))
 
 def on_posts_content_post(
     app: "RSSTagApplication", user: dict, request: Request

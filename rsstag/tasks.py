@@ -22,6 +22,7 @@ TASK_BIGRAMS_RANK = 13
 TASK_TAGS_RANK = 14
 TASK_FASTTEXT = 15
 TASK_CLEAN_BIGRAMS = 16
+TASK_MARK_TELEGRAM = 17
 
 POST_NOT_IN_PROCESSING = 0
 BIGRAM_NOT_IN_PROCESSING = 0
@@ -82,7 +83,7 @@ class RssTagTasks:
                         },
                         upsert=True,
                     )
-                elif data["type"] == TASK_MARK:
+                elif data["type"] in [TASK_MARK, TASK_MARK_TELEGRAM]:
                     if data["data"]:
                         self._db.tasks.insert_many(data["data"])
                     else:
@@ -383,6 +384,7 @@ class RssTagTasks:
         task_titles = {
             TASK_DOWNLOAD: "Downloading posts from provider",
             TASK_MARK: 'Sync posts "read" state with provider',
+            TASK_MARK_TELEGRAM: 'Sync posts "read" state with Telegram',
             TASK_TAGS: "Bulding posts tags",
             TASK_WORDS: "",
             TASK_LETTERS: "Buildings first letters dictionary",

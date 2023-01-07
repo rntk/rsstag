@@ -15,6 +15,13 @@
         <span class="login_button global_tools_button">
             <a href="/provider">{{provider}}: tags: {{posts['tags']}}  posts: ({{posts['unread']}} / {{posts['read']}})</a>
         </span>
+        <span class="sync_telegram_button global_tools_button">
+            {% if provider == "telegram" %}
+                <form action="/telegram-mark" method="post">
+                    <input type="submit" value="Sync">
+                </form>
+            {% endif %}
+        </span>
         {{ g_status.global_status() }}
         {{ menu.settings_menu() }}
     </div>

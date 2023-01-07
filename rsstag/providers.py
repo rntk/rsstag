@@ -778,7 +778,7 @@ class TelegramProvider:
                 logging.info("%s %s", chat_id, msg_id)
                 self._view(tlg, chat_id, [msg_id])
                 time.sleep(1)
-            time.sleep(5)
+            time.sleep(60)
 
             tlg.close()
         finally:
@@ -795,12 +795,9 @@ class TelegramProvider:
         logging.info("Mark: close char %s %s", chat_id, r)
 
     def mark(self, data: dict, user: dict) -> Optional[bool]:
-        logging.info("mark: %s", data)
-        status = data["status"]
-        if not status:
-            logging.info("skip mark: %s", data)
-            return True
+        return True
 
+    def mark_all(self, data: dict, user: dict) -> Optional[bool]:
         feeds_h = RssTagFeeds(self._db)
         posts_h = RssTagPosts(self._db)
         if user["provider"] != "telegram":
@@ -808,46 +805,35 @@ class TelegramProvider:
             return False
 
         user_id = user["sid"]
-        post_id = data["id"]
-        post = posts_h.get_by_id(user_id, post_id)
-        if not post:
-            logging.info("post not found: %s", data)
-            return False
-
-        feed = feeds_h.get_by_feed_id(user_id, post["feed_id"])
-        if not feed:
-            logging.info("feed not found: %s", data)
-            return False
-
+        feeds = feeds_h.get_all(user_id)
         tlg_ids = []
-        feed_id = int(feed["feed_id"])
-        db_posts = posts_h.get_by_feed_id(
-            user_id,
-            str(feed_id),
-            projection={"id": True, "_id": False, "read": True},
-        )
-        if not db_posts:
-            logging.info("db_posts not found: %s", data)
-            return False
-        posts = list(db_posts)
-        posts.sort(key=lambda x: x["id"], reverse=False)
-        p_id = 0
-        n = 0
-        for p in posts:
-            if not p["read"]:
-                break
-            n += 1
-            p_id = p["id"]
-        logging.info("%s %s, %d, %d", feed_id, feed["title"], len(posts), n)
-        if p_id == 0:
-            logging.info("p_id not found: %s", data)
+        for feed in feeds:
+            feed_id = int(feed["feed_id"])
+            posts = list(posts_h.get_by_feed_id(
+                user_id,
+                str(feed_id),
+                projection={"id": True, "_id": False, "read": True},
+            ))
+            posts.sort(key=lambda x: x["id"], reverse=False)
+            p_id = 0
+            n = 0
+            for p in posts:
+                if not p["read"]:
+                    break
+                n += 1
+                p_id = p["id"]
+            logging.info("%s %s %d %d", feed_id, feed["title"], len(posts), n)
+            if p_id == 0:
+                continue
+
+            tlg_ids.append((feed_id, p_id))
+
+        logging.info("Telegram ids to mark: %d", len(tlg_ids))
+        if not tlg_ids:
+            logging.info("No ids to mark")
             return True
 
-        tlg_ids.append((feed_id, post_id))
-
-        logging.info(len(tlg_ids))
-        if tlg_ids:
-            self._tlg_sync(user["phone"], user["sid"], tlg_ids)
+        self._tlg_sync(user["phone"], user_id, tlg_ids)
 
         return True
 
