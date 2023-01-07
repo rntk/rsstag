@@ -126,6 +126,13 @@ class RssTagPosts:
 
         return self._db.posts.find_one(query, projection=projection)
 
+    def get_by_id(
+            self, owner: str, pid: int, projection: Optional[dict] = None
+    ) -> Optional[dict]:
+        query = {"owner": owner, "id": pid}
+
+        return self._db.posts.find_one(query, projection=projection)
+
     def get_by_pids(
         self, owner: str, pids: List[int], projection: Optional[dict] = None
     ) -> Iterator[dict]:

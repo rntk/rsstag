@@ -14,12 +14,15 @@ from collections import defaultdict
 from io import StringIO
 import unicodedata
 from threading import Thread
+from multiprocessing import Lock
 from queue import Queue, Empty
 import traceback
 
 from rsstag.tasks import POST_NOT_IN_PROCESSING
 from rsstag.web.routes import RSSTagRoutes
 from rsstag.users import TelegramCode
+from rsstag.feeds import RssTagFeeds
+from rsstag.posts import RssTagPosts
 
 import aiohttp
 
@@ -27,10 +30,10 @@ from pymongo import MongoClient
 
 from telegram.client import Telegram
 from telegram.client import Result as TelegramResult
-from telegram.queries import get_message_link, get_chat, get_chats, get_chat_history, search_channel
+from telegram.queries import get_message_link, get_chat, get_chats, get_chat_history, search_channel, open_chat, close_chat, view_messages
 
 NOT_CATEGORIZED = "NotCategorized"
-
+TELEGRAM_LOCK = Lock()
 
 class BazquxProvider:
     """rss downloader from bazqux.com"""
@@ -753,7 +756,99 @@ class TelegramProvider:
 
         yield (posts, list(feeds.values()))
 
+    def _tlg_sync(self, phone: str, sid: str, sync_ids: List[Tuple[int, int]]) -> None:
+        if not sync_ids:
+            return
+        TELEGRAM_LOCK.acquire()
+        try:
+            t_cfg = self._config["telegram"]
+            tlg = Telegram(
+                app_id=t_cfg["app_id"],
+                app_hash=t_cfg["app_hash"],
+                phone=phone,
+                db_key=t_cfg["encryption_key"],
+                db_path=t_cfg["db_dir"]
+            )
+            tlg_code = TelegramCode(self._db, sid)
+            if not tlg.login(tlg_code.get_code):
+                return
+
+            tlg.run()
+            for chat_id, msg_id in sync_ids:
+                logging.info("%s %s", chat_id, msg_id)
+                self._view(tlg, chat_id, [msg_id])
+                time.sleep(1)
+            time.sleep(5)
+
+            tlg.close()
+        finally:
+            TELEGRAM_LOCK.release()
+
+    def _view(self, tlg: Telegram, chat_id: int, ids: List[int]) -> None:
+        r = tlg.request(open_chat(chat_id))
+        logging.info("Mark: open chat: %s %s", chat_id, r)
+
+        res = tlg.request(view_messages(chat_id, ids))
+        logging.info("Mark view message: %s %s", ids, res)
+
+        r = tlg.request(close_chat(chat_id))
+        logging.info("Mark: close char %s %s", chat_id, r)
+
     def mark(self, data: dict, user: dict) -> Optional[bool]:
+        logging.info("mark: %s", data)
+        status = data["status"]
+        if not status:
+            logging.info("skip mark: %s", data)
+            return True
+
+        feeds_h = RssTagFeeds(self._db)
+        posts_h = RssTagPosts(self._db)
+        if user["provider"] != "telegram":
+            logging.error("Not telegram provider")
+            return False
+
+        user_id = user["sid"]
+        post_id = data["id"]
+        post = posts_h.get_by_id(user_id, post_id)
+        if not post:
+            logging.info("post not found: %s", data)
+            return False
+
+        feed = feeds_h.get_by_feed_id(user_id, post["feed_id"])
+        if not feed:
+            logging.info("feed not found: %s", data)
+            return False
+
+        tlg_ids = []
+        feed_id = int(feed["feed_id"])
+        db_posts = posts_h.get_by_feed_id(
+            user_id,
+            str(feed_id),
+            projection={"id": True, "_id": False, "read": True},
+        )
+        if not db_posts:
+            logging.info("db_posts not found: %s", data)
+            return False
+        posts = list(db_posts)
+        posts.sort(key=lambda x: x["id"], reverse=False)
+        p_id = 0
+        n = 0
+        for p in posts:
+            if not p["read"]:
+                break
+            n += 1
+            p_id = p["id"]
+        logging.info("%s %s, %d, %d", feed_id, feed["title"], len(posts), n)
+        if p_id == 0:
+            logging.info("p_id not found: %s", data)
+            return True
+
+        tlg_ids.append((feed_id, post_id))
+
+        logging.info(len(tlg_ids))
+        if tlg_ids:
+            self._tlg_sync(user["phone"], user["sid"], tlg_ids)
+
         return True
 
 class TextFileProvider:
