@@ -13,7 +13,10 @@ import traceback
 from rsstag.tags_builder import TagsBuilder
 from rsstag.html_cleaner import HTMLCleaner
 from pymongo import MongoClient, UpdateOne
-from rsstag.providers import BazquxProvider, TelegramProvider, TextFileProvider
+from rsstag.providers.bazqux import BazquxProvider
+from rsstag.providers.telegram import TelegramProvider
+from rsstag.providers.textfile import TextFileProvider
+import rsstag.providers.providers as data_providers
 from rsstag.utils import load_config
 from rsstag.web.routes import RSSTagRoutes
 from rsstag.users import RssTagUsers
@@ -595,9 +598,9 @@ class RSSTagWorker:
         self._db = db
 
         providers = {
-            "bazqux": BazquxProvider(self._config),
-            "telegram": TelegramProvider(self._config, self._db),
-            "textfile": TextFileProvider(self._config)
+            data_providers.BAZQUX: BazquxProvider(self._config),
+            data_providers.TELEGRAM: TelegramProvider(self._config, self._db),
+            data_providers.TEXT_FILE: TextFileProvider(self._config)
         }
         builder = TagsBuilder()
         cleaner = HTMLCleaner()
@@ -656,7 +659,7 @@ class RSSTagWorker:
                     else:
                         task_done = marked
                 elif task["type"] == TASK_MARK_TELEGRAM:
-                    provider: TelegramProvider = providers["telegram"]
+                    provider: TelegramProvider = providers[data_providers.TELEGRAM]
                     marked = provider.mark_all(task["data"], task["user"])
                     if marked is None:
                         tasks.freeze_tasks(task["user"], task["type"])

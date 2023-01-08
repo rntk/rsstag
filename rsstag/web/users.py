@@ -7,7 +7,8 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from rsstag.web.app import RSSTagApplication
-from rsstag.providers import BazquxProvider
+from rsstag.providers.bazqux import BazquxProvider
+from rsstag.providers.providers import BAZQUX, TEXT_FILE, TELEGRAM
 from rsstag.tasks import TASK_ALL, TASK_DOWNLOAD
 from rsstag.users import TELEGRAM_CODE_FIELD
 
@@ -57,7 +58,7 @@ def on_login_post(app: "RSSTagApplication", request: Request) -> Response:
 
     user = app.users.get_by_login_password(login, password)
     err = []
-    if user and user["provider"] == "bazqux":
+    if user and user["provider"] == BAZQUX:
         # login as baszqux user and check token
         err = []
         provider = BazquxProvider(app.config)
@@ -80,7 +81,7 @@ def on_login_post(app: "RSSTagApplication", request: Request) -> Response:
     elif not user:
         # create new user
         provider = request.cookies.get("provider")
-        if (provider == "bazqux") or (provider == "inoreader"):
+        if provider == BAZQUX:
             provider_h = BazquxProvider(app.config)
             token = provider_h.get_token(login, password)
             if token:
@@ -89,9 +90,9 @@ def on_login_post(app: "RSSTagApplication", request: Request) -> Response:
                 err.append("Wrong login or password")
             else:
                 err.append("Cant` create session. Try later")
-        elif provider == "telegram":
+        elif provider == TELEGRAM:
             user = app.create_new_session(login, password, "", provider)
-        elif provider == "textfile":
+        elif provider == TEXT_FILE:
             if os.path.exists(login):
                 user = app.create_new_session(login, password, "", provider)
             else:

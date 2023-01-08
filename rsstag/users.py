@@ -7,6 +7,7 @@ from typing import Optional
 from hashlib import sha256
 from pymongo import MongoClient
 
+from rsstag.providers.providers import TELEGRAM, TEXT_FILE
 
 TELEGRAM_CODE_FIELD = "telegram_code"
 
@@ -58,11 +59,11 @@ class RssTagUsers:
             "w2v": "{}_{}.w2v".format(created.timestamp(), randint(0, 999999)),
             "fasttext": "{}_{}.fasttext".format(created.timestamp(), randint(0, 999999))
         }
-        if provider == "telegram":
+        if provider == TELEGRAM:
             user["phone"] = password
             user["telegram_channel"] = login
 
-        if provider == "textfile":
+        if provider == TEXT_FILE:
             user["text_file"] = login
 
         self._db.users.insert_one(user)
