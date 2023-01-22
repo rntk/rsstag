@@ -21,7 +21,7 @@ class LDA:
         vectors = vectorizer.fit_transform(texts)
         model = LatentDirichletAllocation(n_components=topics_n)
         model.fit(vectors)
-        ftrs = vectorizer.get_feature_names()
+        ftrs = vectorizer.get_feature_names_out()
         topics = set()
         for i in range(topics_n):
             indxs = model.components_[i].argsort()
