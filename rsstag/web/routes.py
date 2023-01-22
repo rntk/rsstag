@@ -243,6 +243,11 @@ class RSSTagRoutes:
                 "url": "/telegram-mark",
                 "endpoint": "on_mark_telegram_posts_post",
                 "methods": ["POST"],
+            },
+            {
+                "url": "/tfidf-tags",
+                "endpoint": "on_tfidf_tags_get",
+                "methods": ["GET"],
             }
         ]
 

@@ -1015,3 +1015,82 @@ def on_get_tag_similar_tags(app: "RSSTagApplication", user: dict, tag: str) -> R
         code = 400
 
     return Response(json.dumps(result), mimetype="application/json", status=code)
+
+def on_get_tfidf_tags(app: "RSSTagApplication", user: dict, rqst: Request) -> Response:
+    cursor = app.posts.get_all(user["sid"], user["settings"]["only_unread"], projection={"_id": False})
+    vectorizer = TfidfVectorizer()
+    texts = []
+    cleaner = HTMLCleaner()
+    builder = TagsBuilder()
+    for post in cursor:
+        txt = gzip.decompress(post["content"]["content"]).decode("utf-8", "replace")
+        if post["content"]["title"]:
+            txt = post["content"]["title"] + ". " + txt
+
+        cleaner.purge()
+        cleaner.feed(txt)
+        strings = cleaner.get_content()
+        txt = " ".join(strings)
+        builder.purge()
+        builder.build_tags_and_bi_grams(txt)
+        builder.get_prepared_text()
+        texts.append(builder.get_prepared_text())
+
+    vectorizer.fit(texts)
+    tfidfs = []
+    for w, indx in vectorizer.vocabulary_.items():
+        tfidfs.append((w, vectorizer.idf_[indx]))
+
+    tfidfs.sort(key=lambda x: x[1], reverse=True)
+    tags = [w[0] for w in tfidfs]
+    cursor = app.tags.get_by_tags(user["sid"], tags, user["settings"]["only_unread"], projection={"_id": False})
+    db_tags = {t["tag"]: t for t in cursor}
+    #db_tags.sort(key=lambda x: x["unread_count"], reverse=True)
+    all_tags = []
+    min_tags = int(rqst.values.get("min_tags", default=5))
+    for (w, _) in tfidfs:
+        if len(all_tags) > 500:
+            break
+        if w not in db_tags:
+            continue
+        tg = db_tags[w]
+        if db_tags[tg["tag"]]["unread_count"] < min_tags:
+            continue
+        all_tags.append(
+            {
+                "tag": tg["tag"],
+                "url": "/tag/" + quote(tg["tag"]),
+                "words": tg["words"],
+                "count": tg["unread_count"],
+                "sentiment": tg["sentiment"] if "sentiment" in tg else [],
+                "temp": tg["temperature"],
+                "freq": tg["freq"],
+            }
+        )
+
+    db_letters = app.letters.get(user["sid"], make_sort=True)
+    if db_letters:
+        letters = app.letters.to_list(db_letters, user["settings"]["only_unread"])
+    else:
+        letters = []
+    page = app.template_env.get_template("group-by-tag.html")
+
+    return Response(
+        page.render(
+            tags=all_tags,
+            sort_by_title="tags",
+            sort_by_link=app.routes.get_url_by_endpoint(
+                endpoint="on_group_by_tags_get",
+                params={"page_number": 1},
+            ),
+            group_by_link=app.routes.get_url_by_endpoint(
+                endpoint="on_group_by_category_get"
+            ),
+            pages_map={},
+            current_page=1,
+            letters=letters,
+            user_settings=user["settings"],
+            provider=user["provider"],
+        ),
+        mimetype="text/html",
+    )

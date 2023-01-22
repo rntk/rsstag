@@ -109,7 +109,7 @@ window.onload = () => {
         );
     } else if (
         /\/group\/(tag|hottag)\/.*/.test(path) || /\/tags\/sentiment\/.*/.test(path) ||
-        /\/tags\/group\/.*/.test(path) || /\/topics\/[0-9]+/.test(path)
+        /\/tags\/group\/.*/.test(path) || /\/topics\/[0-9]+/.test(path) || /\/tfidf-tags/.test(path)
     ) {
         const tags_storage = new TagsStorage(window.EVSYS);
         ReactDOM.render(
