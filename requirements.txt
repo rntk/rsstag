@@ -31,5 +31,5 @@ smart-open==6.1.0
 threadpoolctl==3.1.0
 tqdm==4.64.1
 typing_extensions==4.3.0
-Werkzeug==2.2.2
+Werkzeug==2.2.3
 yarl==1.8.1
