@@ -635,7 +635,8 @@ class RSSTagWorker:
                                     if fee["feed_id"] in skip_ids:
                                         continue
                                     n_feeds.append(fee)
-                                db.posts.insert_many(posts)
+                                if posts:
+                                    db.posts.insert_many(posts)
                                 if n_feeds:
                                     db.feeds.insert_many(n_feeds)
                             task_done = True
