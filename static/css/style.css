@@ -683,20 +683,16 @@ h3.post_title {
   .screen_middle {
     top: 5%;
   }
-
   .letters {
     margin-top: 3em;
   }
-
   .tag_title, .group_title {
     margin-top: 3em;
   }
-
   .page, .geomap {
     margin-bottom: 3em;
     width: 98%;
   }
-
   .global_tools_button {
     margin-top: 1em;
   }
@@ -755,6 +751,22 @@ h3.post_title {
 .cluster_link {
   display: inline-block;
   margin: 0.4em;
+}
+
+.openai_info_block {
+  width: 100%;
+}
+
+.openai_tool_table {
+  width: 100%;
+}
+
+.openai_tool_table td {
+  width: 49%;
+}
+
+.openai_tool_table textarea {
+  width: 100%;
 }
 
 /*# sourceMappingURL=style.css.map */

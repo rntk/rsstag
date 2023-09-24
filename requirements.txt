@@ -33,3 +33,4 @@ tqdm==4.64.1
 typing_extensions==4.3.0
 Werkzeug==2.2.3
 yarl==1.8.1
+openai==0.28.0

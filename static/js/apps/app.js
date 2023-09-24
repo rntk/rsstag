@@ -39,6 +39,8 @@ import BiGramsMentionsChart from '../components/bigrams-mentions-chart.js';
 //import TopicsTexts from '../components/topics-texts.js';
 import TagsClustersStorage from '../storages/tags-clusters-storage.js';
 import TagsClustersList from '../components/tags-clusters.js';
+import OpenAIStorage from "../storages/openai-storage.js";
+import {OpenAITool} from "../components/openai.js";
 
 function handleScroll() {
     let $tools = document.querySelector('#global_tools');
@@ -213,6 +215,13 @@ function tagNoContextInfoPage(tag) {
         <TagContexts ES={wordtree_evsys} tag={tag} />,
         document.getElementById('tag_contexts')
     );
+    const openai_evsys = new EventsSystem();
+    const openai_storage = new OpenAIStorage(tag.tag, openai_evsys);
+    ReactDOM.render(
+        <OpenAITool ES={openai_evsys} />,
+        document.getElementById('openai_tool')
+    );
+    openai_storage.start();
 
     /*const topics_texts_evsys = new EventsSystem();
     const topics_texts_chart = new TopicsTexts("#topics_texts", topics_texts_evsys);

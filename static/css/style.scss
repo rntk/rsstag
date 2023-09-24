@@ -638,3 +638,18 @@ h3 {
     display: inline-block;
     margin: 0.4em;
 }
+
+.openai_info_block {
+    width: 100%;
+}
+.openai_tool_table {
+    width: 100%;
+}
+
+.openai_tool_table td {
+    width: 49%;
+}
+
+.openai_tool_table textarea {
+    width: 100%;
+}

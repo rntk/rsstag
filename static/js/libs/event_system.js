@@ -50,8 +50,10 @@ export default class EventsSystem {
         this.TAGS_CLUSTERS_UPDATED = "tag_clusters_updated";
 
         this.SAVE_TELEGRAM_CODE = "save_telegram_code";
-
         this.SAVE_TELEGRAM_PASSWORD = "save_telegram_password";
+        
+        this.OPENAI_GET_RESPONSE = "openai_get_response";
+        this.OPENAI_GOT_RESPONSE = "openai_got_response";
 
         this._events = {};
     }

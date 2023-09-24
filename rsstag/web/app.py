@@ -25,6 +25,7 @@ import rsstag.web.posts as posts_handlers
 import rsstag.web.users as users_handlers
 import rsstag.web.tags as tags_handlers
 import rsstag.web.bigrams as bigrams_handlers
+import rsstag.web.openai as openai_handlers
 
 from razdel import sentenize
 
@@ -41,6 +42,8 @@ from pymongo import MongoClient
 
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.cluster import DBSCAN
+
+from rsstag.openai import OpenAI
 
 
 class RSSTagApplication(object):
@@ -113,6 +116,8 @@ class RSSTagApplication(object):
         except Exception as e:
             logging.warning("Try to load nltk stopwords %s", e)
             nltk.download("stopwords")
+
+        self.openai = OpenAI(self.config["openai"]["token"])
 
     def close(self):
         logging.info("Goodbye!")
@@ -850,3 +855,6 @@ class RSSTagApplication(object):
 
     def on_tfidf_tags_get(self, user: dict, rqst: Request):
         return tags_handlers.on_get_tfidf_tags(self, user, rqst)
+
+    def on_openai_post(self, user: dict, request: Request):
+        return openai_handlers.on_openai_post(self, user, request)

@@ -248,6 +248,11 @@ class RSSTagRoutes:
                 "url": "/tfidf-tags",
                 "endpoint": "on_tfidf_tags_get",
                 "methods": ["GET"],
+            },
+            {
+                "url": "/openai",
+                "endpoint": "on_openai_post",
+                "methods": ["POST"],
             }
         ]
 
