@@ -75,20 +75,21 @@ def get_authorization_state() -> Dict[str, Any]:
 def check_authentication_code(code: str) -> Dict[str, Any]:
     return {"@type": "checkAuthenticationCode", "code": code}
 
+def check_authentication_password(code: str) -> Dict[str, Any]:
+    return {"@type": "checkAuthenticationPassword", "password": code}
+
 def set_tdlib_parameters(app_id: int, app_hash: str, db_path: str) -> Dict[str, Any]:
     return {
         "@type": "setTdlibParameters",
-        "parameters": {
-            "database_directory": db_path,
-            "use_message_database": True,
-            "use_secret_chats": True,
-            "api_id": app_id,
-            "api_hash": app_hash,
-            "system_language_code": "en",
-            "device_model": "rsstag",
-            "application_version": "0.1",
-            "enable_storage_optimizer": True
-        }
+        "database_directory": db_path,
+        "use_message_database": True,
+        "use_secret_chats": True,
+        "api_id": app_id,
+        "api_hash": app_hash,
+        "system_language_code": "en",
+        "device_model": "rsstag",
+        "application_version": "0.1",
+        "enable_storage_optimizer": True
     }
 
 def check_database_encryption_key(key: str) -> Dict[str, Any]:

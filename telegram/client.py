@@ -15,6 +15,7 @@ from .queries import (
     set_tdlib_parameters,
     get_authorization_state,
     check_authentication_code,
+    check_authentication_password,
     set_authentication_phone_number,
     check_database_encryption_key
 )
@@ -195,10 +196,11 @@ class Telegram:
 
         self._client_id = None
 
-    def login(self, get_code: Callable[[str], str]) -> bool:
+    def login(self, get_code: Callable[[str], str], get_password: Callable[[str], str]) -> bool:
         self._client_id = self._td_create_client_id()
         self._td_execute(json.dumps(set_log_verbosity_level(2)).encode("utf-8"))
         self._get_code_fn = get_code
+        self._get_password_fn = get_password
         self._send(get_authorization_state())
         while True:
             event = self._receive()
@@ -246,7 +248,8 @@ class Telegram:
                 return False
 
             if state == "authorizationStateWaitPassword":
-                return False
+                self._send(check_authentication_password(self._get_password_fn(self._phone)))
+                continue
 
             if state == "authorizationStateReady":
                 self._auth = True
