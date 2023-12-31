@@ -15,7 +15,7 @@ import traceback
 
 from rsstag.tasks import POST_NOT_IN_PROCESSING
 from rsstag.web.routes import RSSTagRoutes
-from rsstag.users import TelegramCode
+from rsstag.users import TelegramAuthData
 from rsstag.feeds import RssTagFeeds
 from rsstag.posts import RssTagPosts
 from rsstag.providers.providers import TELEGRAM
@@ -327,8 +327,8 @@ class TelegramProvider:
             db_key=self._config[provider]["encryption_key"],
             db_path=self._config[provider]["db_dir"],
         )
-        tlg_code = TelegramCode(self._db, user["sid"])
-        if not self._tlg.login(tlg_code.get_code):
+        tlg_code = TelegramAuthData(self._db, user["sid"])
+        if not self._tlg.login(tlg_code.get_code, tlg_code.get_password):
             raise Exception("Telegram login failed")
         self._tlg.run()
         time.sleep(120)
@@ -493,8 +493,8 @@ class TelegramProvider:
                 db_key=t_cfg["encryption_key"],
                 db_path=t_cfg["db_dir"]
             )
-            tlg_code = TelegramCode(self._db, sid)
-            if not tlg.login(tlg_code.get_code):
+            tlg_code = TelegramAuthData(self._db, sid)
+            if not tlg.login(tlg_code.get_code, tlg_code.get_password):
                 return
 
             tlg.run()

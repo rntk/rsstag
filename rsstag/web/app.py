@@ -102,7 +102,7 @@ class RSSTagApplication(object):
             "on_refresh_get_post",
         )
         self.allow_not_ready = {
-            "on_telegram_code_post",
+            "on_telegram_auth_post",
             "on_settings_post"
         }
         self.navec = None
@@ -827,8 +827,8 @@ class RSSTagApplication(object):
             mimetype="text/html",
         )
 
-    def on_telegram_code_post(self, user: dict, request: Request) -> Response:
-        return users_handlers.on_telegram_code_post(self, user, request)
+    def on_telegram_auth_post(self, user: dict, request: Request) -> Response:
+        return users_handlers.on_telegram_auth_post(self, user, request)
 
     def on_tag_specific_get(self, user: dict, _: Request, tag: str):
         return tags_handlers.on_tag_specific_get(self, user, tag)

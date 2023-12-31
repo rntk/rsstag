@@ -10,6 +10,7 @@ from pymongo import MongoClient
 from rsstag.providers.providers import TELEGRAM, TEXT_FILE
 
 TELEGRAM_CODE_FIELD = "telegram_code"
+TELEGRAM_PASSWORD_FIELD = "telegram_password"
 
 class RssTagUsers:
     indexes = ["sid"]
@@ -120,7 +121,7 @@ class RssTagUsers:
 
         return True
 
-class TelegramCode:
+class TelegramAuthData:
     def __init__(self, db: MongoClient, sid: str):
         self._db = db
         self._sid = sid
@@ -129,6 +130,27 @@ class TelegramCode:
         users_h = RssTagUsers(self._db)
         user = users_h.get_by_sid(self._sid)
         field_name = TELEGRAM_CODE_FIELD
+        if not user:
+            raise Exception("User not found: " + self._sid)
+        users_h.update_by_sid(self._sid, {field_name: ""})
+        while True:
+            user = users_h.get_by_sid(self._sid)
+            if not user:
+                raise Exception("User not found: " + self._sid)
+            if field_name not in user:
+                raise Exception("User field not '{}' found not found: {}".format(field_name, self._sid))
+            if user[field_name] == "":
+                time.sleep(2)
+                continue
+
+            return user[field_name]
+
+        return ""
+
+    def get_password(self, phone: str) -> str:
+        users_h = RssTagUsers(self._db)
+        user = users_h.get_by_sid(self._sid)
+        field_name = TELEGRAM_PASSWORD_FIELD
         if not user:
             raise Exception("User not found: " + self._sid)
         users_h.update_by_sid(self._sid, {field_name: ""})

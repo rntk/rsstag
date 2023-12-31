@@ -39,8 +39,13 @@ export default class GlobalStatus extends React.Component{
                         is_ok: data.data.is_ok,
                         msgs: data.data.msgs
                     });
+                    if (data.data.telegram_password) {
+                        this.getTelegramPassword();
+                        return;
+                    }
                     if (data.data.telegram_code) {
                         this.getTelegramCode();
+                        return;
                     }
                 }
             }
@@ -59,6 +64,17 @@ export default class GlobalStatus extends React.Component{
             }
         }
         this.ES.trigger(this.ES.SAVE_TELEGRAM_CODE, code);
+    }
+
+    getTelegramPassword() {
+        let pswd = "";
+        while (true) {
+            pswd = prompt("Telegram password:");
+            if (pswd) {
+                break;
+            }
+        }
+        this.ES.trigger(this.ES.SAVE_TELEGRAM_PASSWORD, pswd);
     }
 
     componentDidMount() {

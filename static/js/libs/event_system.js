@@ -51,6 +51,8 @@ export default class EventsSystem {
 
         this.SAVE_TELEGRAM_CODE = "save_telegram_code";
 
+        this.SAVE_TELEGRAM_PASSWORD = "save_telegram_password";
+
         this._events = {};
     }
 

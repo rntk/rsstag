@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 from rsstag.providers.bazqux import BazquxProvider
 from rsstag.providers.providers import BAZQUX, TEXT_FILE, TELEGRAM
 from rsstag.tasks import TASK_ALL, TASK_DOWNLOAD
-from rsstag.users import TELEGRAM_CODE_FIELD
+from rsstag.users import TELEGRAM_CODE_FIELD, TELEGRAM_PASSWORD_FIELD
 
 from werkzeug.wrappers import Request, Response
 from werkzeug.utils import redirect
@@ -192,7 +192,9 @@ def on_status_get(app: "RSSTagApplication", user: Optional[dict]) -> Response:
             task_titles = app.tasks.get_current_tasks_titles(user["sid"])
             result = {"data": {"is_ok": True, "msgs": task_titles}}
             if (TELEGRAM_CODE_FIELD in user) and (user[TELEGRAM_CODE_FIELD] == ""):
-                result["data"]["telegram_code"] = True
+                result["data"][TELEGRAM_CODE_FIELD] = True
+            if (TELEGRAM_PASSWORD_FIELD in user) and (user[TELEGRAM_PASSWORD_FIELD] == ""):
+                result["data"][TELEGRAM_PASSWORD_FIELD] = True
     else:
         result = {
             "data": {"is_ok": False, "msgs": ["Looks like you are not logged in"]}
@@ -269,14 +271,19 @@ def on_root_get(
 
     return response
 
-def on_telegram_code_post(app: "RSSTagApplication", user: dict, request: Request) -> Response:
-    tlg_code = json.loads(request.get_data(as_text=True))
-    if tlg_code and tlg_code["code"]:
-        app.users.update_by_sid(user["sid"], {TELEGRAM_CODE_FIELD: tlg_code["code"]})
-        result = {"data": "ok"}
-        code = 200
-    else:
-        result = {"error": "Something wrong with telegram code"}
-        code = 400
+def on_telegram_auth_post(app: "RSSTagApplication", user: dict, request: Request) -> Response:
+    tlg_data = json.loads(request.get_data(as_text=True))
+    result = {"error": "Something wrong with telegram auth"}
+    code = 400
+    if tlg_data:
+        set_data = {}
+        if TELEGRAM_CODE_FIELD in tlg_data and tlg_data[TELEGRAM_CODE_FIELD]:
+            set_data[TELEGRAM_CODE_FIELD] = tlg_data[TELEGRAM_CODE_FIELD]
+        if TELEGRAM_PASSWORD_FIELD in tlg_data and tlg_data[TELEGRAM_PASSWORD_FIELD]:
+            set_data[TELEGRAM_PASSWORD_FIELD] = tlg_data[TELEGRAM_PASSWORD_FIELD]
+        if set_data:
+            app.users.update_by_sid(user["sid"], set_data)
+            result = {"data": "ok"}
+            code = 200
 
     return Response(json.dumps(result), mimetype="application/json", status=code)

@@ -9,7 +9,7 @@ export default class SettingsStorage {
         };
         this.urls = {
             save_settings: '/settings',
-            save_telegram_code: '/telegram-code'
+            save_telegram_auth: '/telegram-auth'
         };
     }
 
@@ -36,6 +36,7 @@ export default class SettingsStorage {
         this.ES.bind(this.ES.UPDATE_SETTINGS, this.saveSettings.bind(this));
         this.ES.bind(this.ES.CHANGE_SETTINGS_WINDOW_STATE, this.changeSettingsWindowState.bind(this));
         this.ES.bind(this.ES.SAVE_TELEGRAM_CODE, this.saveTelegramCode.bind(this));
+        this.ES.bind(this.ES.SAVE_TELEGRAM_PASSWORD, this.saveTelegramPassword.bind(this));
     }
 
     changeSettingsWindowState(offset) {
@@ -77,12 +78,28 @@ export default class SettingsStorage {
 
     saveTelegramCode(code) {
         fetch(
-            this.urls.save_telegram_code,
+            this.urls.save_telegram_auth,
             {
                 method: 'POST',
                 credentials: 'include',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({code: code})
+                body: JSON.stringify({telegram_code: code})
+            }
+        ).then(response => {
+            return;
+        }).catch(err => {
+            this.errorMessage('Error. Try later');
+        });
+    }
+
+    saveTelegramPassword(pswd) {
+        fetch(
+            this.urls.save_telegram_auth,
+            {
+                method: 'POST',
+                credentials: 'include',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({telegram_password: pswd})
             }
         ).then(response => {
             return;
