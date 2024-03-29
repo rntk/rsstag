@@ -33,6 +33,14 @@ import numpy as np
 from navec import Navec
 from slovnet import NER
 
+import torch
+import torch.nn.functional as F
+from transformers import BertModel, BertTokenizerFast
+
+tokenizer = BertTokenizerFast.from_pretrained("setu4993/LaBSE")
+model = BertModel.from_pretrained("setu4993/LaBSE")
+model = model.eval()
+
 
 def on_group_by_tags_get(
     app: "RSSTagApplication", user: dict, page_number: int = 1
@@ -1094,3 +1102,50 @@ def on_get_tfidf_tags(app: "RSSTagApplication", user: dict, rqst: Request) -> Re
         ),
         mimetype="text/html",
     )
+
+def on_get_tag_similar_tags_semantic(app: "RSSTagApplication", user: dict, tag: str) -> Response:
+    if tag:
+        tags_words = set(tag.split())
+        cursor = app.tags.get_all(user["sid"], user["settings"]["only_unread"], projection={"tag": True})
+        words = [t["tag"] for t in cursor if t["tag"] not in tags_words]
+        similar = set()
+        vects = [get_embeddings_norm(w) for w in words]
+        dists = pairwise_distances(vects, vects, metric="cosine")
+        _, ys = np.where(dists < 0.4)
+        for y in ys:
+            similar.add(words[y])
+
+        cursor = app.tags.get_by_tags(
+            user["sid"], list(similar), user["settings"]["only_unread"], projection={"_id": False}
+        )
+        tags = [t for t in cursor]
+
+        tags.sort(key=lambda t: t["unread_count"], reverse=True)
+        all_tags = []
+        for tg in tags:
+            all_tags.append(
+                {
+                    "tag": tg["tag"],
+                    "url": "/tag/" + quote(tg["tag"]),
+                    "words": tg["words"],
+                    "count": tg["unread_count"],
+                    "sentiment": tg["sentiment"] if "sentiment" in tg else [],
+                    "temp": tg["temperature"],
+                    "freq": tg["freq"],
+                }
+            )
+
+        result = {"data": all_tags}
+        code = 200
+    else:
+        result = {"error": "Something wrong with request"}
+        code = 400
+
+    return Response(json.dumps(result), mimetype="application/json", status=code)
+
+def get_embeddings_norm(sentences):
+    inputs = tokenizer(sentences, return_tensors="pt", padding=True)
+    with torch.no_grad():
+        outputs = model(**inputs)
+
+    return F.normalize(outputs.pooler_output, p=2)

@@ -847,6 +847,9 @@ class RSSTagApplication(object):
     def on_get_tag_similar_tags(self, user: dict, _: Request, tags: str):
         return tags_handlers.on_get_tag_similar_tags(self, user, tags)
 
+    def on_get_tag_similar_tags_semantic(self, user: dict, _: Request, tags: str):
+        return tags_handlers.on_get_tag_similar_tags_semantic(self, user, tags)
+
     def on_group_by_bigrams_dyn_get(self, user: dict, _: Request, page_number: int):
         return bigrams_handlers.on_group_by_bigrams_dyn_get(self, user, page_number)
 

@@ -384,4 +384,16 @@ function tagWithContextInfoPage(tag) {
         document.getElementById('load_similar_words')
     );
     similar_words_storage.start();
+
+    const similar_words_semantic_evsys = new EventsSystem();
+    const similar_words_semantic_storage = new TagsStorage(similar_words_semantic_evsys, '/tag-similar-tags-semantic');
+    ReactDOM.render(
+        <TagsList ES={similar_words_semantic_evsys} />,
+        document.getElementById('similar_words_semantic_tags')
+    );
+    ReactDOM.render(
+        <TagButton ES={similar_words_semantic_evsys} title="Words" tag={tag} />,
+        document.getElementById('load_similar_semantic_words')
+    );
+    similar_words_semantic_storage.start();
 }
