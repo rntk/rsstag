@@ -48,15 +48,10 @@ def on_openai_post(app: "RSSTagApplication", user: dict, rqst: Request):
     if not user_msgs:
         result = {"error": "No user messages"}
         return Response(json.dumps(result), mimetype="application/json", status=400)
-    user_msgs = text + "\n" + user_msgs
+    user_msgs = text + texts_splitter + user_msgs
+    #print(user_msgs)
 
-    system_msgs = [
-        "Messages are split by: " + texts_splitter,
-    ]
-    if "system" in data and data["system"]:
-        system_msgs.append(data["system"])
-    print(user_msgs, system_msgs)
-    txt = app.openai.call([user_msgs], system_msgs)
+    txt = app.openai.call([user_msgs], ["Messages are splited by: " + texts_splitter])
     result = {"data": txt}
 
     return Response(json.dumps(result), mimetype="application/json", status=200)
