@@ -26,7 +26,7 @@ def on_openai_post(app: "RSSTagApplication", user: dict, rqst: Request):
     db_posts_c = app.posts.get_by_tags(user["sid"], [tag], only_unread)
     text = ""
     texts_splitter = "\nRSSTAG_TEXT_SPLITTER\n"
-    for post in db_posts_c[:5]:
+    for post in db_posts_c[:50]:
         txt = post["content"]["title"] + ". " + gzip.decompress(post["content"]["content"]).decode(
             "utf-8", "replace"
         )
@@ -48,10 +48,10 @@ def on_openai_post(app: "RSSTagApplication", user: dict, rqst: Request):
     if not user_msgs:
         result = {"error": "No user messages"}
         return Response(json.dumps(result), mimetype="application/json", status=400)
-    user_msgs = text + texts_splitter + user_msgs
-    #print(user_msgs)
+    user_msgs = text + texts_splitter + user_msgs + "\n" + "Messages are splited by: " + texts_splitter
+    print(user_msgs)
 
-    txt = app.openai.call([user_msgs], ["Messages are splited by: " + texts_splitter])
+    txt = app.anthropic.call([user_msgs])
     result = {"data": txt}
 
     return Response(json.dumps(result), mimetype="application/json", status=200)

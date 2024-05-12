@@ -44,6 +44,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.cluster import DBSCAN
 
 from rsstag.openai import OpenAI
+from rsstag.anthropic import Anthropic
 
 
 class RSSTagApplication(object):
@@ -118,6 +119,7 @@ class RSSTagApplication(object):
             nltk.download("stopwords")
 
         self.openai = OpenAI(self.config["openai"]["token"])
+        self.anthropic = Anthropic(self.config["anthropic"]["token"])
 
     def close(self):
         logging.info("Goodbye!")
