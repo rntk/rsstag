@@ -25,14 +25,13 @@ def on_openai_post(app: "RSSTagApplication", user: dict, rqst: Request):
         only_unread = None
     db_posts_c = app.posts.get_by_tags(user["sid"], [tag], only_unread)
     text = ""
-    texts_splitter = "\nRSSTAG_TEXT_SPLITTER\n"
-    for post in db_posts_c[:50]:
+    for post in db_posts_c[:5]:
         txt = post["content"]["title"] + ". " + gzip.decompress(post["content"]["content"]).decode(
             "utf-8", "replace"
         )
         txt = txt.strip()
         if txt:
-            text += txt + texts_splitter
+            text += f"<message>{txt}</message>\n"
 
     if not text:
         result = {"error": "No texts"}
@@ -48,10 +47,19 @@ def on_openai_post(app: "RSSTagApplication", user: dict, rqst: Request):
     if not user_msgs:
         result = {"error": "No user messages"}
         return Response(json.dumps(result), mimetype="application/json", status=400)
-    user_msgs = text + texts_splitter + user_msgs + "\n" + "Messages are splited by: " + texts_splitter
+    system_msg = f"""
+You will receive a list of messages, each containing a keyword "{tag}".
+The messages will be enclosed within the <messages></messages> tags,
+and each individual message will be wrapped in <message></message> tags. Here is the list of messages:
+
+<messages>{text}</messages>
+
+Your task is to process these messages and assist the user with the following request:
+"""
+    user_msgs = system_msg + user_msgs
     print(user_msgs)
 
-    txt = app.anthropic.call([user_msgs])
+    txt = app.llamacpp.call([user_msgs])
     result = {"data": txt}
 
     return Response(json.dumps(result), mimetype="application/json", status=200)

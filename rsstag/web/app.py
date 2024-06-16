@@ -27,6 +27,10 @@ import rsstag.web.tags as tags_handlers
 import rsstag.web.bigrams as bigrams_handlers
 import rsstag.web.openai as openai_handlers
 
+from rsstag.openai import OpenAI
+from rsstag.anthropic import Anthropic
+from rsstag.llamacpp import LLamaCPP
+
 from razdel import sentenize
 
 import nltk
@@ -43,8 +47,6 @@ from pymongo import MongoClient
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.cluster import DBSCAN
 
-from rsstag.openai import OpenAI
-from rsstag.anthropic import Anthropic
 
 
 class RSSTagApplication(object):
@@ -120,6 +122,7 @@ class RSSTagApplication(object):
 
         self.openai = OpenAI(self.config["openai"]["token"])
         self.anthropic = Anthropic(self.config["anthropic"]["token"])
+        self.llamacpp = LLamaCPP(self.config["llamacpp"]["host"])
 
     def close(self):
         logging.info("Goodbye!")
