@@ -38,7 +38,7 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
-                "url": "/group/tag/startwith/<string(length: 1):letter>/<int:page_number>",
+                "url": "/group/tag/startwith/<string:letter>/<int:page_number>",
                 "endpoint": "on_group_by_tags_startwith_get",
                 "methods": ["GET"],
             },
