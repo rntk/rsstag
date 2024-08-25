@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "description": "rsstag frontend app",
   "main": "app.js",
-  "dependencies": {},
+  "dependencies": {
+    "sunburst-chart": "^1.19.2"
+  },
   "devDependencies": {
     "@babel/cli": "^7.16.8",
     "@babel/core": "^7.16.12",
