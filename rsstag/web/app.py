@@ -861,5 +861,8 @@ class RSSTagApplication(object):
     def on_tfidf_tags_get(self, user: dict, rqst: Request):
         return tags_handlers.on_get_tfidf_tags(self, user, rqst)
 
+    def on_sunburst_get(self, user: dict, _: Request, tags: str):
+        return tags_handlers.on_get_sunburst(self, user, tags)
+
     def on_openai_post(self, user: dict, request: Request):
         return openai_handlers.on_openai_post(self, user, request)

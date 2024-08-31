@@ -253,7 +253,12 @@ class RSSTagRoutes:
                 "url": "/openai",
                 "endpoint": "on_openai_post",
                 "methods": ["POST"],
-            }
+            },
+            {
+                "url": "/sunburst/<string:tags>",
+                "endpoint": "on_sunburst_get",
+                "methods": ["GET"],
+            },
         ]
 
         self._rules = []
