@@ -259,6 +259,11 @@ class RSSTagRoutes:
                 "endpoint": "on_sunburst_get",
                 "methods": ["GET"],
             },
+            {
+                "url": "/tree/<string:tags>",
+                "endpoint": "on_sunburst_get",
+                "methods": ["GET"],
+            }
         ]
 
         self._rules = []

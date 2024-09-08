@@ -1097,9 +1097,86 @@ def on_get_tfidf_tags(app: "RSSTagApplication", user: dict, rqst: Request) -> Re
         mimetype="text/html",
     )
 
+def on_get_sunburst(app: "RSSTagApplication", user: dict, tags: str) -> Response:
+    tags_l = tags.split()
+    cursor = app.posts.get_by_tags(user["sid"], tags_l, user["settings"]["only_unread"], projection={"_id": False})
+    tag_data = {"tag": tags}
+    cur_tag = tags_l[-1]
+    subtags = set(tags_l[:-1])
+    root = {"name": tags, "children": []}
+    childs = defaultdict(int)
+    stopwrds = set(stopwords.words("english") + stopwords.words("russian"))
+    window = 4
+    if len(tags_l) > 1:
+        for post in cursor:
+            txt = gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
+            words = txt.split()
+            for i, w in enumerate(words):
+                if w != cur_tag:
+                    continue
+                s = i - window
+                if s < 0:
+                    s = 0
+                e = i + window
+                if e >= len(words):
+                    e = len(words) - 1
+                sibls = set(words[s:e])
+                if sibls.intersection(subtags) != subtags:
+                    continue
+                for j in range(1, window):
+                    s = i - j
+                    if s >= 0:
+                        childs[words[s]] += 1
+                    e = i + j
+                    if e < len(words):
+                        childs[words[e]] += 1
+    else:
+        for post in cursor:
+            txt = gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
+            words = txt.split()
+            for i, w in enumerate(words):
+                if w != cur_tag:
+                    continue
+                for j in range(1, window):
+                    s = i - j
+                    if s >= 0:
+                        childs[words[s]] += 1
+                    e = i + j
+                    if e < len(words):
+                        childs[words[e]] += 1
+
+    for ch, c in childs.items():
+        if ch in stopwrds:
+            continue
+        if ch in tags_l:
+            continue
+
+        root["children"].append({"name": ch, "value": c})
+    # we need to sort children by value
+    root["children"].sort(key=lambda x: x["value"], reverse=True)
+
+    page = app.template_env.get_template("tag-sunburst.html")
+
+    return Response(
+        page.render(
+            tag=tag_data,
+            root=root,
+            sort_by_title="tags",
+            sort_by_link=app.routes.get_url_by_endpoint(
+                endpoint="on_group_by_tags_get", params={"page_number": 1}
+            ),
+            group_by_link=app.routes.get_url_by_endpoint(
+                endpoint="on_group_by_category_get"
+            ),
+            user_settings=user["settings"],
+            provider=user["provider"],
+        ),
+        mimetype="text/html",
+    )
+
 tmp_cache = {}
 
-def on_get_sunburst(app: "RSSTagApplication", user: dict, tags: str) -> Response:
+def on_get_sunburst_(app: "RSSTagApplication", user: dict, tags: str) -> Response:
     tags_l = tags.split()
     cursor = app.posts.get_by_tags(user["sid"], tags_l, user["settings"]["only_unread"], projection={"_id": False})
     tag_data = {"tag": tags}

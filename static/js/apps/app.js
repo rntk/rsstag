@@ -107,8 +107,9 @@ window.onload = () => {
     if (path === '/') {
         ;
     } else if (/^\/sunburst\//.test(path)) {
-        //let sunburst = new TagSunburst(window.tag_sunburst_initial_root);
-        //sunburst.render(".page");
+        let sunburst = new TagSunburst(window.tag_sunburst_initial_root);
+        sunburst.render(".page");
+    } else if (/^\/tree\//.test(path)) {
         let tree = new TagTree(window.tag_sunburst_initial_root);
         tree.render(".page");
     } else if (path === '/group/category') {
