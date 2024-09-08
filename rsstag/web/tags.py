@@ -16,6 +16,8 @@ if TYPE_CHECKING:
 from rsstag.tags_builder import TagsBuilder
 from rsstag.html_cleaner import HTMLCleaner
 from rsstag.lda import LDA
+from rsstag.llamacpp import LLamaCPP
+from rsstag.openai import OpenAI
 
 from gensim.models.word2vec import Word2Vec
 from gensim.models.fasttext import FastText
@@ -1095,6 +1097,8 @@ def on_get_tfidf_tags(app: "RSSTagApplication", user: dict, rqst: Request) -> Re
         mimetype="text/html",
     )
 
+tmp_cache = {}
+
 def on_get_sunburst(app: "RSSTagApplication", user: dict, tags: str) -> Response:
     tags_l = tags.split()
     cursor = app.posts.get_by_tags(user["sid"], tags_l, user["settings"]["only_unread"], projection={"_id": False})
@@ -1143,13 +1147,61 @@ def on_get_sunburst(app: "RSSTagApplication", user: dict, tags: str) -> Response
                     if e < len(words):
                         childs[words[e]] += 1
 
+    llama = LLamaCPP("http://127.0.0.1:8080")
+    topics = {}
+    cats = defaultdict(list)
+    n = 0
     for ch, c in childs.items():
         if ch in stopwrds:
             continue
         if ch in tags_l:
             continue
+        prompt_tag = " ".join(tags_l + [ch])
+        prompt = """
+You will be provided wtih a phrase and you need to write a high-level topic or category for this phrase.
+- Keep you answer short and clear.
+- Do not add any extra information.
+- Write only the category or high-level topic for this phrase. Just one word.
+The phrase:
+{}
 
-        root["children"].append({"name": ch, "value": c})
+        """.format(prompt_tag)
+        if prompt in tmp_cache:
+            response = tmp_cache[prompt]
+        else:
+            response = llama.call([prompt])
+            tmp_cache[prompt] = response
+        cat = response.replace("<end_of_turn>", "")
+        cat = cat.strip()
+        #response = app.openai.call([prompt])
+        print(tags, ch, response, cat)
+        topics[ch] = cat
+        cats[cat].append(ch)
+        n += 1
+        if n > 100:
+            break
+        
+    root = {"name": tags, "children": []}
+    added = set()
+    for ch, c in childs.items():
+        if ch in stopwrds:
+            continue
+        if ch in tags_l:
+            continue
+        if ch not in topics:
+            continue
+        cat = topics[ch]
+        if cat in added:
+            continue
+        added.add(cat)
+        sub_childs = []
+        for ch1 in cats[cat]:
+            v = childs.get(ch1, 1)
+            v = v / len(cats[cat])
+            print(v, len(cats[cat]), len(childs))
+            sub_childs.append({"name": ch1, "value": v})
+
+        root["children"].append({"name": cat, "value": len(cats[cat]), "children": sub_childs})
     # we need to sort children by value
     root["children"].sort(key=lambda x: x["value"], reverse=True)
 

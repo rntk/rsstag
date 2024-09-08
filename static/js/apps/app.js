@@ -42,6 +42,7 @@ import TagsClustersList from '../components/tags-clusters.js';
 import OpenAIStorage from "../storages/openai-storage.js";
 import {OpenAITool} from "../components/openai.js";
 import TagSunburst from "../components/sunburst.js";
+import TagTree from "../components/dendrogram.js";
 
 function handleScroll() {
     let $tools = document.querySelector('#global_tools');
@@ -106,8 +107,10 @@ window.onload = () => {
     if (path === '/') {
         ;
     } else if (/^\/sunburst\//.test(path)) {
-        let sunburst = new TagSunburst(window.tag_sunburst_initial_root);
-        sunburst.render(".page");
+        //let sunburst = new TagSunburst(window.tag_sunburst_initial_root);
+        //sunburst.render(".page");
+        let tree = new TagTree(window.tag_sunburst_initial_root);
+        tree.render(".page");
     } else if (path === '/group/category') {
         ReactDOM.render(
             <CategoriesList ES={window.EVSYS} />,

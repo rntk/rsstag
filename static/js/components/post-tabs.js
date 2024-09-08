@@ -5,12 +5,14 @@ import WordTree from './wordtree.js';
 import PostsWordsCloud from "./posts-wordscloud.js";
 import {PostsBigrams} from "./post-bigrams.js";
 import {PostsTags} from "./post-tags.js";
+//simport {}
 
 const TAB_POSTS = "posts";
 const TAB_WORDSTREE = "wordstree";
 const TAB_BIGRAMS = "bigrams";
 const TAB_WORDSCLOUD = "wordscloud";
 const TAB_TAGS = "tags";
+const TAB_SUMMARIZATION = "summarization";
 
 export class PostTabs extends React.Component {
     constructor(props) {
@@ -21,6 +23,7 @@ export class PostTabs extends React.Component {
         this.tabs.set(TAB_WORDSTREE, "Wordtree");
         this.tabs.set(TAB_BIGRAMS, "Bi-grams");
         this.tabs.set(TAB_WORDSCLOUD, "Wordcloud");
+        this.tabs.set(TAB_SUMMARIZATION, "Summarization");
         this.state = {
             current: TAB_POSTS
         };

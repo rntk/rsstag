@@ -5,6 +5,41 @@
 {%  include "head-data.html" %}
 </head>
 <body>
+    <style>
+        .node circle {
+            fill: #999;
+        }
+        
+        .node text {
+            font: 10px sans-serif;
+        }
+        
+        .node--internal circle {
+            fill: #555;
+        }
+        
+        .node--internal text {
+            text-shadow: 0 1px 0 #fff, 0 -1px 0 #fff, 1px 0 0 #fff, -1px 0 0 #fff;
+        }
+        
+        .link {
+            fill: none;
+            stroke: #555;
+            stroke-opacity: 0.4;
+            stroke-width: 1.5px;
+        }
+        
+        form {
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            position: absolute;
+            left: 10px;
+            top: 10px;
+        }
+        
+        label {
+            display: block;
+        }
+        </style>
 {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
 <div id="global_tools">
     <div class="left_half">
@@ -21,7 +56,7 @@
     </div>
 </div>
 <div class="page">
-
+    <svg width="960" height="2400"></svg>
 </div>
 <div id="global_tools_bottom">
     <ul id="paginator"></ul>
