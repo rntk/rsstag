@@ -1156,9 +1156,10 @@ def on_get_sunburst(app: "RSSTagApplication", user: dict, tags: str) -> Response
             continue
         if ch in tags_l:
             continue
-        prompt_tag = " ".join(tags_l + [ch])
+        #prompt_tag = " ".join(tags_l + [ch])
+        prompt_tag = ch
         prompt = """
-You will be provided wtih a phrase and you need to write a high-level topic or category for this phrase.
+You will be provided with a phrase and you need to write a high-level topic or category for this phrase.
 - Keep you answer short and clear.
 - Do not add any extra information.
 - Write only the category or high-level topic for this phrase. Just one word.
@@ -1174,7 +1175,6 @@ The phrase:
         cat = response.replace("<end_of_turn>", "")
         cat = cat.strip()
         #response = app.openai.call([prompt])
-        print(tags, ch, response, cat)
         topics[ch] = cat
         cats[cat].append(ch)
         n += 1
@@ -1198,7 +1198,6 @@ The phrase:
         for ch1 in cats[cat]:
             v = childs.get(ch1, 1)
             v = v / len(cats[cat])
-            print(v, len(cats[cat]), len(childs))
             sub_childs.append({"name": ch1, "value": v})
 
         root["children"].append({"name": cat, "value": len(cats[cat]), "children": sub_childs})
