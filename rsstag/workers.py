@@ -330,7 +330,7 @@ class RSSTagWorker:
             texts_for_vec.append(text)
 
         if texts_for_vec:
-            vectorizer = TfidfVectorizer(stop_words=self._stopw)
+            vectorizer = TfidfVectorizer(stop_words=list(self._stopw))
             dbs = DBSCAN(eps=0.9, min_samples=2, n_jobs=1)
             dbs.fit(vectorizer.fit_transform(texts_for_vec))
             clusters = defaultdict(set)

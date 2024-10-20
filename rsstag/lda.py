@@ -17,7 +17,7 @@ class LDA:
     def topics(
         self, texts: List[str], topics_n: int = 10, top_k: int = 10
     ) -> List[str]:
-        vectorizer = TfidfVectorizer(stop_words=self._stopwords)
+        vectorizer = TfidfVectorizer(stop_words=list(self._stopwords))
         vectors = vectorizer.fit_transform(texts)
         model = LatentDirichletAllocation(n_components=topics_n)
         model.fit(vectors)

@@ -676,7 +676,7 @@ def on_tag_clusters_get(app: "RSSTagApplication", user: dict, tag: str) -> Respo
             texts.append(gzip.decompress(post["lemmas"]).decode("utf-8", "replace"))
             pids.append(post["pid"])
         stopw = set(stopwords.words("english") + stopwords.words("russian"))
-        vectorizer = TfidfVectorizer(stop_words=stopw)
+        vectorizer = TfidfVectorizer(stop_words=list(stopw))
         vectorizer.fit(texts)
         vectors = vectorizer.transform(texts)
         dbs = DBSCAN(eps=0.7, min_samples=2, metric="cosine")

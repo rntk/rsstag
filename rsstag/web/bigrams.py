@@ -148,7 +148,7 @@ def on_group_by_bigrams_dyn_get(
         texts.append(gzip.decompress(post["lemmas"]).decode("utf-8", "replace"))
 
     stopw = set(stopwords.words("english") + stopwords.words("russian"))
-    vectorizer = TfidfVectorizer(stop_words=stopw)
+    vectorizer = TfidfVectorizer(stop_words=list(stopw))
     vectorizer.fit(texts)
     tfidfs = []
     for w, indx in vectorizer.vocabulary_.items():
