@@ -1,5 +1,5 @@
 import json
-from typing import List
+from typing import List, Union
 import logging
 from urllib.parse import urlparse
 from http.client import HTTPConnection, HTTPSConnection
@@ -10,22 +10,21 @@ class LLamaCPP:
         self.__host = u.netloc
         self.__is_https = u.scheme.lower() == "https"
 
-    def call(self, user_msgs: List[str]) -> str:
-        if self.__is_https:
-            conn = HTTPSConnection(self.__host)
-        else:
-            conn = HTTPConnection(self.__host)
+    def call(self, user_msgs: List[str], temperature: float=0.0) -> str:
+        conn = self.get_connection()
         body = json.dumps(
             {
                 "model": "gpt-3.5-turbo",
-                "messages": [{"role": "user", "content": user_msgs[0]}]
+                "messages": [{"role": "user", "content": user_msgs[0]}],
+                "temperature": temperature,
+                "cache_prompt": True
             }
         )
         headers = {'Content-type': 'application/json'}
         conn.request("POST", "/v1/chat/completions", body, headers)
         res = conn.getresponse()
         resp_body = res.read()
-        logging.info("server response: %s", resp_body)
+        #logging.info("server response: %s", resp_body)
         if res.status != 200:
             err_msg = f"{res.status} - {res.reason} - {resp_body}"
             logging.error(err_msg)
@@ -33,3 +32,9 @@ class LLamaCPP:
         resp = json.loads(resp_body)
 
         return resp["choices"][0]["message"]["content"]
+
+    def get_connection(self) -> Union[HTTPConnection, HTTPSConnection]:
+        if self.__is_https:
+            return HTTPSConnection(self.__host)
+        else:
+            return HTTPConnection(self.__host)
