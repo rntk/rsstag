@@ -232,13 +232,20 @@ class TelegramProvider:
                     tasks_q.task_done()
                     continue
             limit = channel["unread_count"]
-            if max_limit == 0:
+            if max_limit <= 0:
                 if limit <= 0:
                     tasks_q.task_done()
                     # no unread posts
                     continue
                 # load only unreaded posts
-                max_limit = limit
+                if max_limit < 0:
+                    max_limit = abs(max_limit)
+                    if limit < max_limit:
+                        max_limit = limit
+                    else:
+                        limit = max_limit
+                else:
+                    max_limit = limit
             else:
                 limit = max_limit
 

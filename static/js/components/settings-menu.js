@@ -28,7 +28,7 @@ export default class SettingsMenu extends React.Component{
         let value = parseInt(e.target.value),
             name = e.target.id;
 
-        if (!isNaN(value) && (value >= 0)) {
+        if (!isNaN(value)) {
             this.state.settings[name] = value;
             this.setState(this.state);
             return true;
