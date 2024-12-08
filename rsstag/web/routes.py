@@ -263,6 +263,11 @@ class RSSTagRoutes:
                 "url": "/tree/<string:tags>",
                 "endpoint": "on_sunburst_get",
                 "methods": ["GET"],
+            },
+            {
+                "url": "/chain/<string:tags>",
+                "endpoint": "on_chain_get",
+                "methods": ["GET"],
             }
         ]
 

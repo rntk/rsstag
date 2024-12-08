@@ -1,0 +1,58 @@
+<html>
+<head>
+
+<title>Page of tag {{tag['tag']}}</title>
+{%  include "head-data.html" %}
+</head>
+<body>
+
+{% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
+<div id="global_tools">
+    <div class="left_half">
+        <div id="link_on_root" class="global_tools_button">
+            <a href="/">main</a>
+        </div>
+        <div id="help_button" class="global_tools_button">
+            <a href="#">help</a>
+        </div>
+    </div>
+    <div class="right_half">
+        {{ g_status.global_status() }}
+        {{ menu.settings_menu() }}
+    </div>
+</div>
+<div class="page">
+    <h1>
+        <a href="/entity/{{ tag['tag'] }}">{{ tag['tag'] }}</a>
+    </h1>
+    {% for chain in chains %}
+        <div class="cloud_item">
+            <a class="cloud_item_title" href="/entity/{{ tag['tag'] }} {{ chain[0] }}">{{ chain[0] }}({{ chain[1] }})</a>
+            <br>
+            <a href="/chain/{{ tag['tag'] }} {{ chain[0] }}">chain</a>
+        </div>
+    {% endfor %}
+    <div>
+        {{ svg_hist }}
+    </div>
+</div>
+<div id="global_tools_bottom">
+    <ul id="paginator"></ul>
+</div>
+<!--script language="javascript" type="application/javascript">
+    var count = document.getElementById('cloud_items_count');
+    count.innerHTML = document.getElementsByTagName('li').length;
+</script-->
+<!--script src="//unpkg.com/sunburst-chart"></script-->
+<script type="text/javascript">
+    let initial_tag = {{tag|json}};
+    window.tag_chain_initial_data = {{chains|json}};
+</script>
+
+<div id="help_window">
+<ul>
+    <li>Click/tap on one tag and then click/tap on other tag, will open the page with posts have selected tags</li>
+</ul>
+</div>
+<div id="progressbar"></div></body>
+</html>

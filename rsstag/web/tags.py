@@ -18,6 +18,7 @@ from rsstag.html_cleaner import HTMLCleaner
 from rsstag.lda import LDA
 from rsstag.llamacpp import LLamaCPP
 from rsstag.openai import OpenAI
+from rsstag.charts import create_svg_histogram
 
 from gensim.models.word2vec import Word2Vec
 from gensim.models.fasttext import FastText
@@ -1287,6 +1288,63 @@ The phrase:
         page.render(
             tag=tag_data,
             root=root,
+            sort_by_title="tags",
+            sort_by_link=app.routes.get_url_by_endpoint(
+                endpoint="on_group_by_tags_get", params={"page_number": 1}
+            ),
+            group_by_link=app.routes.get_url_by_endpoint(
+                endpoint="on_group_by_category_get"
+            ),
+            user_settings=user["settings"],
+            provider=user["provider"],
+        ),
+        mimetype="text/html",
+    )
+
+def on_get_chain(app: "RSSTagApplication", user: dict, tags: str) -> Response:
+    tags_l = tags.split()
+    cursor = app.posts.get_by_tags(user["sid"], tags_l, user["settings"]["only_unread"], projection={"_id": False})
+    tag_data = {"tag": tags}
+
+    chains = {}
+    stopwrds = set(stopwords.words("english") + stopwords.words("russian"))
+    stopwrds.update(tags_l)
+    window = 4
+    for post in cursor:
+        txt = gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
+        words = txt.split()
+        counted_tags = set()
+        for i, w in enumerate(words):
+            if w not in tags_l:
+                continue
+            for j in range(1, window):
+                s = i - j
+                if s >= 0:
+                    sw = words[s]
+                    if sw not in stopwrds and sw not in counted_tags:
+                        counted_tags.add(sw)
+                        if sw not in chains:
+                            chains[sw] = 0
+                        chains[sw] += 1
+                e = i + j
+                if e < len(words):
+                    sw = words[e]
+                    if sw in stopwrds or sw in counted_tags:
+                        continue
+                    counted_tags.add(sw)
+                    if sw not in chains:
+                        chains[sw] = 0
+                    chains[sw] += 1
+    chains = [(k, v) for k, v in chains.items()]
+    chains.sort(key=lambda x: x[1], reverse=True)
+
+    page = app.template_env.get_template("tag-chain.html")
+    svg = create_svg_histogram(chains)
+    return Response(
+        page.render(
+            tag=tag_data,
+            chains=chains,
+            svg_hist=svg,
             sort_by_title="tags",
             sort_by_link=app.routes.get_url_by_endpoint(
                 endpoint="on_group_by_tags_get", params={"page_number": 1}

@@ -740,7 +740,7 @@ h3.post_title {
   text-decoration: none;
 }
 
-.tag_sentences_link {
+.tag_sentences_link, .get_tag_sunburst {
   padding: 0 0.5em;
 }
 
@@ -768,5 +768,3 @@ h3.post_title {
 .openai_tool_table textarea {
   width: 100%;
 }
-
-/*# sourceMappingURL=style.css.map */

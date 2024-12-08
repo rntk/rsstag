@@ -52,6 +52,7 @@ export default class TagItem extends React.Component{
                     {(hide_tag_info_link)? "": <a href={'/tag-info/' + this.state.tag.tag} className="get_tag_siblings">...</a>}
                     {(hide_tag_info_link)? "": sents_link}
                     {(hide_tag_info_link)? "": <a href={'/sunburst/' + this.state.tag.tag} className="get_tag_sunburst">sunburst</a>}
+                    {(hide_tag_info_link)? "": <a href={'/chain/' + this.state.tag.tag} className="get_tag_chains">chain</a>}
                 </li>
             </div>
         )
