@@ -5,6 +5,11 @@ var plugins = [
     new webpack.EnvironmentPlugin(['NODE_ENV'])
 ];
 
+const fs = require('fs');
+const sass = require('sass');
+const result = sass.compile("/css/style.scss");
+fs.writeFileSync('/css/style.css', result.css);
+
 if (process.env.NODE_ENV === 'production') {
     plugins = plugins.concat([
         /*new webpack.optimize.UglifyJsPlugin({
