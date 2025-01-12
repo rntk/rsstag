@@ -27,7 +27,7 @@ import rsstag.web.tags as tags_handlers
 import rsstag.web.bigrams as bigrams_handlers
 import rsstag.web.openai as openai_handlers
 
-from rsstag.openai import OpenAI
+from rsstag.openai import ROpenAI
 from rsstag.anthropic import Anthropic
 from rsstag.llamacpp import LLamaCPP
 
@@ -76,7 +76,10 @@ class RSSTagApplication(object):
         self.providers = self.config["settings"]["providers"].split(",")
         self.user_ttl = int(self.config["settings"]["user_ttl"])
         cl = MongoClient(
-            self.config["settings"]["db_host"], int(self.config["settings"]["db_port"])
+            self.config["settings"]["db_host"],
+            int(self.config["settings"]["db_port"]),
+            username=self.config["settings"]["db_login"] if self.config["settings"]["db_login"] else None,
+            password=self.config["settings"]["db_password"] if self.config["settings"]["db_password"] else None,
         )
         self.db = cl[self.config["settings"]["db_name"]]
         self.posts = RssTagPosts(self.db)
@@ -120,7 +123,7 @@ class RSSTagApplication(object):
             logging.warning("Try to load nltk stopwords %s", e)
             nltk.download("stopwords")
 
-        self.openai = OpenAI(self.config["openai"]["token"])
+        self.openai = ROpenAI(self.config["openai"]["token"])
         self.anthropic = Anthropic(self.config["anthropic"]["token"])
         self.llamacpp = LLamaCPP(self.config["llamacpp"]["host"])
 

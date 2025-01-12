@@ -592,6 +592,8 @@ class RSSTagWorker:
         cl = MongoClient(
             self._config["settings"]["db_host"],
             int(self._config["settings"]["db_port"]),
+            username=self._config["settings"]["db_login"] if self._config["settings"]["db_login"] else None,
+            password=self._config["settings"]["db_password"] if self._config["settings"]["db_password"] else None,
         )
 
         db = cl[self._config["settings"]["db_name"]]
