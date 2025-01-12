@@ -1,13 +1,15 @@
 from typing import List, Optional
 import logging
 
-import openai
+from openai import OpenAI, Completion
 
-class OpenAI:
+class ROpenAI:
     def __init__(self, token: str):
         self.token = token
-        self.model = "gpt-3.5-turbo"
-        openai.api_key = self.token
+        self.model = "gpt-4o-mini"
+        self.client = OpenAI(
+            api_key=self.token
+        )
 
     def call(self, user_msgs: List[str], system_msgs: Optional[List[str]]=None) -> str:
         messages = []
@@ -18,7 +20,7 @@ class OpenAI:
             for msg in system_msgs:
                 messages.append({"role": "system", "content": msg})
         try:
-            resp = openai.ChatCompletion.create(
+            resp: Completion  = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
             )
@@ -28,4 +30,4 @@ class OpenAI:
 
         logging.info("OpenAI response: %s", resp)
 
-        return resp['choices'][0]['message']['content']
+        return resp.choices[0].message.content
