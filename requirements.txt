@@ -34,4 +34,4 @@ typing-extensions==4.12.2
 Werkzeug==3.0.6
 yarl==1.8.1
 openai==0.28.0
-anthropic==0.31.2
+anthropic==0.45.0
