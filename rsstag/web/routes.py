@@ -268,7 +268,22 @@ class RSSTagRoutes:
                 "url": "/chain/<string:tags>",
                 "endpoint": "on_chain_get",
                 "methods": ["GET"],
-            }
+            },
+            {
+                "url": "/prefixes/all/<int:prefix_len>",
+                "endpoint": "on_prefixes_all_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/prefixes/words/<string:prefix>",
+                "endpoint": "on_prefixes_words_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/prefixes/prefix/<string:prefix>",
+                "endpoint": "on_prefixes_prefix_get",
+                "methods": ["GET"],
+            },
         ]
 
         self._rules = []

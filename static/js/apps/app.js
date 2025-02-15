@@ -109,7 +109,7 @@ window.onload = () => {
     } else if (/^\/sunburst\//.test(path)) {
         let sunburst = new TagSunburst(window.tag_sunburst_initial_root);
         sunburst.render(".page");
-    } else if (/^\/tree\//.test(path)) {
+    } else if (/^\/tree\//.test(path) || (/^\/prefixes\/prefix\//.test(path)))  {
         let tree = new TagTree(window.tag_sunburst_initial_root);
         tree.render(".page");
     } else if (path === '/group/category') {
@@ -119,7 +119,8 @@ window.onload = () => {
         );
     } else if (
         /\/group\/(tag|hottag)\/.*/.test(path) || /\/tags\/sentiment\/.*/.test(path) ||
-        /\/tags\/group\/.*/.test(path) || /\/topics\/[0-9]+/.test(path) || /\/tfidf-tags/.test(path)
+        /\/tags\/group\/.*/.test(path) || /\/topics\/[0-9]+/.test(path) || /\/tfidf-tags/.test(path) ||
+        /\/prefixes\/all\/.*/.test(path) || /\/prefixes\/words\/.*/.test(path)
     ) {
         const tags_storage = new TagsStorage(window.EVSYS);
         ReactDOM.render(

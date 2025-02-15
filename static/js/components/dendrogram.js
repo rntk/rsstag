@@ -17,7 +17,7 @@ export default class TagTree {
 
             return link + encodeURIComponent(url_tag);
         };
-        let chart = RadialTree(this.data, {
+        let chart = Tree(this.data, {
             label: d => d.name,
             title: (d, n) => `${n.ancestors().reverse().map(d => d.data.name).join(" ")}`, // hover text
             link: link_fn,
@@ -101,6 +101,47 @@ function Tree(data, { // data is either tabular (array of objects) or hierarchy 
         .attr("style", "max-width: 100%; height: auto; height: intrinsic;")
         .attr("font-family", "sans-serif")
         .attr("font-size", 14);
+
+    // Add CSS transitions for smooth highlighting
+    svg.append("style").text(`
+        .link {
+            transition: stroke-opacity 0.3s;
+        }
+        .node {
+            transition: fill-opacity 0.3s;
+        }
+    `);
+
+    // Helper function to find connected nodes and paths
+    function findConnected(d) {
+        const nodes = new Set();
+        const links = new Set();
+        d.ancestors().forEach(node => {
+            nodes.add(node);
+            if (node.parent) {
+                links.add(node.parent);
+            }
+        });
+        return { nodes, links };
+    }
+
+    // Mouse event handlers for highlighting
+    function handleMouseOver(event, d) {
+        const { nodes, links } = findConnected(d);
+        svg.selectAll(".link")
+            .filter(link => !links.has(link.source))
+            .attr("stroke-opacity", 0.1);
+        svg.selectAll(".node")
+            .filter(node => !nodes.has(node))
+            .attr("fill-opacity", 0.1);
+    }
+
+    function handleMouseOut() {
+        svg.selectAll(".link")
+            .attr("stroke-opacity", strokeOpacity);
+        svg.selectAll(".node")
+            .attr("fill-opacity", 1);
+    }
   
     svg.append("g")
         .attr("fill", "none")
@@ -114,7 +155,8 @@ function Tree(data, { // data is either tabular (array of objects) or hierarchy 
         .join("path")
           .attr("d", d3.link(curve)
               .x(d => d.y)
-              .y(d => d.x));
+              .y(d => d.x))
+          .attr("class", "link");
   
     const node = svg.append("g")
       .selectAll("a")
@@ -122,7 +164,10 @@ function Tree(data, { // data is either tabular (array of objects) or hierarchy 
       .join("a")
         .attr("xlink:href", link == null ? null : d => link(d.data, d))
         .attr("target", link == null ? null : linkTarget)
-        .attr("transform", d => `translate(${d.y},${d.x})`);
+        .attr("transform", d => `translate(${d.y},${d.x})`)
+        .attr("class", "node")
+        .on("mouseover", handleMouseOver)
+        .on("mouseout", handleMouseOut);
   
     node.append("circle")
         .attr("fill", d => d.children ? stroke : fill)
@@ -175,10 +220,10 @@ function RadialTree(data, { // data is either tabular (array of objects) or hier
     strokeOpacity = 0.4, // stroke opacity for links
     strokeLinejoin, // stroke line join for links
     strokeLinecap, // stroke line cap for links
-    halo = "#d7d7af", // color of label halo 
+    halo = "#d7d7af", // color of label halo
     haloWidth = 3, // padding around the labels
   } = {}) {
-    
+
     // If id and parentId options are specified, or the path option, use d3.stratify
     // to convert tabular data to a hierarchy; otherwise we assume that the data is
     // specified as an object {children} with nested objects (a.k.a. the “flare.json”
@@ -186,17 +231,17 @@ function RadialTree(data, { // data is either tabular (array of objects) or hier
     const root = path != null ? d3.stratify().path(path)(data)
         : id != null || parentId != null ? d3.stratify().id(id).parentId(parentId)(data)
         : d3.hierarchy(data, children);
-  
+
     // Sort the nodes.
     if (sort != null) root.sort(sort);
-  
+
     // Compute labels and titles.
     const descendants = root.descendants();
     const L = label == null ? null : descendants.map(d => label(d.data, d));
-  
+
     // Compute the layout.
     tree().size([2 * Math.PI, radius]).separation(separation)(root);
-  
+
     const svg = d3.create("svg")
         .attr("viewBox", [-marginLeft - radius, -marginTop - radius, width, height])
         .attr("width", width)
@@ -204,7 +249,7 @@ function RadialTree(data, { // data is either tabular (array of objects) or hier
         .attr("style", "max-width: 100%; height: auto; height: intrinsic;")
         .attr("font-family", "sans-serif")
         .attr("font-size", 14);
-  
+
     svg.append("g")
         .attr("fill", "none")
         .attr("stroke", stroke)
@@ -218,7 +263,7 @@ function RadialTree(data, { // data is either tabular (array of objects) or hier
         .attr("d", d3.linkRadial()
             .angle(d => d.x)
             .radius(d => d.y));
-  
+
     const node = svg.append("g")
       .selectAll("a")
       .data(root.descendants())
@@ -226,14 +271,14 @@ function RadialTree(data, { // data is either tabular (array of objects) or hier
         .attr("xlink:href", link == null ? null : d => link(d.data, d))
         .attr("target", link == null ? null : linkTarget)
         .attr("transform", d => `rotate(${d.x * 180 / Math.PI - 90}) translate(${d.y},0)`);
-  
+
     node.append("circle")
         .attr("fill", d => d.children ? stroke : fill)
         .attr("r", r);
-  
+
     if (title != null) node.append("title")
         .text(d => title(d.data, d));
-  
+    
     if (L) node.append("text")
         .attr("transform", d => `rotate(${d.x >= Math.PI ? 180 : 0})`)
         .attr("dy", "0.32em")
@@ -243,6 +288,6 @@ function RadialTree(data, { // data is either tabular (array of objects) or hier
         .attr("stroke", halo)
         .attr("stroke-width", haloWidth)
         .text((d, i) => L[i]);
-  
+
     return svg.node();
   }
