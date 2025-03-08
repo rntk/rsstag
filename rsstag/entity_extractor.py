@@ -4,7 +4,6 @@ import logging
 import unicodedata
 from collections import defaultdict
 from rsstag.html_cleaner import HTMLCleaner
-import pymorphy2
 import nltk
 
 
@@ -15,7 +14,7 @@ class RssTagEntityExtractor:
 
     def __init__(self):
         self._html_cleaner = HTMLCleaner()
-        self._lemmer_ru = pymorphy2.MorphAnalyzer()
+        self._lemmer_ru = nltk.stem.snowball.RussianStemmer()
         self._stemmer_ru = nltk.stem.snowball.RussianStemmer()
         self._stemmer_en = nltk.stem.PorterStemmer()
         self._only_cyrillic = re.compile("^[А-яЁё_-]*$")
@@ -70,12 +69,7 @@ class RssTagEntityExtractor:
                 new_word = ""
                 if len(word) > 2:
                     if self._only_cyrillic.match(word):
-                        morphy = self._lemmer_ru.parse(word)
-                        if morphy:
-                            if (morphy[0].tag.POS == "NOUN") and (
-                                morphy[0].tag.number == "sing"
-                            ):
-                                new_word = morphy[0].normal_form
+                        new_word = self._lemmer_ru.stem(word)
                     elif self._only_latin.match(word):
                         try:
                             new_word = self._stemmer_en.stem(word)

@@ -3,8 +3,7 @@ import re
 import logging
 from collections import defaultdict
 from typing import List, Dict
-import pymorphy2
-from nltk.stem import PorterStemmer
+from nltk.stem import SnowballStemmer
 from nltk.corpus import stopwords
 from functools import lru_cache
 
@@ -23,8 +22,8 @@ class TagsBuilder:
         self.only_cyrillic = re.compile(r"^[а-яА-ЯёЁ]*$")
         self.only_latin = re.compile(r"^[a-zA-Z]*$")
         #self.clear_html_esc = re.compile(r"&[#a-zA-Z0-9]*?;")
-        self.latin = PorterStemmer()
-        self.cyrillic = pymorphy2.MorphAnalyzer()
+        self.latin = SnowballStemmer("english")
+        self.cyrillic = SnowballStemmer("russian")
         self._stopwords = None
         self._log = logging.getLogger("TagsBuilder")
         self._window = 2
@@ -57,11 +56,7 @@ class TagsBuilder:
         try:
             word_length = len(current_word)
             if self.only_cyrillic.match(current_word):
-                temp = self.cyrillic.parse(current_word)
-                if temp:
-                    tag = temp[0].normal_form
-                else:
-                    tag = current_word
+                tag = self.cyrillic.stem(current_word)
             elif self.only_latin.match(current_word):
                 tag = self.latin.stem(current_word)
             elif current_word.isnumeric or word_length < 4:
@@ -72,6 +67,9 @@ class TagsBuilder:
                 tag = current_word[:-2]
             else:
                 tag = current_word[:-3]
+
+            if not tag:
+                tag = current_word
         except Exception as e:
             self._log.error('Can`t add to stat word: "%s". Info: %s', current_word, e)
 
@@ -146,7 +144,7 @@ class TagsBuilder:
                 for bi_word in bi_words:
                     bi_tag = self.process_word(bi_word)
                     if not bi_tag:
-                        logging.error("Bigram bug: %s", text)
+                        logging.error("Bigram bug: %s - %s", bi_word, bi_tag)
                         continue
                     bi_grams_l = [tag, bi_tag]
                     bi_grams_l.sort()
