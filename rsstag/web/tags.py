@@ -33,9 +33,6 @@ from sklearn.cluster import DBSCAN
 from sklearn.metrics import pairwise_distances
 import numpy as np
 
-from navec import Navec
-from slovnet import NER
-
 
 def on_group_by_tags_get(
     app: "RSSTagApplication", user: dict, page_number: int = 1
@@ -701,51 +698,7 @@ def on_tag_clusters_get(app: "RSSTagApplication", user: dict, tag: str) -> Respo
 
 def on_tag_entities_get(app: "RSSTagApplication", user: dict, tag: str) -> Response:
     if tag:
-        cursor = app.posts.get_by_tags(
-            user["sid"],
-            tag.split(),
-            user["settings"]["only_unread"],
-            {"content": True, "tags": True, "bi_grams": True},
-        )
-        html_cleaner = HTMLCleaner()
-        tags_builder = TagsBuilder()
-        if app.navec is None:
-            app.navec = Navec.load("./data/navec_news_v1_1B_250K_300d_100q.tar")
-        if app.ner is None:
-            app.ner = NER.load("./data/slovnet_ner_news_v1.tar")
-            app.ner.navec(app.navec)
         ners = {}
-        text_clearing = re.compile(r"[^\w\d ]")
-        for post in cursor:
-            html_cleaner.purge()
-            txt = post["content"]["title"] + ". " + gzip.decompress(post["content"]["content"]).decode("utf-8", "replace")
-            html_cleaner.feed(txt)
-            txt = html.unescape(" ".join(html_cleaner.get_content()))
-            markup = app.ner(txt)
-            if len(markup.spans) == 0:
-                continue
-            for span in markup.spans:
-                n = txt[span.start:span.stop].casefold()
-                n = text_clearing.sub(" ", n).strip()
-                if " " in n:
-                    words = n.split(" ")
-                    ns = map(lambda w: tags_builder.process_word(w), words)
-                    n = " ".join(ns)
-                else:
-                    words = [n]
-                    n = tags_builder.process_word(n)
-                if n not in ners:
-                    ners[n] = {
-                        "tag": n,
-                        "url": "/entity/" + quote(n),
-                        "words": [],
-                        "count": 0,
-                        "sentiment": [],
-                        "temp": 0,
-                    }
-                ners[n]["count"] += 1
-                ners[n]["words"] = list(set(ners[n]["words"] + words))
-
         result = {"data": [ners[n] for n in ners]}
         code = 200
     else:

@@ -32,8 +32,6 @@ from rsstag.openai import ROpenAI
 from rsstag.anthropic import Anthropic
 from rsstag.llamacpp import LLamaCPP
 
-from razdel import sentenize
-
 import nltk
 from nltk.corpus import stopwords
 
@@ -115,8 +113,6 @@ class RSSTagApplication(object):
             "on_telegram_auth_post",
             "on_settings_post"
         }
-        self.navec = None
-        self.ner = None
         try:
             # ensure stowords are downloaded
             len(stopwords.words("english") + stopwords.words("russian"))
@@ -716,23 +712,7 @@ class RSSTagApplication(object):
                 if feed:
                     by_feed[post["feed_id"]] = feed
             sents = []
-            sz_sents = list(sentenize(txt))
-            for i, snt in enumerate(sz_sents):
-                t = snt.text.strip()
-                if not t:
-                    continue
-                mtch = w_reg.match(t)
-                if mtch is None:
-                    continue
-                if len(t) < 200:
-                    pos = i - 1
-                    if pos >= 0:
-                        t = sz_sents[pos].text + " " + t
-                    pos = i + 1
-                    if pos < len(sz_sents):
-                        t += " " + sz_sents[pos].text
-                t = t.replace(mtch.group(1), "<b>{}</b>".format(mtch.group(1)))
-                sents.append(t)
+            #t = t.replace(mtch.group(1), "<b>{}</b>".format(mtch.group(1)))
             if not sents:
                 continue
             sentences.append(
