@@ -10,6 +10,9 @@ export default class PostsStorage {
             group_title: '',
             posts: new Map(),
             readed: false,
+            showed: false,
+            posts_per_page: 100,
+            current_page: 1,
         };
         this.urls = {
             fetch_content: '/posts-content',
@@ -38,13 +41,14 @@ export default class PostsStorage {
             group_title: window.group_title,
             words: window.words,
             readed: false,
-            showed: false
+            showed: false,
+            posts_per_page: window.rss_settings.posts_on_page,
+            current_page: 1
         };
         if (this.isNeedReadedChange(state)) {
             state.readed = !state.readed;
         }
         this.setState(state);
-
     }
 
     getState() {
@@ -62,6 +66,7 @@ export default class PostsStorage {
         this.ES.bind(this.ES.SHOW_POST_LINKS, this.fetchPostLinks.bind(this));
         this.ES.bind(this.ES.SET_CURRENT_POST, this.setCurrentPost.bind(this));
         this.ES.bind(this.ES.POSTS_RENDERED, this.processRenderedPosts.bind(this));
+        this.ES.bind(this.ES.LOAD_MORE_POSTS, this.loadMorePosts.bind(this));
     }
 
     processRenderedPosts() {
@@ -73,6 +78,12 @@ export default class PostsStorage {
                 }
             }
         }
+    }
+
+    loadMorePosts() {
+        let state = this.getState();
+        state.current_page++;
+        this.setState(state);
     }
 
     setCurrentPost(post_id) {
