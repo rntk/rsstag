@@ -55,6 +55,8 @@ export default class EventsSystem {
         this.OPENAI_GET_RESPONSE = "openai_get_response";
         this.OPENAI_GOT_RESPONSE = "openai_got_response";
 
+        this.LOAD_MORE_POSTS = "load_more_posts";
+
         this._events = {};
     }
 

@@ -768,3 +768,11 @@ h3.post_title {
 .openai_tool_table textarea {
   width: 100%;
 }
+
+.load_more_posts {
+  text-align: center;
+  padding: 0.5em;
+  cursor: pointer;
+  font-size: 16pt;
+  border-bottom: 1px solid #c6c6c6;
+}
