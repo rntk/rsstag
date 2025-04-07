@@ -2,30 +2,20 @@ version: "3.8"
 
 services:
   mongodb:
-    image: mongo:4.4
+    image: mongo:8
     restart: always
-    networks:
-      - rsstag-network
+    volumes:
+      - ./mongo-data:/for_dumps
 
   rsstag:
     depends_on:
       - mongodb
     links:
       - mongodb
-    image: rntk/rsstag
+    image: rsstag
     ports:
       - "8885:8885"
     restart: always
-    networks:
-      - rsstag-network
     volumes:
-      - ./conf.conf:/rsstag/rsscloud.conf
-    environment:
-      DB_HOST: mongodb
-
-networks:
-  rsstag-network:
-   ipam:
-      config:
-      - subnet: 172.16.238.0/24
-        gateway: 172.16.238.1
+      - ./rsscloud.conf:/rsstag/rsscloud.conf
+      - ./input_files:/input_files
