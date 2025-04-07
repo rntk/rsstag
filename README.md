@@ -6,7 +6,13 @@
 
 ### 2. Prepare config files
 
-Copy default.conf to rsscloud.conf and edit `db_port`.
+Copy default.conf to rsscloud.conf.
+
+Set fields:
+
+`db_host = mongodb`
+
+`db_port = 27017`.
 
 ### 3. Build the rsstag image
 
