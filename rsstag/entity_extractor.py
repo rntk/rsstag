@@ -4,8 +4,8 @@ import logging
 import unicodedata
 from collections import defaultdict
 from rsstag.html_cleaner import HTMLCleaner
+from rsstag.stopwords import stopwords
 import nltk
-
 
 class RssTagEntityExtractor:
     """
@@ -21,7 +21,7 @@ class RssTagEntityExtractor:
         self._only_latin = re.compile("^[A-z_-]*$")
         self._delimiter = " "
         self._stopwords = set(
-            nltk.corpus.stopwords.words("english") + nltk.corpus.stopwords.words("russian")
+            stopwords.words("english") + stopwords.words("russian")
         )
         self._words_stat = defaultdict(lambda: {"u": 0, "l": 0})
         self._log = logging.getLogger("RssTagEntityExtractor")

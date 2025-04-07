@@ -3,7 +3,7 @@ import logging
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.decomposition import LatentDirichletAllocation
-from nltk.corpus import stopwords
+from rsstag.stopwords import stopwords
 
 
 class LDA:

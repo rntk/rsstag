@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 from werkzeug.wrappers import Response
 
 from sklearn.feature_extraction.text import TfidfVectorizer
-from nltk.corpus import stopwords
+from rsstag.stopwords import stopwords
 
 
 def on_group_by_bigrams_get(

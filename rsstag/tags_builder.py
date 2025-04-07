@@ -4,7 +4,7 @@ import logging
 from collections import defaultdict
 from typing import List, Dict
 from nltk.stem import SnowballStemmer
-from nltk.corpus import stopwords
+from rsstag.stopwords import stopwords
 from functools import lru_cache
 
 

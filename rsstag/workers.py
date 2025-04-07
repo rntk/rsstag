@@ -49,8 +49,7 @@ from rsstag.fasttext import FastTextLearn
 from rsstag.sentiment import RuSentiLex, WordNetAffectRuRom, SentimentConverter
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import DBSCAN
-from nltk.corpus import stopwords
-import nltk
+from rsstag.stopwords import stopwords
 
 
 class RSSTagWorker:
@@ -64,12 +63,6 @@ class RSSTagWorker:
             filemode="a",
             level=getattr(logging, self._config["settings"]["log_level"].upper()),
         )
-        try:
-            # ensure stowords are downloaded
-            len(stopwords.words("english") + stopwords.words("russian"))
-        except Exception as e:
-            logging.warning("Try to load nltk stopwords %s", e)
-            nltk.download("stopwords")
         self._stopw = set(stopwords.words("english") + stopwords.words("russian"))
 
     def start(self):

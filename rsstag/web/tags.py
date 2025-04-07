@@ -26,7 +26,7 @@ from gensim.models.fasttext import FastText
 from werkzeug.wrappers import Request, Response
 from werkzeug.exceptions import NotFound, InternalServerError
 
-from nltk.corpus import stopwords
+from rsstag.stopwords import stopwords
 
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.cluster import DBSCAN

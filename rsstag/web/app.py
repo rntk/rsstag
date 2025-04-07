@@ -32,8 +32,7 @@ from rsstag.openai import ROpenAI
 from rsstag.anthropic import Anthropic
 from rsstag.llamacpp import LLamaCPP
 
-import nltk
-from nltk.corpus import stopwords
+from rsstag.stopwords import stopwords
 
 from werkzeug.wrappers import Response, Request
 from werkzeug.exceptions import HTTPException, NotFound, InternalServerError
@@ -113,12 +112,6 @@ class RSSTagApplication(object):
             "on_telegram_auth_post",
             "on_settings_post"
         }
-        try:
-            # ensure stowords are downloaded
-            len(stopwords.words("english") + stopwords.words("russian"))
-        except Exception as e:
-            logging.warning("Try to load nltk stopwords %s", e)
-            nltk.download("stopwords")
 
         self.openai = ROpenAI(self.config["openai"]["token"])
         self.anthropic = Anthropic(self.config["anthropic"]["token"])
