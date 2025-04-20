@@ -5,7 +5,7 @@ import logging
 from collections import defaultdict
 from urllib.parse import unquote_plus, unquote
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from rsstag.web.app import RSSTagApplication
@@ -517,15 +517,16 @@ def on_get_posts_with_tags(
         )
 
 
-def on_entity_get(app: "RSSTagApplication", user: dict, quoted_tag: str) -> Response:
+def on_entity_get(app: "RSSTagApplication", user: dict, quoted_tag: str, window: Optional[int]=10) -> Response:
     tag = unquote(quoted_tag)
+    tag_words = tag.split()
     projection = {"_id": False, "content.content": False}
     if user["settings"]["only_unread"]:
         only_unread = user["settings"]["only_unread"]
     else:
         only_unread = None
     db_posts_c = app.posts.get_by_tags(
-        user["sid"], tag.split(), only_unread, projection
+        user["sid"], tag_words, only_unread, projection
     )
     db_posts = list(db_posts_c)
 
@@ -538,8 +539,62 @@ def on_entity_get(app: "RSSTagApplication", user: dict, quoted_tag: str) -> Resp
     posts = []
     by_feed = {}
     pids = set()
+    multi_word_tag = len(tag_words) > 1
+    tag_words_set = set(tag_words)
     for post in db_posts:
         post["lemmas"] = gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
+
+
+        # If tag has multiple words, check if they are within the window distance
+        if multi_word_tag:
+            lemmas_list = post["lemmas"].split()
+            words_positions = {}
+
+            # Find positions of all tag words in lemmas
+            
+            for i, lemma in enumerate(lemmas_list):
+                if lemma in tag_words_set:
+                    if lemma not in words_positions:
+                        words_positions[lemma] = []
+                    words_positions[lemma].append(i)
+
+            # Check if all words are present
+            if len(words_positions) != len(tag_words):
+                continue
+
+            # Check if any combination of positions is within window distance
+            within_window = False
+
+            # Get all possible combinations of positions
+            positions_lists = []
+            for word in tag_words:
+                if word in words_positions and words_positions[word]:
+                    positions_lists.append(words_positions[word])
+
+            # If we have positions for all words
+            if len(positions_lists) == len(tag_words):
+                # Try each position of the first word with all combinations of other words
+                for pos1 in positions_lists[0]:
+                    # Create a test set starting with the first word's position
+                    test_positions = [pos1]
+
+                    # Try to find positions of other words that are within window distance
+                    for positions in positions_lists[1:]:
+                        # Find the nearest position to pos1
+                        nearest_pos = min(positions, key=lambda x: abs(x - pos1))
+                        test_positions.append(nearest_pos)
+
+                    # Check if the max distance is within window
+                    max_pos = max(test_positions)
+                    min_pos = min(test_positions)
+                    if max_pos - min_pos <= window:
+                        within_window = True
+                        break
+
+            # Skip post if words aren't within window
+            if not within_window:
+                continue
+
         if post["pid"] not in pids:
             pids.add(post["pid"])
             if post["feed_id"] not in by_feed:
@@ -556,7 +611,7 @@ def on_entity_get(app: "RSSTagApplication", user: dict, quoted_tag: str) -> Resp
                         "favicon": by_feed[post["feed_id"]]["favicon"],
                     }
                 )
-    tags_cur = app.tags.get_by_tags(user["sid"], tag.split(), only_unread=only_unread)
+    tags_cur = app.tags.get_by_tags(user["sid"], tag_words, only_unread=only_unread)
     words = set()
     for tg in tags_cur:
         words.update(tg["words"])

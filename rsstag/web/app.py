@@ -35,7 +35,7 @@ from rsstag.llamacpp import LLamaCPP
 from rsstag.stopwords import stopwords
 
 from werkzeug.wrappers import Response, Request
-from werkzeug.exceptions import HTTPException, NotFound, InternalServerError
+from werkzeug.exceptions import HTTPException, NotFound, InternalServerError, BadRequest
 from werkzeug.utils import redirect
 
 from jinja2 import Environment, PackageLoader
@@ -655,8 +655,15 @@ class RSSTagApplication(object):
     def on_tag_entities_get(self, user: dict, _: Request, tag: str) -> Response:
         return tags_handlers.on_tag_entities_get(self, user, tag)
 
-    def on_entity_get(self, user: dict, _: Request, quoted_tag=None) -> Response:
-        return posts_handlers.on_entity_get(self, user, quoted_tag)
+    def on_entity_get(self, user: dict, req: Request, quoted_tag=None) -> Response:
+        try:
+            window = int(req.args.get("window", 10))
+        except ValueError:
+            return self.on_error(user, req, BadRequest())
+        if window < 1:
+            return self.on_error(user, req, BadRequest())
+
+        return posts_handlers.on_entity_get(self, user, quoted_tag, window)
 
     def on_tag_tfidf_get(self, user: dict, _: Request, tag: str) -> Response:
         return tags_handlers.on_tag_tfidf_get(self, user, tag)
