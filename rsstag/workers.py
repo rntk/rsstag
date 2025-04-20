@@ -469,24 +469,55 @@ class RSSTagWorker:
         return 0
 
     def make_bi_grams_rank(self, db: MongoClient, task: dict) -> bool:
+        """
+            https://arxiv.org/pdf/1307.0596
+        """
         bi_grams = RssTagBiGrams(db)
         user_sid = task["user"]["sid"]
         bi_count = bi_grams.count(user_sid)
         if bi_count == 0:
             return False
+
+        # Get total document count for the user
+        posts = RssTagPosts(db)
+        total_docs = posts.count(user_sid) or 1  # Avoid division by zero
+
         bi_temps = {}
+        q = 0.5  # Parameter q, can be adjusted between 0-1
+
         for bi in task["data"]:
             grams = bi["tag"].split(" ")
             if not grams[0] or not grams[1]:
                 logging.error("Bigrams bug: %s", bi["tag"])
                 continue
+
+            # Get individual tag frequencies
             f1 = self._tags_freqs(user_sid, grams[0])
             f2 = self._tags_freqs(user_sid, grams[1])
-            bi_f = bi["posts_count"]
-            temp = bi_f / math.log(f1 + f2)
+            d_xy = bi["posts_count"]  # Bigram document frequency
+
+            # Calculate cPMId according to the formula:
+            # log(d(x,y) / (d(x) * d(y) / D + sqrt(d(x)) * sqrt(ln q/-2)))
+            denominator = ((f1 * f2) / total_docs)
+
+            # Only calculate sqrt term if frequency > 0
+            sqrt_term = math.sqrt(f1) * math.sqrt(math.log(q) / -2) if f1 > 0 else 0
+
+            # Complete denominator
+            denominator += sqrt_term
+
+            # Calculate cPMId (avoid division by zero and log of negative number)
+            if denominator > 0 and d_xy > 0:
+                cpmi = math.log(d_xy / denominator)
+            else:
+                cpmi = 0
+
+            # Apply stopword penalty if needed
             if grams[0] in self._stopw or grams[1] in self._stopw:
-                temp /= f1 + f2
-            bi_temps[bi["tag"]] = temp + 0.01
+                cpmi /= (f1 + f2)
+
+            # Ensure positive value for sorting
+            bi_temps[bi["tag"]] = max(cpmi + 0.01, 0.01)
 
         bi_grams.set_temperatures(user_sid, bi_temps)
 
