@@ -41,13 +41,15 @@ export class OpenAITool extends React.Component{
         return (<table className="openai_tool_table">
             <tbody>
             <tr>
-                <td>
+                <td className="tag_prompt_response">
+                    <pre>{this.state? this.state.response: ""}</pre>
+                </td>
+            </tr>
+            <tr>
+                <td className="tag_prompt_field">
                     <textarea onChange={this.changeRequest}>
                     {this.state? this.state.user: ""}
                     </textarea>
-                </td>
-                <td>
-                    {this.state? this.state.response: ""}
                 </td>
             </tr>
             <tr>
