@@ -52,7 +52,7 @@ from sklearn.cluster import DBSCAN
 from rsstag.stopwords import stopwords
 
 
-class RSSTagWorker:
+class RSSTagWorkerDispatcher:
     """Rsstag workers handler"""
 
     def __init__(self, config_path):
@@ -63,22 +63,29 @@ class RSSTagWorker:
             filemode="a",
             level=getattr(logging, self._config["settings"]["log_level"].upper()),
         )
-        self._stopw = set(stopwords.words("english") + stopwords.words("russian"))
 
     def start(self):
         """Start worker"""
         for i in range(int(self._config["settings"]["workers_count"])):
-            self._workers_pool.append(Process(target=self.worker))
+            self._workers_pool.append(Process(target=worker, args=(self._config,)))
             self._workers_pool[-1].start()
-        self._workers_pool[-1].join()
 
-    def clear_user_data(self, db: object, user: dict):
+        for w in self._workers_pool:
+            w.join()
+
+class Worker:
+    def __init__(self, db, config):
+        self._db = db
+        self._config = config
+        self._stopw = set(stopwords.words("english") + stopwords.words("russian"))
+
+    def clear_user_data(self, user: dict):
         try:
-            db.posts.delete_many({"owner": user["sid"]})
-            db.feeds.delete_many({"owner": user["sid"]})
-            db.tags.delete_many({"owner": user["sid"]})
-            db.bi_grams.delete_many({"owner": user["sid"]})
-            db.letters.delete_many({"owner": user["sid"]})
+            self._db.posts.delete_many({"owner": user["sid"]})
+            self._db.feeds.delete_many({"owner": user["sid"]})
+            self._db.tags.delete_many({"owner": user["sid"]})
+            self._db.bi_grams.delete_many({"owner": user["sid"]})
+            self._db.letters.delete_many({"owner": user["sid"]})
             result = True
         except Exception as e:
             logging.error("Can`t clear user data %s. Info: %s", user["sid"], e)
@@ -88,7 +95,6 @@ class RSSTagWorker:
 
     def make_tags(
         self,
-        db: MongoClient,
         posts: List[dict],
         builder: TagsBuilder,
         cleaner: HTMLCleaner,
@@ -204,11 +210,11 @@ class RSSTagWorker:
             )
         try:
             if posts_updates:
-                db.posts.bulk_write(posts_updates, ordered=False)
+                self._db.posts.bulk_write(posts_updates, ordered=False)
             if tags_updates:
-                db.tags.bulk_write(tags_updates, ordered=False)
+                self._db.tags.bulk_write(tags_updates, ordered=False)
             if bi_grams_updates:
-                db.bi_grams.bulk_write(bi_grams_updates, ordered=False)
+                self._db.bi_grams.bulk_write(bi_grams_updates, ordered=False)
             result = True
         except Exception as e:
             result = False
@@ -216,7 +222,7 @@ class RSSTagWorker:
 
         return result
 
-    def process_words(self, db: MongoClient, tag: dict) -> bool:
+    def process_words(self, tag: dict) -> bool:
         seconds_interval = 3600
         current_time = time.time()
         max_repeats = 5
@@ -224,7 +230,7 @@ class RSSTagWorker:
         word_query = {"word": tag["tag"], "owner": tag["owner"]}
         for i in range(0, max_repeats):
             try:
-                word = db.words.find_one(word_query)
+                word = self._db.words.find_one(word_query)
                 if word:
                     old_mid = sum(word["numbers"]) / len(word["numbers"])
                     time_delta = current_time - word["it"]
@@ -242,13 +248,13 @@ class RSSTagWorker:
                         word["numbers"][-1] += tag["posts_count"]
                         new_mid = sum(word["numbers"]) / len(word["numbers"])
                     temperature = abs(new_mid - old_mid)
-                    db.tags.find_one_and_update(
+                    self._db.tags.find_one_and_update(
                         {"tag": tag["tag"], "owner": tag["owner"]},
                         {"$set": {"temperature": temperature}},
                     )
-                    db.words.find_one_and_update(word_query, update_query)
+                    self._db.words.find_one_and_update(word_query, update_query)
                 else:
-                    db.words.insert(
+                    self._db.words.insert(
                         {
                             "word": tag["tag"],
                             "owner": tag["owner"],
@@ -271,17 +277,17 @@ class RSSTagWorker:
 
         return result
 
-    def make_letters(self, db, owner: str, config: dict):
+    def make_letters(self, owner: str, config: dict):
         router = RSSTagRoutes(config["settings"]["host_name"])
-        letters = RssTagLetters(db)
-        tags = RssTagTags(db)
+        letters = RssTagLetters(self._db)
+        tags = RssTagTags(self._db)
         all_tags = tags.get_all(owner, projection={"tag": True, "unread_count": True})
         result = True
         letters.sync_with_tags(owner, list(all_tags), router)
 
         return result
 
-    def make_ner(self, db, all_posts: List[dict]) -> Optional[bool]:
+    def make_ner(self, all_posts: List[dict]) -> Optional[bool]:
         if not all_posts:
             return True
         owner = all_posts[0]["owner"]
@@ -306,13 +312,13 @@ class RSSTagWorker:
             return True
 
         logging.info("Found %s entities for user %s", len(count_ent), owner)
-        tags = RssTagTags(db)
+        tags = RssTagTags(self._db)
         result = tags.add_entities(owner, count_ent)
 
         return result
 
-    def make_clustering(self, db, owner: str) -> Optional[bool]:
-        posts = RssTagPosts(db)
+    def make_clustering(self, owner: str) -> Optional[bool]:
+        posts = RssTagPosts(self._db)
         all_posts = posts.get_all(owner, projection={"lemmas": True, "pid": True})
         clusters = None
         texts_for_vec = []
@@ -345,12 +351,12 @@ class RSSTagWorker:
 
         return True
 
-    def make_w2v(self, db, owner: str, config: dict) -> Optional[bool]:
-        l_sent = PostLemmaSentence(db, owner, split=True)
+    def make_w2v(self, owner: str, config: dict) -> Optional[bool]:
+        l_sent = PostLemmaSentence(self._db, owner, split=True)
         if l_sent.count() == 0:
             return True
 
-        users_h = RssTagUsers(db)
+        users_h = RssTagUsers(self._db)
         user = users_h.get_by_sid(owner)
         if not user:
             return False
@@ -366,12 +372,12 @@ class RSSTagWorker:
 
         return result
 
-    def make_fasttext(self, db, owner: str, config: dict) -> Optional[bool]:
-        l_sent = PostLemmaSentence(db, owner, split=True)
+    def make_fasttext(self, owner: str, config: dict) -> Optional[bool]:
+        l_sent = PostLemmaSentence(self._db, owner, split=True)
         if l_sent.count() == 0:
             return True
 
-        users_h = RssTagUsers(db)
+        users_h = RssTagUsers(self._db)
         user = users_h.get_by_sid(owner)
         if not user:
             return False
@@ -387,11 +393,11 @@ class RSSTagWorker:
 
         return result
 
-    def make_tags_groups(self, db, owner: str, config: dict) -> Optional[bool]:
-        tags_h = RssTagTags(db)
+    def make_tags_groups(self, owner: str, config: dict) -> Optional[bool]:
+        tags_h = RssTagTags(self._db)
         all_tags = tags_h.get_all(owner, projection={"tag": True})
         try:
-            users_h = RssTagUsers(db)
+            users_h = RssTagUsers(self._db)
             user = users_h.get_by_sid(owner)
             if not user:
                 return False
@@ -415,7 +421,7 @@ class RSSTagWorker:
 
         return result
 
-    def make_tags_sentiment(self, db, owner: str, config: dict) -> Optional[bool]:
+    def make_tags_sentiment(self, owner: str, config: dict) -> Optional[bool]:
         """
         TODO: may be will be need RuSentiLex and WordNetAffectRuRom caching
         """
@@ -428,7 +434,7 @@ class RSSTagWorker:
             i = 0
             if not wrong:
                 ru_sent.load(strings, ",", "!")
-                tags = RssTagTags(db)
+                tags = RssTagTags(self._db)
                 all_tags = tags.get_all(owner, projection={"tag": True})
                 wna_dir = config["settings"]["lilu_wordnet"]
                 wn_en = WordNetAffectRuRom("en", 4)
@@ -468,18 +474,18 @@ class RSSTagWorker:
 
         return 0
 
-    def make_bi_grams_rank(self, db: MongoClient, task: dict) -> bool:
+    def make_bi_grams_rank(self, task: dict) -> bool:
         """
             https://arxiv.org/pdf/1307.0596
         """
-        bi_grams = RssTagBiGrams(db)
+        bi_grams = RssTagBiGrams(self._db)
         user_sid = task["user"]["sid"]
         bi_count = bi_grams.count(user_sid)
         if bi_count == 0:
             return False
 
         # Get total document count for the user
-        posts = RssTagPosts(db)
+        posts = RssTagPosts(self._db)
         total_docs = posts.count(user_sid) or 1  # Avoid division by zero
 
         bi_temps = {}
@@ -523,9 +529,9 @@ class RSSTagWorker:
 
         return True
 
-    def _make_bi_grams_rank(self, db: MongoClient, user_sid: str) -> bool:
-        tags = RssTagTags(db)
-        bi_grams = RssTagBiGrams(db)
+    def _make_bi_grams_rank(self, user_sid: str) -> bool:
+        tags = RssTagTags(self._db)
+        bi_grams = RssTagBiGrams(self._db)
         freq_cache = {}
         bi_count = bi_grams.count(user_sid)
         if bi_count == 0:
@@ -570,7 +576,7 @@ class RSSTagWorker:
 
         return tags_h.get_tags_sum(owner)
 
-    def _make_tags_rank(self, db: MongoClient, task: dict) -> bool:
+    def _make_tags_rank(self, task: dict) -> bool:
         user_sid = task["user"]["sid"]
         posts_count = self._get_posts_count(user_sid, task["_id"])
         if posts_count == 0:
@@ -589,12 +595,12 @@ class RSSTagWorker:
             temp = tf * idf
             tag_temps[tag_d["tag"]] = temp
 
-        tags_h = RssTagTags(db)
+        tags_h = RssTagTags(self._db)
         tags_h.add_entities(user_sid, tag_temps, replace=True)
 
         return True
 
-    def make_tags_rank(self, db: MongoClient, task: dict) -> bool:
+    def make_tags_rank(self, task: dict) -> bool:
         tag_temps = {}
         for tag_d in task["data"]:
             tf = tag_d["posts_count"] / math.log(1 + tag_d["freq"])
@@ -602,137 +608,136 @@ class RSSTagWorker:
                 tf /= tag_d["freq"]
             tag_temps[tag_d["tag"]] = tf + 0.01
 
-        tags_h = RssTagTags(db)
+        tags_h = RssTagTags(self._db)
         tags_h.add_entities(task["user"]["sid"], tag_temps)
 
         return True
 
-    def make_clean_bigrams(self, db: MongoClient, task: dict) -> bool:
-        bi_grams = RssTagBiGrams(db)
+    def make_clean_bigrams(self, task: dict) -> bool:
+        bi_grams = RssTagBiGrams(self._db)
         return bi_grams.remove_by_count(task["user"]["sid"], 1)
 
-    def worker(self):
-        """Worker for bazqux.com"""
-        cl = MongoClient(
-            self._config["settings"]["db_host"],
-            int(self._config["settings"]["db_port"]),
-            username=self._config["settings"]["db_login"] if self._config["settings"]["db_login"] else None,
-            password=self._config["settings"]["db_password"] if self._config["settings"]["db_password"] else None,
-        )
+def worker(config):
+    cl = MongoClient(
+        config["settings"]["db_host"],
+        int(config["settings"]["db_port"]),
+        username=config["settings"]["db_login"] if config["settings"]["db_login"] else None,
+        password=config["settings"]["db_password"] if config["settings"]["db_password"] else None,
+    )
 
-        db = cl[self._config["settings"]["db_name"]]
-        self._db = db
+    db = cl[config["settings"]["db_name"]]
+    wrkr = Worker(db, config)
 
-        providers = {
-            data_providers.BAZQUX: BazquxProvider(self._config),
-            data_providers.TELEGRAM: TelegramProvider(self._config, self._db),
-            data_providers.TEXT_FILE: TextFileProvider(self._config)
-        }
-        builder = TagsBuilder()
-        cleaner = HTMLCleaner()
-        users = RssTagUsers(db)
-        tasks = RssTagTasks(db)
-        while True:
-            try:
-                task = tasks.get_task(users)
-                task_done = False
-                if task["type"] == TASK_NOOP:
-                    time.sleep(randint(3, 8))
-                    continue
-                if task["type"] == TASK_DOWNLOAD:
-                    logging.info("Start downloading for user")
-                    if self.clear_user_data(db, task["user"]):
-                        provider = providers[task["user"]["provider"]]
-                        posts_n = 0
-                        try:
-                            for posts, feeds in provider.download(task["user"]):
-                                posts_n += len(posts)
-                                f_ids = [f["feed_id"] for f in feeds]
-                                c = db.feeds.find(
-                                    {
-                                        "owner": task["user"]["sid"],
-                                        "feed_id": {"$in": f_ids},
-                                    },
-                                    projection={"feed_id": True, "_id": False},
-                                )
-                                skip_ids = {fc["feed_id"] for fc in c}
-                                n_feeds = []
-                                for fee in feeds:
-                                    if fee["feed_id"] in skip_ids:
-                                        continue
-                                    n_feeds.append(fee)
-                                if posts:
-                                    db.posts.insert_many(posts)
-                                if n_feeds:
-                                    db.feeds.insert_many(n_feeds)
-                            task_done = True
-                        except Exception as e:
-                            task_done = False
-                            logging.error(
-                                "Can`t save in db for user %s. Info: %s. %s",
-                                task["user"]["sid"],
-                                e,
-                                traceback.format_exc()
-                            )
-                        logging.info("Saved posts: %s.", posts_n)
-
-                elif task["type"] == TASK_MARK:
-                    provider = providers[task["user"]["provider"]]
-                    marked = provider.mark(task["data"], task["user"])
-                    if marked is None:
-                        tasks.freeze_tasks(task["user"], task["type"])
-                        users.update_by_sid(task["user"]["sid"], {"retoken": True})
-                        task_done = False
-                    else:
-                        task_done = marked
-                elif task["type"] == TASK_MARK_TELEGRAM:
-                    provider: TelegramProvider = providers[data_providers.TELEGRAM]
-                    marked = provider.mark_all(task["data"], task["user"])
-                    if marked is None:
-                        tasks.freeze_tasks(task["user"], task["type"])
-                        users.update_by_sid(task["user"]["sid"], {"retoken": True})
-                        task_done = False
-                    else:
-                        task_done = marked
-                elif task["type"] == TASK_TAGS:
-                    if task["data"]:
-                        task_done = self.make_tags(db, task["data"], builder, cleaner)
-                    else:
-                        task_done = True
-                        logging.warning("Error while make tags: %s", task)
-                elif task["type"] == TASK_LETTERS:
-                    task_done = self.make_letters(db, task["user"]["sid"], self._config)
-                elif task["type"] == TASK_NER:
-                    task_done = self.make_ner(db, task["data"])
-                elif task["type"] == TASK_TAGS_SENTIMENT:
-                    task_done = self.make_tags_sentiment(
-                        db, task["user"]["sid"], self._config
-                    )
-                elif task["type"] == TASK_CLUSTERING:
-                    task_done = self.make_clustering(db, task["user"]["sid"])
-                elif task["type"] == TASK_W2V:
-                    task_done = self.make_w2v(db, task["user"]["sid"], self._config)
-                elif task["type"] == TASK_FASTTEXT:
-                    task_done = self.make_fasttext(db, task["user"]["sid"], self._config)
-                elif task["type"] == TASK_TAGS_GROUP:
-                    task_done = self.make_tags_groups(
-                        db, task["user"]["sid"], self._config
-                    )
-                elif task["type"] == TASK_BIGRAMS_RANK:
-                    task_done = self.make_bi_grams_rank(db, task)
-                elif task["type"] == TASK_TAGS_RANK:
-                    task_done = self.make_tags_rank(db, task)
-                elif task["type"] == TASK_CLEAN_BIGRAMS:
-                    task_done = self.make_clean_bigrams(db, task)
-                """elif task['type'] == TASK_WORDS:
-                    task_done = self.process_words(db, task['data'])"""
-                # TODO: add tags_coords, add D2V?
-                if task_done:
-                    tasks.finish_task(task)
-                    if task["type"] == TASK_CLUSTERING:
-                        users.update_by_sid(
-                            task["user"]["sid"], {"ready": True, "in_queue": False}
-                        )
-            except Exception as e:
-                logging.error("worker got exception: {}. {}".format(e, traceback.format_exc()))
+    providers = {
+        data_providers.BAZQUX: BazquxProvider(config),
+        data_providers.TELEGRAM: TelegramProvider(config, db),
+        data_providers.TEXT_FILE: TextFileProvider(config)
+    }
+    builder = TagsBuilder()
+    cleaner = HTMLCleaner()
+    users = RssTagUsers(db)
+    tasks = RssTagTasks(db)
+    while True:
+        try:
+            task = tasks.get_task(users)
+            task_done = False
+            if task["type"] == TASK_NOOP:
                 time.sleep(randint(3, 8))
+                continue
+            if task["type"] == TASK_DOWNLOAD:
+                logging.info("Start downloading for user")
+                if wrkr.clear_user_data(task["user"]):
+                    provider = providers[task["user"]["provider"]]
+                    posts_n = 0
+                    try:
+                        for posts, feeds in provider.download(task["user"]):
+                            posts_n += len(posts)
+                            f_ids = [f["feed_id"] for f in feeds]
+                            c = db.feeds.find(
+                                {
+                                    "owner": task["user"]["sid"],
+                                    "feed_id": {"$in": f_ids},
+                                },
+                                projection={"feed_id": True, "_id": False},
+                            )
+                            skip_ids = {fc["feed_id"] for fc in c}
+                            n_feeds = []
+                            for fee in feeds:
+                                if fee["feed_id"] in skip_ids:
+                                    continue
+                                n_feeds.append(fee)
+                            if posts:
+                                db.posts.insert_many(posts)
+                            if n_feeds:
+                                db.feeds.insert_many(n_feeds)
+                        task_done = True
+                    except Exception as e:
+                        task_done = False
+                        logging.error(
+                            "Can`t save in db for user %s. Info: %s. %s",
+                            task["user"]["sid"],
+                            e,
+                            traceback.format_exc()
+                        )
+                    logging.info("Saved posts: %s.", posts_n)
+
+            elif task["type"] == TASK_MARK:
+                provider = providers[task["user"]["provider"]]
+                marked = provider.mark(task["data"], task["user"])
+                if marked is None:
+                    tasks.freeze_tasks(task["user"], task["type"])
+                    users.update_by_sid(task["user"]["sid"], {"retoken": True})
+                    task_done = False
+                else:
+                    task_done = marked
+            elif task["type"] == TASK_MARK_TELEGRAM:
+                provider = providers[data_providers.TELEGRAM]
+                marked = provider.mark_all(task["data"], task["user"])
+                if marked is None:
+                    tasks.freeze_tasks(task["user"], task["type"])
+                    users.update_by_sid(task["user"]["sid"], {"retoken": True})
+                    task_done = False
+                else:
+                    task_done = marked
+            elif task["type"] == TASK_TAGS:
+                if task["data"]:
+                    task_done = wrkr.make_tags(task["data"], builder, cleaner)
+                else:
+                    task_done = True
+                    logging.warning("Error while make tags: %s", task)
+            elif task["type"] == TASK_LETTERS:
+                task_done = wrkr.make_letters(task["user"]["sid"], config)
+            elif task["type"] == TASK_NER:
+                task_done = wrkr.make_ner(task["data"])
+            elif task["type"] == TASK_TAGS_SENTIMENT:
+                task_done = wrkr.make_tags_sentiment(
+                    task["user"]["sid"], config
+                )
+            elif task["type"] == TASK_CLUSTERING:
+                task_done = wrkr.make_clustering(task["user"]["sid"])
+            elif task["type"] == TASK_W2V:
+                task_done = wrkr.make_w2v(task["user"]["sid"], config)
+            elif task["type"] == TASK_FASTTEXT:
+                task_done = wrkr.make_fasttext(task["user"]["sid"], config)
+            elif task["type"] == TASK_TAGS_GROUP:
+                task_done = wrkr.make_tags_groups(
+                    task["user"]["sid"], config
+                )
+            elif task["type"] == TASK_BIGRAMS_RANK:
+                task_done = wrkr.make_bi_grams_rank(task)
+            elif task["type"] == TASK_TAGS_RANK:
+                task_done = wrkr.make_tags_rank(task)
+            elif task["type"] == TASK_CLEAN_BIGRAMS:
+                task_done = wrkr.make_clean_bigrams(task)
+            """elif task['type'] == TASK_WORDS:
+                task_done = wrkr.process_words(task['data'])"""
+            # TODO: add tags_coords, add D2V?
+            if task_done:
+                tasks.finish_task(task)
+                if task["type"] == TASK_CLUSTERING:
+                    users.update_by_sid(
+                        task["user"]["sid"], {"ready": True, "in_queue": False}
+                    )
+        except Exception as e:
+            logging.error("worker got exception: {}. {}".format(e, traceback.format_exc()))
+            time.sleep(randint(3, 8))
