@@ -284,6 +284,11 @@ class RSSTagRoutes:
                 "endpoint": "on_prefixes_prefix_get",
                 "methods": ["GET"],
             },
+            {
+                "url": "/chat",
+                "endpoint": "on_chat_post",
+                "methods": ["POST"],
+            },
         ]
 
         self._rules = []

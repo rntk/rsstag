@@ -776,3 +776,65 @@ h3.post_title {
   font-size: 16pt;
   border-bottom: 1px solid #c6c6c6;
 }
+
+/* Chat component styles */
+.post-chat-container {
+  padding: 1em;
+  margin: 1em 0;
+}
+
+.chat-form {
+  margin-bottom: 1em;
+}
+
+.chat-input {
+  width: 100%;
+  padding: 0.5em;
+  margin-bottom: 0.5em;
+  border: 1px solid #c6c6c6;
+  border-radius: 0.5em;
+  font-size: 12pt;
+}
+
+.chat-submit {
+  padding: 0.5em 1em;
+  background-color: #008ec9;
+  color: white;
+  border: none;
+  border-radius: 0.5em;
+  cursor: pointer;
+  font-size: 12pt;
+}
+
+.chat-submit:hover {
+  background-color: #0077a8;
+}
+
+.chat-submit:disabled {
+  background-color: #c6c6c6;
+  cursor: not-allowed;
+}
+
+.loading-indicator {
+  margin: 1em 0;
+  font-style: italic;
+  color: #666;
+}
+
+.chat-response {
+  margin-top: 1em;
+  padding: 1em;
+  background-color: #f5f5f5;
+  border-radius: 0.5em;
+  border: 1px solid #c6c6c6;
+}
+
+.chat-response h4 {
+  margin-top: 0;
+  color: #008ec9;
+}
+
+.response-content {
+  white-space: pre-line;
+  line-height: 1.4;
+}

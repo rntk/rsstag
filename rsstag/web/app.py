@@ -27,6 +27,7 @@ import rsstag.web.tags as tags_handlers
 import rsstag.web.bigrams as bigrams_handlers
 import rsstag.web.openai as openai_handlers
 import rsstag.web.prefixes as prefixes_handlers
+import rsstag.web.chat as chat_handlers
 
 from rsstag.openai import ROpenAI
 from rsstag.anthropic import Anthropic
@@ -853,6 +854,9 @@ class RSSTagApplication(object):
 
     def on_openai_post(self, user: dict, request: Request):
         return openai_handlers.on_openai_post(self, user, request)
+
+    def on_chat_post(self, user: dict, request: Request):
+        return chat_handlers.on_chat_post(self, user, request)
 
     def on_prefixes_all_get(self, user: dict, _: Request, prefix_len: int):
         return prefixes_handlers.on_prefixes_all_get(self, user, prefix_len)
