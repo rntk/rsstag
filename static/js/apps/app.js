@@ -44,6 +44,17 @@ import {OpenAITool} from "../components/openai.js";
 import TagSunburst from "../components/sunburst.js";
 import TagTree from "../components/dendrogram.js";
 
+function handleTextSelection() {
+    document.addEventListener('mouseup', () => {
+        const selectedText = window.getSelection().toString().trim();
+        if (selectedText) {
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('rerank', selectedText);
+            window.open(currentUrl.toString(), '_blank');
+        }
+    });
+}
+
 function handleScroll() {
     let $tools = document.querySelector('#global_tools');
     let $tools_bottom = document.querySelector('#global_tools_bottom');
@@ -84,6 +95,7 @@ window.onload = () => {
         window.EVSYS = new EventsSystem();
     }
     handleScroll();
+    handleTextSelection(); // Add this line to initialize the text selection listener
     ReactDOM.render(
         <SettingsMenu ES={window.EVSYS} />,
         document.getElementById('settings_menu')

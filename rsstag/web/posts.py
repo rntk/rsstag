@@ -4,6 +4,7 @@ import gzip
 import logging
 from collections import defaultdict
 from urllib.parse import unquote_plus, unquote
+import requests # Add requests import
 
 from typing import TYPE_CHECKING, Optional
 
@@ -517,10 +518,13 @@ def on_get_posts_with_tags(
         )
 
 
-def on_entity_get(app: "RSSTagApplication", user: dict, quoted_tag: str, window: Optional[int]=10) -> Response:
+def on_entity_get(app: "RSSTagApplication", user: dict, quoted_tag: str, window: Optional[int]=10, rerank: Optional[str]=None) -> Response:
+    #print(rerank)
     tag = unquote(quoted_tag)
     tag_words = tag.split()
-    projection = {"_id": False, "content.content": False}
+    projection = {"_id": False}
+    if not rerank:
+        projection["content.content"] = False
     if user["settings"]["only_unread"]:
         only_unread = user["settings"]["only_unread"]
     else:
@@ -541,9 +545,16 @@ def on_entity_get(app: "RSSTagApplication", user: dict, quoted_tag: str, window:
     pids = set()
     multi_word_tag = len(tag_words) > 1
     tag_words_set = set(tag_words)
+    
+    # Maximum length for reranking API
+    MAX_CHUNK_LENGTH = 1024
+    # Overlap percentage (50%)
+    OVERLAP_PERCENT = 0.5
+    
+    rerank_url = "http://127.0.0.1:8257/v1/rerank" #app.config.get("rerank", {}).get("url")
+    
     for post in db_posts:
         post["lemmas"] = gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
-
 
         # If tag has multiple words, check if they are within the window distance
         if multi_word_tag:
@@ -602,15 +613,83 @@ def on_entity_get(app: "RSSTagApplication", user: dict, quoted_tag: str, window:
                 if feed:
                     by_feed[post["feed_id"]] = feed
             if post["feed_id"] in by_feed:
-                posts.append(
-                    {
-                        "post": post,
-                        "pos": post["pid"],
-                        "category_title": by_feed[post["feed_id"]]["category_title"],
-                        "feed_title": by_feed[post["feed_id"]]["title"],
-                        "favicon": by_feed[post["feed_id"]]["favicon"],
-                    }
-                )
+                post_data = {
+                    "post": post,
+                    "pos": post["pid"],
+                    "category_title": by_feed[post["feed_id"]]["category_title"],
+                    "feed_title": by_feed[post["feed_id"]]["title"],
+                    "favicon": by_feed[post["feed_id"]]["favicon"],
+                }
+                
+                # Process reranking individually for each post
+                if rerank and rerank_url:
+                    try:
+                        # Get content
+                        content = gzip.decompress(post["content"]["content"]).decode("utf-8", "replace")
+                        
+                        # Split content into chunks with 50% overlap
+                        chunks = []
+                        words = content.split()
+                        chunk_size = MAX_CHUNK_LENGTH
+                        stride = int(chunk_size * (1 - OVERLAP_PERCENT))
+                        
+                        if len(words) <= chunk_size:
+                            # Content fits in one chunk
+                            chunks.append(" ".join(words))
+                        else:
+                            # Split into overlapping chunks
+                            for i in range(0, len(words), stride):
+                                chunk = words[i:i + chunk_size]
+                                if chunk:
+                                    chunks.append(" ".join(chunk))
+                                # Stop if this chunk or next would be too small
+                                if i + chunk_size >= len(words):
+                                    break
+                        
+                        # Prepare all chunks for a single request
+                        rerank_data = [[rerank, chunk] for chunk in chunks]
+                        
+                        # Send a single request with all chunks
+                        response = requests.post(rerank_url, json=rerank_data, timeout=300)
+                        response.raise_for_status()
+                        scores = response.json()
+                        #print(scores)
+                        
+                        # Find the maximum score from all chunks
+                        max_score = -float('inf')
+                        if isinstance(scores, list) and scores:
+                            for score in scores:
+                                max_score = max(max_score, score)
+                        
+                        # Only add the score if we found a valid one
+                        if max_score > -float('inf'):
+                            post_data['rerank_score'] = max_score
+                            
+                    except requests.exceptions.RequestException as e:
+                        logging.error('Rerank API call failed for post %d: %s', post["pid"], e)
+                    except json.JSONDecodeError as e:
+                        logging.error('Failed to decode rerank API JSON response for post %d: %s', post["pid"], e)
+                    except Exception as e:
+                        logging.error('Unexpected error during reranking for post %d: %s', post["pid"], e)
+                    
+                    # Remove content to save memory
+                    if "content" in post and "content" in post["content"]:
+                        del post["content"]["content"]
+                
+                posts.append(post_data)
+
+    # Sort posts by rerank score if available
+    if rerank and rerank_url:
+        posts.sort(key=lambda x: x.get('rerank_score', -float('inf')), reverse=True)
+        
+        # Filter to keep only positively scored posts if we have enough
+        filtered_posts = [p for p in posts if p.get('rerank_score', 0) > 0]
+        if len(filtered_posts) > 3:
+            posts = filtered_posts
+        else:
+            # Keep at least the top 3 posts regardless of score
+            posts = posts[:3]
+
     tags_cur = app.tags.get_by_tags(user["sid"], tag_words, only_unread=only_unread)
     words = set()
     for tg in tags_cur:

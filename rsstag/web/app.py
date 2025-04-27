@@ -663,8 +663,12 @@ class RSSTagApplication(object):
             return self.on_error(user, req, BadRequest())
         if window < 1:
             return self.on_error(user, req, BadRequest())
+        
+        rerank = None
+        if "rerank" in req.args:
+            rerank = req.args.get("rerank")
 
-        return posts_handlers.on_entity_get(self, user, quoted_tag, window)
+        return posts_handlers.on_entity_get(self, user, quoted_tag, window, rerank)
 
     def on_tag_tfidf_get(self, user: dict, _: Request, tag: str) -> Response:
         return tags_handlers.on_tag_tfidf_get(self, user, tag)
