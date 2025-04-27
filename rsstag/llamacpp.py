@@ -1,5 +1,5 @@
 import json
-from typing import List, Union, Optional
+from typing import List, Union, Optional, Dict, Any
 import logging
 from urllib.parse import urlparse
 from http.client import HTTPConnection, HTTPSConnection
@@ -67,3 +67,48 @@ class LLamaCPP:
             embeds.append(emb["embedding"])
 
         return embeds
+
+    def rerank(self, query: str, documents: List[str], top_n: int = None) -> Optional[List[Dict[str, Any]]]:
+        """
+        Reranks documents according to their relevance to the query.
+
+        Args:
+            query: The query string to rank documents against
+            documents: List of document strings to rank
+            top_n: Optional number of top documents to return (default returns all documents)
+
+        Returns:
+            List of dictionaries containing:
+                - document: The original document text
+                - index: Original index of the document in the input list
+                - relevance_score: A float indicating relevance (higher is more relevant)
+            Sorted by relevance_score in descending order, or None if the API call fails.
+        """
+        conn = self.get_connection()
+        request_body = {
+            "query": query,
+            "documents": documents
+        }
+
+        if top_n is not None:
+            request_body["top_n"] = top_n
+
+        body = json.dumps(request_body)
+        headers = {
+            'Content-type': 'application/json',
+            'Authorization': 'Bearer '
+        }
+
+        conn.request("POST", "/v1/rerank", body, headers)
+        res = conn.getresponse()
+        resp_body = res.read()
+
+        if res.status != 200:
+            err_msg = f"{res.status} - {res.reason} - {resp_body}"
+            logging.error(err_msg)
+
+            return None
+
+        resp = json.loads(resp_body)
+
+        return resp.get("results", [])
