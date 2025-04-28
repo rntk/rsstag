@@ -12,7 +12,9 @@ services:
       - mongodb
     links:
       - mongodb
-    image: rsstag
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "8885:8885"
     restart: always
