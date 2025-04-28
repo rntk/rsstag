@@ -56,7 +56,13 @@ if __name__ == "__main__":
         config_path = sys.argv[1]
     cfg = load_config(config_path)
 
-    cl = MongoClient(cfg["settings"]["db_host"], int(cfg["settings"]["db_port"]))
+    cl = MongoClient(
+        cfg["settings"]["db_host"], 
+        int(cfg["settings"]["db_port"]), 
+        username=cfg["settings"]["db_login"],
+        password=cfg["settings"]["db_password"],
+        authSource=cfg["settings"]["db_auth_source"]
+    )
     db = cl[cfg["settings"]["db_name"]]
     feeds_h = RssTagFeeds(db)
     posts_h = RssTagPosts(db)

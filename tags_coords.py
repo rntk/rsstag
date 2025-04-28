@@ -134,7 +134,13 @@ if __name__ == "__main__":
         filemode="a",
         level=getattr(logging, config["settings"]["log_level"].upper()),
     )
-    cl = MongoClient(config["settings"]["db_host"], int(config["settings"]["db_port"]))
+    cl = MongoClient(
+        config["settings"]["db_host"], 
+        int(config["settings"]["db_port"]), 
+        username=config["settings"]["db_login"],
+        password=config["settings"]["db_password"],
+        authSource=config["settings"]["db_auth_source"]
+    )
     db = cl[config["settings"]["db_name"]]
     match_tag_to_geo(db)
     make_tags_geo(db, config["yandex"]["geocode_key"])
