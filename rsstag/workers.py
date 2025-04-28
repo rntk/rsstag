@@ -623,6 +623,7 @@ def worker(config):
         int(config["settings"]["db_port"]),
         username=config["settings"]["db_login"] if config["settings"]["db_login"] else None,
         password=config["settings"]["db_password"] if config["settings"]["db_password"] else None,
+        authSource=config["settings"]["db_auth_source"] if "db_auth_source" in config["settings"] else None,
     )
 
     db = cl[config["settings"]["db_name"]]
