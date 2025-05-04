@@ -709,6 +709,215 @@ def on_entity_get(app: "RSSTagApplication", user: dict, quoted_tag: str, window:
         mimetype="text/html",
     )
 
+def get_embeddings(texts: list[str]) -> list[list[float]]:
+    from http.client import HTTPConnection
+    conn = HTTPConnection("192.168.178.26:8256")
+    conn.request("POST", "/v1/embeddings", json.dumps(texts), {"Content-Type": "application/json"})
+    resp = conn.getresponse()
+    data = resp.read()
+    conn.close()
+
+    return json.loads(data)
+
+def cosine_similarity(v1: list[float], v2: list[float]) -> float:
+    """Calculate cosine similarity between two vectors."""
+    dot_product = sum(a * b for a, b in zip(v1, v2))
+    norm_v1 = sum(a * a for a in v1) ** 0.5
+    norm_v2 = sum(b * b for b in v2) ** 0.5
+    if norm_v1 == 0 or norm_v2 == 0:
+        return 0
+    return dot_product / (norm_v1 * norm_v2)
+
+def on_entity_get_(app: "RSSTagApplication", user: dict, quoted_tag: str, window: Optional[int]=10, rerank: Optional[str]=None) -> Response:
+    #print(rerank)
+    tag = unquote(quoted_tag)
+    tag_words = tag.split()
+    projection = {"_id": False}
+    if not rerank:
+        projection["content.content"] = False
+    if user["settings"]["only_unread"]:
+        only_unread = user["settings"]["only_unread"]
+    else:
+        only_unread = None
+    db_posts_c = app.posts.get_by_tags(
+        user["sid"], tag_words, only_unread, projection
+    )
+    db_posts = list(db_posts_c)
+
+    if user["settings"]["similar_posts"]:
+        clusters = app.posts.get_clusters(db_posts)
+        cl_posts = app.posts.get_by_clusters(
+            user["sid"], list(clusters), only_unread, projection
+        )
+        db_posts.extend(cl_posts)
+    posts = []
+    by_feed = {}
+    pids = set()
+    multi_word_tag = len(tag_words) > 1
+    tag_words_set = set(tag_words)
+    
+    # Maximum length for chunking
+    MAX_CHUNK_LENGTH = 1024
+    # Overlap percentage (50%)
+    OVERLAP_PERCENT = 0.5
+    
+    # Get the query embedding only once if reranking is requested
+    query_embedding = None
+    if rerank:
+        try:
+            # Get embedding for the rerank query
+            query_embeddings = get_embeddings([rerank])
+            if query_embeddings and len(query_embeddings) > 0:
+                query_embedding = query_embeddings[0]
+        except Exception as e:
+            logging.error('Failed to get embedding for query "%s": %s', rerank, e)
+    
+    for post in db_posts:
+        post["lemmas"] = gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
+
+        # If tag has multiple words, check if they are within the window distance
+        if multi_word_tag:
+            lemmas_list = post["lemmas"].split()
+            words_positions = {}
+
+            # Find positions of all tag words in lemmas
+            
+            for i, lemma in enumerate(lemmas_list):
+                if lemma in tag_words_set:
+                    if lemma not in words_positions:
+                        words_positions[lemma] = []
+                    words_positions[lemma].append(i)
+
+            # Check if all words are present
+            if len(words_positions) != len(tag_words):
+                continue
+
+            # Check if any combination of positions is within window distance
+            within_window = False
+
+            # Get all possible combinations of positions
+            positions_lists = []
+            for word in tag_words:
+                if word in words_positions and words_positions[word]:
+                    positions_lists.append(words_positions[word])
+
+            # If we have positions for all words
+            if len(positions_lists) == len(tag_words):
+                # Try each position of the first word with all combinations of other words
+                for pos1 in positions_lists[0]:
+                    # Create a test set starting with the first word's position
+                    test_positions = [pos1]
+
+                    # Try to find positions of other words that are within window distance
+                    for positions in positions_lists[1:]:
+                        # Find the nearest position to pos1
+                        nearest_pos = min(positions, key=lambda x: abs(x - pos1))
+                        test_positions.append(nearest_pos)
+
+                    # Check if the max distance is within window
+                    max_pos = max(test_positions)
+                    min_pos = min(test_positions)
+                    if max_pos - min_pos <= window:
+                        within_window = True
+                        break
+
+            # Skip post if words aren't within window
+            if not within_window:
+                continue
+
+        if post["pid"] not in pids:
+            pids.add(post["pid"])
+            if post["feed_id"] not in by_feed:
+                feed = app.feeds.get_by_feed_id(user["sid"], post["feed_id"])
+                if feed:
+                    by_feed[post["feed_id"]] = feed
+            if post["feed_id"] in by_feed:
+                post_data = {
+                    "post": post,
+                    "pos": post["pid"],
+                    "category_title": by_feed[post["feed_id"]]["category_title"],
+                    "feed_title": by_feed[post["feed_id"]]["title"],
+                    "favicon": by_feed[post["feed_id"]]["favicon"],
+                }
+                
+                # Process embeddings for reranking if requested and query embedding was obtained
+                if rerank and query_embedding:
+                    try:
+                        # Get content
+                        content = gzip.decompress(post["content"]["content"]).decode("utf-8", "replace")
+                        
+                        # Split content into chunks with 50% overlap
+                        chunks = []
+                        words = content.split()
+                        chunk_size = MAX_CHUNK_LENGTH
+                        stride = int(chunk_size * (1 - OVERLAP_PERCENT))
+                        
+                        if len(words) <= chunk_size:
+                            # Content fits in one chunk
+                            chunks.append(" ".join(words))
+                        else:
+                            # Split into overlapping chunks
+                            for i in range(0, len(words), stride):
+                                chunk = words[i:i + chunk_size]
+                                if chunk:
+                                    chunks.append(" ".join(chunk))
+                                # Stop if this chunk or next would be too small
+                                if i + chunk_size >= len(words):
+                                    break
+                        
+                        # Get embeddings for chunks only (query embedding already obtained)
+                        chunk_embeddings = get_embeddings(chunks)
+                        
+                        if chunk_embeddings:
+                            # Calculate cosine similarity between query and each chunk
+                            similarities = [cosine_similarity(query_embedding, chunk_emb) for chunk_emb in chunk_embeddings]
+                            
+                            # Find the highest similarity score
+                            max_similarity = max(similarities) if similarities else 0
+                            
+                            # Store the similarity as score
+                            post_data['rerank_score'] = max_similarity
+                            
+                    except Exception as e:
+                        logging.error('Embedding/similarity calculation failed for post %d: %s', post["pid"], e)
+                    
+                    # Remove content to save memory
+                    if "content" in post and "content" in post["content"]:
+                        del post["content"]["content"]
+                
+                posts.append(post_data)
+
+    # Sort posts by similarity score if available
+    if rerank and query_embedding:
+        posts.sort(key=lambda x: x.get('rerank_score', -float('inf')), reverse=True)
+        
+        # Filter to keep only posts with similarity above threshold if we have enough
+        threshold = 0.5  # Adjusted threshold for cosine similarity
+        filtered_posts = [p for p in posts if p.get('rerank_score', 0) > threshold]
+        if len(filtered_posts) > 3:
+            posts = filtered_posts
+        else:
+            # Keep at least the top 3 posts regardless of score
+            posts = posts[:3]
+
+    tags_cur = app.tags.get_by_tags(user["sid"], tag_words, only_unread=only_unread)
+    words = set()
+    for tg in tags_cur:
+        words.update(tg["words"])
+
+    page = app.template_env.get_template("posts.html")
+
+    return Response(
+        page.render(
+            posts=posts,
+            tag=tag,
+            group="tag",
+            words=list(words),
+            user_settings=user["settings"],
+            provider=user["provider"],
+        ),
+        mimetype="text/html",
+    )
 
 def on_posts_get(
     app: "RSSTagApplication", user: dict, request: Request, pids: str
