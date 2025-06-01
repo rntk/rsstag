@@ -113,6 +113,7 @@ def on_s_tree_get(app: "RSSTagApplication", user: dict, request: Request, tag: s
     pattern = r'\b(' + "|".join(re.escape(w) for w in words) + r')\b'
     word_re = re.compile(pattern, re.IGNORECASE)
 
+    pid_context_map = []  # Store (pid, context) for later use
     for post in cursor:
         txt = gzip.decompress(post["content"]["content"]).decode("utf-8", "replace")
         if post["content"].get("title"):
@@ -127,13 +128,16 @@ def on_s_tree_get(app: "RSSTagApplication", user: dict, request: Request, tag: s
                 left = sent[: m.start()].strip()
                 mid = sent[m.start() : m.end()]
                 right = sent[m.end() :].strip()
-                contexts.append(
-                    {
-                        "left": html.escape(left),
-                        "mid": html.escape(mid),
-                        "right": html.escape(right),
-                    }
-                )
+                context = {
+                    "left": html.escape(left),
+                    "mid": html.escape(mid),
+                    "right": html.escape(right),
+                }
+                # Attach pid to context for later cluster->pid mapping
+                if "pid" in post:
+                    context["_pid"] = post["pid"]
+                pid_context_map.append(context)
+                contexts.append(context)
 
     # cluster sentences by textual similarity and prepare clusters
     if contexts:
@@ -147,10 +151,25 @@ def on_s_tree_get(app: "RSSTagApplication", user: dict, request: Request, tag: s
         dbs = DBSCAN(eps=0.7, min_samples=2, metric="cosine")
         labels = dbs.fit_predict(vectors)
         clusters = defaultdict(list)
+        cluster_pids = defaultdict(set)
         for label, context in zip(labels, contexts):
             clusters[label].append(context)
+            if "_pid" in context:
+                cluster_pids[label].add(context["_pid"])
+        # Prepare cluster_links: {label: url}
+        cluster_links = {}
+        for label, pids in cluster_pids.items():
+            if pids:
+                pid_str = "_".join(str(pid) for pid in sorted(pids))
+                cluster_links[label] = app.routes.get_url_by_endpoint(
+                    endpoint="on_posts_get",
+                    params={"pids": pid_str}
+                )
+            else:
+                cluster_links[label] = None
     else:
         clusters = {}
+        cluster_links = {}
 
     page = app.template_env.get_template("s-tree.html")
     return Response(
@@ -158,6 +177,7 @@ def on_s_tree_get(app: "RSSTagApplication", user: dict, request: Request, tag: s
             tag=tag,
             words=words,
             clusters=clusters,
+            cluster_links=cluster_links,
             user_settings=user["settings"],
             provider=user["provider"],
         ),

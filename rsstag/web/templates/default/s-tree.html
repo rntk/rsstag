@@ -37,7 +37,13 @@
   </div>
   {% if clusters %}
     {% for label, ctxs in clusters.items() %}
-    <h4>Cluster {{ label }}</h4>
+    <h4>
+      {% if cluster_links[label] %}
+        <a href="{{ cluster_links[label] }}">Cluster {{ label }}</a>
+      {% else %}
+        Cluster {{ label }}
+      {% endif %}
+    </h4>
     <div class="table-responsive">
       <table class="s-tree-table">
         <thead><tr><th>Left</th><th>Word</th><th>Right</th></tr></thead>
@@ -63,3 +69,4 @@
 <div id="progressbar"></div>
 </body>
 </html>
+
