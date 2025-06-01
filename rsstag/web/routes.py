@@ -100,6 +100,11 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/s-tree/<string:tag>",
+                "endpoint": "on_s_tree_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/posts/<string:pids>",
                 "endpoint": "on_posts_get",
                 "methods": ["GET"],

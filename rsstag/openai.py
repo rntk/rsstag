@@ -6,7 +6,7 @@ from openai import OpenAI, Completion
 class ROpenAI:
     def __init__(self, token: str):
         self.token = token
-        self.model = "gpt-4o-mini"
+        self.model = "gpt-4.1-mini"
         self.client = OpenAI(
             api_key=self.token
         )

@@ -99,6 +99,54 @@ def on_group_by_tags_get(
         mimetype="text/html",
     )
 
+def on_s_tree_get(app: "RSSTagApplication", user: dict, request: Request, tag: str) -> Response:
+    tag_data = app.tags.get_by_tag(user["sid"], tag)
+    if not tag_data:
+        return app.on_error(user, request, NotFound())
+
+    words = tag_data.get("words", [])
+    only_unread = user["settings"].get("only_unread") or None
+    cursor = app.posts.get_by_tags(user["sid"], [tag], only_unread=only_unread)
+
+    contexts = []
+    html_c = HTMLCleaner()
+    pattern = r'\b(' + "|".join(re.escape(w) for w in words) + r')\b'
+    word_re = re.compile(pattern, re.IGNORECASE)
+
+    for post in cursor:
+        txt = gzip.decompress(post["content"]["content"]).decode("utf-8", "replace")
+        if post["content"].get("title"):
+            txt = post["content"]["title"] + ". " + txt
+        html_c.purge()
+        html_c.feed(txt)
+        text = " ".join(html_c.get_content())
+        sentences = re.split(r'(?<=[.!?])\s+', text)
+
+        for sent in sentences:
+            for m in word_re.finditer(sent):
+                left = sent[: m.start()].strip()
+                mid = sent[m.start() : m.end()]
+                right = sent[m.end() :].strip()
+                contexts.append(
+                    {
+                        "left": html.escape(left),
+                        "mid": html.escape(mid),
+                        "right": html.escape(right),
+                    }
+                )
+
+    page = app.template_env.get_template("s-tree.html")
+    return Response(
+        page.render(
+            tag=tag,
+            words=words,
+            contexts=contexts,
+            user_settings=user["settings"],
+            provider=user["provider"],
+        ),
+        mimetype="text/html",
+    )
+
 
 def on_group_by_tags_sentiment(
     app: "RSSTagApplication", user: dict, sentiment: str, page_number: int = 1

@@ -744,6 +744,9 @@ class RSSTagApplication(object):
             mimetype="text/html",
         )
 
+    def on_s_tree_get(self, user: dict, request: Request, tag: str) -> Response:
+        return tags_handlers.on_s_tree_get(self, user, request, tag)
+
     def on_cluster_get(self, user: dict, _: Request, cluster: int) -> Response:
         return posts_handlers.on_cluster_get(self, user, cluster)
 
