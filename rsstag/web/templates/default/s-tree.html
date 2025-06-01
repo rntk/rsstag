@@ -35,23 +35,26 @@
       <h3>Sentence Tree: {{tag}}</h3>
       <div>Words: {% for w in words %}{{w}}{% if not loop.last %}, {% endif %}{% endfor %}</div>
   </div>
-  {% if contexts %}
-  <div class="table-responsive">
-    <table class="s-tree-table">
-      <thead><tr><th>Left</th><th>Word</th><th>Right</th></tr></thead>
-      <tbody>
-      {% for c in contexts %}
-        <tr>
-          <td class="left">{{c.left}}</td>
-          <td class="mid">{{c.mid}}</td>
-          <td class="right">{{c.right}}</td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
+  {% if clusters %}
+    {% for label, ctxs in clusters.items() %}
+    <h4>Cluster {{ label }}</h4>
+    <div class="table-responsive">
+      <table class="s-tree-table">
+        <thead><tr><th>Left</th><th>Word</th><th>Right</th></tr></thead>
+        <tbody>
+        {% for c in ctxs %}
+          <tr>
+            <td class="left">{{ c.left }}</td>
+            <td class="mid">{{ c.mid }}</td>
+            <td class="right">{{ c.right }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endfor %}
   {% else %}
-  <p>No sentences found.</p>
+    <p>No sentences found.</p>
   {% endif %}
 </div>
 <div id="global_tools_bottom">

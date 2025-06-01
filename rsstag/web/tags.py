@@ -135,12 +135,29 @@ def on_s_tree_get(app: "RSSTagApplication", user: dict, request: Request, tag: s
                     }
                 )
 
+    # cluster sentences by textual similarity and prepare clusters
+    if contexts:
+        # reconstruct full sentences for vectorization
+        sentences_list = [
+            c["left"] + " " + c["mid"] + " " + c["right"] for c in contexts
+        ]
+        stopw = set(stopwords.words("english") + stopwords.words("russian"))
+        vectorizer = TfidfVectorizer(stop_words=list(stopw))
+        vectors = vectorizer.fit_transform(sentences_list)
+        dbs = DBSCAN(eps=0.7, min_samples=2, metric="cosine")
+        labels = dbs.fit_predict(vectors)
+        clusters = defaultdict(list)
+        for label, context in zip(labels, contexts):
+            clusters[label].append(context)
+    else:
+        clusters = {}
+
     page = app.template_env.get_template("s-tree.html")
     return Response(
         page.render(
             tag=tag,
             words=words,
-            contexts=contexts,
+            clusters=clusters,
             user_settings=user["settings"],
             provider=user["provider"],
         ),
