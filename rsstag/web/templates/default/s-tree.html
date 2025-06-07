@@ -11,7 +11,28 @@
 .s-tree-table .right { text-align: left; }
 .s-tree-table th, .s-tree-table td { max-width: 200px; }
 .table-responsive { width: 100%; overflow-x: auto; }
+.toggle-cluster-btn {
+    margin-left: 10px;
+    font-size: 0.8em;
+    cursor: pointer;
+    background: none;
+    border: 1px solid #ccc;
+    padding: 2px 5px;
+    border-radius: 3px;
+}
 </style>
+<script type="text/javascript">
+function toggleClusterContent(button, contentId) {
+    var content = document.getElementById(contentId);
+    if (content.style.display === "none") {
+        content.style.display = "";
+        button.textContent = "Collapse";
+    } else {
+        content.style.display = "none";
+        button.textContent = "Expand";
+    }
+}
+</script>
 </head>
 <body>
 {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
@@ -43,8 +64,9 @@
       {% else %}
         Cluster {{ label }}
       {% endif %}
+      <button type="button" class="toggle-cluster-btn" onclick="toggleClusterContent(this, 'cluster-content-{{ label }}')">Collapse</button>
     </h4>
-    <div class="table-responsive">
+    <div class="table-responsive" id="cluster-content-{{ label }}">
       <table class="s-tree-table">
         <thead><tr><th>Left</th><th>Word</th><th>Right</th></tr></thead>
         <tbody>
