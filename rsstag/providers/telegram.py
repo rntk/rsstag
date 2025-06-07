@@ -42,18 +42,20 @@ def tlg_poll_to_html(post: dict) -> str:
         return ""
 
     result_html = StringIO()
+    question_text = post["content"]["poll"]["question"].get("text", "") if isinstance(post["content"]["poll"]["question"], dict) else str(post["content"]["poll"]["question"])
     result_html.write(
         "<p>" +
-        post["content"]["poll"]["question"] +
+        question_text +
         "</p><ol>"
     )
     for opt in post["content"]["poll"]["options"]:
         if opt["@type"] != "pollOption":
             continue
 
+        option_text = opt["text"].get("text", "") if isinstance(opt["text"], dict) else str(opt["text"])
         result_html.write(
             "<li>" +
-            opt["text"] +
+            option_text +
             "</li>"
         )
     result_html.write("</ol>")
