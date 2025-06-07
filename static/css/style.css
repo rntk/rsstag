@@ -718,7 +718,6 @@ h3.post_title {
   margin-bottom: 1em;
   padding-bottom: 1em;
   border-bottom: 1px solid #c6c6c6;
-  vertical-align: middle;
   display: block;
 }
 
@@ -837,4 +836,49 @@ h3.post_title {
 .response-content {
   white-space: pre-line;
   line-height: 1.4;
+}
+
+.s-tree-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.s-tree-table th, .s-tree-table td {
+  border: 1px solid #ddd;
+  padding: 4px;
+  word-break: break-word;
+  white-space: normal;
+}
+
+.s-tree-table .left {
+  text-align: right;
+}
+
+.s-tree-table .mid {
+  text-align: center;
+  font-weight: bold;
+}
+
+.s-tree-table .right {
+  text-align: left;
+}
+
+.s-tree-table th, .s-tree-table td {
+  max-width: 200px;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.toggle-cluster-btn {
+  margin-left: 10px;
+  font-size: 0.8em;
+  cursor: pointer;
+  background: none;
+  border: 1px solid #ccc;
+  padding: 2px 5px;
+  border-radius: 3px;
 }

@@ -43,6 +43,7 @@ import OpenAIStorage from "../storages/openai-storage.js";
 import {OpenAITool} from "../components/openai.js";
 import TagSunburst from "../components/sunburst.js";
 import TagTree from "../components/dendrogram.js";
+import SentenceTree from '../components/SentenceTree.js';
 
 function handleTextSelection() {
     document.addEventListener('mouseup', () => {
@@ -118,6 +119,13 @@ window.onload = () => {
     );
     if (path === '/') {
         ;
+    } else if (/^\/s-tree\//.test(path)) {
+        // Ensure s_tree_data is available globally for the SentenceTree component
+        // This might be set by a script tag in the HTML template
+        ReactDOM.render(
+            <SentenceTree />,
+            document.getElementById('s_tree_page') // Ensure this div exists in your HTML
+        );
     } else if (/^\/sunburst\//.test(path)) {
         let sunburst = new TagSunburst(window.tag_sunburst_initial_root);
         sunburst.render(".page");

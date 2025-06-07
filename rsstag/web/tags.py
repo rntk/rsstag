@@ -156,9 +156,11 @@ def on_s_tree_get(app: "RSSTagApplication", user: dict, request: Request, tag: s
         clusters = defaultdict(list)
         cluster_pids = defaultdict(set)
         for label, context in zip(labels, contexts):
-            clusters[label].append(context)
+            # Convert numpy.int64 label to standard int
+            processed_label = int(label)
+            clusters[processed_label].append(context)
             if "_pid" in context:
-                cluster_pids[label].add(context["_pid"])
+                cluster_pids[processed_label].add(context["_pid"])
         # Prepare cluster_links: {label: url}
         cluster_links = {}
         for label, pids in cluster_pids.items():

@@ -3,35 +3,13 @@
 <head>
 <title>Sentence Tree | {{tag}}</title>
 {% include "head-data.html" %}
-<style>
-.s-tree-table { width:100%; border-collapse: collapse; table-layout: auto; }
-.s-tree-table th, .s-tree-table td { border:1px solid #ddd; padding:4px; word-break: break-word; white-space: normal; }
-.s-tree-table .left { text-align: right; }
-.s-tree-table .mid { text-align: center; font-weight: bold; }
-.s-tree-table .right { text-align: left; }
-.s-tree-table th, .s-tree-table td { max-width: 200px; }
-.table-responsive { width: 100%; overflow-x: auto; }
-.toggle-cluster-btn {
-    margin-left: 10px;
-    font-size: 0.8em;
-    cursor: pointer;
-    background: none;
-    border: 1px solid #ccc;
-    padding: 2px 5px;
-    border-radius: 3px;
-}
-</style>
 <script type="text/javascript">
-function toggleClusterContent(button, contentId) {
-    var content = document.getElementById(contentId);
-    if (content.style.display === "none") {
-        content.style.display = "";
-        button.textContent = "Collapse";
-    } else {
-        content.style.display = "none";
-        button.textContent = "Expand";
-    }
-}
+    window.s_tree_data = {
+        tag: {{ tag|tojson|safe }},
+        words: {{ words|tojson|safe }},
+        clusters: {{ clusters|tojson|safe }},
+        cluster_links: {{ cluster_links|tojson|safe }}
+    };
 </script>
 </head>
 <body>
@@ -51,46 +29,7 @@ function toggleClusterContent(button, contentId) {
         <li>Sentence Tree: aligned sentences by word</li>
     </ul>
 </div>
-<div class="page">
-  <div class="group_title">
-      <h3>Sentence Tree: {{tag}}</h3>
-      <div>Words: {% for w in words %}{{w}}{% if not loop.last %}, {% endif %}{% endfor %}</div>
-  </div>
-  {% if clusters %}
-    {% for label, ctxs in clusters.items() %}
-    <h4>
-      {% if cluster_links[label] %}
-        <a href="{{ cluster_links[label] }}">Cluster {{ label }}</a>
-      {% else %}
-        Cluster {{ label }}
-      {% endif %}
-      <button type="button" class="toggle-cluster-btn" onclick="toggleClusterContent(this, 'cluster-content-{{ label }}')">Collapse</button>
-    </h4>
-    <div class="table-responsive" id="cluster-content-{{ label }}">
-      <table class="s-tree-table">
-        <thead><tr><th>Left</th><th>Word</th><th>Right</th></tr></thead>
-        <tbody>
-        {% for c in ctxs %}
-          <tr>
-            <td class="left">{{ c.left }}</td>
-            <td class="mid">
-              {% if c.post_url %}
-                <a href="{{ c.post_url }}" target="_blank">{{ c.mid }}</a>
-              {% else %}
-                {{ c.mid }}
-              {% endif %}
-            </td>
-            <td class="right">{{ c.right }}</td>
-          </tr>
-        {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% endfor %}
-  {% else %}
-    <p>No sentences found.</p>
-  {% endif %}
-</div>
+<div id="s_tree_page"></div> {# This is where the React component will be mounted #}
 <div id="global_tools_bottom">
     <ul id="paginator"></ul>
 </div>
