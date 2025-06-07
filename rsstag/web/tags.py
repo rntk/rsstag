@@ -136,6 +136,9 @@ def on_s_tree_get(app: "RSSTagApplication", user: dict, request: Request, tag: s
                 # Attach pid to context for later cluster->pid mapping
                 if "pid" in post:
                     context["_pid"] = post["pid"]
+                    context["post_url"] = app.routes.get_url_by_endpoint(
+                        endpoint="on_posts_get", params={"pids": str(post["pid"])}
+                    )
                 pid_context_map.append(context)
                 contexts.append(context)
 

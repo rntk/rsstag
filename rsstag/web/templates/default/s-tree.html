@@ -51,7 +51,13 @@
         {% for c in ctxs %}
           <tr>
             <td class="left">{{ c.left }}</td>
-            <td class="mid">{{ c.mid }}</td>
+            <td class="mid">
+              {% if c.post_url %}
+                <a href="{{ c.post_url }}" target="_blank">{{ c.mid }}</a>
+              {% else %}
+                {{ c.mid }}
+              {% endif %}
+            </td>
             <td class="right">{{ c.right }}</td>
           </tr>
         {% endfor %}
