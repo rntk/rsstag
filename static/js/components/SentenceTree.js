@@ -1,12 +1,80 @@
 'use strict';
 import React from 'react';
 
+const MAX_LEN = 150; // Number of symbols to show before truncation
+
 class SentenceRow extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = {
+            leftExpanded: false,
+            rightExpanded: false
+        };
+    }
+
+    toggleLeft = () => {
+        this.setState(prev => ({ leftExpanded: !prev.leftExpanded }));
+    }
+
+    toggleRight = () => {
+        this.setState(prev => ({ rightExpanded: !prev.rightExpanded }));
+    }
+
+    renderLeftTruncated(text, expanded, toggleFn) {
+        if (!text || text.length <= MAX_LEN) {
+            return text;
+        }
+        if (expanded) {
+            return (
+                <>
+                    <button className="show-more-btn" onClick={toggleFn}>show less</button>
+                    {' '}
+                    {text}
+                </>
+            );
+        } else {
+            return (
+                <>
+                    <button className="show-more-btn" onClick={toggleFn}>show more</button>
+                    {' '}
+                    ...{text.slice(-MAX_LEN)}
+                </>
+            );
+        }
+    }
+
+    renderTruncated(text, expanded, toggleFn) {
+        // For right side only (show beginning)
+        if (!text || text.length <= MAX_LEN) {
+            return text;
+        }
+        if (expanded) {
+            return (
+                <>
+                    {text}
+                    {' '}
+                    <button className="show-more-btn" onClick={toggleFn}>show less</button>
+                </>
+            );
+        } else {
+            return (
+                <>
+                    {text.slice(0, MAX_LEN)}...
+                    {' '}
+                    <button className="show-more-btn" onClick={toggleFn}>show more</button>
+                </>
+            );
+        }
+    }
+
     render() {
         const { context } = this.props;
+        const { leftExpanded, rightExpanded } = this.state;
         return (
             <tr>
-                <td className="left">{context.left}</td>
+                <td className="left">
+                    {this.renderLeftTruncated(context.left, leftExpanded, this.toggleLeft)}
+                </td>
                 <td className="mid">
                     {context.post_url ? (
                         <a href={context.post_url} target="_blank" rel="noopener noreferrer">{context.mid}</a>
@@ -14,7 +82,9 @@ class SentenceRow extends React.Component {
                         context.mid
                     )}
                 </td>
-                <td className="right">{context.right}</td>
+                <td className="right">
+                    {this.renderTruncated(context.right, rightExpanded, this.toggleRight)}
+                </td>
             </tr>
         );
     }
