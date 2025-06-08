@@ -155,12 +155,15 @@ def on_s_tree_get(app: "RSSTagApplication", user: dict, request: Request, tag: s
         labels = dbs.fit_predict(vectors)
         clusters = defaultdict(list)
         cluster_pids = defaultdict(set)
+        cluster_sent_map = defaultdict(list)  # label -> list of context dicts
+
         for label, context in zip(labels, contexts):
-            # Convert numpy.int64 label to standard int
             processed_label = int(label)
             clusters[processed_label].append(context)
             if "_pid" in context:
                 cluster_pids[processed_label].add(context["_pid"])
+            cluster_sent_map[processed_label].append(context)
+
         # Prepare cluster_links: {label: url}
         cluster_links = {}
         for label, pids in cluster_pids.items():
@@ -172,8 +175,35 @@ def on_s_tree_get(app: "RSSTagApplication", user: dict, request: Request, tag: s
                 )
             else:
                 cluster_links[label] = None
+
+        # Deduplicate sentences within each cluster
+        dedup_clusters = {}
+        for label, context_list in cluster_sent_map.items():
+            sentence_map = {}  # sentence_text -> set of pids
+            sentence_context = {}  # sentence_text -> context (for left/mid/right)
+            for context in context_list:
+                sentence = (context["left"] + " " + context["mid"] + " " + context["right"]).strip()
+                pid = context.get("_pid")
+                if sentence not in sentence_map:
+                    sentence_map[sentence] = set()
+                    sentence_context[sentence] = context
+                if pid:
+                    sentence_map[sentence].add(pid)
+            # For each unique sentence, create a row with all pids and a cluster-style link
+            dedup_contexts = []
+            for sentence, pids in sentence_map.items():
+                ctx = sentence_context[sentence].copy()
+                if pids:
+                    pid_str = "_".join(str(pid) for pid in sorted(pids))
+                    ctx["post_url"] = app.routes.get_url_by_endpoint(
+                        endpoint="on_posts_get",
+                        params={"pids": pid_str}
+                    )
+                    ctx["_pids"] = list(sorted(pids))
+                dedup_contexts.append(ctx)
+            dedup_clusters[label] = dedup_contexts
     else:
-        clusters = {}
+        dedup_clusters = {}
         cluster_links = {}
 
     page = app.template_env.get_template("s-tree.html")
@@ -181,7 +211,7 @@ def on_s_tree_get(app: "RSSTagApplication", user: dict, request: Request, tag: s
         page.render(
             tag=tag,
             words=words,
-            clusters=clusters,
+            clusters=dedup_clusters,
             cluster_links=cluster_links,
             user_settings=user["settings"],
             provider=user["provider"],
