@@ -118,13 +118,6 @@ class Cluster extends React.Component {
                 </h4>
                 <div className="table-responsive" style={{ display: isCollapsed ? 'none' : '' }}>
                     <table className="s-tree-table">
-                        <thead>
-                            <tr>
-                                <th>Left</th>
-                                <th>Word</th>
-                                <th>Right</th>
-                            </tr>
-                        </thead>
                         <tbody>
                             {ctxs.map((c, index) => (
                                 <SentenceRow key={index} context={c} />
