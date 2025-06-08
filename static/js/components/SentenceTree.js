@@ -20,70 +20,69 @@ class SentenceRow extends React.Component {
         this.setState(prev => ({ rightExpanded: !prev.rightExpanded }));
     }
 
-    renderLeftTruncated(text, expanded, toggleFn) {
+    renderLeftTruncated(text, expanded) {
         if (!text || text.length <= MAX_LEN) {
             return text;
         }
         if (expanded) {
-            return (
-                <>
-                    <button className="show-more-btn" onClick={toggleFn}>show less</button>
-                    {' '}
-                    {text}
-                </>
-            );
+            return text;
         } else {
-            return (
-                <>
-                    <button className="show-more-btn" onClick={toggleFn}>show more</button>
-                    {' '}
-                    ...{text.slice(-MAX_LEN)}
-                </>
-            );
+            return <>...{text.slice(-MAX_LEN)}</>;
         }
     }
 
-    renderTruncated(text, expanded, toggleFn) {
+    renderTruncated(text, expanded) {
         // For right side only (show beginning)
         if (!text || text.length <= MAX_LEN) {
             return text;
         }
         if (expanded) {
-            return (
-                <>
-                    {text}
-                    {' '}
-                    <button className="show-more-btn" onClick={toggleFn}>show less</button>
-                </>
-            );
+            return text;
         } else {
-            return (
-                <>
-                    {text.slice(0, MAX_LEN)}...
-                    {' '}
-                    <button className="show-more-btn" onClick={toggleFn}>show more</button>
-                </>
-            );
+            return <>{text.slice(0, MAX_LEN)}...</>;
         }
     }
 
     render() {
         const { context } = this.props;
         const { leftExpanded, rightExpanded } = this.state;
+        const leftTruncatable = context.left && context.left.length > MAX_LEN;
+        const rightTruncatable = context.right && context.right.length > MAX_LEN;
+
         return (
-            <tr>
-                <td className="left">
-                    {this.renderLeftTruncated(context.left, leftExpanded, this.toggleLeft)}
-                </td>
-                <td className="mid">
-                    {context.post_url ? (
-                        <a href={context.post_url} target="_blank" rel="noopener noreferrer">{context.mid}</a>
-                    ) : (
-                        context.mid
+            <tr className="sentence-row">
+                <td className="left sentence-cell">
+                    <div className="sentence-cell-inner">
+                        {this.renderLeftTruncated(context.left, leftExpanded)}
+                    </div>
+                    {leftTruncatable && (
+                        <div className="show-more-less-block">
+                            <button className="show-more-btn" onClick={this.toggleLeft}>
+                                {leftExpanded ? 'show less' : 'show more'}
+                            </button>
+                        </div>
                     )}
                 </td>
-                <td className="right">
-                    {this.renderTruncated(context.right, rightExpanded, this.toggleRight)}
+                <td className="mid sentence-cell">
+                    <div className="sentence-cell-inner">
+                        {context.post_url ? (
+                            <a href={context.post_url} target="_blank" rel="noopener noreferrer">{context.mid}</a>
+                        ) : (
+                            context.mid
+                        )}
+                    </div>
+                </td>
+                <td className="right sentence-cell">
+                    <div className="sentence-cell-inner">
+                        {this.renderTruncated(context.right, rightExpanded)}
+                    </div>
+                    {rightTruncatable && (
+                        <div className="show-more-less-block">
+                            <button className="show-more-btn" onClick={this.toggleRight}>
+                                {rightExpanded ? 'show less' : 'show more'}
+                            </button>
+                        </div>
+                    )}
                 </td>
             </tr>
         );

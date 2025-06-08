@@ -721,19 +721,82 @@ h3.post_title {
     line-height: 1.4;
   }
 
-.s-tree-table { width:100%; border-collapse: collapse; table-layout: auto; }
-.s-tree-table th, .s-tree-table td { border:1px solid #ddd; padding:4px; word-break: break-word; white-space: normal; }
-.s-tree-table .left { text-align: right; }
-.s-tree-table .mid { text-align: center; font-weight: bold; }
-.s-tree-table .right { text-align: left; }
-.s-tree-table th, .s-tree-table td { max-width: 200px; }
-.table-responsive { width: 100%; overflow-x: auto; }
-.toggle-cluster-btn {
-    margin-left: 10px;
-    font-size: 0.8em;
+.s-tree-table { 
+    width:100%; 
+    border-collapse: collapse; 
+    table-layout: auto; // changed from auto to fixed for consistent cell widths
+}
+.s-tree-table th, .s-tree-table td { 
+    border:1px solid #ddd; 
+    padding:4px; 
+    word-break: break-word; 
+    white-space: normal; 
+}
+.s-tree-table .left { 
+    text-align: right; 
+    width: 44%; // increased width for left
+    min-width: 180px;
+    max-width: 520px;
+}
+.s-tree-table .mid { 
+    text-align: center; 
+    font-weight: bold; 
+    width: 10%; // reduced width for mid
+    min-width: 40px;
+    max-width: 80px;
+}
+.s-tree-table .right { 
+    text-align: left; 
+    width: 44%; // increased width for right
+    min-width: 180px;
+    max-width: 520px;
+}
+.s-tree-table th, .s-tree-table td { 
+    max-width: 520px; // increased for more space
+    overflow: hidden;
+}
+
+.sentence-row .sentence-cell {
+    padding: 0;
+    vertical-align: middle;
+    position: relative;
+}
+
+.sentence-cell-inner {
+    display: flex;
+    align-items: center;
+    min-height: 2.2em;
+    height: 100%;
+    width: 100%;
+    box-sizing: border-box;
+    // Prevents shrinking for short content
+    min-width: 0;
+    justify-content: flex-end; // default for left
+}
+.s-tree-table .mid .sentence-cell-inner {
+    justify-content: center;
+}
+.s-tree-table .right .sentence-cell-inner {
+    justify-content: flex-start;
+}
+
+// --- Add styles for show-more/less block ---
+.show-more-less-block {
+    margin-top: 0.2em;
+    text-align: center;
+    width: 100%;
+}
+.show-more-btn {
+    font-size: 12px;
+    padding: 2px 8px;
+    margin: 0 auto;
+    display: inline-block;
     cursor: pointer;
-    background: none;
-    border: 1px solid #ccc;
-    padding: 2px 5px;
-    border-radius: 3px;
+    border: 1px solid #bbb;
+    border-radius: 0.3em;
+    background: #f8f8f8;
+    transition: background 0.2s;
+}
+.show-more-btn:hover {
+    background: #e0e0e0;
 }
