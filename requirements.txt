@@ -30,7 +30,7 @@ pydantic==2.10.6
 pydantic_core==2.27.2
 pymongo==4.11.2
 regex==2024.11.6
-requests==2.32.2
+requests==2.32.4
 scikit-learn==1.6.1
 scipy==1.13.1
 smart-open==7.1.0
