@@ -62,7 +62,18 @@ export default class PostsItem extends React.Component{
         const repl = '<span class="highlite_tag">$1</span>';
         const reg = new RegExp(`(${words.join("|")})`, "gi");
 
-        return content.replaceAll(reg, repl);
+        const tagRegex = /(<[^>]+>)/g;
+        const parts = content.split(tagRegex);
+
+        const result = parts.map((part, index) => {
+            if (index % 2 === 1) { // It's a tag
+                return part;
+            } else { // It's text
+                return part.replaceAll(reg, repl);
+            }
+        });
+
+        return result.join('');
     }
 
     dangerHTML(post) {
