@@ -27,6 +27,11 @@ export class PostTabs extends React.Component {
         this.state = {
             current: TAB_POSTS
         };
+        if (this.props.words_from_hash) {
+            this.words_from_hash = decodeURIComponent(this.props.words_from_hash.substr(1)).split(' ');
+        } else {
+            this.words_from_hash = [];
+        }
         const container_id = "#posts_page1";
         this._container = document.querySelector(container_id);
         this.wordtree = new WordTree(container_id, this.props.ES);
@@ -106,6 +111,13 @@ export class PostTabs extends React.Component {
     }
 
     updatePosts(data) {
+        if (this.words_from_hash) {
+            for (let word of this.words_from_hash) {
+                if (data.words.indexOf(word) === -1) {
+                    data.words.push(word);
+                }
+            }
+        }
         this.setState({posts: data});
     }
 

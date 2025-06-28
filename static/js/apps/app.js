@@ -167,8 +167,9 @@ window.onload = () => {
             /^\/tag\/.*/.test(path) || /^\/posts\/with\/tags\/.*/.test(path) || /^\/bi-gram\/.*/.test(path) ||
         /^\/entity\/.*/.test(path) || /^\/posts\/.*/.test(path)) {
         const posts_storage = new PostsStorage(window.EVSYS);
+        const hash = window.location.hash;
         ReactDOM.render(
-            <PostTabs ES={window.EVSYS} />,
+            <PostTabs ES={window.EVSYS} words_from_hash={hash} />,
             document.getElementById('posts_page')
         );
         ReactDOM.render(

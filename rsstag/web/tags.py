@@ -105,6 +105,7 @@ def on_s_tree_get(app: "RSSTagApplication", user: dict, request: Request, tag: s
         return app.on_error(user, request, NotFound())
 
     words = tag_data.get("words", [])
+    words_hash = "#" + quote(" ".join(words)) if words else ""
     only_unread = user["settings"].get("only_unread") or None
     cursor = app.posts.get_by_tags(user["sid"], [tag], only_unread=only_unread)
 
@@ -136,8 +137,11 @@ def on_s_tree_get(app: "RSSTagApplication", user: dict, request: Request, tag: s
                 # Attach pid to context for later cluster->pid mapping
                 if "pid" in post:
                     context["_pid"] = post["pid"]
-                    context["post_url"] = app.routes.get_url_by_endpoint(
-                        endpoint="on_posts_get", params={"pids": str(post["pid"])}
+                    context["post_url"] = (
+                        app.routes.get_url_by_endpoint(
+                            endpoint="on_posts_get", params={"pids": str(post["pid"])}
+                        )
+                        + words_hash
                     )
                 pid_context_map.append(context)
                 contexts.append(context)
@@ -169,9 +173,11 @@ def on_s_tree_get(app: "RSSTagApplication", user: dict, request: Request, tag: s
         for label, pids in cluster_pids.items():
             if pids:
                 pid_str = "_".join(str(pid) for pid in sorted(pids))
-                cluster_links[label] = app.routes.get_url_by_endpoint(
-                    endpoint="on_posts_get",
-                    params={"pids": pid_str}
+                cluster_links[label] = (
+                    app.routes.get_url_by_endpoint(
+                        endpoint="on_posts_get", params={"pids": pid_str}
+                    )
+                    + words_hash
                 )
             else:
                 cluster_links[label] = None
@@ -182,7 +188,9 @@ def on_s_tree_get(app: "RSSTagApplication", user: dict, request: Request, tag: s
             sentence_map = {}  # sentence_text -> set of pids
             sentence_context = {}  # sentence_text -> context (for left/mid/right)
             for context in context_list:
-                sentence = (context["left"] + " " + context["mid"] + " " + context["right"]).strip()
+                sentence = (
+                    context["left"] + " " + context["mid"] + " " + context["right"]
+                ).strip()
                 pid = context.get("_pid")
                 if sentence not in sentence_map:
                     sentence_map[sentence] = set()
@@ -195,9 +203,11 @@ def on_s_tree_get(app: "RSSTagApplication", user: dict, request: Request, tag: s
                 ctx = sentence_context[sentence].copy()
                 if pids:
                     pid_str = "_".join(str(pid) for pid in sorted(pids))
-                    ctx["post_url"] = app.routes.get_url_by_endpoint(
-                        endpoint="on_posts_get",
-                        params={"pids": pid_str}
+                    ctx["post_url"] = (
+                        app.routes.get_url_by_endpoint(
+                            endpoint="on_posts_get", params={"pids": pid_str}
+                        )
+                        + words_hash
                     )
                     ctx["_pids"] = list(sorted(pids))
                 dedup_contexts.append(ctx)

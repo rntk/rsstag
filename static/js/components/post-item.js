@@ -59,7 +59,7 @@ export default class PostsItem extends React.Component{
 
             return 0;
         });
-        const repl = "<b>$1</b>";
+        const repl = '<span class="highlite_tag">$1</span>';
         const reg = new RegExp(`(${words.join("|")})`, "gi");
 
         return content.replaceAll(reg, repl);
