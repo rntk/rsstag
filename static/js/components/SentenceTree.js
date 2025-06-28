@@ -107,11 +107,21 @@ class Cluster extends React.Component {
     render() {
         const { label, ctxs, cluster_link } = this.props;
         const { isCollapsed } = this.state;
+        let posts_count = 0;
+        if (cluster_link) {
+            posts_count = 1; // If a link exists, there is at least one post.
+            const pids_match = cluster_link.match(/posts?\/([\d_]+)/);
+            if (pids_match) {
+                const pids_str = pids_match[1];
+                const underscore_count = (pids_str.match(/_/g) || []).length;
+                posts_count = underscore_count + 1;
+            }
+        }
 
         return (
             <div>
                 <h4>
-                    {cluster_link ? <a href={cluster_link}>Cluster {label}</a> : `Cluster ${label}`} ({ctxs.length})
+                    {cluster_link ? <a href={cluster_link}>Cluster {label}</a> : `Cluster ${label}`} ({posts_count}/{ctxs.length})
                     <button type="button" className="toggle-cluster-btn" onClick={this.toggleClusterContent}>
                         {isCollapsed ? "Expand" : "Collapse"}
                     </button>
