@@ -111,7 +111,7 @@ class Cluster extends React.Component {
         return (
             <div>
                 <h4>
-                    {cluster_link ? <a href={cluster_link}>Cluster {label}</a> : `Cluster ${label}`}
+                    {cluster_link ? <a href={cluster_link}>Cluster {label}</a> : `Cluster ${label}`} ({ctxs.length})
                     <button type="button" className="toggle-cluster-btn" onClick={this.toggleClusterContent}>
                         {isCollapsed ? "Expand" : "Collapse"}
                     </button>
