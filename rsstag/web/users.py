@@ -2,13 +2,15 @@ import json
 import logging
 import os
 from typing import Optional, List
+import asyncio
+import aiohttp
 
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from rsstag.web.app import RSSTagApplication
 from rsstag.providers.bazqux import BazquxProvider
-from rsstag.providers.providers import BAZQUX, TEXT_FILE, TELEGRAM
+from rsstag.providers.providers import BAZQUX, TEXT_FILE, TELEGRAM, GMAIL
 from rsstag.tasks import TASK_ALL, TASK_DOWNLOAD
 from rsstag.users import TELEGRAM_CODE_FIELD, TELEGRAM_PASSWORD_FIELD
 
@@ -25,6 +27,11 @@ def on_login_get(
         page = app.template_env.get_template("login.html")
         if not err:
             err = []
+        google_auth_url = ""
+        if provider == GMAIL:
+            google_auth_url = app.routes.get_url_by_endpoint(
+                endpoint="on_login_google_auth_get"
+            )
         response = Response(
             page.render(
                 err=err,
@@ -32,6 +39,7 @@ def on_login_get(
                 version=app.config["settings"]["version"],
                 support=app.config["settings"]["support"],
                 provider=provider,
+                google_auth_url=google_auth_url,
             ),
             mimetype="text/html",
         )
@@ -47,6 +55,104 @@ def on_login_get(
         )
 
     return response
+
+
+async def _exchange_code_for_token(app: "RSSTagApplication", code: str):
+    token_url = "https://oauth2.googleapis.com/token"
+    host_name = app.config["settings"]["host_name"]
+    callback_path = app.routes.get_url_by_endpoint(endpoint="on_oauth2callback_get")
+    redirect_uri = f"http://{host_name}{callback_path}"
+    client_id = app.config["gmail"]["client_id"]
+    client_secret = app.config["gmail"]["client_secret"]
+    payload = {
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "code": code,
+        "redirect_uri": redirect_uri,
+        "grant_type": "authorization_code",
+    }
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.post(token_url, data=payload) as resp:
+                if resp.status != 200:
+                    logging.error(f"Failed to get token: {await resp.text()}")
+                    return None, None
+                token_data = await resp.json()
+        except aiohttp.ClientError as e:
+            logging.error(f"Aiohttp client error during token exchange: {e}")
+            return None, None
+        access_token = token_data.get("access_token")
+        if not access_token:
+            return None, None
+        user_info_url = "https://www.googleapis.com/oauth2/v1/userinfo"
+        headers = {"Authorization": f"Bearer {access_token}"}
+        try:
+            async with session.get(user_info_url, headers=headers) as resp:
+                if resp.status != 200:
+                    logging.error(f"Failed to get user info: {await resp.text()}")
+                    return token_data, None
+                user_info = await resp.json()
+                return token_data, user_info
+        except aiohttp.ClientError as e:
+            logging.error(f"Aiohttp client error getting user info: {e}")
+            return token_data, None
+
+
+def on_oauth2callback_get(app: "RSSTagApplication", request: Request) -> Response:
+    code = request.args.get("code")
+    if not code:
+        return app.on_login_get(None, request, ["Gmail login failed: no code provided."])
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    token_data, user_info = loop.run_until_complete(
+        _exchange_code_for_token(app, code)
+    )
+    if not token_data or not user_info:
+        return app.on_login_get(
+            None, request, ["Failed to get token or user info from Google."]
+        )
+    email = user_info.get("email")
+    if not email:
+        return app.on_login_get(None, request, ["Failed to get email from Google."])
+    user = app.users.get_by_login(email)
+    access_token = token_data["access_token"]
+    refresh_token = token_data.get("refresh_token")
+    if not user:
+        user = app.users.create_user(
+            login=email, password="", token=access_token, provider=GMAIL
+        )
+        if refresh_token:
+            app.users.update_by_sid(user["sid"], {"refresh_token": refresh_token})
+    else:
+        update_data = {"token": access_token}
+        if refresh_token:
+            update_data["refresh_token"] = refresh_token
+        app.users.update_by_sid(user["sid"], update_data)
+
+    user = app.users.get_by_sid(user["sid"])
+    response = redirect(app.routes.get_url_by_endpoint(endpoint="on_root_get"))
+    response.set_cookie("sid", user["sid"], max_age=app.user_ttl, httponly=True)
+
+    return response
+
+
+def on_login_google_auth_get(app: "RSSTagApplication", _: Request) -> Response:
+    host_name = app.config["settings"]["host_name"]
+    callback_path = app.routes.get_url_by_endpoint(endpoint="on_oauth2callback_get")
+    redirect_uri = f"http://{host_name}{callback_path}"
+    client_id = app.config["gmail"]["client_id"]
+    scope = "https://www.googleapis.com/auth/gmail.readonly"
+    oauth_url = (
+        f"https://accounts.google.com/o/oauth2/v2/auth?client_id={client_id}"
+        f"&redirect_uri={redirect_uri}&scope={scope}&response_type=code"
+        f"&access_type=offline&prompt=consent"
+    )
+    return redirect(oauth_url)
+
+
 
 
 def on_login_post(app: "RSSTagApplication", request: Request) -> Response:
