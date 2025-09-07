@@ -663,7 +663,7 @@ class RSSTagApplication(object):
             return self.on_error(user, req, BadRequest())
         if window < 1:
             return self.on_error(user, req, BadRequest())
-        
+
         rerank = None
         if "rerank" in req.args:
             rerank = req.args.get("rerank")
@@ -751,7 +751,7 @@ class RSSTagApplication(object):
         return posts_handlers.on_cluster_get(self, user, cluster)
 
     def on_clusters_get(self, user: dict, request: Request) -> Response:
-        projection = {"_id": False, "clusters": True}
+        projection = {"_id": True, "clusters": True, "tags": True, "lemmas": True}
         if user["settings"]["only_unread"]:
             only_unread = user["settings"]["only_unread"]
         else:
@@ -763,6 +763,9 @@ class RSSTagApplication(object):
             if "clusters" not in post:
                 continue
 
+            text = gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
+            if not text.strip():
+                continue
             for cl in post["clusters"]:
                 if cl not in links:
                     links[cl] = {
@@ -770,10 +773,42 @@ class RSSTagApplication(object):
                             endpoint="on_cluster_get", params={"cluster": cl}
                         ),
                         "n": 0,
+                        "texts": [],
+                        "tags": [],
                     }
                 links[cl]["n"] += 1
+                links[cl]["texts"].append(text)
+                links[cl]["tags"].extend(post.get("tags", []))
 
-        lnks = [(cl, links[cl]["l"], links[cl]["n"]) for cl in links]
+        # Compute centroid and top words for each cluster
+        stopw = set(stopwords.words("english") + stopwords.words("russian"))
+        for cl in links:
+            texts = links[cl]["texts"]
+            if texts:
+                try:
+                    vectorizer = TfidfVectorizer(stop_words=list(stopw))
+                    vectors = vectorizer.fit_transform(texts)
+                    if vectors.shape[1] == 0:
+                        raise ValueError("empty vocabulary")
+                    centroid = vectors.mean(axis=0).A1
+                    feature_names = vectorizer.get_feature_names_out()
+                    top_indices = centroid.argsort()[-3:][::-1]
+                    top_words = [feature_names[i] for i in top_indices]
+                    links[cl]["top_tags"] = ", ".join(top_words)
+                except ValueError:
+                    # Fall back to tag frequency
+                    tags = links[cl]["tags"]
+                    if tags:
+                        from collections import Counter
+                        counter = Counter(tags)
+                        top_tags = [tag for tag, _ in counter.most_common(3)]
+                        links[cl]["top_tags"] = ", ".join(top_tags)
+                    else:
+                        links[cl]["top_tags"] = f"Cluster {cl}"
+            else:
+                links[cl]["top_tags"] = f"Cluster {cl}"
+
+        lnks = [(links[cl]["top_tags"], links[cl]["l"], links[cl]["n"]) for cl in links]
         lnks.sort(key=lambda x: x[2], reverse=True)
         page = self.template_env.get_template("clusters.html")
 
@@ -785,7 +820,7 @@ class RSSTagApplication(object):
         )
 
     def on_clusters_dyn_get(self, user: dict, request: Request) -> Response:
-        projection = {"_id": False, "lemmas": True, "pid": True}
+        projection = {"_id": False, "lemmas": True, "pid": True, "tags": True}
         if user["settings"]["only_unread"]:
             only_unread = user["settings"]["only_unread"]
         else:
@@ -794,9 +829,14 @@ class RSSTagApplication(object):
 
         texts = []
         pids = []
+        post_tags = []
         for post in db_posts:
-            texts.append(gzip.decompress(post["lemmas"]).decode("utf-8", "replace"))
+            text = gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
+            if not text.strip():
+                continue
+            texts.append(text)
             pids.append(post["pid"])
+            post_tags.append(post.get("tags", []))
 
         stopw = set(stopwords.words("english") + stopwords.words("russian"))
         vectorizer = TfidfVectorizer(stop_words=list(stopw))
@@ -805,20 +845,54 @@ class RSSTagApplication(object):
         dbs = DBSCAN(eps=0.7, min_samples=2, metric="cosine")
         cl = dbs.fit_predict(vectors)
         label_pids = defaultdict(list)
+        label_texts = defaultdict(list)
+        label_tags = defaultdict(list)
         for i, label in enumerate(cl):
             if label < 0:
                 continue
             label_pids[label].append(str(pids[i]))
+            label_texts[label].append(texts[i])
+            label_tags[label].extend(post_tags[i])
+
         links = {}
-        for label, pids in label_pids.items():
+        for label, pids_list in label_pids.items():
             links[label] = {
                 "l": self.routes.get_url_by_endpoint(
-                    endpoint="on_posts_get", params={"pids": "_".join(pids)}
+                    endpoint="on_posts_get", params={"pids": "_".join(pids_list)}
                 ),
-                "n": len(pids),
+                "n": len(pids_list),
+                "texts": label_texts[label],
+                "tags": label_tags[label],
             }
 
-        lnks = [(cl, links[cl]["l"], links[cl]["n"]) for cl in links]
+        # Compute centroid and top words for each cluster
+        for label in links:
+            texts_for_cluster = links[label]["texts"]
+            if texts_for_cluster:
+                try:
+                    cluster_vectorizer = TfidfVectorizer(stop_words=list(stopw))
+                    cluster_vectors = cluster_vectorizer.fit_transform(texts_for_cluster)
+                    if cluster_vectors.shape[1] == 0:
+                        raise ValueError("empty vocabulary")
+                    centroid = cluster_vectors.mean(axis=0).A1
+                    feature_names = cluster_vectorizer.get_feature_names_out()
+                    top_indices = centroid.argsort()[-3:][::-1]
+                    top_words = [feature_names[i] for i in top_indices]
+                    links[label]["top_tags"] = ", ".join(top_words)
+                except ValueError:
+                    # Fall back to tag frequency
+                    tags = links[label]["tags"]
+                    if tags:
+                        from collections import Counter
+                        counter = Counter(tags)
+                        top_tags = [tag for tag, _ in counter.most_common(3)]
+                        links[label]["top_tags"] = ", ".join(top_tags)
+                    else:
+                        links[label]["top_tags"] = f"Cluster {label}"
+            else:
+                links[label]["top_tags"] = f"Cluster {label}"
+
+        lnks = [(links[cl]["top_tags"], links[cl]["l"], links[cl]["n"]) for cl in links]
         lnks.sort(key=lambda x: x[2], reverse=True)
         page = self.template_env.get_template("clusters.html")
 
