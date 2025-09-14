@@ -6,8 +6,8 @@
     <script type="text/javascript" src="/static/js/google-charts.js"></script>
     <script type="text/javascript" src="/static/js/d3.v6.min.js"></script>
     <style>
-        .sentence-group { display:inline-block; margin:2px 2px; padding:2px 2px; border-radius:3px; }
-        .sentence-group.highlighted { opacity:0.9; }
+    .sentence-group { display:inline-block; margin:2px 2px; padding:2px 2px; border-radius:3px; transition:background-color 0.2s ease; }
+    .sentence-group.highlighted { /* background comes inline; keep a subtle text emphasis */ font-weight:inherit; }
         .sentence { display:inline; }
         #segments_tree { font-family:monospace; font-size:13px; line-height:1.25em; padding:8px; color:#000; border-radius:6px; max-height:400px; overflow:auto; }
         .seg-node { cursor:pointer; white-space:nowrap; }
@@ -23,6 +23,7 @@
     .range-highlight { outline:2px solid #ff9800; box-shadow:0 0 3px 2px rgba(255,152,0,0.6); }
     .pulse { animation:pulse-bg 1.5s ease-in-out 1; }
     @keyframes pulse-bg { 0%{outline-color:#ff9800;} 50%{outline-color:#ffc107;} 100%{outline-color:#ff9800;} }
+    .sticky-sidebar { position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow-y: auto; z-index: 10; background: rgba(255, 255, 255, 0.95); padding: 10px; border-radius: 6px; backdrop-filter: blur(5px); }
       </style>
 </head>
 <body>
@@ -59,7 +60,7 @@
                 {% set sentence_num = sentence.number %}
                 {% set group_for_sentence = sentence_num|find_group(groups) %}
                 {% if group_for_sentence %}
-                    <span class="sentence-group highlighted" style="background-color: {{ group_colors[group_for_sentence] }}; border-left: 3px solid {{ group_colors[group_for_sentence] }};">
+                    <span class="sentence-group highlighted" style="background-color: {{ group_colors[group_for_sentence] | hex_to_rgba(0.22) }}; border-left: 3px solid {{ group_colors[group_for_sentence] }};">
                         <span class="sentence">{{sentence.text}}</span>
                     </span>
                 {% else %}
@@ -69,10 +70,12 @@
         </div>
       </div>
       <div style="flex:1 1 320px; min-width:280px;">
-        <h3>Hierarchy</h3>
-        <div id="segments_tree"></div>
-        <h3 style="margin-top:18px;">Legend (all segments)</h3>
-        <div class="legend" id="segments_legend"></div>
+        <div class="sticky-sidebar">
+          <h3>Hierarchy</h3>
+          <div id="segments_tree"></div>
+          <h3 style="margin-top:18px;">Legend (all segments)</h3>
+          <div class="legend" id="segments_legend"></div>
+        </div>
       </div>
     </div>
 </div>
@@ -125,9 +128,13 @@
         function buildLegend(segments){
             const legend = document.getElementById('segments_legend');
             segments.slice().sort((a,b)=>a.depth-b.depth||a.start-b.start).forEach(seg=>{
-                const item=document.createElement('div'); item.className='legend-item';
+                const item=document.createElement('div'); item.className='legend-item depth-'+seg.depth;
                 const c=document.createElement('div'); c.className='legend-color';
-                const t=document.createElement('div'); t.textContent=seg.title+' '+seg.start+'-'+seg.end; item.appendChild(c); item.appendChild(t); legend.appendChild(item);
+                const color = group_colors[seg.id] || '#ccc';
+                c.style.background = color;
+                c.title = 'Depth '+seg.depth;
+                const t=document.createElement('div'); t.textContent=seg.title+' ['+seg.start+'-'+seg.end+']';
+                item.appendChild(c); item.appendChild(t); legend.appendChild(item);
             });
         }
         // add data-sentence attributes

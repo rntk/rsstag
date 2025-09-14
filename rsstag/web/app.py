@@ -74,6 +74,21 @@ class RSSTagApplication(object):
         self.template_env.filters["json"] = json.dumps
         self.template_env.filters["url_encode"] = quote_plus
         self.template_env.filters["find_group"] = self._find_group_for_sentence
+        # Add filter to convert hex color to rgba with alpha for softer highlights
+        def _hex_to_rgba(hex_color: str, alpha: float = 0.15) -> str:
+            alpha = 0.15
+            try:
+                hex_color = hex_color.lstrip('#')
+                if len(hex_color) == 3:
+                    hex_color = ''.join([c*2 for c in hex_color])
+                r = int(hex_color[0:2], 16)
+                g = int(hex_color[2:4], 16)
+                b = int(hex_color[4:6], 16)
+                alpha = max(0.0, min(1.0, alpha))
+                return f"rgba({r},{g},{b},{alpha})"
+            except Exception:
+                return "rgba(215,215,175,0.25)"  # fallback similar to previous base
+        self.template_env.filters["hex_to_rgba"] = _hex_to_rgba
         self.providers = self.config["settings"]["providers"].split(",")
         self.user_ttl = int(self.config["settings"]["user_ttl"])
         cl = MongoClient(
@@ -654,20 +669,28 @@ Sentences:\n{numbered_sentences}\n"""
             seg["id"]: list(range(seg["start"], seg["end"] + 1)) for seg in leaf_segments
         }
 
-        # Color generation per segment (depth shading)
-        def depth_color(depth: int, base_hex: str = "#d7d7af") -> str:
-            # Convert hex -> rgb
-            r, g, b = self._hex_to_rgb(base_hex)
-            # Adjust lightness by depth (simple darkening)
-            factor = 1 - min(depth * 0.12, 0.6)
-            nr = int(r * factor)
-            ng = int(g * factor)
-            nb = int(b * factor)
-            return self._rgb_to_hex((nr, ng, nb))
+        # Color generation per segment: assign distinct hue per segment id (stable) and vary lightness by depth
+        import hashlib, colorsys
+
+        def hsl_to_hex(h: float, s: float, l: float) -> str:
+            r, g, b = colorsys.hls_to_rgb(h, l, s)  # note: colorsys uses HLS (h, l, s)
+            return '#' + ''.join(f'{int(c*255):02x}' for c in (r, g, b))
+
+        def segment_color(seg: dict) -> str:
+            # Stable hash based on id + range to reduce collisions
+            base_str = f"{seg['id']}:{seg['start']}-{seg['end']}"
+            digest = hashlib.md5(base_str.encode('utf-8')).hexdigest()
+            hue = (int(digest[:8], 16) % 360) / 360.0  # 0..1
+            depth = seg.get('depth', 0)
+            # Saturation & lightness adjustments by depth
+            # Deeper segments slightly less saturated & darker
+            sat = max(0.30, 0.60 - depth * 0.07)
+            light = max(0.30, 0.72 - depth * 0.08)
+            return hsl_to_hex(hue, sat, light)
 
         group_colors = {}
-        for seg in segments:  # color every segment so tree can use it
-            group_colors[seg["id"]] = depth_color(seg["depth"])
+        for seg in segments:  # color every segment so tree & legend can use it
+            group_colors[seg["id"]] = segment_color(seg)
 
         feed = self.feeds.get_by_feed_id(user["sid"], current_post.get("feed_id"))
         feed_title = feed["title"] if feed else "Unknown Feed"
