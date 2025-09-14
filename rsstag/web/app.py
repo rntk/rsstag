@@ -458,132 +458,231 @@ class RSSTagApplication(object):
         if not current_post:
             return self.on_error(user, _, NotFound())
 
-        # Get post content
+        # --- 1. Extract & sentence split ---
         content = gzip.decompress(current_post["content"]["content"]).decode("utf-8", "replace")
         if current_post["content"]["title"]:
             content = current_post["content"]["title"] + ". " + content
 
-        # Split into sentences using regex
-        # Split on period, question mark, or exclamation mark followed by space and capital letter
-        sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', content.strip())
-        # Handle cases where sentences don't start with capital letters
+        # Regex sentence splitter with fallback
+        sentences = re.split(r'(?<=[.!?])\s+(?=[A-ZА-Я])', content.strip())  # include Cyrillic capital letters
         if len(sentences) == 1:
-            # Fallback: split on any period, question mark, or exclamation mark followed by space
             sentences = re.split(r'(?<=[.!?])\s+', content.strip())
+        print(len(sentences), "sentences found")
 
-        print(f"Total sentences: {len(sentences)}")
-        
         sentences_list = []
         for i, sentence in enumerate(sentences, 1):
             if sentence.strip():
-                sentences_list.append({'text': sentence, 'number': i})
+                sentences_list.append({"text": sentence.strip(), "number": i})
 
-        # Create numbered sentences for LLM
-        numbered_sentences = [f"{s['number']}: {s['text']}" for s in sentences_list]
-        text_for_llm = "\n".join(numbered_sentences)
+        # Guard: if nothing meaningful - early render
+        if not sentences_list:
+            feed = self.feeds.get_by_feed_id(user["sid"], current_post.get("feed_id"))
+            feed_title = feed["title"] if feed else "Unknown Feed"
+            page = self.template_env.get_template("post-grouped.html")
+            return Response(
+                page.render(
+                    post_id=post_id,
+                    sentences=[],
+                    groups={},
+                    group_colors={},
+                    hierarchical_segments=[],
+                    feed_title=feed_title,
+                    user_settings=user["settings"],
+                    provider=user["provider"],
+                ),
+                mimetype="text/html",
+            )
 
-        # Send to LLM
-        prompt = f"""
-Please analyze the following numbered sentences and identify groups of adjacent sentences that must not be split and processed separately because they are crucial to keep these sentences together to save the point or the context of the sentences.
+        # --- 2. Hierarchical segmentation using LLM ---
+        # We recursively ask LLM to segment ranges into subranges. Output is minimized: only indices + short label (1-4 words)
+        max_depth = 5
+        min_sentences_for_split = 2  # only attempt to split if segment has >= this many sentences
+        max_total_llm_calls = 10
+        llm_calls_used = 0
 
-Sentences:
-{text_for_llm}
+        def build_numbered_subset(start_idx: int, end_idx: int) -> str:
+            # Provide only those sentences in numbered format required
+            subset_lines = []
+            for s in sentences_list[start_idx - 1 : end_idx]:
+                # Limit sentence length to reduce tokens
+                txt = s["text"].strip()
+                if len(txt) > 300:
+                    txt = txt[:300] + "…"
+                subset_lines.append(f"{s['number']}. {txt}")
+            return "\n".join(subset_lines)
 
-Please output only the groups in the format:
-g1: 1,2
-g2: 3,4,5
-etc.
+        def segmentation_prompt(numbered_sentences: str, parent_id: str, depth: int) -> str:
+            return f"""You are an expert analyst. Decompose the following contiguous sentence block into 2-8 coherent sub-sections (if possible) that form a hierarchy level {depth}. Each subsection must be a continuous sentence range (no gaps, no overlaps). Only split if it truly improves semantic clarity.
 
-Only include groups where sentences are adjacent and should stay together. 
-If no such groups exist, output nothing."""
-        
-        prompt = f"""
-**Task:**
-You are given a list of numbered sentences. Your goal is to identify groups of **adjacent sentences** that must be kept together because splitting them would break their meaning, logic, or context.
+Rules:
+1. Use ONLY sentence numbers shown.
+2. Do NOT invent or rewrite sentence content.
+3. Minimize output tokens. Return ONLY one line per subsection.
+4. If the block is already atomic (cannot be meaningfully split), output exactly: NONE
+5. Each subsection must have a short title of 1-4 words capturing the theme/fact.
+6. Title must not duplicate another title at the same level unless unavoidable.
+7. Ranges must fully cover the block without overlaps and be in ascending order.
 
-**Guidelines for Grouping:**
+Output format (TSV, no header, no extra commentary):
+<id>\t<parent_id>\t<start_sentence_number>\t<end_sentence_number>\t<title>
 
-1. **Adjacency rule:** Only group sentences that are directly next to each other (e.g., 2–3, not 2–4).
-2. **Contextual dependency:** Group sentences if one sentence:
+Where <id> is a new identifier: use pattern <parent_id>_<depth>_<index>, with <index> starting from 1.
+Examples (assuming parent 'root' at depth {depth}):
+root_{depth}_1\troot\t1\t8\tIntroduction
+root_{depth}_2\troot\t9\t15\tMarket Context
 
-   * continues the same idea or example from the previous one,
-   * provides necessary clarification (e.g., definitions, conditions, exceptions), or
-   * relies on the previous sentence to make sense (e.g., cause → effect, question → answer).
-3. **Exclusion:** Do not group sentences if they can stand alone without losing meaning.
-4. **Overlaps:** Groups must not overlap or nest. Each sentence can belong to at most one group.
-5. **Edge cases:**
+If unsplittable return ONLY: NONE
 
-   * If all sentences must be kept together, return one single group with all numbers.
-   * If no sentences need grouping, output nothing.
+Sentences:\n{numbered_sentences}\n"""
 
-**Output format:**
+        # Derive dynamic root title (prefer original article title if present, else LLM summary of theme)
+        root_title = None
+        if current_post["content"].get("title"):
+            root_title = current_post["content"].get("title").strip()[:80]
+        if not root_title:
+            try:
+                # Use first N sentences for topic extraction to save tokens
+                head_subset = build_numbered_subset(1, min(8, len(sentences_list)))
+                topic_prompt = (
+                    "Provide a concise (<=4 words) top-level topic label capturing the overall theme of these sentences. "
+                    "Return ONLY the label, no punctuation, no quotes.\n" + head_subset
+                )
+                resp = self.llamacpp.call([topic_prompt], temperature=0.0)
+                cand = resp.strip().split('\n')[0].strip()[:60]
+                if 2 <= len(cand) <= 60:
+                    root_title = cand
+            except Exception as e:
+                logging.warning("Root title LLM fallback failed: %s", e)
+        if not root_title:
+            root_title = "Document"
 
-g1: 1,2
-g2: 3,4,5
+        # Root segment covers entire range
+        segments = [
+            {
+                "id": "root",
+                "parent": None,
+                "start": 1,
+                "end": len(sentences_list),
+                "title": root_title,
+                "depth": 0,
+            }
+        ]
 
+        # Index for quick lookup
+        by_id = {"root": segments[0]}
 
-* Always use the format `gX: n,n+1,...`
-* Groups must be numbered sequentially starting from g1.
-* Output only the groups (no extra text).
+        # Queue for BFS style segmentation (breadth keeps fewer deep early expansions)
+        queue = [segments[0]]
 
-**Example:**
-Input:
-
-Sentences:
-1. The experiment was conducted in three phases.  
-2. First, we collected baseline data.  
-3. Then, we introduced the treatment.  
-4. Finally, we measured the outcomes.  
-5. The results are shown below.  
-
-Output:
-
-g1: 1,2,3,4
-
-**Now, analyze the following sentences:**
-{text_for_llm}
-"""
-
-        try:
-            llm_response = self.llamacpp.call([prompt], temperature=0.0)
-            print(llm_response)
-        except Exception as e:
-            logging.error("LLM call failed: %s", e)
-            llm_response = ""
-
-        # Parse response
-        groups = {}
-        for line in llm_response.strip().split('\n'):
-            line = line.strip()
-            if line.startswith('g') and ':' in line:
+        def try_split(segment: dict):
+            nonlocal llm_calls_used
+            if llm_calls_used >= max_total_llm_calls:
+                return []
+            length = segment["end"] - segment["start"] + 1
+            if segment["depth"] >= max_depth or length < min_sentences_for_split:
+                return []
+            numbered_subset = build_numbered_subset(segment["start"], segment["end"])
+            prompt = segmentation_prompt(numbered_subset, segment["id"], segment["depth"] + 1)
+            try:
+                llm_calls_used += 1
+                response = self.llamacpp.call([prompt], temperature=0.0)
+                print("LLM response:\n", response)
+            except Exception as e:
+                logging.error("LLM segmentation failed: %s", e)
+                return []
+            lines = [ln.strip() for ln in response.strip().split('\n') if ln.strip()]
+            if not lines:
+                return []
+            if len(lines) == 1 and lines[0].upper() == "NONE":
+                return []
+            new_segments = []
+            for ln in lines:
+                parts = ln.split('\t')
+                if len(parts) != 5:
+                    continue
+                seg_id, parent_id, start_s, end_s, title = parts
+                # Basic validation
+                if parent_id != segment["id"]:
+                    continue
                 try:
-                    group_part, sentences_part = line.split(':', 1)
-                    group_id = group_part.strip()
-                    sentence_nums = [int(s.strip()) for s in sentences_part.split(',') if s.strip().isdigit()]
-                    if sentence_nums:
-                        groups[group_id] = sentence_nums
+                    start_i = int(start_s)
+                    end_i = int(end_s)
                 except ValueError:
                     continue
+                if not (segment["start"] <= start_i <= end_i <= segment["end"]):
+                    continue
+                # Avoid duplicate ids
+                if seg_id in by_id:
+                    continue
+                new_segments.append(
+                    {
+                        "id": seg_id,
+                        "parent": parent_id,
+                        "start": start_i,
+                        "end": end_i,
+                        "title": title[:60],
+                        "depth": segment["depth"] + 1,
+                    }
+                )
+            # Validate coverage (optional strict) – ensure ordering & non overlap
+            new_segments_sorted = sorted(new_segments, key=lambda s: s["start"])
+            cursor = segment["start"]
+            for ns in new_segments_sorted:
+                if ns["start"] != cursor:
+                    # Gap or misalignment => reject split
+                    return []
+                cursor = ns["end"] + 1
+            if cursor - 1 != segment["end"]:
+                return []
+            return new_segments_sorted
 
-        # Prepare data for template
-        feed = self.feeds.get_by_feed_id(user["sid"], current_post["feed_id"])
+        while queue and llm_calls_used < max_total_llm_calls:
+            current = queue.pop(0)
+            children = try_split(current)
+            if children:
+                for c in children:
+                    segments.append(c)
+                    by_id[c["id"]] = c
+                queue.extend(children)
+
+        # Determine leaf segments (no children)
+        parents = {s["parent"] for s in segments if s["parent"] is not None}
+        leaf_segments = [s for s in segments if s["id"] not in parents]
+
+        # Build groups mapping from leaf segments for sentence highlighting
+        groups = {
+            seg["id"]: list(range(seg["start"], seg["end"] + 1)) for seg in leaf_segments
+        }
+
+        # Color generation per segment (depth shading)
+        def depth_color(depth: int, base_hex: str = "#d7d7af") -> str:
+            # Convert hex -> rgb
+            r, g, b = self._hex_to_rgb(base_hex)
+            # Adjust lightness by depth (simple darkening)
+            factor = 1 - min(depth * 0.12, 0.6)
+            nr = int(r * factor)
+            ng = int(g * factor)
+            nb = int(b * factor)
+            return self._rgb_to_hex((nr, ng, nb))
+
+        group_colors = {}
+        for seg in segments:  # color every segment so tree can use it
+            group_colors[seg["id"]] = depth_color(seg["depth"])
+
+        feed = self.feeds.get_by_feed_id(user["sid"], current_post.get("feed_id"))
         feed_title = feed["title"] if feed else "Unknown Feed"
 
-        # Assign colors to groups using sunburst-style color generation
-        base_color = "#d7d7af"
-        color_range = 20
-        group_colors = {}
-        for group_id in sorted(groups.keys()):
-            group_colors[group_id] = self._generate_similar_color(base_color, color_range)
-
         page = self.template_env.get_template("post-grouped.html")
-
         return Response(
             page.render(
                 post_id=post_id,
                 sentences=sentences_list,
                 groups=groups,
                 group_colors=group_colors,
+                hierarchical_segments=[
+                    {k: v for k, v in seg.items() if k in {"id", "parent", "start", "end", "title", "depth"}}
+                    for seg in segments
+                ],
                 feed_title=feed_title,
                 user_settings=user["settings"],
                 provider=user["provider"],

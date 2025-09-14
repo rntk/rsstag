@@ -1,0 +1,141 @@
+<!DOCTYPE html/>
+<html>
+<head>
+<title>Grouped Post | {{feed_title}}</title>
+{% include "head-data.html" %}
+    <script type="text/javascript" src="/static/js/google-charts.js"></script>
+    <script type="text/javascript" src="/static/js/d3.v6.min.js"></script>
+    <style>
+        .sentence-group { display:inline-block; margin:2px 2px; padding:2px 2px; border-radius:3px; }
+        .sentence-group.highlighted { opacity:0.9; }
+        .sentence { display:inline; }
+        #segments_tree { font-family:monospace; font-size:13px; line-height:1.25em; padding:8px; color:#000; border-radius:6px; max-height:400px; overflow:auto; }
+        .seg-node { cursor:pointer; white-space:nowrap; }
+        .seg-node .label { padding:2px 4px; border-radius:4px; }
+        .seg-meta { opacity:0.7; font-size:11px; margin-left:4px; }
+        .legend { margin:10px 0; display:flex; flex-wrap:wrap; gap:6px; }
+        .legend-item { display:flex; align-items:center; gap:4px; padding:2px 6px; border-radius:4px; font-size:12px; }
+        .legend-color { width:14px; height:14px; border-radius:3px; border:1px solid #999; }
+        .depth-0 .label { font-weight:bold; font-size:14px; }
+        .collapsed > .children { display:none; }
+        .children { margin-left:18px; border-left:1px dashed #555; padding-left:6px; }
+        .toggle { color:#6cf; margin-right:4px; }
+    .range-highlight { outline:2px solid #ff9800; box-shadow:0 0 3px 2px rgba(255,152,0,0.6); }
+    .pulse { animation:pulse-bg 1.5s ease-in-out 1; }
+    @keyframes pulse-bg { 0%{outline-color:#ff9800;} 50%{outline-color:#ffc107;} 100%{outline-color:#ff9800;} }
+      </style>
+</head>
+<body>
+{% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
+
+<div id="global_tools">
+    <div class="left_half">
+        <div id="link_on_root" class="global_tools_button">
+            <a href="/">main</a>
+        </div>
+        <div id="help_button" class="global_tools_button">
+            <a href="#">help</a>
+        </div>
+    </div>
+    <div class="right_half">
+        <div id="player_block" class="global_tools_button"></div>
+        <div id="posts_stat" class="global_tools_button"></div>
+        <div id="read_all" class="global_tools_button"></div>
+        <div id="show_all" class="global_tools_button"></div>
+        {{ g_status.global_status() }}
+        {{ menu.settings_menu() }}
+    </div>
+</div>
+
+<div class="page">
+    <h2>Post {{post_id}} - {{feed_title}}</h2>
+
+
+    <div style="display:flex; gap:20px; flex-wrap:wrap;">
+      <div style="flex:2 1 600px; min-width:400px;">
+        <h3>Sentences (leaf segment highlighting)</h3>
+        <div id="grouped_sentences">
+            {% for sentence in sentences %}
+                {% set sentence_num = sentence.number %}
+                {% set group_for_sentence = sentence_num|find_group(groups) %}
+                {% if group_for_sentence %}
+                    <span class="sentence-group highlighted" style="background-color: {{ group_colors[group_for_sentence] }}; border-left: 3px solid {{ group_colors[group_for_sentence] }};">
+                        <span class="sentence">{{sentence.text}}</span>
+                    </span>
+                {% else %}
+                    <span class="sentence-group"><span class="sentence">{{ sentence.text }}</span></span>
+                {% endif %}
+            {% endfor %}
+        </div>
+      </div>
+      <div style="flex:1 1 320px; min-width:280px;">
+        <h3>Hierarchy</h3>
+        <div id="segments_tree"></div>
+        <h3 style="margin-top:18px;">Legend (all segments)</h3>
+        <div class="legend" id="segments_legend"></div>
+      </div>
+    </div>
+</div>
+
+<script type="text/javascript">
+    window.post_id = {{post_id}};
+    window.feed_title = '{{feed_title}}';
+    window.groups = {{groups|json}};
+    window.group_colors = {{group_colors|json}};
+    window.sentences = {{sentences|json}};
+    window.rss_settings = {{ user_settings|json }};
+    window.hierarchical_segments = {{ hierarchical_segments|json }};
+    (function(){
+        function buildTree(segments){
+            const byParent = {};
+            segments.forEach(s=>{ (byParent[s.parent || 'ROOT'] ||= []).push(s); });
+            Object.values(byParent).forEach(list=>list.sort((a,b)=>a.start-b.start));
+            const root = segments.find(s=>s.id==='root');
+            if(!root) return document.createTextNode('No hierarchy');
+            return renderNode(root);
+            function renderNode(seg){
+                const children = byParent[seg.id] || [];
+                const hasChildren = children.length>0;
+                const color = group_colors[seg.id] || '#ccc';
+                const el = document.createElement('div');
+                el.className = 'seg-node depth-'+seg.depth + (hasChildren?'':' leaf');
+                const toggle = document.createElement('span'); toggle.className='toggle'; toggle.textContent = hasChildren ? '−' : '·';
+                if(hasChildren){ toggle.onclick = ()=>{ el.classList.toggle('collapsed'); toggle.textContent = el.classList.contains('collapsed')?'+':'−'; }; }
+                const label = document.createElement('span'); label.className='label'; label.style.color='#000'; label.textContent = seg.title || ('SEG '+seg.id);
+                const meta = document.createElement('span'); meta.className='seg-meta'; meta.textContent = '['+seg.start+'-'+seg.end+']';
+                el.appendChild(toggle); el.appendChild(label); el.appendChild(meta);
+                if(hasChildren){ const chWrap = document.createElement('div'); chWrap.className='children'; children.forEach(c=>chWrap.appendChild(renderNode(c))); el.appendChild(chWrap); }
+                label.onclick = ()=>{
+                    // Clear previous multi-range highlight
+                    document.querySelectorAll('#grouped_sentences .range-highlight').forEach(el=>{
+                        el.classList.remove('range-highlight');
+                    });
+                    // Highlight all sentences in segment range
+                    for(let i=seg.start; i<=seg.end; i++){
+                        const el = document.querySelector('[data-sentence="'+i+'"]');
+                        if(el){ el.classList.add('range-highlight'); }
+                    }
+                    // Scroll to first sentence of segment
+                    const target = document.querySelector('[data-sentence="'+seg.start+'"]');
+                    if(target){ target.scrollIntoView({behavior:'smooth', block:'center'}); }
+                };
+                return el;
+            }
+        }
+        function buildLegend(segments){
+            const legend = document.getElementById('segments_legend');
+            segments.slice().sort((a,b)=>a.depth-b.depth||a.start-b.start).forEach(seg=>{
+                const item=document.createElement('div'); item.className='legend-item';
+                const c=document.createElement('div'); c.className='legend-color';
+                const t=document.createElement('div'); t.textContent=seg.title+' '+seg.start+'-'+seg.end; item.appendChild(c); item.appendChild(t); legend.appendChild(item);
+            });
+        }
+        // add data-sentence attributes
+        document.querySelectorAll('#grouped_sentences .sentence-group').forEach((el,i)=>{ el.setAttribute('data-sentence', i+1); });
+        if(window.hierarchical_segments && window.hierarchical_segments.length){
+            const treeRoot = buildTree(window.hierarchical_segments); document.getElementById('segments_tree').appendChild(treeRoot); buildLegend(window.hierarchical_segments);
+        }
+    })();
+</script>
+<div id="progressbar"></div></body>
+</html>
