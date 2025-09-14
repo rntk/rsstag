@@ -8,6 +8,7 @@ import logging
 from collections import OrderedDict, defaultdict
 from typing import Optional, List
 import traceback
+import random
 
 from rsstag.tasks import RssTagTasks
 from rsstag.web.routes import RSSTagRoutes
@@ -72,6 +73,7 @@ class RSSTagApplication(object):
         )
         self.template_env.filters["json"] = json.dumps
         self.template_env.filters["url_encode"] = quote_plus
+        self.template_env.filters["find_group"] = self._find_group_for_sentence
         self.providers = self.config["settings"]["providers"].split(",")
         self.user_ttl = int(self.config["settings"]["user_ttl"])
         cl = MongoClient(
@@ -119,6 +121,38 @@ class RSSTagApplication(object):
         self.openai = ROpenAI(self.config["openai"]["token"])
         self.anthropic = Anthropic(self.config["anthropic"]["token"])
         self.llamacpp = LLamaCPP(self.config["llamacpp"]["host"])
+
+    def _find_group_for_sentence(self, sentence_num, groups):
+        """Custom filter to find which group a sentence belongs to"""
+        for group_id, group_sentences in groups.items():
+            if sentence_num in group_sentences:
+                return group_id
+        return None
+
+    def _generate_similar_color(self, base_color, color_range):
+        """Generate a color similar to base_color within the specified range"""
+        # Convert base color to RGB
+        base_rgb = self._hex_to_rgb(base_color)
+        
+        # Generate new RGB values within the specified range
+        new_rgb = []
+        for value in base_rgb:
+            min_val = max(0, value - color_range)
+            max_val = min(255, value + color_range)
+            new_value = random.randint(min_val, max_val)
+            new_rgb.append(new_value)
+        
+        # Convert back to hex
+        return self._rgb_to_hex(new_rgb)
+
+    def _hex_to_rgb(self, hex_color):
+        """Convert hex color to RGB tuple"""
+        hex_color = hex_color.lstrip('#')
+        return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+
+    def _rgb_to_hex(self, rgb):
+        """Convert RGB tuple to hex color"""
+        return '#' + ''.join(f'{x:02x}' for x in rgb)
 
     def close(self):
         logging.info("Goodbye!")
@@ -417,6 +451,145 @@ class RSSTagApplication(object):
 
     def on_post_links_get(self, user: dict, _: Request, post_id: int) -> Response:
         return posts_handlers.on_post_links_get(self, user, post_id)
+
+    def on_post_grouped_get(self, user: dict, _: Request, post_id: int) -> Response:
+        projection = {"content": True, "feed_id": True, "url": True}
+        current_post = self.posts.get_by_pid(user["sid"], post_id, projection)
+        if not current_post:
+            return self.on_error(user, _, NotFound())
+
+        # Get post content
+        content = gzip.decompress(current_post["content"]["content"]).decode("utf-8", "replace")
+        if current_post["content"]["title"]:
+            content = current_post["content"]["title"] + ". " + content
+
+        # Split into sentences using regex
+        # Split on period, question mark, or exclamation mark followed by space and capital letter
+        sentences = re.split(r'(?<=[.!?])\s+(?=[A-Z])', content.strip())
+        # Handle cases where sentences don't start with capital letters
+        if len(sentences) == 1:
+            # Fallback: split on any period, question mark, or exclamation mark followed by space
+            sentences = re.split(r'(?<=[.!?])\s+', content.strip())
+
+        print(f"Total sentences: {len(sentences)}")
+        
+        sentences_list = []
+        for i, sentence in enumerate(sentences, 1):
+            if sentence.strip():
+                sentences_list.append({'text': sentence, 'number': i})
+
+        # Create numbered sentences for LLM
+        numbered_sentences = [f"{s['number']}: {s['text']}" for s in sentences_list]
+        text_for_llm = "\n".join(numbered_sentences)
+
+        # Send to LLM
+        prompt = f"""
+Please analyze the following numbered sentences and identify groups of adjacent sentences that must not be split and processed separately because they are crucial to keep these sentences together to save the point or the context of the sentences.
+
+Sentences:
+{text_for_llm}
+
+Please output only the groups in the format:
+g1: 1,2
+g2: 3,4,5
+etc.
+
+Only include groups where sentences are adjacent and should stay together. 
+If no such groups exist, output nothing."""
+        
+        prompt = f"""
+**Task:**
+You are given a list of numbered sentences. Your goal is to identify groups of **adjacent sentences** that must be kept together because splitting them would break their meaning, logic, or context.
+
+**Guidelines for Grouping:**
+
+1. **Adjacency rule:** Only group sentences that are directly next to each other (e.g., 2–3, not 2–4).
+2. **Contextual dependency:** Group sentences if one sentence:
+
+   * continues the same idea or example from the previous one,
+   * provides necessary clarification (e.g., definitions, conditions, exceptions), or
+   * relies on the previous sentence to make sense (e.g., cause → effect, question → answer).
+3. **Exclusion:** Do not group sentences if they can stand alone without losing meaning.
+4. **Overlaps:** Groups must not overlap or nest. Each sentence can belong to at most one group.
+5. **Edge cases:**
+
+   * If all sentences must be kept together, return one single group with all numbers.
+   * If no sentences need grouping, output nothing.
+
+**Output format:**
+
+g1: 1,2
+g2: 3,4,5
+
+
+* Always use the format `gX: n,n+1,...`
+* Groups must be numbered sequentially starting from g1.
+* Output only the groups (no extra text).
+
+**Example:**
+Input:
+
+Sentences:
+1. The experiment was conducted in three phases.  
+2. First, we collected baseline data.  
+3. Then, we introduced the treatment.  
+4. Finally, we measured the outcomes.  
+5. The results are shown below.  
+
+Output:
+
+g1: 1,2,3,4
+
+**Now, analyze the following sentences:**
+{text_for_llm}
+"""
+
+        try:
+            llm_response = self.llamacpp.call([prompt], temperature=0.0)
+            print(llm_response)
+        except Exception as e:
+            logging.error("LLM call failed: %s", e)
+            llm_response = ""
+
+        # Parse response
+        groups = {}
+        for line in llm_response.strip().split('\n'):
+            line = line.strip()
+            if line.startswith('g') and ':' in line:
+                try:
+                    group_part, sentences_part = line.split(':', 1)
+                    group_id = group_part.strip()
+                    sentence_nums = [int(s.strip()) for s in sentences_part.split(',') if s.strip().isdigit()]
+                    if sentence_nums:
+                        groups[group_id] = sentence_nums
+                except ValueError:
+                    continue
+
+        # Prepare data for template
+        feed = self.feeds.get_by_feed_id(user["sid"], current_post["feed_id"])
+        feed_title = feed["title"] if feed else "Unknown Feed"
+
+        # Assign colors to groups using sunburst-style color generation
+        base_color = "#d7d7af"
+        color_range = 20
+        group_colors = {}
+        for group_id in sorted(groups.keys()):
+            group_colors[group_id] = self._generate_similar_color(base_color, color_range)
+
+        page = self.template_env.get_template("post-grouped.html")
+
+        return Response(
+            page.render(
+                post_id=post_id,
+                sentences=sentences_list,
+                groups=groups,
+                group_colors=group_colors,
+                feed_title=feed_title,
+                user_settings=user["settings"],
+                provider=user["provider"],
+            ),
+            mimetype="text/html",
+        )
 
     # TODO: delete or change or something other
     def on_get_posts_with_tags(self, user: dict, _: Request, s_tags: str) -> Response:

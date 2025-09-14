@@ -102,6 +102,11 @@ class RSSTagRoutes:
                 "endpoint": "on_post_links_get",
                 "methods": ["GET"],
             },
+            {
+                "url": "/post-grouped/<int:post_id>",
+                "endpoint": "on_post_grouped_get",
+                "methods": ["GET"],
+            },
             {"url": "/status", "endpoint": "on_status_get", "methods": ["GET"]},
             {"url": "/settings", "endpoint": "on_settings_post", "methods": ["POST"]},
             {
