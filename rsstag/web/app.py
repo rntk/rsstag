@@ -467,36 +467,47 @@ class RSSTagApplication(object):
     def on_post_links_get(self, user: dict, _: Request, post_id: int) -> Response:
         return posts_handlers.on_post_links_get(self, user, post_id)
 
-    def on_post_grouped_get(self, user: dict, _: Request, post_id: int) -> Response:
+    def on_post_grouped_get(self, user: dict, _: Request, pids: str) -> Response:
         projection = {"content": True, "feed_id": True, "url": True}
-        current_post = self.posts.get_by_pid(user["sid"], post_id, projection)
-        if not current_post:
+        post_ids = [int(pid) for pid in pids.split('_') if pid]
+        if not post_ids:
             return self.on_error(user, _, NotFound())
 
-        # --- 1. Extract & sentence split ---
-        content = gzip.decompress(current_post["content"]["content"]).decode("utf-8", "replace")
-        if current_post["content"]["title"]:
-            content = current_post["content"]["title"] + ". " + content
+        all_sentences = []
+        feed_titles = []
+        current_sentence_number = 1
 
-        # Regex sentence splitter with fallback
-        sentences = re.split(r'(?<=[.!?])\s+(?=[A-ZА-Я])', content.strip())  # include Cyrillic capital letters
-        if len(sentences) == 1:
-            sentences = re.split(r'(?<=[.!?])\s+', content.strip())
-        print(len(sentences), "sentences found")
+        for post_id in post_ids:
+            current_post = self.posts.get_by_pid(user["sid"], post_id, projection)
+            if not current_post:
+                continue
 
-        sentences_list = []
-        for i, sentence in enumerate(sentences, 1):
-            if sentence.strip():
-                sentences_list.append({"text": sentence.strip(), "number": i})
+            content = gzip.decompress(current_post["content"]["content"]).decode("utf-8", "replace")
+            if current_post["content"]["title"]:
+                content = current_post["content"]["title"] + ". " + content
+
+            sentences = re.split(r'(?<=[.!?])\s+(?=[A-ZА-Я])', content.strip())
+            if len(sentences) == 1:
+                sentences = re.split(r'(?<=[.!?])\s+', content.strip())
+
+            for sentence in sentences:
+                if sentence.strip():
+                    all_sentences.append({"text": sentence.strip(), "number": current_sentence_number})
+                    current_sentence_number += 1
+
+            feed = self.feeds.get_by_feed_id(user["sid"], current_post.get("feed_id"))
+            feed_titles.append(feed["title"] if feed else "Unknown Feed")
+
+        sentences_list = all_sentences
+        print(len(sentences_list), "sentences found")
 
         # Guard: if nothing meaningful - early render
         if not sentences_list:
-            feed = self.feeds.get_by_feed_id(user["sid"], current_post.get("feed_id"))
-            feed_title = feed["title"] if feed else "Unknown Feed"
+            feed_title = " | ".join(feed_titles) if feed_titles else "Unknown Feeds"
             page = self.template_env.get_template("post-grouped.html")
             return Response(
                 page.render(
-                    post_id=post_id,
+                    post_id=pids,
                     sentences=[],
                     groups={},
                     group_colors={},
@@ -557,31 +568,10 @@ root_{depth}_3\troot\t16\t20\tFinancial Impact
 
 If the text contains only one unified topic, return ONLY: NONE
 
-/no_thinking
-
 Sentences:\n{numbered_sentences}\n"""
 
-        # Derive dynamic root title (prefer original article title if present, else LLM summary of theme)
-        root_title = None
-        if current_post["content"].get("title"):
-            root_title = current_post["content"].get("title").strip()[:80]
-        if not root_title:
-            try:
-                # Use first N sentences for topic extraction to save tokens
-                head_subset = build_numbered_subset(1, min(8, len(sentences_list)))
-                topic_prompt = (
-                    "Provide a concise (<=4 words) top-level topic label capturing the overall theme of these sentences. "
-                    "Return ONLY the label, no punctuation, no quotes.\n" + head_subset
-                )
-                resp = self.llamacpp.call([topic_prompt], temperature=0.0)
-                print("LLM response", resp)
-                cand = resp.strip().split('\n')[0].strip()[:60]
-                if 2 <= len(cand) <= 60:
-                    root_title = cand
-            except Exception as e:
-                logging.warning("Root title LLM fallback failed: %s", e)
-        if not root_title:
-            root_title = "Document"
+        # Derive dynamic root title for multiple posts
+        root_title = "Multiple Posts"
 
         # Root segment covers entire range
         segments = [
@@ -721,13 +711,12 @@ Sentences:\n{numbered_sentences}\n"""
         for seg in segments:
             seg["color"] = group_colors[seg["id"]]
 
-        feed = self.feeds.get_by_feed_id(user["sid"], current_post.get("feed_id"))
-        feed_title = feed["title"] if feed else "Unknown Feed"
+        feed_title = " | ".join(feed_titles) if feed_titles else "Unknown Feeds"
 
         page = self.template_env.get_template("post-grouped.html")
         return Response(
             page.render(
-                post_id=post_id,
+                post_id=pids,
                 sentences=sentences_list,
                 groups=groups,
                 group_colors=group_colors,

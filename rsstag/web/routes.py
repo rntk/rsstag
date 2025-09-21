@@ -103,7 +103,7 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
-                "url": "/post-grouped/<int:post_id>",
+                "url": "/post-grouped/<string:pids>",
                 "endpoint": "on_post_grouped_get",
                 "methods": ["GET"],
             },
