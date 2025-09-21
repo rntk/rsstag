@@ -1,6 +1,7 @@
 import json
 from typing import List, Union, Optional, Dict, Any
 import logging
+import re
 from urllib.parse import urlparse
 from http.client import HTTPConnection, HTTPSConnection
 
@@ -31,7 +32,10 @@ class LLamaCPP:
             return err_msg
         resp = json.loads(resp_body)
 
-        return resp["choices"][0]["message"]["content"]
+        content = resp["choices"][0]["message"]["content"]
+        # Remove <think></think> tags and their content
+        content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL)
+        return content
 
     def get_connection(self) -> Union[HTTPConnection, HTTPSConnection]:
         if self.__is_https:

@@ -73,8 +73,6 @@
         <div class="sticky-sidebar">
           <h3>Hierarchy</h3>
           <div id="segments_tree"></div>
-          <h3 style="margin-top:18px;">Legend (all segments)</h3>
-          <div class="legend" id="segments_legend"></div>
         </div>
       </div>
     </div>
@@ -84,7 +82,6 @@
     window.post_id = {{post_id}};
     window.feed_title = '{{feed_title}}';
     window.groups = {{groups|json}};
-    window.group_colors = {{group_colors|json}};
     window.sentences = {{sentences|json}};
     window.rss_settings = {{ user_settings|json }};
     window.hierarchical_segments = {{ hierarchical_segments|json }};
@@ -99,14 +96,15 @@
             function renderNode(seg){
                 const children = byParent[seg.id] || [];
                 const hasChildren = children.length>0;
-                const color = group_colors[seg.id] || '#ccc';
+                const color = seg.color || '#ccc';
                 const el = document.createElement('div');
                 el.className = 'seg-node depth-'+seg.depth + (hasChildren?'':' leaf');
                 const toggle = document.createElement('span'); toggle.className='toggle'; toggle.textContent = hasChildren ? '−' : '·';
                 if(hasChildren){ toggle.onclick = ()=>{ el.classList.toggle('collapsed'); toggle.textContent = el.classList.contains('collapsed')?'+':'−'; }; }
+                const colorIndicator = document.createElement('span'); colorIndicator.className='color-indicator'; colorIndicator.style.backgroundColor = color; colorIndicator.style.width = '10px'; colorIndicator.style.height = '10px'; colorIndicator.style.borderRadius = '50%'; colorIndicator.style.display = 'inline-block'; colorIndicator.style.marginRight = '4px';
                 const label = document.createElement('span'); label.className='label'; label.style.color='#000'; label.textContent = seg.title || ('SEG '+seg.id);
                 const meta = document.createElement('span'); meta.className='seg-meta'; meta.textContent = '['+seg.start+'-'+seg.end+']';
-                el.appendChild(toggle); el.appendChild(label); el.appendChild(meta);
+                el.appendChild(toggle); el.appendChild(colorIndicator); el.appendChild(label); el.appendChild(meta);
                 if(hasChildren){ const chWrap = document.createElement('div'); chWrap.className='children'; children.forEach(c=>chWrap.appendChild(renderNode(c))); el.appendChild(chWrap); }
                 label.onclick = ()=>{
                     // Clear previous multi-range highlight
@@ -125,22 +123,10 @@
                 return el;
             }
         }
-        function buildLegend(segments){
-            const legend = document.getElementById('segments_legend');
-            segments.slice().sort((a,b)=>a.depth-b.depth||a.start-b.start).forEach(seg=>{
-                const item=document.createElement('div'); item.className='legend-item depth-'+seg.depth;
-                const c=document.createElement('div'); c.className='legend-color';
-                const color = group_colors[seg.id] || '#ccc';
-                c.style.background = color;
-                c.title = 'Depth '+seg.depth;
-                const t=document.createElement('div'); t.textContent=seg.title+' ['+seg.start+'-'+seg.end+']';
-                item.appendChild(c); item.appendChild(t); legend.appendChild(item);
-            });
-        }
         // add data-sentence attributes
         document.querySelectorAll('#grouped_sentences .sentence-group').forEach((el,i)=>{ el.setAttribute('data-sentence', i+1); });
         if(window.hierarchical_segments && window.hierarchical_segments.length){
-            const treeRoot = buildTree(window.hierarchical_segments); document.getElementById('segments_tree').appendChild(treeRoot); buildLegend(window.hierarchical_segments);
+            const treeRoot = buildTree(window.hierarchical_segments); document.getElementById('segments_tree').appendChild(treeRoot);
         }
     })();
 </script>

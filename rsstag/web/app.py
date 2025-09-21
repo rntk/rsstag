@@ -527,26 +527,37 @@ class RSSTagApplication(object):
             return "\n".join(subset_lines)
 
         def segmentation_prompt(numbered_sentences: str, parent_id: str, depth: int) -> str:
-            return f"""You are an expert analyst. Decompose the following contiguous sentence block into 2-8 coherent sub-sections (if possible) that form a hierarchy level {depth}. Each subsection must be a continuous sentence range (no gaps, no overlaps). Only split if it truly improves semantic clarity.
+            return f"""You are an expert analyst. Identify and decompose the following contiguous sentence block into 2-8 distinct topical sub-sections that form a hierarchy level {depth}. Each subsection must represent a DIFFERENT TOPIC or DISTINCT THEME. Avoid creating overly broad or general groupings.
+
+TOPIC ANALYSIS PRIORITY:
+- Look for distinct subjects, concepts, or themes within the text
+- Separate different topics even if they are related
+- Prefer multiple specific topics over one general topic
+- Each subsection must be a continuous sentence range (no gaps, no overlaps)
+- Only split if it creates meaningful topic separation
 
 Rules:
 1. Use ONLY sentence numbers shown.
 2. Do NOT invent or rewrite sentence content.
 3. Minimize output tokens. Return ONLY one line per subsection.
-4. If the block is already atomic (cannot be meaningfully split), output exactly: NONE
-5. Each subsection must have a short title of 1-4 words capturing the theme/fact.
-6. Title must not duplicate another title at the same level unless unavoidable.
-7. Ranges must fully cover the block without overlaps and be in ascending order.
+4. If the block contains only ONE unified topic that cannot be meaningfully split into different topics, output exactly: NONE
+5. Each subsection must have a short title of 1-4 words capturing the SPECIFIC topic/theme.
+6. Avoid generic titles like "Content", "Information", "Details" - be specific about the actual topic.
+7. Title must not duplicate another title at the same level unless unavoidable.
+8. Ranges must fully cover the block without overlaps and be in ascending order.
 
 Output format (TSV, no header, no extra commentary):
 <id>\t<parent_id>\t<start_sentence_number>\t<end_sentence_number>\t<title>
 
 Where <id> is a new identifier: use pattern <parent_id>_<depth>_<index>, with <index> starting from 1.
 Examples (assuming parent 'root' at depth {depth}):
-root_{depth}_1\troot\t1\t8\tIntroduction
-root_{depth}_2\troot\t9\t15\tMarket Context
+root_{depth}_1\troot\t1\t8\tMarket Analysis
+root_{depth}_2\troot\t9\t15\tTechnology Trends
+root_{depth}_3\troot\t16\t20\tFinancial Impact
 
-If unsplittable return ONLY: NONE
+If the text contains only one unified topic, return ONLY: NONE
+
+/no_thinking
 
 Sentences:\n{numbered_sentences}\n"""
 
@@ -563,6 +574,7 @@ Sentences:\n{numbered_sentences}\n"""
                     "Return ONLY the label, no punctuation, no quotes.\n" + head_subset
                 )
                 resp = self.llamacpp.call([topic_prompt], temperature=0.0)
+                print("LLM response", resp)
                 cand = resp.strip().split('\n')[0].strip()[:60]
                 if 2 <= len(cand) <= 60:
                     root_title = cand
@@ -612,10 +624,15 @@ Sentences:\n{numbered_sentences}\n"""
                 return []
             new_segments = []
             for ln in lines:
+                # Parse TSV format: id\tparent\tstart\tend\ttitle
                 parts = ln.split('\t')
-                if len(parts) != 5:
+                if len(parts) < 5:
                     continue
-                seg_id, parent_id, start_s, end_s, title = parts
+                seg_id = parts[0].strip()
+                parent_id = parts[1].strip()
+                start_s = parts[2].strip()
+                end_s = parts[3].strip()
+                title = parts[4].strip()
                 # Basic validation
                 if parent_id != segment["id"]:
                     continue
@@ -639,16 +656,24 @@ Sentences:\n{numbered_sentences}\n"""
                         "depth": segment["depth"] + 1,
                     }
                 )
-            # Validate coverage (optional strict) – ensure ordering & non overlap
+            # Validate segments (relaxed validation - allow gaps but prevent overlaps)
             new_segments_sorted = sorted(new_segments, key=lambda s: s["start"])
-            cursor = segment["start"]
-            for ns in new_segments_sorted:
-                if ns["start"] != cursor:
-                    # Gap or misalignment => reject split
+            
+            # Check for overlaps (but allow gaps)
+            for i in range(len(new_segments_sorted) - 1):
+                current_seg = new_segments_sorted[i]
+                next_seg = new_segments_sorted[i + 1]
+                if current_seg["end"] >= next_seg["start"]:
+                    # Overlap detected, reject this split
+                    logging.warning(f"Segment overlap detected: {current_seg['id']} ends at {current_seg['end']}, {next_seg['id']} starts at {next_seg['start']}")
                     return []
-                cursor = ns["end"] + 1
-            if cursor - 1 != segment["end"]:
-                return []
+            
+            # Ensure all segments are within parent bounds
+            for ns in new_segments_sorted:
+                if not (segment["start"] <= ns["start"] <= ns["end"] <= segment["end"]):
+                    logging.warning(f"Segment {ns['id']} [{ns['start']}-{ns['end']}] is outside parent bounds [{segment['start']}-{segment['end']}]")
+                    return []
+            
             return new_segments_sorted
 
         while queue and llm_calls_used < max_total_llm_calls:
@@ -692,6 +717,10 @@ Sentences:\n{numbered_sentences}\n"""
         for seg in segments:  # color every segment so tree & legend can use it
             group_colors[seg["id"]] = segment_color(seg)
 
+        # Add color to each segment for the hierarchical tree
+        for seg in segments:
+            seg["color"] = group_colors[seg["id"]]
+
         feed = self.feeds.get_by_feed_id(user["sid"], current_post.get("feed_id"))
         feed_title = feed["title"] if feed else "Unknown Feed"
 
@@ -703,7 +732,7 @@ Sentences:\n{numbered_sentences}\n"""
                 groups=groups,
                 group_colors=group_colors,
                 hierarchical_segments=[
-                    {k: v for k, v in seg.items() if k in {"id", "parent", "start", "end", "title", "depth"}}
+                    {k: v for k, v in seg.items() if k in {"id", "parent", "start", "end", "title", "depth", "color"}}
                     for seg in segments
                 ],
                 feed_title=feed_title,
