@@ -519,199 +519,87 @@ class RSSTagApplication(object):
                 mimetype="text/html",
             )
 
-        # --- 2. Hierarchical segmentation using LLM ---
-        # We recursively ask LLM to segment ranges into subranges. Output is minimized: only indices + short label (1-4 words)
-        max_depth = 5
-        min_sentences_for_split = 2  # only attempt to split if segment has >= this many sentences
-        max_total_llm_calls = 10
-        llm_calls_used = 0
+        feed_title = " | ".join(feed_titles) if feed_titles else "Unknown Feeds"
 
+        # --- 2. Simple topic grouping using LLM ---
         def build_numbered_subset(start_idx: int, end_idx: int) -> str:
-            # Provide only those sentences in numbered format required
             subset_lines = []
             for s in sentences_list[start_idx - 1 : end_idx]:
-                # Limit sentence length to reduce tokens
                 txt = s["text"].strip()
-                if len(txt) > 300:
-                    txt = txt[:300] + "…"
                 subset_lines.append(f"{s['number']}. {txt}")
             return "\n".join(subset_lines)
 
-        def segmentation_prompt(numbered_sentences: str, parent_id: str, depth: int) -> str:
-            return f"""You are an expert analyst. Identify and decompose the following contiguous sentence block into 2-8 distinct topical sub-sections that form a hierarchy level {depth}. Each subsection must represent a DIFFERENT TOPIC or DISTINCT THEME. Avoid creating overly broad or general groupings.
+        numbered_sentences = build_numbered_subset(1, len(sentences_list))
+        prompt = f"""You are an expert at grouping sentences into topics.
 
-TOPIC ANALYSIS PRIORITY:
-- Look for distinct subjects, concepts, or themes within the text
-- Separate different topics even if they are related
-- Prefer multiple specific topics over one general topic
-- Each subsection must be a continuous sentence range (no gaps, no overlaps)
-- Only split if it creates meaningful topic separation
+Group the following sentences into 2-8 distinct topics. Each topic should consist of contiguous sentences.
 
-Rules:
-1. Use ONLY sentence numbers shown.
-2. Do NOT invent or rewrite sentence content.
-3. Minimize output tokens. Return ONLY one line per subsection.
-4. If the block contains only ONE unified topic that cannot be meaningfully split into different topics, output exactly: NONE
-5. Each subsection must have a short title of 1-4 words capturing the SPECIFIC topic/theme.
-6. Avoid generic titles like "Content", "Information", "Details" - be specific about the actual topic.
-7. Title must not duplicate another title at the same level unless unavoidable.
-8. Ranges must fully cover the block without overlaps and be in ascending order.
+Important restrictions:
+- Only use the sentence numbers provided in the list below.
+- Do not invent, add, or reference any sentences or numbers not present in the provided list.
+- If there are fewer than 2 sentences, group them into a single topic or as appropriate.
+- Ensure all sentence numbers in your output are valid and correspond exactly to the numbers in the list.
 
-Output format (TSV, no header, no extra commentary):
-<id>\t<parent_id>\t<start_sentence_number>\t<end_sentence_number>\t<title>
+Output format: One line per topic: TopicName: sentence_number,sentence_number,...
 
-Where <id> is a new identifier: use pattern <parent_id>_<depth>_<index>, with <index> starting from 1.
-Examples (assuming parent 'root' at depth {depth}):
-root_{depth}_1\troot\t1\t8\tMarket Analysis
-root_{depth}_2\troot\t9\t15\tTechnology Trends
-root_{depth}_3\troot\t16\t20\tFinancial Impact
+Example: Sport: 1,2,3
 
-If the text contains only one unified topic, return ONLY: NONE
+Sentences:
+{numbered_sentences}
+"""
+        print("LLM prompt:\n", prompt)
 
-Sentences:\n{numbered_sentences}\n"""
+        try:
+            response = self.llamacpp.call([prompt], temperature=0.0)
+            print("LLM response:\n", response)
+        except Exception as e:
+            logging.error("LLM grouping failed: %s", e)
+            response = ""
 
-        # Derive dynamic root title for multiple posts
-        root_title = "Multiple Posts"
+        lines = [ln.strip() for ln in response.strip().split('\n') if ln.strip()]
+        groups = {}
+        for ln in lines:
+            if ':' in ln:
+                parts = ln.split(':', 1)
+                if len(parts) == 2:
+                    topic, nums = parts
+                    topic = topic.strip()
+                    nums = nums.strip()
+                    if nums:
+                        sentence_nums = []
+                        for part in nums.split(','):
+                            part = part.strip()
+                            if '-' in part:
+                                try:
+                                    start, end = part.split('-')
+                                    start = int(start.strip())
+                                    end = int(end.strip())
+                                    sentence_nums.extend(range(start, end + 1))
+                                except ValueError:
+                                    continue
+                            else:
+                                try:
+                                    sentence_nums.append(int(part))
+                                except ValueError:
+                                    continue
+                        if sentence_nums:
+                            groups[topic] = sentence_nums
 
-        # Root segment covers entire range
-        segments = [
-            {
-                "id": "root",
-                "parent": None,
-                "start": 1,
-                "end": len(sentences_list),
-                "title": root_title,
-                "depth": 0,
-            }
-        ]
-
-        # Index for quick lookup
-        by_id = {"root": segments[0]}
-
-        # Queue for BFS style segmentation (breadth keeps fewer deep early expansions)
-        queue = [segments[0]]
-
-        def try_split(segment: dict):
-            nonlocal llm_calls_used
-            if llm_calls_used >= max_total_llm_calls:
-                return []
-            length = segment["end"] - segment["start"] + 1
-            if segment["depth"] >= max_depth or length < min_sentences_for_split:
-                return []
-            numbered_subset = build_numbered_subset(segment["start"], segment["end"])
-            prompt = segmentation_prompt(numbered_subset, segment["id"], segment["depth"] + 1)
-            try:
-                llm_calls_used += 1
-                response = self.llamacpp.call([prompt], temperature=0.0)
-                print("LLM response:\n", response)
-            except Exception as e:
-                logging.error("LLM segmentation failed: %s", e)
-                return []
-            lines = [ln.strip() for ln in response.strip().split('\n') if ln.strip()]
-            if not lines:
-                return []
-            if len(lines) == 1 and lines[0].upper() == "NONE":
-                return []
-            new_segments = []
-            for ln in lines:
-                # Parse TSV format: id\tparent\tstart\tend\ttitle
-                parts = ln.split('\t')
-                if len(parts) < 5:
-                    continue
-                seg_id = parts[0].strip()
-                parent_id = parts[1].strip()
-                start_s = parts[2].strip()
-                end_s = parts[3].strip()
-                title = parts[4].strip()
-                # Basic validation
-                if parent_id != segment["id"]:
-                    continue
-                try:
-                    start_i = int(start_s)
-                    end_i = int(end_s)
-                except ValueError:
-                    continue
-                if not (segment["start"] <= start_i <= end_i <= segment["end"]):
-                    continue
-                # Avoid duplicate ids
-                if seg_id in by_id:
-                    continue
-                new_segments.append(
-                    {
-                        "id": seg_id,
-                        "parent": parent_id,
-                        "start": start_i,
-                        "end": end_i,
-                        "title": title[:60],
-                        "depth": segment["depth"] + 1,
-                    }
-                )
-            # Validate segments (relaxed validation - allow gaps but prevent overlaps)
-            new_segments_sorted = sorted(new_segments, key=lambda s: s["start"])
-            
-            # Check for overlaps (but allow gaps)
-            for i in range(len(new_segments_sorted) - 1):
-                current_seg = new_segments_sorted[i]
-                next_seg = new_segments_sorted[i + 1]
-                if current_seg["end"] >= next_seg["start"]:
-                    # Overlap detected, reject this split
-                    logging.warning(f"Segment overlap detected: {current_seg['id']} ends at {current_seg['end']}, {next_seg['id']} starts at {next_seg['start']}")
-                    return []
-            
-            # Ensure all segments are within parent bounds
-            for ns in new_segments_sorted:
-                if not (segment["start"] <= ns["start"] <= ns["end"] <= segment["end"]):
-                    logging.warning(f"Segment {ns['id']} [{ns['start']}-{ns['end']}] is outside parent bounds [{segment['start']}-{segment['end']}]")
-                    return []
-            
-            return new_segments_sorted
-
-        while queue and llm_calls_used < max_total_llm_calls:
-            current = queue.pop(0)
-            children = try_split(current)
-            if children:
-                for c in children:
-                    segments.append(c)
-                    by_id[c["id"]] = c
-                queue.extend(children)
-
-        # Determine leaf segments (no children)
-        parents = {s["parent"] for s in segments if s["parent"] is not None}
-        leaf_segments = [s for s in segments if s["id"] not in parents]
-
-        # Build groups mapping from leaf segments for sentence highlighting
-        groups = {
-            seg["id"]: list(range(seg["start"], seg["end"] + 1)) for seg in leaf_segments
-        }
-
-        # Color generation per segment: assign distinct hue per segment id (stable) and vary lightness by depth
+        # Color generation per group
         import hashlib, colorsys
 
         def hsl_to_hex(h: float, s: float, l: float) -> str:
-            r, g, b = colorsys.hls_to_rgb(h, l, s)  # note: colorsys uses HLS (h, l, s)
+            r, g, b = colorsys.hls_to_rgb(h, l, s)
             return '#' + ''.join(f'{int(c*255):02x}' for c in (r, g, b))
 
-        def segment_color(seg: dict) -> str:
-            # Stable hash based on id + range to reduce collisions
-            base_str = f"{seg['id']}:{seg['start']}-{seg['end']}"
-            digest = hashlib.md5(base_str.encode('utf-8')).hexdigest()
-            hue = (int(digest[:8], 16) % 360) / 360.0  # 0..1
-            depth = seg.get('depth', 0)
-            # Saturation & lightness adjustments by depth
-            # Deeper segments slightly less saturated & darker
-            sat = max(0.30, 0.60 - depth * 0.07)
-            light = max(0.30, 0.72 - depth * 0.08)
+        def group_color(group_id: str) -> str:
+            digest = hashlib.md5(group_id.encode('utf-8')).hexdigest()
+            hue = (int(digest[:8], 16) % 360) / 360.0
+            sat = 0.6
+            light = 0.7
             return hsl_to_hex(hue, sat, light)
 
-        group_colors = {}
-        for seg in segments:  # color every segment so tree & legend can use it
-            group_colors[seg["id"]] = segment_color(seg)
-
-        # Add color to each segment for the hierarchical tree
-        for seg in segments:
-            seg["color"] = group_colors[seg["id"]]
-
-        feed_title = " | ".join(feed_titles) if feed_titles else "Unknown Feeds"
+        group_colors = {gid: group_color(gid) for gid in groups}
 
         page = self.template_env.get_template("post-grouped.html")
         return Response(
@@ -720,10 +608,7 @@ Sentences:\n{numbered_sentences}\n"""
                 sentences=sentences_list,
                 groups=groups,
                 group_colors=group_colors,
-                hierarchical_segments=[
-                    {k: v for k, v in seg.items() if k in {"id", "parent", "start", "end", "title", "depth", "color"}}
-                    for seg in segments
-                ],
+                hierarchical_segments=[],
                 feed_title=feed_title,
                 user_settings=user["settings"],
                 provider=user["provider"],

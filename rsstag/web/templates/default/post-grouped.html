@@ -71,8 +71,8 @@
       </div>
       <div style="flex:1 1 320px; min-width:280px;">
         <div class="sticky-sidebar">
-          <h3>Hierarchy</h3>
-          <div id="segments_tree"></div>
+          <h3>Topics</h3>
+          <div id="topics_list"></div>
         </div>
       </div>
     </div>
@@ -82,6 +82,7 @@
     window.post_id = {{post_id}};
     window.feed_title = '{{feed_title}}';
     window.groups = {{groups|json}};
+    window.group_colors = {{group_colors|json}};
     window.sentences = {{sentences|json}};
     window.rss_settings = {{ user_settings|json }};
     window.hierarchical_segments = {{ hierarchical_segments|json }};
@@ -125,9 +126,37 @@
         }
         // add data-sentence attributes
         document.querySelectorAll('#grouped_sentences .sentence-group').forEach((el,i)=>{ el.setAttribute('data-sentence', i+1); });
-        if(window.hierarchical_segments && window.hierarchical_segments.length){
-            const treeRoot = buildTree(window.hierarchical_segments); document.getElementById('segments_tree').appendChild(treeRoot);
-        }
+        // Build topics list
+        const topicsList = document.getElementById('topics_list');
+        Object.keys(window.groups).forEach(topic => {
+            const nums = window.groups[topic];
+            const color = window.group_colors[topic];
+            const el = document.createElement('div');
+            el.className = 'topic-item';
+            el.style.margin = '4px 0';
+            el.style.padding = '4px';
+            el.style.borderRadius = '4px';
+            el.style.cursor = 'pointer';
+            el.style.backgroundColor = color + '40'; // add alpha
+            el.style.borderLeft = '3px solid ' + color;
+            el.textContent = topic + ' (' + nums.length + ' sentences)';
+            el.onclick = () => {
+                // Clear previous highlights
+                document.querySelectorAll('#grouped_sentences .range-highlight').forEach(el=>{
+                    el.classList.remove('range-highlight');
+                });
+                // Highlight sentences in this topic
+                nums.forEach(num => {
+                    const el = document.querySelector('[data-sentence="'+num+'"]');
+                    if(el){ el.classList.add('range-highlight'); }
+                });
+                // Scroll to first sentence
+                const firstNum = nums[0];
+                const target = document.querySelector('[data-sentence="'+firstNum+'"]');
+                if(target){ target.scrollIntoView({behavior:'smooth', block:'center'}); }
+            };
+            topicsList.appendChild(el);
+        });
     })();
 </script>
 <div id="progressbar"></div></body>
