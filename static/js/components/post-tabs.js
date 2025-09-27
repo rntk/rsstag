@@ -67,6 +67,16 @@ export class PostTabs extends React.Component {
         if (words) {
             words = `(${words})`;
         }
+        
+        // Generate PIDs for post-grouped link
+        let pids = [];
+        if (this.state.posts && this.state.posts.posts) {
+            for (let [_, post] of this.state.posts.posts) {
+                pids.push(post.pos);
+            }
+        }
+        let postGroupedUrl = pids.length > 0 ? `/post-grouped/${pids.join('_')}` : null;
+        
         let el = null;
         if (this.state.current === TAB_POSTS) {
             el = PostsListS(this.state.posts, this.props.ES);
@@ -85,6 +95,11 @@ export class PostTabs extends React.Component {
             <div className="group_title">
                 <h3>{this.state.posts.group_title}&nbsp;</h3>
                 {words? words: ''}
+                {postGroupedUrl && (
+                    <a href={postGroupedUrl} target="_blank" rel="noopener noreferrer" style={{marginLeft: '10px', fontSize: '0.9em'}}>
+                        [Open in new page]
+                    </a>
+                )}
             </div>
             {el}
         </div>);
