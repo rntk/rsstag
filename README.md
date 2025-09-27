@@ -2,7 +2,7 @@
 ### 1. Build js bundle
 `cd static/js`
 
-```docker run -it --rm -v `pwd`/../css:/css -v `pwd`:/app -w /app node:20 ./build.sh```
+```docker run -it --rm -v `pwd`/../css:/css -v `pwd`:/app -w /app node:22 ./build.sh```
 
 ### 2. Prepare config files
 
