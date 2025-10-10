@@ -473,10 +473,8 @@ class RSSTagApplication(object):
         if not post_ids:
             return self.on_error(user, _, NotFound())
 
-        all_sentences = []
+        full_content = ""
         feed_titles = []
-        current_sentence_number = 1
-
         for post_id in post_ids:
             current_post = self.posts.get_by_pid(user["sid"], post_id, projection)
             if not current_post:
@@ -486,18 +484,67 @@ class RSSTagApplication(object):
             if current_post["content"]["title"]:
                 content = current_post["content"]["title"] + ". " + content
 
-            sentences = re.split(r'(?<=[.!?])\s+(?=[A-ZА-Я])', content.strip())
-            if len(sentences) == 1:
-                sentences = re.split(r'(?<=[.!?])\s+', content.strip())
-
-            for sentence in sentences:
-                if sentence.strip():
-                    all_sentences.append({"text": sentence.strip(), "number": current_sentence_number})
-                    current_sentence_number += 1
+            full_content += content + "\n\n"
 
             feed = self.feeds.get_by_feed_id(user["sid"], current_post.get("feed_id"))
             feed_titles.append(feed["title"] if feed else "Unknown Feed")
 
+        def split_sentences(text):
+            sentences = re.split(r'(?<=[.!?])\s+(?=[A-ZА-Я])', text.strip())
+            if len(sentences) == 1:
+                sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+            return [s.strip() for s in sentences if s.strip()]
+
+        def llm_split_sentences(text):
+            positions = set()
+            for m in re.finditer(r'[.!?]', text):
+                positions.add(m.end())
+            for m in re.finditer(r'\s+', text):
+                positions.add(m.end())
+            positions = sorted(positions)
+            if not positions:
+                return split_sentences(text)
+            tagged_text = text
+            counter = 0
+            for pos in sorted(positions, reverse=True):
+                counter += 1
+                tagged_text = tagged_text[:pos] + '{wrdssplttr' + str(counter) + '}' + tagged_text[pos:]
+            prompt = f"""Here is the text with potential split tags "wrdssplttr" inserted at all whitespace positions and after sentence punctuation.
+Please list the numbers of the tags that mark the actual sentence boundaries, separated by commas. For example: 1,3,5
+Only output the numbers, nothing else.
+Text:{tagged_text}"""
+            print("LLM splitting prompt:\n", prompt)
+            try:
+                response = self.llamacpp.call([prompt], temperature=0.0)
+                print("LLM splitting response:\n", response)
+                boundary_nums = [int(x.strip()) for x in response.strip().split(',') if x.strip().isdigit()]
+            except ValueError as e:
+                if "Request too large (400)" in str(e):
+                    logging.info("Sentence splitting request too large, falling back to regex splitting")
+                    return split_sentences(text)
+                else:
+                    logging.error("LLM splitting failed: %s", e)
+                    return split_sentences(text)
+            except Exception as e:
+                logging.error("LLM splitting failed: %s", e)
+                return split_sentences(text)
+            split_positions = [positions[i-1] for i in boundary_nums if 1 <= i <= len(positions)]
+            sentences = []
+            start = 0
+            for pos in sorted(split_positions):
+                sent = text[start:pos].strip()
+                if sent:
+                    sentences.append(sent)
+                start = pos
+            sent = text[start:].strip()
+            if sent:
+                sentences.append(sent)
+            if not sentences:
+                return split_sentences(text)
+            return sentences
+
+        sentences = llm_split_sentences(full_content)
+        all_sentences = [{"text": s, "number": i+1} for i, s in enumerate(sentences)]
         sentences_list = all_sentences
         print(len(sentences_list), "sentences found")
 
@@ -530,19 +577,24 @@ class RSSTagApplication(object):
             return "\n".join(subset_lines)
 
         numbered_sentences = build_numbered_subset(1, len(sentences_list))
-        prompt = f"""You are an expert at grouping sentences into topics.
+        prompt = f"""You are an expert at grouping sentences into specific, detailed subtopics.
 
-Group the following sentences into 2-8 distinct topics. Each topic should consist of contiguous sentences.
+Group the following sentences into 2-8 distinct subtopics. Each subtopic should consist of contiguous sentences. Focus on creating SPECIFIC, NARROW subtopics rather than broad categories. If sentences are about the same general area (like sports), identify the specific subtopic within that area (like "Football Transfer News", "Basketball Championship", "Tennis Tournament Results" rather than just "Sport").
 
 Important restrictions:
 - Only use the sentence numbers provided in the list below.
 - Do not invent, add, or reference any sentences or numbers not present in the provided list.
-- If there are fewer than 2 sentences, group them into a single topic or as appropriate.
+- If there are fewer than 2 sentences, group them into a single subtopic or as appropriate.
 - Ensure all sentence numbers in your output are valid and correspond exactly to the numbers in the list.
+- Create specific, descriptive subtopic names that capture the precise content rather than general categories.
 
-Output format: One line per topic: TopicName: sentence_number,sentence_number,...
+Output format: One line per subtopic: SpecificSubtopicName: sentence_number,sentence_number,...
 
-Example: Sport: 1,2,3
+Example: Football Transfer Market Analysis: 1,2,3
+
+For example, sentences are numbered like:
+1. This is the first example sentence.
+2. This is the second example sentence.
 
 Sentences:
 {numbered_sentences}
@@ -550,8 +602,16 @@ Sentences:
         print("LLM prompt:\n", prompt)
 
         try:
-            response = self.llamacpp.call([prompt], temperature=0.0)
+            response = self.llamacpp.call([prompt], temperature=0.0).strip()
             print("LLM response:\n", response)
+        except ValueError as e:
+            if "Request too large (400)" in str(e):
+                logging.info("Request too large, splitting sentences into chunks")
+                response = self._handle_sentence_grouping_chunking(sentences_list, prompt, temperature=0.0)
+                print("LLM chunked response:\n", response)
+            else:
+                logging.error("LLM grouping failed: %s", e)
+                response = ""
         except Exception as e:
             logging.error("LLM grouping failed: %s", e)
             response = ""
@@ -615,6 +675,73 @@ Sentences:
             ),
             mimetype="text/html",
         )
+
+    def _handle_sentence_grouping_chunking(self, sentences_list: list, original_prompt: str, temperature: float = 0.0, max_sentences_per_chunk: int = 10) -> str:
+        """
+        Handle chunking for sentence grouping when request is too large.
+        Splits sentences into smaller batches and includes the prompt with each batch.
+        """
+        # Extract the prompt template and instructions from the original prompt
+        sentences_start = original_prompt.find("Sentences:\n") + 11
+        if sentences_start == 10:  # "Sentences:\n" not found
+            logging.error("Cannot parse grouping prompt for chunking")
+            return ""
+        
+        prompt_template = original_prompt[:sentences_start]
+        
+        # Split sentences into chunks
+        chunks = []
+        for i in range(0, len(sentences_list), max_sentences_per_chunk):
+            chunk = sentences_list[i:i + max_sentences_per_chunk]
+            chunks.append(chunk)
+        
+        logging.info(f"Splitting {len(sentences_list)} sentences into {len(chunks)} chunks")
+        
+        # Process each chunk with the full prompt
+        all_groups = {}
+        
+        for chunk_idx, sentence_chunk in enumerate(chunks):
+            # Build numbered sentences for this chunk
+            chunk_lines = []
+            for s in sentence_chunk:
+                txt = s["text"].strip()
+                chunk_lines.append(f"{s['number']}. {txt}")
+            
+            numbered_sentences_chunk = "\n".join(chunk_lines)
+            chunk_prompt = prompt_template + numbered_sentences_chunk
+            
+            try:
+                logging.info(f"Processing chunk {chunk_idx + 1}/{len(chunks)} with {len(sentence_chunk)} sentences")
+                response = self.llamacpp.call([chunk_prompt], temperature).strip()
+                
+                # Parse groups from response
+                lines = [ln.strip() for ln in response.strip().split('\n') if ln.strip()]
+                for ln in lines:
+                    if ':' in ln:
+                        parts = ln.split(':', 1)
+                        if len(parts) == 2:
+                            topic, nums = parts
+                            topic = topic.strip()
+                            nums = nums.strip()
+                            if nums and topic:
+                                # Create unique topic name if it already exists
+                                original_topic = topic
+                                counter = 1
+                                while topic in all_groups:
+                                    topic = f"{original_topic} (Part {counter})"
+                                    counter += 1
+                                all_groups[topic] = nums
+                                
+            except Exception as e:
+                logging.error(f"Chunked grouping failed for chunk {chunk_idx + 1}: %s", e)
+                continue
+        
+        # Combine results into the expected format
+        result_lines = []
+        for topic, nums in all_groups.items():
+            result_lines.append(f"{topic}: {nums}")
+        
+        return '\n'.join(result_lines)
 
     # TODO: delete or change or something other
     def on_get_posts_with_tags(self, user: dict, _: Request, s_tags: str) -> Response:

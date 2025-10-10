@@ -29,6 +29,9 @@ class LLamaCPP:
         if res.status != 200:
             err_msg = f"{res.status} - {res.reason} - {resp_body}"
             logging.error(err_msg)
+            # Raise exception for 400 status (request too large)
+            if res.status == 400:
+                raise ValueError(f"Request too large (400): {err_msg}")
             return err_msg
         resp = json.loads(resp_body)
 
