@@ -208,11 +208,14 @@ def on_login_google_auth_get(app: "RSSTagApplication", _: Request) -> Response:
     # email: Access to user's email address  
     # profile: Access to basic profile info
     # gmail.readonly: Read-only access to Gmail
+    # gmail.modify: Allows adding/removing labels (needed for marking emails)
     scopes = [
         "openid",
         "email", 
         "profile",
-        "https://www.googleapis.com/auth/gmail.readonly"
+        "https://www.googleapis.com/auth/gmail.readonly",
+        "https://www.googleapis.com/auth/gmail.modify",
+        "https://www.googleapis.com/auth/gmail.labels"
     ]
     
     # Build OAuth URL with proper parameter encoding

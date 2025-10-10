@@ -21,6 +21,7 @@ class GmailProvider:
         self._config = config
         self.no_category_name = "Gmail"
         self._api_host = "www.googleapis.com"
+        self._mark_label = config["gmail"].get("mark_label", "rsstag_mark")
 
     def get_headers(self, user: dict) -> dict:
         """Build Authorization headers from available token fields.
@@ -31,6 +32,46 @@ class GmailProvider:
         if not token:
             return {}
         return {"Authorization": f"Bearer {token}"}
+
+    async def get_or_create_label(self, session, user: dict) -> Optional[str]:
+        """Get or create the custom label for marking emails. Returns label ID."""
+        # First, try to get the label
+        list_labels_url = f"https://{self._api_host}/gmail/v1/users/me/labels"
+        resp = await self.make_authenticated_request(session, 'GET', list_labels_url, user)
+        
+        if not resp or resp.status != 200:
+            logging.error(f"Failed to list labels: {resp.status if resp else 'No response'}")
+            return None
+        
+        labels_data = await resp.json()
+        labels = labels_data.get('labels', [])
+        
+        # Check if our label exists
+        for label in labels:
+            if label['name'] == self._mark_label:
+                logging.info(f"Found existing label: {self._mark_label} with id {label['id']}")
+                return label['id']
+        
+        # Label doesn't exist, create it
+        create_label_url = f"https://{self._api_host}/gmail/v1/users/me/labels"
+        label_payload = {
+            "name": self._mark_label,
+            "messageListVisibility": "show",
+            "labelListVisibility": "labelShow"
+        }
+        
+        resp = await self.make_authenticated_request(
+            session, 'POST', create_label_url, user, json=label_payload
+        )
+        
+        if not resp or resp.status != 200:
+            logging.error(f"Failed to create label: {await resp.text() if resp else 'No response'}")
+            return None
+        
+        label_data = await resp.json()
+        label_id = label_data.get('id')
+        logging.info(f"Created new label: {self._mark_label} with id {label_id}")
+        return label_id
 
     async def refresh_access_token(self, user: dict) -> Optional[str]:
         """Refresh the access token using the refresh token"""
@@ -233,20 +274,28 @@ class GmailProvider:
         return ""
 
     def mark(self, data: dict, user: dict) -> Optional[bool]:
-        """Mark email as read or unread"""
+        """Mark email by adding/removing custom label"""
         message_id = data["id"]
         should_be_read = data["status"]
         url = f"https://{self._api_host}/gmail/v1/users/me/messages/{message_id}/modify"
         
-        if should_be_read:
-            payload = {'removeLabelIds': ['UNREAD']}
-        else:
-            payload = {'addLabelIds': ['UNREAD']}
-
         async def main():
             async with aiohttp.ClientSession() as session:
+                # Get or create the label
+                label_id = await self.get_or_create_label(session, user)
+                if not label_id:
+                    logging.error("Failed to get or create label")
+                    return False
+                
+                # Add label if marking as read, remove if marking as unread
+                if should_be_read:
+                    payload = {'addLabelIds': [label_id]}
+                else:
+                    payload = {'removeLabelIds': [label_id]}
+
                 resp = await self.make_authenticated_request(session, 'POST', url, user, json=payload)
                 if resp and resp.status == 200:
+                    logging.info(f"Successfully {'added' if should_be_read else 'removed'} label {self._mark_label} to/from message {message_id}")
                     return True
                 else:
                     logging.error(f"Failed to mark email: {await resp.text() if resp else 'No response'}")
