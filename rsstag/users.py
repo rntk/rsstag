@@ -66,6 +66,11 @@ class RssTagUsers:
 
         if provider == TEXT_FILE:
             user["text_file"] = login
+        
+        # Store login/email for OAuth providers (Gmail, etc.) to enable lookup by email
+        from rsstag.providers.providers import GMAIL
+        if provider == GMAIL:
+            user["login"] = login
 
         self._db.users.insert_one(user)
 
@@ -84,6 +89,10 @@ class RssTagUsers:
         lp_hash = self.hash_login_password(login, password)
 
         return self._db.users.find_one({"lp": lp_hash})
+
+    def get_by_login(self, login: str) -> Optional[dict]:
+        """Get user by login/email (for OAuth providers like Gmail)"""
+        return self._db.users.find_one({"login": login})
 
     def get_by_sid(self, sid: str) -> Optional[dict]:
         return self._db.users.find_one({"sid": sid})
