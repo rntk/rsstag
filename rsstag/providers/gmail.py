@@ -8,6 +8,7 @@ from typing import Tuple, List, Optional, Iterator
 from datetime import datetime
 from hashlib import md5
 import gzip
+import time
 
 import aiohttp
 
@@ -116,41 +117,67 @@ class GmailProvider:
             logging.error(f"Error fetching email content: {e}")
             return None
 
-    async def make_authenticated_request(self, session, method, url, user, **kwargs):
-        """Make an authenticated request with automatic token refresh on 401"""
+    async def make_authenticated_request(self, session, method, url, user, max_retries=3, **kwargs):
+        """Make an authenticated request with automatic token refresh on 401 and retry on 429
+        
+        Args:
+            session: aiohttp session
+            method: HTTP method (GET, POST)
+            url: Request URL
+            user: User dict with credentials
+            max_retries: Maximum number of retries for 429 errors (default: 3)
+            **kwargs: Additional arguments for the request
+        """
         headers = self.get_headers(user)
         if 'headers' in kwargs:
             kwargs['headers'].update(headers)
         else:
             kwargs['headers'] = headers
-            
-        # First attempt with current token
-        response = None
-        if method.upper() == 'GET':
-            response = await session.get(url, **kwargs)
-        elif method.upper() == 'POST':
-            response = await session.post(url, **kwargs)
         
-        # If we get 401, try to refresh the token
-        if response and response.status == 401:
-            logging.info("Received 401, attempting to refresh token")
-            new_token = await self.refresh_access_token(user)
-            if not new_token:
-                logging.error("Failed to refresh token")
-                return response
-                
-            # Update user token(s) and headers
-            user['token'] = new_token
-            user['access_token'] = new_token
-            user['token_refreshed'] = True  # Mark that token was refreshed
-            headers = self.get_headers(user)
-            kwargs['headers'].update(headers)
-            
-            # Retry with new token
+        # Retry loop for 429 errors
+        for retry_count in range(max_retries + 1):
+            # Make the request
+            response = None
             if method.upper() == 'GET':
                 response = await session.get(url, **kwargs)
             elif method.upper() == 'POST':
                 response = await session.post(url, **kwargs)
+            
+            # Handle 429 Too Many Requests
+            if response and response.status == 429:
+                if retry_count < max_retries:
+                    # Calculate exponential backoff: 1s, 2s, 4s
+                    wait_time = 2 ** retry_count
+                    logging.warning(f"Received 429 Too Many Requests, retrying in {wait_time}s (attempt {retry_count + 1}/{max_retries})")
+                    await asyncio.sleep(wait_time)
+                    continue
+                else:
+                    logging.error(f"Max retries ({max_retries}) reached for 429 error")
+                    return response
+            
+            # Handle 401 Unauthorized - try to refresh the token
+            if response and response.status == 401:
+                logging.info("Received 401, attempting to refresh token")
+                new_token = await self.refresh_access_token(user)
+                if not new_token:
+                    logging.error("Failed to refresh token")
+                    return response
+                    
+                # Update user token(s) and headers
+                user['token'] = new_token
+                user['access_token'] = new_token
+                user['token_refreshed'] = True  # Mark that token was refreshed
+                headers = self.get_headers(user)
+                kwargs['headers'].update(headers)
+                
+                # Retry with new token
+                if method.upper() == 'GET':
+                    response = await session.get(url, **kwargs)
+                elif method.upper() == 'POST':
+                    response = await session.post(url, **kwargs)
+            
+            # Return response if not 429 or if successful after retry
+            return response
         
         return response
 
