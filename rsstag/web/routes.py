@@ -13,6 +13,21 @@ class RSSTagRoutes:
             {"url": "/login", "endpoint": "on_login_get", "methods": ["GET"]},
             {"url": "/login", "endpoint": "on_login_post", "methods": ["POST"]},
             {
+                "url": "/login/google/auth",
+                "endpoint": "on_login_google_auth_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/oauth2callback",
+                "endpoint": "on_oauth2callback_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/login/google/auth",
+                "endpoint": "on_login_google_auth_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/provider",
                 "endpoint": "on_select_provider_get",
                 "methods": ["GET"],

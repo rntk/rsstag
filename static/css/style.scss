@@ -88,6 +88,18 @@ h3.post_title {
 .tag_title, .group_title span {
     font-size: 11pt;
 }
+
+// Small header between alphabet groups in tags list
+.alpha_group_title {
+    margin: 0.8em 0 0.4em 0.4em;
+    color: #9a9a9a;
+
+    h3 {
+        display: inline;
+        font-weight: normal;
+        font-size: 14pt;
+    }
+}
 .post_meta {
     font-size: 10pt;
     color: $meta_color;

@@ -82,6 +82,16 @@ h3.post_title {
   font-size: 11pt;
 }
 
+.alpha_group_title {
+  margin: 0.8em 0 0.4em 0.4em;
+  color: #9a9a9a;
+}
+.alpha_group_title h3 {
+  display: inline;
+  font-weight: normal;
+  font-size: 14pt;
+}
+
 .post_meta {
   font-size: 10pt;
   color: #bcbcbc;

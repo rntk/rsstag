@@ -16,6 +16,7 @@ from pymongo import MongoClient, UpdateOne
 from rsstag.providers.bazqux import BazquxProvider
 from rsstag.providers.telegram import TelegramProvider
 from rsstag.providers.textfile import TextFileProvider
+from rsstag.providers.gmail import GmailProvider
 import rsstag.providers.providers as data_providers
 from rsstag.utils import load_config
 from rsstag.web.routes import RSSTagRoutes
@@ -631,7 +632,8 @@ def worker(config):
     providers = {
         data_providers.BAZQUX: BazquxProvider(config),
         data_providers.TELEGRAM: TelegramProvider(config, db),
-        data_providers.TEXT_FILE: TextFileProvider(config)
+        data_providers.TEXT_FILE: TextFileProvider(config),
+        data_providers.GMAIL: GmailProvider(config)
     }
     builder = TagsBuilder()
     cleaner = HTMLCleaner()

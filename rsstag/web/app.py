@@ -108,6 +108,8 @@ class RSSTagApplication(object):
             "on_select_provider_get",
             "on_status_get",
             "on_refresh_get_post",
+            "on_login_google_auth_get",
+            "on_oauth2callback_get",
         )
         self.allow_not_ready = {
             "on_telegram_auth_post",
@@ -181,6 +183,12 @@ class RSSTagApplication(object):
         self, _: Optional[dict], request: Request, err: Optional[List[str]] = None
     ) -> Response:
         return users_handlers.on_login_get(self, request, err=err)
+
+    def on_login_google_auth_get(self, _: Optional[dict], request: Request) -> Response:
+        return users_handlers.on_login_google_auth_get(self, request)
+
+    def on_oauth2callback_get(self, _: Optional[dict], request: Request) -> Response:
+        return users_handlers.on_oauth2callback_get(self, request)
 
     def on_login_post(self, _: Optional[dict], request: Request) -> Response:
         return users_handlers.on_login_post(self, request)
