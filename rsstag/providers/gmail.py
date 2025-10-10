@@ -117,7 +117,7 @@ class GmailProvider:
             logging.error(f"Error fetching email content: {e}")
             return None
 
-    async def make_authenticated_request(self, session, method, url, user, max_retries=3, **kwargs):
+    async def make_authenticated_request(self, session, method, url, user, max_retries=5, **kwargs):
         """Make an authenticated request with automatic token refresh on 401 and retry on 429
         
         Args:
@@ -125,7 +125,7 @@ class GmailProvider:
             method: HTTP method (GET, POST)
             url: Request URL
             user: User dict with credentials
-            max_retries: Maximum number of retries for 429 errors (default: 3)
+            max_retries: Maximum number of retries for 429 errors (default: 5)
             **kwargs: Additional arguments for the request
         """
         headers = self.get_headers(user)
@@ -146,8 +146,8 @@ class GmailProvider:
             # Handle 429 Too Many Requests
             if response and response.status == 429:
                 if retry_count < max_retries:
-                    # Calculate exponential backoff: 1s, 2s, 4s
-                    wait_time = 2 ** retry_count
+                    # Calculate exponential backoff with longer delays: 2s, 4s, 8s, 16s, 32s
+                    wait_time = 2 ** (retry_count + 1)
                     logging.warning(f"Received 429 Too Many Requests, retrying in {wait_time}s (attempt {retry_count + 1}/{max_retries})")
                     await asyncio.sleep(wait_time)
                     continue
@@ -193,7 +193,7 @@ class GmailProvider:
                 list_url = f"https://{self._api_host}/gmail/v1/users/me/messages?q=is:unread"
                 message_ids = []
                 while list_url:
-                    resp = await self.make_authenticated_request(session, 'GET', list_url, user)
+                    resp = await self.make_authenticated_request(session, 'GET', list_url, user, max_retries=5)
                     if not resp:
                         logging.error("Failed to authenticate Gmail request")
                         break
@@ -203,18 +203,35 @@ class GmailProvider:
                     data = await resp.json()
                     message_ids.extend(data.get('messages', []))
                     next_token = data.get('nextPageToken')
+                    if next_token:
+                        # Add small delay before fetching next page
+                        await asyncio.sleep(0.5)
                     list_url = f"https://{self._api_host}/gmail/v1/users/me/messages?q=is:unread&pageToken={next_token}" if next_token else None
 
                 if not message_ids:
                     return
 
-                # 2. Fetch email content for each message ID
-                email_tasks = []
-                for message in message_ids:
-                    email_url = f"https://{self._api_host}/gmail/v1/users/me/messages/{message['id']}"
-                    email_tasks.append(self.fetch_email_content_authenticated(session, email_url, user))
+                # 2. Fetch email content for each message ID in batches to avoid rate limiting
+                # Process in batches of 10 with a delay between batches
+                batch_size = 10
+                batch_delay = 0.5  # 0.5 second delay between batches
+                emails = []
                 
-                emails = await asyncio.gather(*email_tasks)
+                logging.info(f"Fetching {len(message_ids)} emails in batches of {batch_size}")
+                for i in range(0, len(message_ids), batch_size):
+                    batch = message_ids[i:i + batch_size]
+                    email_tasks = []
+                    for message in batch:
+                        email_url = f"https://{self._api_host}/gmail/v1/users/me/messages/{message['id']}"
+                        email_tasks.append(self.fetch_email_content_authenticated(session, email_url, user))
+                    
+                    batch_emails = await asyncio.gather(*email_tasks)
+                    emails.extend(batch_emails)
+                    
+                    # Add delay between batches (except for the last batch)
+                    if i + batch_size < len(message_ids):
+                        logging.debug(f"Processed batch {i//batch_size + 1}, waiting {batch_delay}s before next batch")
+                        await asyncio.sleep(batch_delay)
                 
                 routes = RSSTagRoutes(self._config["settings"]["host_name"])
                 pid = 0
@@ -279,7 +296,7 @@ class GmailProvider:
     async def fetch_email_content_authenticated(self, session, url, user):
         """Fetch email content with authentication and token refresh"""
         try:
-            resp = await self.make_authenticated_request(session, 'GET', url, user)
+            resp = await self.make_authenticated_request(session, 'GET', url, user, max_retries=5)
             if resp and resp.status == 200:
                 return await resp.json()
             else:
