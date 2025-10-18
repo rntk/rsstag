@@ -513,21 +513,20 @@ class RSSTagApplication(object):
             # If we found a < after the last >, we're inside a tag
             return last_open > last_close
 
-        def llm_split_sentences(text_plain, text_html):
+        def llm_split_chapters(text_plain, text_html):
             """
-            Split sentences using LLM on plain text, but return HTML sentences.
+            Split text into chapters using LLM on plain text, but return HTML chapters.
             text_plain: cleaned text without HTML for LLM analysis
             text_html: original text with HTML for display
             """
             positions = set()
-            # Find positions in plain text only
-            for m in re.finditer(r'[.!?]', text_plain):
-                positions.add(m.end())
+            # Find positions in plain text only at word boundaries
             for m in re.finditer(r'\s+', text_plain):
                 positions.add(m.end())
             positions = sorted(positions)
             if not positions:
-                return split_sentences(text_plain)
+                # Fallback: treat whole text as one chapter
+                return [{"title": "Main Content", "text": text_html}]
             
             tagged_text = text_plain
             counter = 0
@@ -535,208 +534,164 @@ class RSSTagApplication(object):
                 counter += 1
                 tagged_text = tagged_text[:pos] + '{wrdssplttr' + str(counter) + '}' + tagged_text[pos:]
             
-            prompt = f"""You are a text analysis expert. Your task is to identify sentence boundaries in a text.
+            prompt = f"""You are a text analysis expert. Your task is to identify chapter boundaries in a text.
 
-The text below has been marked with numbered split tags "{{wrdssplttr<NUMBER>}}" at every whitespace and punctuation location (., !, ?).
+The text below has been marked with numbered split tags "{{wrdssplttr<NUMBER>}}" at every word boundary.
 
 Your task:
 1. Analyze the text carefully
-2. Identify which tags mark TRUE sentence boundaries (where one complete sentence ends and another begins)
-3. Return ONLY the tag numbers that represent actual sentence boundaries
+2. Identify chapter boundaries and assign appropriate chapter titles/very brief (1-3 words) summary
+3. Return the chapter titles and the tag numbers that mark the end of each chapter
 
 Important rules:
-- A sentence boundary occurs where a complete thought ends and a new independent thought begins
-- Tags after periods, exclamation marks, or question marks are likely sentence boundaries
-- Tags within a single sentence (like after commas or mid-sentence spaces) should NOT be included
-- Output format: comma-separated numbers only (e.g., 1,5,12,18)
-- Do not include any explanation, just the numbers
+- A chapter boundary occurs where a new major section or topic begins
+- Create specific, descriptive chapter titles that capture the content
+- Output format: One line per chapter: ChapterTitle: tag_number,tag_number,...
+- Do not include any explanation, just the chapter lines
 
 Example:
-Input: "This is sentence one{{wrdssplttr3}}.{{wrdssplttr2}} {{wrdssplttr1}}This is sentence two."
-Output: 1
+Introduction: 1,2,3
+Main Discussion: 4,5,6,7
 
 Text to analyze:
 {tagged_text}
 
-Output (comma-separated tag numbers only):"""
-            print("LLM splitting prompt:\n", prompt)
+Output:"""
+            print("LLM chapter splitting prompt:\n", prompt)
             try:
-                response = self.llamacpp.call([prompt], temperature=0.0)
-                #response = self.openai.call([prompt], temperature=1, reasoning={"effort": "minimal"})
-                print("LLM splitting response:\n", response)
-                boundary_nums = [int(x.strip()) for x in response.strip().split(',') if x.strip().isdigit()]
-            except ValueError as e:
-                if "Request too large (400)" in str(e):
-                    logging.info("Sentence splitting request too large, falling back to regex splitting")
-                    return split_sentences(text_plain)
-                else:
-                    logging.error("LLM splitting failed: %s", e)
-                    return split_sentences(text_plain)
+                response = self.llamacpp.call([prompt], temperature=0.0).strip()
+                print("LLM chapter splitting response:\n", response)
             except Exception as e:
-                logging.error("LLM splitting failed: %s", e)
-                return split_sentences(text_plain)
+                logging.error("LLM chapter splitting failed: %s", e)
+                # Fallback: treat whole text as one chapter
+                return [{"title": "Main Content", "text": text_html}]
             
-            split_positions = [positions[i-1] for i in boundary_nums if 1 <= i <= len(positions)]
+            lines = [ln.strip() for ln in response.strip().split('\n') if ln.strip()]
+            chapters = []
+            for ln in lines:
+                if ':' in ln:
+                    parts = ln.split(':', 1)
+                    if len(parts) == 2:
+                        title, nums = parts
+                        title = title.strip()
+                        nums = nums.strip()
+                        if nums:
+                            tag_nums = []
+                            for part in nums.split(','):
+                                part = part.strip()
+                                try:
+                                    tag_nums.append(int(part))
+                                except ValueError:
+                                    continue
+                            if tag_nums:
+                                chapters.append({"title": title, "tag_nums": sorted(tag_nums)})
             
-            # Now split the HTML text at corresponding positions
-            # We need to map plain text positions to HTML text positions
-            sentences_html = []
-            start = 0
+            if not chapters:
+                return [{"title": "Main Content", "text": text_html}]
             
-            # Create a mapping between plain and HTML text
-            html_cleaner_temp = HTMLCleaner()
-            html_cleaner_temp.feed(text_html)
+            # Sort chapters by the last tag number
+            chapters.sort(key=lambda c: c["tag_nums"][-1])
             
-            # Simple approach: split HTML by finding matching content
-            plain_sentences = []
+            # Now split the text at the tag positions
+            chapter_texts_plain = []
+            chapter_texts_html = []
             start_plain = 0
-            for pos in sorted(split_positions):
-                sent = text_plain[start_plain:pos].strip()
-                if sent:
-                    plain_sentences.append(sent)
-                start_plain = pos
-            sent = text_plain[start_plain:].strip()
-            if sent:
-                plain_sentences.append(sent)
+            start_html = 0
             
-            if not plain_sentences:
-                return split_sentences(text_plain)
+            for chapter in chapters:
+                end_tag = chapter["tag_nums"][-1]
+                if end_tag <= len(positions):
+                    end_pos = positions[end_tag - 1]
+                    chapter_plain = text_plain[start_plain:end_pos].strip()
+                    chapter_texts_plain.append(chapter_plain)
+                    
+                    # Map to HTML
+                    # Approximate mapping
+                    html_cleaner_temp = HTMLCleaner()
+                    html_remaining = text_html[start_html:]
+                    best_match_end = 0
+                    for end_pos_html in range(len(chapter_plain), len(html_remaining) + 1):
+                        html_cleaner_temp.purge()
+                        html_cleaner_temp.feed(html_remaining[:end_pos_html])
+                        extracted_plain = " ".join(html_cleaner_temp.get_content()).strip()
+                        if chapter_plain in extracted_plain or extracted_plain == chapter_plain:
+                            best_match_end = end_pos_html
+                            break
+                    if best_match_end > 0:
+                        chapter_html = html_remaining[:best_match_end].strip()
+                        start_html += best_match_end
+                    else:
+                        chapter_html = chapter_plain  # fallback
+                    chapter_texts_html.append(chapter_html)
+                    
+                    start_plain = end_pos
             
-            # For each plain sentence, find it in the HTML and extract with tags
-            html_remaining = text_html
-            for plain_sent in plain_sentences:
-                # Find approximate position in HTML
-                # We'll use a simple approach: extract text and find the sentence
+            # Add remaining text if any
+            if start_plain < len(text_plain):
+                chapter_plain = text_plain[start_plain:].strip()
+                if chapter_plain:
+                    chapter_texts_plain.append(chapter_plain)
+                    chapter_html = text_html[start_html:].strip()
+                    chapter_texts_html.append(chapter_html)
+            
+            # Assign titles
+            result = []
+            for i, (plain, html) in enumerate(zip(chapter_texts_plain, chapter_texts_html)):
+                title = chapters[i]["title"] if i < len(chapters) else f"Chapter {i+1}"
+                result.append({"title": title, "text": html})
+            
+            return result
+
+        chapters = llm_split_chapters(full_content_plain, full_content_html)
+        
+        all_sentences = []
+        groups = {}
+        sentence_counter = 1
+        
+        for chapter in chapters:
+            chapter_html = chapter["text"]
+            # Clean to plain for splitting
+            html_cleaner.purge()
+            html_cleaner.feed(chapter_html)
+            chapter_plain = " ".join(html_cleaner.get_content())
+            
+            # Split into sentences
+            chapter_sentences_plain = split_sentences(chapter_plain)
+            
+            # Map to HTML sentences
+            chapter_sentences_html = []
+            html_remaining = chapter_html
+            for sent_plain in chapter_sentences_plain:
+                # Find in HTML
                 html_cleaner_temp = HTMLCleaner()
-                
-                # Try to find the sentence in remaining HTML
-                best_match_len = 0
                 best_match_end = 0
-                
-                for end_pos in range(len(plain_sent), len(html_remaining) + 1):
+                for end_pos in range(len(sent_plain), len(html_remaining) + 1):
                     html_cleaner_temp.purge()
                     html_cleaner_temp.feed(html_remaining[:end_pos])
-                    extracted_plain = " ".join(html_cleaner_temp.get_content()).strip()
-                    
-                    if plain_sent in extracted_plain:
+                    extracted = " ".join(html_cleaner_temp.get_content()).strip()
+                    if sent_plain in extracted:
                         best_match_end = end_pos
                         break
-                
                 if best_match_end > 0:
-                    sentences_html.append(html_remaining[:best_match_end].strip())
+                    sent_html = html_remaining[:best_match_end].strip()
                     html_remaining = html_remaining[best_match_end:].strip()
                 else:
-                    # Fallback: just use plain text
-                    sentences_html.append(plain_sent)
+                    sent_html = sent_plain
+                chapter_sentences_html.append(sent_html)
             
-            # Add any remaining HTML
-            if html_remaining.strip():
-                sentences_html.append(html_remaining.strip())
+            # Assign numbers
+            chapter_sentence_nums = []
+            for sent_html in chapter_sentences_html:
+                all_sentences.append({"text": sent_html, "number": sentence_counter})
+                chapter_sentence_nums.append(sentence_counter)
+                sentence_counter += 1
             
-            return sentences_html if sentences_html else split_sentences(text_plain)
-
-        sentences = llm_split_sentences(full_content_plain, full_content_html)
-        all_sentences = [{"text": s, "number": i+1} for i, s in enumerate(sentences)]
+            groups[chapter["title"]] = chapter_sentence_nums
+        
         sentences_list = all_sentences
         print(len(sentences_list), "sentences found")
 
-        # Guard: if nothing meaningful - early render
-        if not sentences_list:
-            feed_title = " | ".join(feed_titles) if feed_titles else "Unknown Feeds"
-            page = self.template_env.get_template("post-grouped.html")
-            return Response(
-                page.render(
-                    post_id=pids,
-                    sentences=[],
-                    groups={},
-                    group_colors={},
-                    hierarchical_segments=[],
-                    feed_title=feed_title,
-                    user_settings=user["settings"],
-                    provider=user["provider"],
-                ),
-                mimetype="text/html",
-            )
-
         feed_title = " | ".join(feed_titles) if feed_titles else "Unknown Feeds"
-
-        # --- 2. Simple topic grouping using LLM ---
-        def build_numbered_subset(start_idx: int, end_idx: int) -> str:
-            subset_lines = []
-            for s in sentences_list[start_idx - 1 : end_idx]:
-                txt = s["text"].strip()
-                subset_lines.append(f"{s['number']}. {txt}")
-            return "\n".join(subset_lines)
-
-        numbered_sentences = build_numbered_subset(1, len(sentences_list))
-        prompt = f"""You are an expert at grouping sentences into specific, detailed subtopics.
-
-Group the following sentences into 2-8 distinct subtopics. Each subtopic should consist of contiguous sentences. Focus on creating SPECIFIC, NARROW subtopics rather than broad categories. If sentences are about the same general area (like sports), identify the specific subtopic within that area (like "Football Transfer News", "Basketball Championship", "Tennis Tournament Results" rather than just "Sport").
-
-Important restrictions:
-- Only use the sentence numbers provided in the list below.
-- Do not invent, add, or reference any sentences or numbers not present in the provided list.
-- If there are fewer than 2 sentences, group them into a single subtopic or as appropriate.
-- Ensure all sentence numbers in your output are valid and correspond exactly to the numbers in the list.
-- Create specific, descriptive subtopic names that capture the precise content rather than general categories.
-
-Output format: One line per subtopic: SpecificSubtopicName: sentence_number,sentence_number,...
-
-Example: Football Transfer Market Analysis: 1,2,3
-
-For example, sentences are numbered like:
-1. This is the first example sentence.
-2. This is the second example sentence.
-
-Sentences:
-{numbered_sentences}
-"""
-        print("LLM prompt:\n", prompt)
-
-        try:
-            response = self.llamacpp.call([prompt], temperature=0.0).strip()
-            #response = self.openai.call([prompt], temperature=1, reasoning={"effort": "low"}).strip()
-            print("LLM response:\n", response)
-        except ValueError as e:
-            if "Request too large (400)" in str(e):
-                logging.info("Request too large, splitting sentences into chunks")
-                response = self._handle_sentence_grouping_chunking(sentences_list, prompt, temperature=0.0)
-                print("LLM chunked response:\n", response)
-            else:
-                logging.error("LLM grouping failed: %s", e)
-                response = ""
-        except Exception as e:
-            logging.error("LLM grouping failed: %s", e)
-            response = ""
-
-        lines = [ln.strip() for ln in response.strip().split('\n') if ln.strip()]
-        groups = {}
-        for ln in lines:
-            if ':' in ln:
-                parts = ln.split(':', 1)
-                if len(parts) == 2:
-                    topic, nums = parts
-                    topic = topic.strip()
-                    nums = nums.strip()
-                    if nums:
-                        sentence_nums = []
-                        for part in nums.split(','):
-                            part = part.strip()
-                            if '-' in part:
-                                try:
-                                    start, end = part.split('-')
-                                    start = int(start.strip())
-                                    end = int(end.strip())
-                                    sentence_nums.extend(range(start, end + 1))
-                                except ValueError:
-                                    continue
-                            else:
-                                try:
-                                    sentence_nums.append(int(part))
-                                except ValueError:
-                                    continue
-                        if sentence_nums:
-                            groups[topic] = sentence_nums
 
         # Color generation per group
         import hashlib, colorsys
