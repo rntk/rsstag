@@ -24,7 +24,7 @@ MarkupSafe==3.0.2
 multidict==6.1.0
 nltk==3.9.1
 numpy==1.26.4
-openai==1.65.4
+openai
 propcache==0.3.0
 pydantic==2.10.6
 pydantic_core==2.27.2
