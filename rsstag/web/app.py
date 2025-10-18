@@ -76,7 +76,6 @@ class RSSTagApplication(object):
         self.template_env.filters["find_group"] = self._find_group_for_sentence
         # Add filter to convert hex color to rgba with alpha for softer highlights
         def _hex_to_rgba(hex_color: str, alpha: float = 0.15) -> str:
-            alpha = 0.15
             try:
                 hex_color = hex_color.lstrip('#')
                 if len(hex_color) == 3:
@@ -500,10 +499,33 @@ class RSSTagApplication(object):
             feed_titles.append(feed["title"] if feed else "Unknown Feed")
 
         def split_sentences(text):
-            sentences = re.split(r'(?<=[.!?])\s+(?=[A-ZА-Я])', text.strip())
-            if len(sentences) == 1:
-                sentences = re.split(r'(?<=[.!?])\s+', text.strip())
-            return [s.strip() for s in sentences if s.strip()]
+            # Normalize whitespace
+            txt = re.sub(r"\s+", " ", text.strip())
+            if not txt:
+                return []
+            # Define common abbreviations (with trailing dot handled in check)
+            abbrev_re = re.compile(r"(?:\b(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|vs|etc|e\.g|i\.e|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec))\.(?:\s*$)?", re.I)
+            # General pattern: sentence end punctuation followed by space and a plausible next start
+            pattern = r"([.!?]+)\s+(?=(?:[\"'“”‘’\(\[]*[A-ZА-Я0-9]))"
+            parts = []
+            start = 0
+            for m in re.finditer(pattern, txt):
+                # Check the few characters before the punctuation for abbreviation; if matches, skip splitting here
+                pre_start = max(0, m.start(1) - 20)
+                context = txt[pre_start:m.end(1)]
+                if abbrev_re.search(context):
+                    # do not split here
+                    continue
+                end = m.end(1)
+                parts.append(txt[start:end].strip())
+                start = m.end()
+            if start < len(txt):
+                parts.append(txt[start:].strip())
+            # Fallback if nothing split
+            if len(parts) == 0:
+                parts = re.split(r'(?<=[.!?])\s+', txt)
+            # Remove empties
+            return [s.strip() for s in parts if s and any(ch.isalnum() for ch in s)]
 
         def is_inside_html_tag(text, pos):
             """Check if position is inside an HTML tag"""
@@ -514,135 +536,221 @@ class RSSTagApplication(object):
             return last_open > last_close
 
         def llm_split_chapters(text_plain, text_html):
-            """
-            Split text into chapters using LLM on plain text, but return HTML chapters.
-            text_plain: cleaned text without HTML for LLM analysis
-            text_html: original text with HTML for display
-            """
-            positions = set()
-            # Find positions in plain text only at word boundaries
-            for m in re.finditer(r'\s+', text_plain):
-                positions.add(m.end())
-            positions = sorted(positions)
-            if not positions:
-                # Fallback: treat whole text as one chapter
+            # First LLM call: get list of topics
+            prompt1 = f"""You are a text analysis expert. Analyze the following article and provide a numbered list of main topics or chapters. Each topic should be a brief title (1-3 words).
+
+Output format:
+
+1. Topic Title
+
+2. Another Topic
+
+Article:
+
+{text_plain}
+
+"""
+            try:
+                response1 = self.llamacpp.call([prompt1], temperature=0.0).strip()
+                print("LLM topics response:\n", response1)
+            except Exception as e:
+                logging.error("LLM topics failed: %s", e)
                 return [{"title": "Main Content", "text": text_html}]
             
-            tagged_text = text_plain
-            counter = 0
-            for pos in sorted(positions, reverse=True):
-                counter += 1
-                tagged_text = tagged_text[:pos] + '{wrdssplttr' + str(counter) + '}' + tagged_text[pos:]
+            # Parse topics
+            lines = [ln.strip() for ln in response1.strip().split('\n') if ln.strip()]
+            topics = []
+            for ln in lines:
+                ln = ln.strip()
+                if not ln:
+                    continue
+                if ln[0].isdigit() and '. ' in ln:
+                    parts = ln.split('. ', 1)
+                    if len(parts) == 2:
+                        topic = parts[1].strip()
+                    else:
+                        continue
+                else:
+                    topic = ln
+                # Clean the count
+                topic = re.sub(r'\s*\(\d+ sentences?\)', '', topic).strip()
+                topics.append(topic)
             
-            prompt = f"""You are a text analysis expert. Your task is to identify chapter boundaries in a text.
+            if not topics:
+                return [{"title": "Main Content", "text": text_html}]
+            
+            # Insert word splitters - number them from START to END
+            positions = []
+            for m in re.finditer(r'\s+', text_plain):
+                positions.append(m.end())
+            if not positions:
+                return [{"title": "Main Content", "text": text_html}]
+            
+            # Insert markers in reverse order to maintain position indices
+            tagged_text = text_plain
+            for counter, pos in enumerate(reversed(positions), 1):
+                # Insert from end to start, but number from start to end
+                marker_num = len(positions) - counter + 1
+                tagged_text = tagged_text[:pos] + '{wrdssplttr' + str(marker_num) + '}' + tagged_text[pos:]
+            
+            # Numbered topics
+            numbered_topics = "\n".join(f"{i+1}. {topic}" for i, topic in enumerate(topics))
+            
+            # Second LLM call: map topics to word splitters
+            prompt2 = f"""You are a text analysis expert. Below is a numbered list of topics and the article with word split markers {{wrdssplttr<number>}}.
 
-The text below has been marked with numbered split tags "{{wrdssplttr<NUMBER>}}" at every word boundary.
+Assign each topic to contiguous sections of the text. For each topic, provide the word split marker number where that topic's section ENDS. Topics should be in sequential order covering the text from beginning to end without gaps or overlaps.
 
-Your task:
-1. Analyze the text carefully
-2. Identify chapter boundaries and assign appropriate chapter titles/very brief (1-3 words) summary
-3. Return the chapter titles and the tag numbers that mark the end of each chapter
-
-Important rules:
-- A chapter boundary occurs where a new major section or topic begins
-- Create specific, descriptive chapter titles that capture the content
-- Output format: One line per chapter: ChapterTitle: tag_number,tag_number,...
-- Do not include any explanation, just the chapter lines
+Output format (one line per topic, in order):
+Topic Title: <last_marker_number>
 
 Example:
-Introduction: 1,2,3
-Main Discussion: 4,5,6,7
+Introduction: 150
+Main Analysis: 450
+Conclusion: 600
 
-Text to analyze:
+Numbered Topics:
+{numbered_topics}
+
+Article with markers:
 {tagged_text}
 
 Output:"""
-            print("LLM chapter splitting prompt:\n", prompt)
+            
             try:
-                response = self.llamacpp.call([prompt], temperature=0.0).strip()
-                print("LLM chapter splitting response:\n", response)
+                print("LLM mapping prompt:\n", prompt2)
+                response2 = self.llamacpp.call([prompt2], temperature=0.0).strip()
+                print("LLM mapping response:\n", response2)
             except Exception as e:
-                logging.error("LLM chapter splitting failed: %s", e)
-                # Fallback: treat whole text as one chapter
+                logging.error("LLM mapping failed: %s", e)
                 return [{"title": "Main Content", "text": text_html}]
             
-            lines = [ln.strip() for ln in response.strip().split('\n') if ln.strip()]
-            chapters = []
+            # Parse mapping - expecting format "Topic Title: <number>"
+            lines = [ln.strip() for ln in response2.strip().split('\n') if ln.strip()]
+            topic_boundaries = []
             for ln in lines:
                 if ':' in ln:
-                    parts = ln.split(':', 1)
-                    if len(parts) == 2:
-                        title, nums = parts
-                        title = title.strip()
-                        nums = nums.strip()
-                        if nums:
-                            tag_nums = []
-                            for part in nums.split(','):
-                                part = part.strip()
-                                try:
-                                    tag_nums.append(int(part))
-                                except ValueError:
-                                    continue
-                            if tag_nums:
-                                chapters.append({"title": title, "tag_nums": sorted(tag_nums)})
+                    title, marker = ln.split(':', 1)
+                    title = title.strip()
+                    marker = marker.strip()
+                    if marker:
+                        try:
+                            end_marker = int(marker)
+                            topic_boundaries.append((title, end_marker))
+                            print(f"Parsed topic boundary: '{title}' ends at marker {end_marker}")
+                        except ValueError:
+                            print(f"Failed to parse marker from line: {ln}")
+                            continue
             
-            if not chapters:
+            print(f"Total topics from first call: {len(topics)}")
+            print(f"Total topic boundaries parsed: {len(topic_boundaries)}")
+            print(f"Total word positions: {len(positions)}")
+            
+            if not topic_boundaries:
+                print("WARNING: No topic boundaries parsed, falling back to single section")
                 return [{"title": "Main Content", "text": text_html}]
             
-            # Sort chapters by the last tag number
-            chapters.sort(key=lambda c: c["tag_nums"][-1])
+            # Validate and clamp boundaries to valid range
+            max_position = len(positions)
+            validated_boundaries = []
+            for title, end_marker in topic_boundaries:
+                if end_marker < 1:
+                    print(f"WARNING: Topic '{title}' has invalid end marker {end_marker}, setting to 1")
+                    end_marker = 1
+                elif end_marker > max_position:
+                    print(f"WARNING: Topic '{title}' has end marker {end_marker} > max {max_position}, clamping to max")
+                    end_marker = max_position
+                validated_boundaries.append((title, end_marker))
             
-            # Now split the text at the tag positions
+            topic_boundaries = validated_boundaries
+            
+            # Build chapters sequentially from start to each end marker
+            chapters = []
+            prev_end = 0
+            
+            for title, end_marker in topic_boundaries:
+                chapters.append({
+                    "title": title,
+                    "start_tag": prev_end,
+                    "end_tag": end_marker
+                })
+                prev_end = end_marker
+            
+            # Split text sequentially
             chapter_texts_plain = []
             chapter_texts_html = []
-            start_plain = 0
             start_html = 0
             
-            for chapter in chapters:
-                end_tag = chapter["tag_nums"][-1]
-                if end_tag <= len(positions):
-                    end_pos = positions[end_tag - 1]
-                    chapter_plain = text_plain[start_plain:end_pos].strip()
-                    chapter_texts_plain.append(chapter_plain)
+            for i, chapter in enumerate(chapters):
+                start_tag = chapter["start_tag"]  # marker number (1-based or 0 for first)
+                end_tag = chapter["end_tag"]      # marker number (1-based)
+                
+                # Convert marker numbers to text positions
+                # Marker 0 = beginning (position 0)
+                # Marker N (1-based) = positions[N-1] (0-based array index)
+                if start_tag == 0:
+                    start_pos = 0
+                else:
+                    # start_tag is a 1-based marker number, need 0-based index
+                    start_pos = positions[start_tag - 1] if start_tag <= len(positions) else len(text_plain)
+                
+                # end_tag is a 1-based marker number
+                end_pos = positions[end_tag - 1] if end_tag <= len(positions) else len(text_plain)
+                
+                chapter_plain = text_plain[start_pos:end_pos].strip()
+                print(f"Chapter {i+1} '{chapter['title']}': markers {start_tag}-{end_tag}, positions {start_pos}-{end_pos}, text length: {len(chapter_plain)}")
+                
+                if not chapter_plain:
+                    print(f"WARNING: Empty chapter text for '{chapter['title']}'")
+                    continue
                     
-                    # Map to HTML
-                    # Approximate mapping
-                    html_cleaner_temp = HTMLCleaner()
-                    html_remaining = text_html[start_html:]
-                    best_match_end = 0
-                    for end_pos_html in range(len(chapter_plain), len(html_remaining) + 1):
-                        html_cleaner_temp.purge()
-                        html_cleaner_temp.feed(html_remaining[:end_pos_html])
-                        extracted_plain = " ".join(html_cleaner_temp.get_content()).strip()
-                        if chapter_plain in extracted_plain or extracted_plain == chapter_plain:
-                            best_match_end = end_pos_html
-                            break
-                    if best_match_end > 0:
-                        chapter_html = html_remaining[:best_match_end].strip()
-                        start_html += best_match_end
-                    else:
-                        chapter_html = chapter_plain  # fallback
-                    chapter_texts_html.append(chapter_html)
-                    
-                    start_plain = end_pos
+                chapter_texts_plain.append(chapter_plain)
+                
+                # Map to HTML
+                html_cleaner_temp = HTMLCleaner()
+                html_remaining = text_html[start_html:]
+                best_match_end = 0
+                for end_pos_html in range(len(chapter_plain), len(html_remaining) + 1):
+                    html_cleaner_temp.purge()
+                    html_cleaner_temp.feed(html_remaining[:end_pos_html])
+                    extracted_plain = " ".join(html_cleaner_temp.get_content()).strip()
+                    if chapter_plain in extracted_plain or extracted_plain == chapter_plain:
+                        best_match_end = end_pos_html
+                        break
+                if best_match_end > 0:
+                    chapter_html = html_remaining[:best_match_end].strip()
+                    start_html += best_match_end
+                else:
+                    chapter_html = chapter_plain  # fallback
+                chapter_texts_html.append(chapter_html)
             
             # Add remaining text if any
-            if start_plain < len(text_plain):
-                chapter_plain = text_plain[start_plain:].strip()
-                if chapter_plain:
-                    chapter_texts_plain.append(chapter_plain)
-                    chapter_html = text_html[start_html:].strip()
-                    chapter_texts_html.append(chapter_html)
+            last_tag = chapters[-1]["end_tag"] if chapters else 0
+            # last_tag is a 1-based marker number, convert to position
+            last_pos = positions[last_tag - 1] if last_tag > 0 and last_tag <= len(positions) else 0
+            remaining_text = text_plain[last_pos:].strip()
+            print(f"Remaining text after last marker {last_tag} (pos {last_pos}): {len(remaining_text)} chars")
+            
+            if last_pos < len(text_plain) and remaining_text:
+                print(f"Adding remaining content chapter")
+                chapter_texts_plain.append(remaining_text)
+                chapter_html = text_html[start_html:].strip()
+                chapter_texts_html.append(chapter_html)
+                chapters.append({"title": "Remaining Content", "start_tag": last_tag, "end_tag": len(positions)})
             
             # Assign titles
             result = []
             for i, (plain, html) in enumerate(zip(chapter_texts_plain, chapter_texts_html)):
-                title = chapters[i]["title"] if i < len(chapters) else f"Chapter {i+1}"
+                if i < len(chapters):
+                    title = chapters[i]["title"]
+                else:
+                    title = f"Chapter {i+1}"
                 result.append({"title": title, "text": html})
             
             return result
 
         chapters = llm_split_chapters(full_content_plain, full_content_html)
+        print(f"Generated {len(chapters)} chapters")
         
         all_sentences = []
         groups = {}
@@ -657,6 +765,7 @@ Output:"""
             
             # Split into sentences
             chapter_sentences_plain = split_sentences(chapter_plain)
+            print(f"Chapter '{chapter['title']}': {len(chapter_sentences_plain)} sentences")
             
             # Map to HTML sentences
             chapter_sentences_html = []
@@ -686,10 +795,18 @@ Output:"""
                 chapter_sentence_nums.append(sentence_counter)
                 sentence_counter += 1
             
-            groups[chapter["title"]] = chapter_sentence_nums
+            # Aggregate sentences per topic title (do not overwrite if title repeats)
+            title = chapter["title"]
+            if title in groups:
+                groups[title].extend(chapter_sentence_nums)
+            else:
+                groups[title] = chapter_sentence_nums
+            
+            print(f"Topic '{title}' assigned sentences: {chapter_sentence_nums}")
         
         sentences_list = all_sentences
-        print(len(sentences_list), "sentences found")
+        print(f"Total: {len(sentences_list)} sentences found")
+        print(f"Groups: {list(groups.keys())}")
 
         feed_title = " | ".join(feed_titles) if feed_titles else "Unknown Feeds"
 
