@@ -61,10 +61,10 @@
                 {% set group_for_sentence = sentence_num|find_group(groups) %}
                 {% if group_for_sentence %}
                     <span class="sentence-group highlighted" style="background-color: {{ group_colors[group_for_sentence] | hex_to_rgba(0.22) }}; border-left: 3px solid {{ group_colors[group_for_sentence] }};">
-                        <span class="sentence">{{sentence.text}}</span>
+                        <span class="sentence">{{sentence.text|safe}}</span>
                     </span>
                 {% else %}
-                    <span class="sentence-group"><span class="sentence">{{ sentence.text }}</span></span>
+                    <span class="sentence-group"><span class="sentence">{{ sentence.text|safe }}</span></span>
                 {% endif %}
             {% endfor %}
         </div>

@@ -473,8 +473,11 @@ class RSSTagApplication(object):
         if not post_ids:
             return self.on_error(user, _, NotFound())
 
-        full_content = ""
+        full_content_html = ""
+        full_content_plain = ""
         feed_titles = []
+        html_cleaner = HTMLCleaner()
+        
         for post_id in post_ids:
             current_post = self.posts.get_by_pid(user["sid"], post_id, projection)
             if not current_post:
@@ -484,7 +487,14 @@ class RSSTagApplication(object):
             if current_post["content"]["title"]:
                 content = current_post["content"]["title"] + ". " + content
 
-            full_content += content + "\n\n"
+            # Keep original HTML for display
+            full_content_html += content + "\n\n"
+            
+            # Clean HTML tags for LLM processing
+            html_cleaner.purge()
+            html_cleaner.feed(content)
+            clean_content = " ".join(html_cleaner.get_content())
+            full_content_plain += clean_content + "\n\n"
 
             feed = self.feeds.get_by_feed_id(user["sid"], current_post.get("feed_id"))
             feed_titles.append(feed["title"] if feed else "Unknown Feed")
@@ -495,55 +505,137 @@ class RSSTagApplication(object):
                 sentences = re.split(r'(?<=[.!?])\s+', text.strip())
             return [s.strip() for s in sentences if s.strip()]
 
-        def llm_split_sentences(text):
+        def is_inside_html_tag(text, pos):
+            """Check if position is inside an HTML tag"""
+            # Look backwards for the nearest < or >
+            last_open = text.rfind('<', 0, pos)
+            last_close = text.rfind('>', 0, pos)
+            # If we found a < after the last >, we're inside a tag
+            return last_open > last_close
+
+        def llm_split_sentences(text_plain, text_html):
+            """
+            Split sentences using LLM on plain text, but return HTML sentences.
+            text_plain: cleaned text without HTML for LLM analysis
+            text_html: original text with HTML for display
+            """
             positions = set()
-            for m in re.finditer(r'[.!?]', text):
+            # Find positions in plain text only
+            for m in re.finditer(r'[.!?]', text_plain):
                 positions.add(m.end())
-            for m in re.finditer(r'\s+', text):
+            for m in re.finditer(r'\s+', text_plain):
                 positions.add(m.end())
             positions = sorted(positions)
             if not positions:
-                return split_sentences(text)
-            tagged_text = text
+                return split_sentences(text_plain)
+            
+            tagged_text = text_plain
             counter = 0
             for pos in sorted(positions, reverse=True):
                 counter += 1
                 tagged_text = tagged_text[:pos] + '{wrdssplttr' + str(counter) + '}' + tagged_text[pos:]
-            prompt = f"""Here is the text with potential split tags "wrdssplttr" inserted at all whitespace positions and after sentence punctuation.
-Please list the numbers of the tags that mark the actual sentence boundaries, separated by commas. For example: 1,3,5
-Only output the numbers, nothing else.
-Text:{tagged_text}"""
+            
+            prompt = f"""You are a text analysis expert. Your task is to identify sentence boundaries in a text.
+
+The text below has been marked with numbered split tags "{{wrdssplttr<NUMBER>}}" at every whitespace and punctuation location (., !, ?).
+
+Your task:
+1. Analyze the text carefully
+2. Identify which tags mark TRUE sentence boundaries (where one complete sentence ends and another begins)
+3. Return ONLY the tag numbers that represent actual sentence boundaries
+
+Important rules:
+- A sentence boundary occurs where a complete thought ends and a new independent thought begins
+- Tags after periods, exclamation marks, or question marks are likely sentence boundaries
+- Tags within a single sentence (like after commas or mid-sentence spaces) should NOT be included
+- Output format: comma-separated numbers only (e.g., 1,5,12,18)
+- Do not include any explanation, just the numbers
+
+Example:
+Input: "This is sentence one{{wrdssplttr3}}.{{wrdssplttr2}} {{wrdssplttr1}}This is sentence two."
+Output: 1
+
+Text to analyze:
+{tagged_text}
+
+Output (comma-separated tag numbers only):"""
             print("LLM splitting prompt:\n", prompt)
             try:
                 response = self.llamacpp.call([prompt], temperature=0.0)
+                #response = self.openai.call([prompt], temperature=1, reasoning={"effort": "minimal"})
                 print("LLM splitting response:\n", response)
                 boundary_nums = [int(x.strip()) for x in response.strip().split(',') if x.strip().isdigit()]
             except ValueError as e:
                 if "Request too large (400)" in str(e):
                     logging.info("Sentence splitting request too large, falling back to regex splitting")
-                    return split_sentences(text)
+                    return split_sentences(text_plain)
                 else:
                     logging.error("LLM splitting failed: %s", e)
-                    return split_sentences(text)
+                    return split_sentences(text_plain)
             except Exception as e:
                 logging.error("LLM splitting failed: %s", e)
-                return split_sentences(text)
+                return split_sentences(text_plain)
+            
             split_positions = [positions[i-1] for i in boundary_nums if 1 <= i <= len(positions)]
-            sentences = []
+            
+            # Now split the HTML text at corresponding positions
+            # We need to map plain text positions to HTML text positions
+            sentences_html = []
             start = 0
+            
+            # Create a mapping between plain and HTML text
+            html_cleaner_temp = HTMLCleaner()
+            html_cleaner_temp.feed(text_html)
+            
+            # Simple approach: split HTML by finding matching content
+            plain_sentences = []
+            start_plain = 0
             for pos in sorted(split_positions):
-                sent = text[start:pos].strip()
+                sent = text_plain[start_plain:pos].strip()
                 if sent:
-                    sentences.append(sent)
-                start = pos
-            sent = text[start:].strip()
+                    plain_sentences.append(sent)
+                start_plain = pos
+            sent = text_plain[start_plain:].strip()
             if sent:
-                sentences.append(sent)
-            if not sentences:
-                return split_sentences(text)
-            return sentences
+                plain_sentences.append(sent)
+            
+            if not plain_sentences:
+                return split_sentences(text_plain)
+            
+            # For each plain sentence, find it in the HTML and extract with tags
+            html_remaining = text_html
+            for plain_sent in plain_sentences:
+                # Find approximate position in HTML
+                # We'll use a simple approach: extract text and find the sentence
+                html_cleaner_temp = HTMLCleaner()
+                
+                # Try to find the sentence in remaining HTML
+                best_match_len = 0
+                best_match_end = 0
+                
+                for end_pos in range(len(plain_sent), len(html_remaining) + 1):
+                    html_cleaner_temp.purge()
+                    html_cleaner_temp.feed(html_remaining[:end_pos])
+                    extracted_plain = " ".join(html_cleaner_temp.get_content()).strip()
+                    
+                    if plain_sent in extracted_plain:
+                        best_match_end = end_pos
+                        break
+                
+                if best_match_end > 0:
+                    sentences_html.append(html_remaining[:best_match_end].strip())
+                    html_remaining = html_remaining[best_match_end:].strip()
+                else:
+                    # Fallback: just use plain text
+                    sentences_html.append(plain_sent)
+            
+            # Add any remaining HTML
+            if html_remaining.strip():
+                sentences_html.append(html_remaining.strip())
+            
+            return sentences_html if sentences_html else split_sentences(text_plain)
 
-        sentences = llm_split_sentences(full_content)
+        sentences = llm_split_sentences(full_content_plain, full_content_html)
         all_sentences = [{"text": s, "number": i+1} for i, s in enumerate(sentences)]
         sentences_list = all_sentences
         print(len(sentences_list), "sentences found")
@@ -603,6 +695,7 @@ Sentences:
 
         try:
             response = self.llamacpp.call([prompt], temperature=0.0).strip()
+            #response = self.openai.call([prompt], temperature=1, reasoning={"effort": "low"}).strip()
             print("LLM response:\n", response)
         except ValueError as e:
             if "Request too large (400)" in str(e):
