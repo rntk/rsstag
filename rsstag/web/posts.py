@@ -5,6 +5,8 @@ import logging
 from collections import defaultdict
 from urllib.parse import unquote_plus, unquote
 import requests # Add requests import
+import re
+from rsstag.html_cleaner import HTMLCleaner
 
 from typing import TYPE_CHECKING, Optional
 
@@ -1033,6 +1035,381 @@ def on_cluster_get(app: "RSSTagApplication", user: dict, cluster: int) -> Respon
             tag="NoTag",
             group="tag",
             words=[],
+            user_settings=user["settings"],
+            provider=user["provider"],
+        ),
+        mimetype="text/html",
+    )
+
+def on_post_grouped_get(app: "RSSTagApplication", user: dict, request: Request, pids: str) -> Response:
+    projection = {"content": True, "feed_id": True, "url": True}
+    post_ids = [int(pid) for pid in pids.split('_') if pid]
+    if not post_ids:
+        return app.on_error(user, request, NotFound())
+
+    full_content_html = ""
+    full_content_plain = ""
+    feed_titles = []
+    html_cleaner = HTMLCleaner()
+    
+    for post_id in post_ids:
+        current_post = app.posts.get_by_pid(user["sid"], post_id, projection)
+        if not current_post:
+            continue
+
+        content = gzip.decompress(current_post["content"]["content"]).decode("utf-8", "replace")
+        if current_post["content"]["title"]:
+            content = current_post["content"]["title"] + ". " + content
+
+        # Keep original HTML for display
+        full_content_html += content + "\n\n"
+        
+        # Clean HTML tags for LLM processing
+        html_cleaner.purge()
+        html_cleaner.feed(content)
+        clean_content = " ".join(html_cleaner.get_content())
+        full_content_plain += clean_content + "\n\n"
+
+        feed = app.feeds.get_by_feed_id(user["sid"], current_post.get("feed_id"))
+        feed_titles.append(feed["title"] if feed else "Unknown Feed")
+
+    def split_sentences(text):
+        # Normalize whitespace
+        txt = re.sub(r"\s+", " ", text.strip())
+        if not txt:
+            return []
+        # Define common abbreviations (with trailing dot handled in check)
+        abbrev_re = re.compile(r"(?:\b(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|vs|etc|e\.g|i\.e|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec))\.(?:\s*$)?", re.I)
+        # General pattern: sentence end punctuation followed by space and a plausible next start
+        pattern = r"([.!?]+)\s+(?=(?:[\"'“”‘’\(\[]*[A-ZА-Я0-9]))"
+        parts = []
+        start = 0
+        for m in re.finditer(pattern, txt):
+            # Check the few characters before the punctuation for abbreviation; if matches, skip splitting here
+            pre_start = max(0, m.start(1) - 20)
+            context = txt[pre_start:m.end(1)]
+            if abbrev_re.search(context):
+                # do not split here
+                continue
+            end = m.end(1)
+            parts.append(txt[start:end].strip())
+            start = m.end()
+        if start < len(txt):
+            parts.append(txt[start:].strip())
+        # Fallback if nothing split
+        if len(parts) == 0:
+            parts = re.split(r'(?<=[.!?])\s+', txt)
+        # Remove empties
+        return [s.strip() for s in parts if s and any(ch.isalnum() for ch in s)]
+
+    def is_inside_html_tag(text, pos):
+        """Check if position is inside an HTML tag"""
+        # Look backwards for the nearest < or >
+        last_open = text.rfind('<', 0, pos)
+        last_close = text.rfind('>', 0, pos)
+        # If we found a < after the last >, we're inside a tag
+        return last_open > last_close
+
+    def llm_split_chapters(text_plain, text_html):
+        # First LLM call: get list of topics
+        prompt1 = f"""You are a text analysis expert. Analyze the following article and provide a numbered list of main topics or chapters. Each topic should be a brief title (1-3 words).
+
+Output format:
+
+1. Topic Title
+
+2. Another Topic
+
+Article:
+
+{text_plain}
+
+"""
+        try:
+            response1 = app.groqcom.call([prompt1], temperature=0.0).strip()
+            print("LLM topics response:\n", response1)
+        except Exception as e:
+            logging.error("LLM topics failed: %s", e)
+            return [{"title": "Main Content", "text": text_html}]
+        
+        # Parse topics
+        lines = [ln.strip() for ln in response1.strip().split('\n') if ln.strip()]
+        topics = []
+        for ln in lines:
+            ln = ln.strip()
+            if not ln:
+                continue
+            if ln[0].isdigit() and '. ' in ln:
+                parts = ln.split('. ', 1)
+                if len(parts) == 2:
+                    topic = parts[1].strip()
+                else:
+                    continue
+            else:
+                topic = ln
+            # Clean the count
+            topic = re.sub(r'\s*\(\d+ sentences?\)', '', topic).strip()
+            topics.append(topic)
+        
+        if not topics:
+            return [{"title": "Main Content", "text": text_html}]
+        
+        # Insert word splitters - number them from START to END
+        positions = []
+        for m in re.finditer(r'\s+', text_plain):
+            positions.append(m.end())
+        if not positions:
+            return [{"title": "Main Content", "text": text_html}]
+        
+        # Insert markers in reverse order to maintain position indices
+        tagged_text = text_plain
+        for counter, pos in enumerate(reversed(positions), 1):
+            # Insert from end to start, but number from start to end
+            marker_num = len(positions) - counter + 1
+            tagged_text = tagged_text[:pos] + '{wrdssplttr' + str(marker_num) + '}' + tagged_text[pos:]
+        
+        # Numbered topics
+        numbered_topics = "\n".join(f"{i+1}. {topic}" for i, topic in enumerate(topics))
+        
+        # Second LLM call: map topics to word splitters
+        prompt2 = f"""You are a text analysis expert. Below is a numbered list of topics and the article with word split markers {{wrdssplttr<number>}}.
+
+Assign each topic to contiguous sections of the text. For each topic, provide the word split marker number where that topic's section ENDS. Topics should be in sequential order covering the text from beginning to end without gaps or overlaps.
+
+Output format (one line per topic, in order):
+Topic Title: <last_marker_number>
+
+Example:
+Introduction: 150
+Main Analysis: 450
+Conclusion: 600
+
+Numbered Topics:
+{numbered_topics}
+
+Article with markers:
+{tagged_text}
+
+Output:"""
+        
+        try:
+            print("LLM mapping prompt:\n", prompt2)
+            response2 = app.groqcom.call([prompt2], temperature=0.0).strip()
+            print("LLM mapping response:\n", response2)
+        except Exception as e:
+            logging.error("LLM mapping failed: %s", e)
+            return [{"title": "Main Content", "text": text_html}]
+        
+        # Parse mapping - expecting format "Topic Title: <number>"
+        lines = [ln.strip() for ln in response2.strip().split('\n') if ln.strip()]
+        topic_boundaries = []
+        for ln in lines:
+            if ':' in ln:
+                title, marker = ln.split(':', 1)
+                title = title.strip()
+                marker = marker.strip()
+                if marker:
+                    try:
+                        end_marker = int(marker)
+                        topic_boundaries.append((title, end_marker))
+                        print(f"Parsed topic boundary: '{title}' ends at marker {end_marker}")
+                    except ValueError:
+                        print(f"Failed to parse marker from line: {ln}")
+                        continue
+        
+        print(f"Total topics from first call: {len(topics)}")
+        print(f"Total topic boundaries parsed: {len(topic_boundaries)}")
+        print(f"Total word positions: {len(positions)}")
+        
+        if not topic_boundaries:
+            print("WARNING: No topic boundaries parsed, falling back to single section")
+            return [{"title": "Main Content", "text": text_html}]
+        
+        # Validate and clamp boundaries to valid range
+        max_position = len(positions)
+        validated_boundaries = []
+        for title, end_marker in topic_boundaries:
+            if end_marker < 1:
+                print(f"WARNING: Topic '{title}' has invalid end marker {end_marker}, setting to 1")
+                end_marker = 1
+            elif end_marker > max_position:
+                print(f"WARNING: Topic '{title}' has end marker {end_marker} > max {max_position}, clamping to max")
+                end_marker = max_position
+            validated_boundaries.append((title, end_marker))
+        
+        topic_boundaries = validated_boundaries
+        
+        # Build chapters sequentially from start to each end marker
+        chapters = []
+        prev_end = 0
+        
+        for title, end_marker in topic_boundaries:
+            chapters.append({
+                "title": title,
+                "start_tag": prev_end,
+                "end_tag": end_marker
+            })
+            prev_end = end_marker
+        
+        # Split text sequentially
+        chapter_texts_plain = []
+        chapter_texts_html = []
+        start_html = 0
+        
+        for i, chapter in enumerate(chapters):
+            start_tag = chapter["start_tag"]  # marker number (1-based or 0 for first)
+            end_tag = chapter["end_tag"]      # marker number (1-based)
+            
+            # Convert marker numbers to text positions
+            # Marker 0 = beginning (position 0)
+            # Marker N (1-based) = positions[N-1] (0-based array index)
+            if start_tag == 0:
+                start_pos = 0
+            else:
+                # start_tag is a 1-based marker number, need 0-based index
+                start_pos = positions[start_tag - 1] if start_tag <= len(positions) else len(text_plain)
+            
+            # end_tag is a 1-based marker number
+            end_pos = positions[end_tag - 1] if end_tag <= len(positions) else len(text_plain)
+            
+            chapter_plain = text_plain[start_pos:end_pos].strip()
+            print(f"Chapter {i+1} '{chapter['title']}': markers {start_tag}-{end_tag}, positions {start_pos}-{end_pos}, text length: {len(chapter_plain)}")
+            
+            if not chapter_plain:
+                print(f"WARNING: Empty chapter text for '{chapter['title']}'")
+                continue
+                
+            chapter_texts_plain.append(chapter_plain)
+            
+            # Map to HTML
+            html_cleaner_temp = HTMLCleaner()
+            html_remaining = text_html[start_html:]
+            best_match_end = 0
+            for end_pos_html in range(len(chapter_plain), len(html_remaining) + 1):
+                html_cleaner_temp.purge()
+                html_cleaner_temp.feed(html_remaining[:end_pos_html])
+                extracted_plain = " ".join(html_cleaner_temp.get_content()).strip()
+                if chapter_plain in extracted_plain or extracted_plain == chapter_plain:
+                    best_match_end = end_pos_html
+                    break
+            if best_match_end > 0:
+                chapter_html = html_remaining[:best_match_end].strip()
+                start_html += best_match_end
+            else:
+                chapter_html = chapter_plain  # fallback
+            chapter_texts_html.append(chapter_html)
+        
+        # Add remaining text if any
+        last_tag = chapters[-1]["end_tag"] if chapters else 0
+        # last_tag is a 1-based marker number, convert to position
+        last_pos = positions[last_tag - 1] if last_tag > 0 and last_tag <= len(positions) else 0
+        remaining_text = text_plain[last_pos:].strip()
+        print(f"Remaining text after last marker {last_tag} (pos {last_pos}): {len(remaining_text)} chars")
+        
+        if last_pos < len(text_plain) and remaining_text:
+            print(f"Adding remaining content chapter")
+            chapter_texts_plain.append(remaining_text)
+            chapter_html = text_html[start_html:].strip()
+            chapter_texts_html.append(chapter_html)
+            chapters.append({"title": "Remaining Content", "start_tag": last_tag, "end_tag": len(positions)})
+        
+        # Assign titles
+        result = []
+        for i, (plain, html) in enumerate(zip(chapter_texts_plain, chapter_texts_html)):
+            if i < len(chapters):
+                title = chapters[i]["title"]
+            else:
+                title = f"Chapter {i+1}"
+            result.append({"title": title, "text": html})
+        
+        return result
+
+    chapters = llm_split_chapters(full_content_plain, full_content_html)
+    print(f"Generated {len(chapters)} chapters")
+    
+    all_sentences = []
+    groups = {}
+    sentence_counter = 1
+    
+    for chapter in chapters:
+        chapter_html = chapter["text"]
+        # Clean to plain for splitting
+        html_cleaner.purge()
+        html_cleaner.feed(chapter_html)
+        chapter_plain = " ".join(html_cleaner.get_content())
+        
+        # Split into sentences
+        chapter_sentences_plain = split_sentences(chapter_plain)
+        print(f"Chapter '{chapter['title']}': {len(chapter_sentences_plain)} sentences")
+        
+        # Map to HTML sentences
+        chapter_sentences_html = []
+        html_remaining = chapter_html
+        for sent_plain in chapter_sentences_plain:
+            # Find in HTML
+            html_cleaner_temp = HTMLCleaner()
+            best_match_end = 0
+            for end_pos in range(len(sent_plain), len(html_remaining) + 1):
+                html_cleaner_temp.purge()
+                html_cleaner_temp.feed(html_remaining[:end_pos])
+                extracted = " ".join(html_cleaner_temp.get_content()).strip()
+                if sent_plain in extracted:
+                    best_match_end = end_pos
+                    break
+            if best_match_end > 0:
+                sent_html = html_remaining[:best_match_end].strip()
+                html_remaining = html_remaining[best_match_end:].strip()
+            else:
+                sent_html = sent_plain
+            chapter_sentences_html.append(sent_html)
+        
+        # Assign numbers
+        chapter_sentence_nums = []
+        for sent_html in chapter_sentences_html:
+            all_sentences.append({"text": sent_html, "number": sentence_counter})
+            chapter_sentence_nums.append(sentence_counter)
+            sentence_counter += 1
+        
+        # Aggregate sentences per topic title (do not overwrite if title repeats)
+        title = chapter["title"]
+        if title in groups:
+            groups[title].extend(chapter_sentence_nums)
+        else:
+            groups[title] = chapter_sentence_nums
+        
+        print(f"Topic '{title}' assigned sentences: {chapter_sentence_nums}")
+    
+    sentences_list = all_sentences
+    print(f"Total: {len(sentences_list)} sentences found")
+    print(f"Groups: {list(groups.keys())}")
+
+    feed_title = " | ".join(feed_titles) if feed_titles else "Unknown Feeds"
+
+    # Color generation per group
+    import hashlib, colorsys
+
+    def hsl_to_hex(h: float, s: float, l: float) -> str:
+        r, g, b = colorsys.hls_to_rgb(h, l, s)
+        return '#' + ''.join(f'{int(c*255):02x}' for c in (r, g, b))
+
+    def group_color(group_id: str) -> str:
+        digest = hashlib.md5(group_id.encode('utf-8')).hexdigest()
+        hue = (int(digest[:8], 16) % 360) / 360.0
+        sat = 0.6
+        light = 0.7
+        return hsl_to_hex(hue, sat, light)
+
+    group_colors = {gid: group_color(gid) for gid in groups}
+
+    page = app.template_env.get_template("post-grouped.html")
+    return Response(
+        page.render(
+            post_id=pids,
+            sentences=sentences_list,
+            groups=groups,
+            group_colors=group_colors,
+            hierarchical_segments=[],
+            feed_title=feed_title,
             user_settings=user["settings"],
             provider=user["provider"],
         ),
