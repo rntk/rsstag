@@ -33,6 +33,7 @@ import rsstag.web.chat as chat_handlers
 from rsstag.openai import ROpenAI
 from rsstag.anthropic import Anthropic
 from rsstag.llamacpp import LLamaCPP
+from rsstag.llm.groqcom import GroqCom
 
 from rsstag.stopwords import stopwords
 
@@ -135,6 +136,7 @@ class RSSTagApplication(object):
         self.openai = ROpenAI(self.config["openai"]["token"])
         self.anthropic = Anthropic(self.config["anthropic"]["token"])
         self.llamacpp = LLamaCPP(self.config["llamacpp"]["host"])
+        self.groqcom = GroqCom(host=self.config["groqcom"]["host"], token=self.config["groqcom"]["token"])
 
     def _find_group_for_sentence(self, sentence_num, groups):
         """Custom filter to find which group a sentence belongs to"""
@@ -551,7 +553,7 @@ Article:
 
 """
             try:
-                response1 = self.llamacpp.call([prompt1], temperature=0.0).strip()
+                response1 = self.groqcom.call([prompt1], temperature=0.0).strip()
                 print("LLM topics response:\n", response1)
             except Exception as e:
                 logging.error("LLM topics failed: %s", e)
@@ -619,7 +621,7 @@ Output:"""
             
             try:
                 print("LLM mapping prompt:\n", prompt2)
-                response2 = self.llamacpp.call([prompt2], temperature=0.0).strip()
+                response2 = self.groqcom.call([prompt2], temperature=0.0).strip()
                 print("LLM mapping response:\n", response2)
             except Exception as e:
                 logging.error("LLM mapping failed: %s", e)
