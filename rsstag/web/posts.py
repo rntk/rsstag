@@ -1119,13 +1119,12 @@ def on_post_grouped_get(app: "RSSTagApplication", user: dict, request: Request, 
         SPLITTER_WINDOW = 4
 
         # First LLM call: get list of topics
-        prompt1 = f"""You are a text analysis expert. Analyze the following article and provide a numbered list of main topics or chapters. Each topic should be a brief title (1-3 words).
+        prompt1 = f"""You are a text analysis expert. Analyze the following article and provide a list of main topics or chapters. Each topic should be a brief title (1-3 words).
 
 Output format:
 
-1. Topic Title
-
-2. Another Topic
+Topic Title
+Another Topic
 
 Article:
 
@@ -1181,7 +1180,30 @@ Article:
 
         if not positions:
             return [{"title": "Main Content", "text": text_html}]
-        
+
+        max_marker = len(positions) + 1  # include final sentinel inserted later
+
+        # Map marker numbers to absolute character positions for easier slicing later
+        marker_positions = {0: 0}
+        for idx, pos in enumerate(positions, start=1):
+            marker_positions[idx] = pos
+        marker_positions[max_marker] = len(text_plain)
+
+        def clamp_marker(marker: int) -> int:
+            if marker < 1:
+                return 1
+            if marker > max_marker:
+                return max_marker
+            return marker
+
+        def marker_start_index(marker: int) -> int:
+            marker = clamp_marker(marker)
+            return marker_positions.get(marker - 1, len(text_plain))
+
+        def marker_end_index(marker: int) -> int:
+            marker = clamp_marker(marker)
+            return marker_positions.get(marker, len(text_plain))
+
         # Insert markers in reverse order to maintain position indices
         tagged_text = text_plain
         for counter, pos in enumerate(reversed(positions), 1):
@@ -1190,7 +1212,7 @@ Article:
             tagged_text = tagged_text[:pos] + '{ws' + str(marker_num) + '}' + tagged_text[pos:]
 
         # Add final end marker to indicate end of text
-        tagged_text = tagged_text + '{ws' + str(len(positions) + 1) + '}'
+        tagged_text = tagged_text + '{ws' + str(max_marker) + '}'
         
         # Numbered topics
         numbered_topics = "\n".join(f"{i+1}. {topic}" for i, topic in enumerate(topics))
@@ -1198,15 +1220,21 @@ Article:
         # Second LLM call: map topics to word splitters
         prompt2 = f"""You are a text analysis expert. Below is a numbered list of topics and the article with word split markers {{ws<number>}}.
 
-Assign each topic to a specific section of the text by providing the start and end word split marker numbers. Topics can be in any order and can cover any part of the text.
+Assign each topic to a specific section of the text by providing the start and end word split marker numbers.
+IMPORTANT:
+- The markers are inserted frequently. You must choose markers that correspond to the actual end of sentences.
+- Do not split a sentence in the middle.
+- Ensure that the text between your start and end markers forms complete sentences.
+- Verify that the word immediately before your chosen 'end_marker' is the end of a sentence (e.g., ends with punctuation).
+- Output ONLY the marker numbers (e.g., "1", "150"), NOT the marker names (e.g., NOT "ws1", "ws150").
 
 Output format (one line per topic):
-<topic_number>: <start_marker> - <end_marker>
+<topic_number>: <start_marker_number> - <end_marker_number>
 
-Example:
-1: 10 - 150
-2: 450 - 600
-3: 151 - 449
+Example (output only numbers, not "ws" prefix):
+1: 1 - 150
+2: 151 - 450
+3: 451 - 600
 
 Numbered Topics:
 {numbered_topics}
@@ -1268,22 +1296,24 @@ Output:"""
             return [{"title": "Main Content", "text": text_html}]
         
         # Validate and clamp boundaries to valid range
-        max_position = len(positions)
         validated_boundaries = []
         for title, start_marker, end_marker in topic_boundaries:
             if start_marker < 1:
                 print(f"WARNING: Topic '{title}' has invalid start marker {start_marker}, setting to 1")
                 start_marker = 1
-            if end_marker > max_position:
-                print(f"WARNING: Topic '{title}' has end marker {end_marker} > max {max_position}, clamping to max")
-                end_marker = max_position
+            if start_marker > max_marker:
+                print(f"WARNING: Topic '{title}' start marker {start_marker} exceeds max {max_marker}, clamping to max")
+                start_marker = max_marker
+            if end_marker > max_marker:
+                print(f"WARNING: Topic '{title}' has end marker {end_marker} > max {max_marker}, clamping to max")
+                end_marker = max_marker
             if start_marker > end_marker:
                  print(f"WARNING: Topic '{title}' has start {start_marker} > end {end_marker}, swapping")
                  start_marker, end_marker = end_marker, start_marker
             
             validated_boundaries.append((title, start_marker, end_marker))
         
-        topic_boundaries = validated_boundaries
+        topic_boundaries = sorted(validated_boundaries, key=lambda x: x[1])
         
         # Build chapters from explicit ranges
         chapters = []
@@ -1297,11 +1327,12 @@ Output:"""
 
         # Add remaining text if any
         last_tag = chapters[-1]["end_tag"] if chapters else 0
-        last_pos = positions[last_tag - 1] if last_tag > 0 and last_tag <= len(positions) else 0
+        last_pos = marker_end_index(last_tag) if last_tag else 0
         
         if last_pos < len(text_plain):
             print(f"Adding remaining content chapter")
-            chapters.append({"title": "Remaining Content", "start_tag": last_tag, "end_tag": len(positions) + 1})
+            next_start = min(last_tag + 1, max_marker)
+            chapters.append({"title": "Remaining Content", "start_tag": next_start, "end_tag": max_marker})
 
         # Split text sequentially
         chapter_texts_plain = []
@@ -1313,13 +1344,14 @@ Output:"""
             start_tag = chapter["start_tag"]  # marker number (1-based or 0 for first)
             end_tag = chapter["end_tag"]      # marker number (1-based)
             
-            # Convert marker numbers to text positions
-            if start_tag == 0:
-                start_pos = 0
-            else:
-                start_pos = positions[start_tag - 1] if start_tag <= len(positions) else len(text_plain)
-            
-            end_pos = positions[end_tag - 1] if end_tag <= len(positions) else len(text_plain)
+            # Convert marker numbers to text positions using precomputed map
+            start_pos = marker_start_index(start_tag)
+            end_pos = marker_end_index(end_tag)
+            if start_pos >= end_pos:
+                print(f"WARNING: Chapter '{chapter['title']}' markers {start_tag}-{end_tag} resolve to empty range")
+                chapter_texts_plain.append("")
+                chapter_texts_html.append("")
+                continue
             
             chapter_plain = text_plain[start_pos:end_pos].strip()
             print(f"Chapter {i+1} '{chapter['title']}': markers {start_tag}-{end_tag}, positions {start_pos}-{end_pos}, text length: {len(chapter_plain)}")
