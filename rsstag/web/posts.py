@@ -1156,8 +1156,22 @@ Article:
         
         # Insert word splitters - number them from START to END
         positions = []
-        for m in re.finditer(r'\s+', text_plain):
-            positions.append(m.end())
+        matches = list(re.finditer(r'\s+', text_plain))
+        word_count = 0
+        split_punct = set('.!?,;:)]}"\'')
+        
+        for m in matches:
+            if m.start() > 0:
+                last_char = text_plain[m.start() - 1]
+                word_count += 1
+                if last_char in split_punct or word_count >= 4:
+                    positions.append(m.end())
+                    word_count = 0
+        
+        if not positions and matches:
+             # Force at least one split if we have whitespace but no triggers
+             positions.append(matches[-1].end())
+
         if not positions:
             return [{"title": "Main Content", "text": text_html}]
         
@@ -1166,13 +1180,13 @@ Article:
         for counter, pos in enumerate(reversed(positions), 1):
             # Insert from end to start, but number from start to end
             marker_num = len(positions) - counter + 1
-            tagged_text = tagged_text[:pos] + '{wrdssplttr' + str(marker_num) + '}' + tagged_text[pos:]
+            tagged_text = tagged_text[:pos] + '{ws' + str(marker_num) + '}' + tagged_text[pos:]
         
         # Numbered topics
         numbered_topics = "\n".join(f"{i+1}. {topic}" for i, topic in enumerate(topics))
         
         # Second LLM call: map topics to word splitters
-        prompt2 = f"""You are a text analysis expert. Below is a numbered list of topics and the article with word split markers {{wrdssplttr<number>}}.
+        prompt2 = f"""You are a text analysis expert. Below is a numbered list of topics and the article with word split markers {{ws<number>}}.
 
 Assign each topic to contiguous sections of the text. For each topic, provide the word split marker number where that topic's section ENDS. Topics should be in sequential order covering the text from beginning to end without gaps or overlaps.
 
