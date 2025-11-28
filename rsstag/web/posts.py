@@ -1191,12 +1191,12 @@ Article:
 Assign each topic to contiguous sections of the text. For each topic, provide the word split marker number where that topic's section ENDS. Topics should be in sequential order covering the text from beginning to end without gaps or overlaps.
 
 Output format (one line per topic, in order):
-Topic Title: <last_marker_number>
+<topic_number>: <last_marker_number>
 
 Example:
-Introduction: 150
-Main Analysis: 450
-Conclusion: 600
+1: 150
+2: 450
+3: 600
 
 Numbered Topics:
 {numbered_topics}
@@ -1214,21 +1214,26 @@ Output:"""
             logging.error("LLM mapping failed: %s", e)
             return [{"title": "Main Content", "text": text_html}]
         
-        # Parse mapping - expecting format "Topic Title: <number>"
+        # Parse mapping - expecting format "<topic_number>: <number>"
         lines = [ln.strip() for ln in response2.strip().split('\n') if ln.strip()]
         topic_boundaries = []
         for ln in lines:
             if ':' in ln:
-                title, marker = ln.split(':', 1)
-                title = title.strip()
+                t_num_str, marker = ln.split(':', 1)
+                t_num_str = t_num_str.strip()
                 marker = marker.strip()
-                if marker:
+                if marker and t_num_str.isdigit():
                     try:
+                        t_num = int(t_num_str)
                         end_marker = int(marker)
-                        topic_boundaries.append((title, end_marker))
-                        print(f"Parsed topic boundary: '{title}' ends at marker {end_marker}")
+                        if 1 <= t_num <= len(topics):
+                            title = topics[t_num - 1]
+                            topic_boundaries.append((title, end_marker))
+                            print(f"Parsed topic boundary: '{title}' ({t_num}) ends at marker {end_marker}")
+                        else:
+                            print(f"Topic number {t_num} out of range")
                     except ValueError:
-                        print(f"Failed to parse marker from line: {ln}")
+                        print(f"Failed to parse marker or topic number from line: {ln}")
                         continue
         
         print(f"Total topics from first call: {len(topics)}")
@@ -1264,26 +1269,31 @@ Output:"""
                 "end_tag": end_marker
             })
             prev_end = end_marker
+
+        # Add remaining text if any
+        last_tag = chapters[-1]["end_tag"] if chapters else 0
+        last_pos = positions[last_tag - 1] if last_tag > 0 and last_tag <= len(positions) else 0
         
+        if last_pos < len(text_plain):
+            print(f"Adding remaining content chapter")
+            chapters.append({"title": "Remaining Content", "start_tag": last_tag, "end_tag": len(positions) + 1})
+
         # Split text sequentially
         chapter_texts_plain = []
         chapter_texts_html = []
         start_html = 0
-        
+        pending_indices = []
+
         for i, chapter in enumerate(chapters):
             start_tag = chapter["start_tag"]  # marker number (1-based or 0 for first)
             end_tag = chapter["end_tag"]      # marker number (1-based)
             
             # Convert marker numbers to text positions
-            # Marker 0 = beginning (position 0)
-            # Marker N (1-based) = positions[N-1] (0-based array index)
             if start_tag == 0:
                 start_pos = 0
             else:
-                # start_tag is a 1-based marker number, need 0-based index
                 start_pos = positions[start_tag - 1] if start_tag <= len(positions) else len(text_plain)
             
-            # end_tag is a 1-based marker number
             end_pos = positions[end_tag - 1] if end_tag <= len(positions) else len(text_plain)
             
             chapter_plain = text_plain[start_pos:end_pos].strip()
@@ -1291,6 +1301,11 @@ Output:"""
             
             if not chapter_plain:
                 print(f"WARNING: Empty chapter text for '{chapter['title']}'")
+                # Even if plain text is empty, we might have skipped HTML if we are not careful?
+                # But start_pos == end_pos, so we shouldn't advance.
+                # Just append empty?
+                chapter_texts_plain.append("")
+                chapter_texts_html.append("")
                 continue
                 
             chapter_texts_plain.append(chapter_plain)
@@ -1299,33 +1314,47 @@ Output:"""
             html_cleaner_temp = HTMLCleaner()
             html_remaining = text_html[start_html:]
             best_match_end = 0
+            match_found = False
+            
             for end_pos_html in range(len(chapter_plain), len(html_remaining) + 1):
                 html_cleaner_temp.purge()
                 html_cleaner_temp.feed(html_remaining[:end_pos_html])
                 extracted_plain = " ".join(html_cleaner_temp.get_content()).strip()
                 if chapter_plain in extracted_plain or extracted_plain == chapter_plain:
                     best_match_end = end_pos_html
+                    match_found = True
                     break
-            if best_match_end > 0:
+            
+            if match_found:
                 chapter_html = html_remaining[:best_match_end].strip()
                 start_html += best_match_end
+                
+                # Check for skipped content
+                html_cleaner_temp.purge()
+                html_cleaner_temp.feed(chapter_html)
+                extracted_final = " ".join(html_cleaner_temp.get_content()).strip()
+                match_index = extracted_final.find(chapter_plain)
+                
+                if match_index > 5 and pending_indices:
+                    # We skipped content and have pending fallbacks.
+                    # Merge into the first pending fallback.
+                    first_idx = pending_indices[0]
+                    chapter_texts_html[first_idx] = chapter_html
+                    
+                    # Clear others
+                    for p_idx in pending_indices[1:]:
+                        chapter_texts_html[p_idx] = ""
+                    
+                    # Current becomes empty (it's merged into first_idx)
+                    chapter_texts_html.append("")
+                    pending_indices = []
+                else:
+                    chapter_texts_html.append(chapter_html)
+                    pending_indices = []
             else:
-                chapter_html = chapter_plain  # fallback
-            chapter_texts_html.append(chapter_html)
-        
-        # Add remaining text if any
-        last_tag = chapters[-1]["end_tag"] if chapters else 0
-        # last_tag is a 1-based marker number, convert to position
-        last_pos = positions[last_tag - 1] if last_tag > 0 and last_tag <= len(positions) else 0
-        remaining_text = text_plain[last_pos:].strip()
-        print(f"Remaining text after last marker {last_tag} (pos {last_pos}): {len(remaining_text)} chars")
-        
-        if last_pos < len(text_plain) and remaining_text:
-            print(f"Adding remaining content chapter")
-            chapter_texts_plain.append(remaining_text)
-            chapter_html = text_html[start_html:].strip()
-            chapter_texts_html.append(chapter_html)
-            chapters.append({"title": "Remaining Content", "start_tag": last_tag, "end_tag": len(positions)})
+                # Fallback
+                chapter_texts_html.append(chapter_plain)
+                pending_indices.append(len(chapter_texts_html) - 1)
         
         # Assign titles
         result = []
@@ -1359,27 +1388,59 @@ Output:"""
         # Map to HTML sentences
         chapter_sentences_html = []
         html_remaining = chapter_html
+        pending_indices = []
+        
         for sent_plain in chapter_sentences_plain:
             # Find in HTML
             html_cleaner_temp = HTMLCleaner()
             best_match_end = 0
+            match_found = False
+            
             for end_pos in range(len(sent_plain), len(html_remaining) + 1):
                 html_cleaner_temp.purge()
                 html_cleaner_temp.feed(html_remaining[:end_pos])
                 extracted = " ".join(html_cleaner_temp.get_content()).strip()
                 if sent_plain in extracted:
                     best_match_end = end_pos
+                    match_found = True
                     break
-            if best_match_end > 0:
+            
+            if match_found:
                 sent_html = html_remaining[:best_match_end].strip()
                 html_remaining = html_remaining[best_match_end:].strip()
+                
+                # Check for skipped content
+                html_cleaner_temp.purge()
+                html_cleaner_temp.feed(sent_html)
+                extracted_final = " ".join(html_cleaner_temp.get_content()).strip()
+                match_index = extracted_final.find(sent_plain)
+                
+                if match_index > 5 and pending_indices:
+                    # We skipped content and have pending fallbacks.
+                    # Merge into the first pending fallback.
+                    first_idx = pending_indices[0]
+                    chapter_sentences_html[first_idx] = sent_html
+                    
+                    # Clear others
+                    for p_idx in pending_indices[1:]:
+                        chapter_sentences_html[p_idx] = ""
+                    
+                    # Current becomes empty
+                    chapter_sentences_html.append("")
+                    pending_indices = []
+                else:
+                    chapter_sentences_html.append(sent_html)
+                    pending_indices = []
             else:
-                sent_html = sent_plain
-            chapter_sentences_html.append(sent_html)
+                # Fallback
+                chapter_sentences_html.append(sent_plain)
+                pending_indices.append(len(chapter_sentences_html) - 1)
         
         # Assign numbers
         chapter_sentence_nums = []
         for sent_html in chapter_sentences_html:
+            if not sent_html:
+                continue
             all_sentences.append({"text": sent_html, "number": sentence_counter})
             chapter_sentence_nums.append(sentence_counter)
             sentence_counter += 1
