@@ -1188,15 +1188,15 @@ Article:
         # Second LLM call: map topics to word splitters
         prompt2 = f"""You are a text analysis expert. Below is a numbered list of topics and the article with word split markers {{ws<number>}}.
 
-Assign each topic to contiguous sections of the text. For each topic, provide the word split marker number where that topic's section ENDS. Topics should be in sequential order covering the text from beginning to end without gaps or overlaps.
+Assign each topic to a specific section of the text by providing the start and end word split marker numbers. Topics can be in any order and can cover any part of the text.
 
-Output format (one line per topic, in order):
-<topic_number>: <last_marker_number>
+Output format (one line per topic):
+<topic_number>: <start_marker> - <end_marker>
 
 Example:
-1: 150
-2: 450
-3: 600
+1: 10 - 150
+2: 450 - 600
+3: 151 - 449
 
 Numbered Topics:
 {numbered_topics}
@@ -1214,27 +1214,40 @@ Output:"""
             logging.error("LLM mapping failed: %s", e)
             return [{"title": "Main Content", "text": text_html}]
         
-        # Parse mapping - expecting format "<topic_number>: <number>"
+        # Parse mapping - expecting format "<topic_number>: <start> - <end>"
         lines = [ln.strip() for ln in response2.strip().split('\n') if ln.strip()]
         topic_boundaries = []
         for ln in lines:
             if ':' in ln:
-                t_num_str, marker = ln.split(':', 1)
-                t_num_str = t_num_str.strip()
-                marker = marker.strip()
-                if marker and t_num_str.isdigit():
-                    try:
-                        t_num = int(t_num_str)
-                        end_marker = int(marker)
-                        if 1 <= t_num <= len(topics):
-                            title = topics[t_num - 1]
-                            topic_boundaries.append((title, end_marker))
-                            print(f"Parsed topic boundary: '{title}' ({t_num}) ends at marker {end_marker}")
-                        else:
-                            print(f"Topic number {t_num} out of range")
-                    except ValueError:
-                        print(f"Failed to parse marker or topic number from line: {ln}")
-                        continue
+                parts = ln.split(':', 1)
+                t_num_str = parts[0].strip()
+                ranges = parts[1].strip()
+                
+                if '-' in ranges:
+                    start_str, end_str = ranges.split('-', 1)
+                    start_str = start_str.strip()
+                    end_str = end_str.strip()
+                    
+                    if t_num_str.isdigit() and start_str.isdigit() and end_str.isdigit():
+                        try:
+                            t_num = int(t_num_str)
+                            start_marker = int(start_str)
+                            end_marker = int(end_str)
+                            
+                            if 1 <= t_num <= len(topics):
+                                title = topics[t_num - 1]
+                                topic_boundaries.append((title, start_marker, end_marker))
+                                print(f"Parsed topic boundary: '{title}' ({t_num}) starts at {start_marker} ends at {end_marker}")
+                            else:
+                                print(f"Topic number {t_num} out of range")
+                        except ValueError:
+                            print(f"Failed to parse numbers from line: {ln}")
+                            continue
+                    else:
+                         print(f"Invalid number format in line: {ln}")
+                else:
+                    print(f"Missing range separator '-' in line: {ln}")
+
         
         print(f"Total topics from first call: {len(topics)}")
         print(f"Total topic boundaries parsed: {len(topic_boundaries)}")
@@ -1247,28 +1260,30 @@ Output:"""
         # Validate and clamp boundaries to valid range
         max_position = len(positions)
         validated_boundaries = []
-        for title, end_marker in topic_boundaries:
-            if end_marker < 1:
-                print(f"WARNING: Topic '{title}' has invalid end marker {end_marker}, setting to 1")
-                end_marker = 1
-            elif end_marker > max_position:
+        for title, start_marker, end_marker in topic_boundaries:
+            if start_marker < 1:
+                print(f"WARNING: Topic '{title}' has invalid start marker {start_marker}, setting to 1")
+                start_marker = 1
+            if end_marker > max_position:
                 print(f"WARNING: Topic '{title}' has end marker {end_marker} > max {max_position}, clamping to max")
                 end_marker = max_position
-            validated_boundaries.append((title, end_marker))
+            if start_marker > end_marker:
+                 print(f"WARNING: Topic '{title}' has start {start_marker} > end {end_marker}, swapping")
+                 start_marker, end_marker = end_marker, start_marker
+            
+            validated_boundaries.append((title, start_marker, end_marker))
         
         topic_boundaries = validated_boundaries
         
-        # Build chapters sequentially from start to each end marker
+        # Build chapters from explicit ranges
         chapters = []
-        prev_end = 0
         
-        for title, end_marker in topic_boundaries:
+        for title, start_marker, end_marker in topic_boundaries:
             chapters.append({
                 "title": title,
-                "start_tag": prev_end,
+                "start_tag": start_marker,
                 "end_tag": end_marker
             })
-            prev_end = end_marker
 
         # Add remaining text if any
         last_tag = chapters[-1]["end_tag"] if chapters else 0
