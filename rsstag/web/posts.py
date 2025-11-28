@@ -1111,6 +1111,10 @@ def on_post_grouped_get(app: "RSSTagApplication", user: dict, request: Request, 
         return last_open > last_close
 
     def llm_split_chapters(text_plain, text_html):
+        # Remove newlines to avoid confusing the LLM
+        text_plain = text_plain.replace('\n', ' ').replace('\r', ' ')
+        text_plain = re.sub(r'\s+', ' ', text_plain).strip()
+
         # First LLM call: get list of topics
         prompt1 = f"""You are a text analysis expert. Analyze the following article and provide a numbered list of main topics or chapters. Each topic should be a brief title (1-3 words).
 
@@ -1335,6 +1339,7 @@ Output:"""
                 html_cleaner_temp.purge()
                 html_cleaner_temp.feed(html_remaining[:end_pos_html])
                 extracted_plain = " ".join(html_cleaner_temp.get_content()).strip()
+                extracted_plain = re.sub(r'\s+', ' ', extracted_plain)
                 if chapter_plain in extracted_plain or extracted_plain == chapter_plain:
                     best_match_end = end_pos_html
                     match_found = True
@@ -1348,6 +1353,7 @@ Output:"""
                 html_cleaner_temp.purge()
                 html_cleaner_temp.feed(chapter_html)
                 extracted_final = " ".join(html_cleaner_temp.get_content()).strip()
+                extracted_final = re.sub(r'\s+', ' ', extracted_final)
                 match_index = extracted_final.find(chapter_plain)
                 
                 if match_index > 5 and pending_indices:
@@ -1415,6 +1421,7 @@ Output:"""
                 html_cleaner_temp.purge()
                 html_cleaner_temp.feed(html_remaining[:end_pos])
                 extracted = " ".join(html_cleaner_temp.get_content()).strip()
+                extracted = re.sub(r'\s+', ' ', extracted)
                 if sent_plain in extracted:
                     best_match_end = end_pos
                     match_found = True
@@ -1428,6 +1435,7 @@ Output:"""
                 html_cleaner_temp.purge()
                 html_cleaner_temp.feed(sent_html)
                 extracted_final = " ".join(html_cleaner_temp.get_content()).strip()
+                extracted_final = re.sub(r'\s+', ' ', extracted_final)
                 match_index = extracted_final.find(sent_plain)
                 
                 if match_index > 5 and pending_indices:
