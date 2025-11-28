@@ -1115,6 +1115,9 @@ def on_post_grouped_get(app: "RSSTagApplication", user: dict, request: Request, 
         text_plain = text_plain.replace('\n', ' ').replace('\r', ' ')
         text_plain = re.sub(r'\s+', ' ', text_plain).strip()
 
+        # Word splitter window size
+        SPLITTER_WINDOW = 4
+
         # First LLM call: get list of topics
         prompt1 = f"""You are a text analysis expert. Analyze the following article and provide a numbered list of main topics or chapters. Each topic should be a brief title (1-3 words).
 
@@ -1168,7 +1171,7 @@ Article:
             if m.start() > 0:
                 last_char = text_plain[m.start() - 1]
                 word_count += 1
-                if last_char in split_punct or word_count >= 4:
+                if last_char in split_punct or word_count >= SPLITTER_WINDOW:
                     positions.append(m.end())
                     word_count = 0
         
@@ -1185,6 +1188,9 @@ Article:
             # Insert from end to start, but number from start to end
             marker_num = len(positions) - counter + 1
             tagged_text = tagged_text[:pos] + '{ws' + str(marker_num) + '}' + tagged_text[pos:]
+
+        # Add final end marker to indicate end of text
+        tagged_text = tagged_text + '{ws' + str(len(positions) + 1) + '}'
         
         # Numbered topics
         numbered_topics = "\n".join(f"{i+1}. {topic}" for i, topic in enumerate(topics))
