@@ -102,6 +102,11 @@ class RSSTagRoutes:
                 "endpoint": "on_post_links_get",
                 "methods": ["GET"],
             },
+            {
+                "url": "/post-grouped/<string:pids>",
+                "endpoint": "on_post_grouped_get",
+                "methods": ["GET"],
+            },
             {"url": "/status", "endpoint": "on_status_get", "methods": ["GET"]},
             {"url": "/settings", "endpoint": "on_settings_post", "methods": ["POST"]},
             {
@@ -307,6 +312,16 @@ class RSSTagRoutes:
             {
                 "url": "/chat",
                 "endpoint": "on_chat_post",
+                "methods": ["POST"],
+            },
+            {
+                "url": "/tasks",
+                "endpoint": "on_tasks_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/tasks",
+                "endpoint": "on_tasks_post",
                 "methods": ["POST"],
             },
         ]

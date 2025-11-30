@@ -1,53 +1,59 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-<title>RSSTag</title>
-{% include 'head-data.html' %}
+    <title>RSSTag</title>
+    {% include 'head-data.html' %}
 </head>
+
 <body>
-{% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
-<noscript>
-    <h1>Please enable javascript in your browser</h1>
-</noscript>
-<div id="global_tools">
-    {% include "logo.html" %}
-    <div class="panel right_half">
-        <span class="login_button global_tools_button">
-            <a href="/provider">{{provider}}: tags: {{posts['tags']}}  posts: ({{posts['unread']}} / {{posts['read']}})</a>
-        </span>
-        <span class="sync_telegram_button global_tools_button">
-            {% if provider == "telegram" %}
+    {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
+    <noscript>
+        <h1>Please enable javascript in your browser</h1>
+    </noscript>
+    <div id="global_tools">
+        {% include "logo.html" %}
+        <div class="panel right_half">
+            <span class="login_button global_tools_button">
+                <a href="/provider">{{provider}}: tags: {{posts['tags']}} posts: ({{posts['unread']}} /
+                    {{posts['read']}})</a>
+            </span>
+            <span class="sync_telegram_button global_tools_button">
+                {% if provider == "telegram" %}
                 <form action="/telegram-mark" method="post">
                     <input type="submit" value="Sync">
                 </form>
-            {% endif %}
-        </span>
-        {{ g_status.global_status() }}
-        {{ menu.settings_menu() }}
+                {% endif %}
+            </span>
+            {{ g_status.global_status() }}
+            {{ menu.settings_menu() }}
+        </div>
     </div>
-</div>
-<div class="page screen_middle">
-    {% for e in err %}
+    <div class="page screen_middle">
+        {% for e in err %}
         <p id="error">{{e}}</p>
-    {% endfor %}
-    <div class="root_item"><a href="/group/category">Posts grouped by category</a></div>
-    <div class="root_item"><a href="/group/tag/1">Posts grouped by tag</a></div>
-    <div class="root_item"><a href="/group/bi-grams/1">Posts grouped by bi-grams</a></div>
-    <div class="root_item"><a href="/group/bi-grams-dyn/1">Posts grouped by bi-grams dynamic</a></div>
-    <div class="root_item"><a href="/groups/1">Tags groups</a></div>
-    <div class="root_item"><a href="/topics/1">Topics</a></div>
-    <div class="root_item"><a href="/clusters">Clusters</a></div>
-    <div class="root_item"><a href="/tfidf-tags?min_tags=10">TF IDF</a></div>
-    <div class="root_item"><a href="/clusters-dyn">Clusters dynamic</a></div>
-    <div class="root_item"><a href="/map">News on map</a></div>
-    {% for sent in sentiments %}
+        {% endfor %}
+        <div class="root_item"><a href="/group/category">Posts grouped by category</a></div>
+        <div class="root_item"><a href="/group/tag/1">Posts grouped by tag</a></div>
+        <div class="root_item"><a href="/group/bi-grams/1">Posts grouped by bi-grams</a></div>
+        <div class="root_item"><a href="/group/bi-grams-dyn/1">Posts grouped by bi-grams dynamic</a></div>
+        <div class="root_item"><a href="/groups/1">Tags groups</a></div>
+        <div class="root_item"><a href="/topics/1">Topics</a></div>
+        <div class="root_item"><a href="/clusters">Clusters</a></div>
+        <div class="root_item"><a href="/tfidf-tags?min_tags=10">TF IDF</a></div>
+        <div class="root_item"><a href="/clusters-dyn">Clusters dynamic</a></div>
+        <div class="root_item"><a href="/map">News on map</a></div>
+        {% for sent in sentiments %}
         <div class="root_item"><a href="/tags/sentiment/{{sent|replace('/', '|')}}/1">Tags - {{sent}}</a></div>
-    {% endfor %}
-    <div class="root_item"><a href="/provider">Select provider</a></div>
-    <div class="root_item"><a href="/refresh">Refresh posts</a></div>
-</div>
+        {% endfor %}
+        <div class="root_item"><a href="/provider">Select provider</a></div>
+        <div class="root_item"><a href="/tasks">Tasks Queue</a></div>
+        <div class="root_item"><a href="/refresh">Refresh posts</a></div>
+    </div>
 
-<div id="status" ><span></span></div>
-{% include "root-footer.html" %}
-<div id="progressbar"></div></body>
+    <div id="status"><span></span></div>
+    {% include "root-footer.html" %}
+    <div id="progressbar"></div>
+</body>
+
 </html>

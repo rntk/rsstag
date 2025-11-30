@@ -8,6 +8,7 @@ import logging
 from collections import OrderedDict, defaultdict
 from typing import Optional, List
 import traceback
+import random
 
 from rsstag.tasks import RssTagTasks
 from rsstag.web.routes import RSSTagRoutes
@@ -28,10 +29,12 @@ import rsstag.web.bigrams as bigrams_handlers
 import rsstag.web.openai as openai_handlers
 import rsstag.web.prefixes as prefixes_handlers
 import rsstag.web.chat as chat_handlers
+import rsstag.web.tasks as tasks_handlers
 
 from rsstag.openai import ROpenAI
 from rsstag.anthropic import Anthropic
 from rsstag.llamacpp import LLamaCPP
+from rsstag.llm.groqcom import GroqCom
 
 from rsstag.stopwords import stopwords
 
@@ -72,6 +75,21 @@ class RSSTagApplication(object):
         )
         self.template_env.filters["json"] = json.dumps
         self.template_env.filters["url_encode"] = quote_plus
+        self.template_env.filters["find_group"] = self._find_group_for_sentence
+        # Add filter to convert hex color to rgba with alpha for softer highlights
+        def _hex_to_rgba(hex_color: str, alpha: float = 0.15) -> str:
+            try:
+                hex_color = hex_color.lstrip('#')
+                if len(hex_color) == 3:
+                    hex_color = ''.join([c*2 for c in hex_color])
+                r = int(hex_color[0:2], 16)
+                g = int(hex_color[2:4], 16)
+                b = int(hex_color[4:6], 16)
+                alpha = max(0.0, min(1.0, alpha))
+                return f"rgba({r},{g},{b},{alpha})"
+            except Exception:
+                return "rgba(215,215,175,0.25)"  # fallback similar to previous base
+        self.template_env.filters["hex_to_rgba"] = _hex_to_rgba
         self.providers = self.config["settings"]["providers"].split(",")
         self.user_ttl = int(self.config["settings"]["user_ttl"])
         cl = MongoClient(
@@ -113,12 +131,47 @@ class RSSTagApplication(object):
         )
         self.allow_not_ready = {
             "on_telegram_auth_post",
-            "on_settings_post"
+            "on_settings_post",
+            "on_tasks_get",
+            "on_tasks_post"
         }
 
         self.openai = ROpenAI(self.config["openai"]["token"])
         self.anthropic = Anthropic(self.config["anthropic"]["token"])
         self.llamacpp = LLamaCPP(self.config["llamacpp"]["host"])
+        self.groqcom = GroqCom(host=self.config["groqcom"]["host"], token=self.config["groqcom"]["token"])
+
+    def _find_group_for_sentence(self, sentence_num, groups):
+        """Custom filter to find which group a sentence belongs to"""
+        for group_id, group_sentences in groups.items():
+            if sentence_num in group_sentences:
+                return group_id
+        return None
+
+    def _generate_similar_color(self, base_color, color_range):
+        """Generate a color similar to base_color within the specified range"""
+        # Convert base color to RGB
+        base_rgb = self._hex_to_rgb(base_color)
+        
+        # Generate new RGB values within the specified range
+        new_rgb = []
+        for value in base_rgb:
+            min_val = max(0, value - color_range)
+            max_val = min(255, value + color_range)
+            new_value = random.randint(min_val, max_val)
+            new_rgb.append(new_value)
+        
+        # Convert back to hex
+        return self._rgb_to_hex(new_rgb)
+
+    def _hex_to_rgb(self, hex_color):
+        """Convert hex color to RGB tuple"""
+        hex_color = hex_color.lstrip('#')
+        return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+
+    def _rgb_to_hex(self, rgb):
+        """Convert RGB tuple to hex color"""
+        return '#' + ''.join(f'{x:02x}' for x in rgb)
 
     def close(self):
         logging.info("Goodbye!")
@@ -201,6 +254,12 @@ class RSSTagApplication(object):
 
     def on_settings_post(self, user: dict, request: Request) -> Response:
         return users_handlers.on_settings_post(self, user, request)
+
+    def on_tasks_get(self, user: dict, request: Request) -> Response:
+        return tasks_handlers.on_tasks_get(self, user, request)
+
+    def on_tasks_post(self, user: dict, request: Request) -> Response:
+        return tasks_handlers.on_tasks_post(self, user, request)
 
     def on_error(self, _: Optional[dict], __: Request, e: HTTPException) -> Response:
         page = self.template_env.get_template("error.html")
@@ -417,6 +476,76 @@ class RSSTagApplication(object):
 
     def on_post_links_get(self, user: dict, _: Request, post_id: int) -> Response:
         return posts_handlers.on_post_links_get(self, user, post_id)
+
+    def on_post_grouped_get(self, user: dict, request: Request, pids: str) -> Response:
+        return posts_handlers.on_post_grouped_get(self, user, request, pids)
+
+    def _handle_sentence_grouping_chunking(self, sentences_list: list, original_prompt: str, temperature: float = 0.0, max_sentences_per_chunk: int = 10) -> str:
+        """
+        Handle chunking for sentence grouping when request is too large.
+        Splits sentences into smaller batches and includes the prompt with each batch.
+        """
+        # Extract the prompt template and instructions from the original prompt
+        sentences_start = original_prompt.find("Sentences:\n") + 11
+        if sentences_start == 10:  # "Sentences:\n" not found
+            logging.error("Cannot parse grouping prompt for chunking")
+            return ""
+        
+        prompt_template = original_prompt[:sentences_start]
+        
+        # Split sentences into chunks
+        chunks = []
+        for i in range(0, len(sentences_list), max_sentences_per_chunk):
+            chunk = sentences_list[i:i + max_sentences_per_chunk]
+            chunks.append(chunk)
+        
+        logging.info(f"Splitting {len(sentences_list)} sentences into {len(chunks)} chunks")
+        
+        # Process each chunk with the full prompt
+        all_groups = {}
+        
+        for chunk_idx, sentence_chunk in enumerate(chunks):
+            # Build numbered sentences for this chunk
+            chunk_lines = []
+            for s in sentence_chunk:
+                txt = s["text"].strip()
+                chunk_lines.append(f"{s['number']}. {txt}")
+            
+            numbered_sentences_chunk = "\n".join(chunk_lines)
+            chunk_prompt = prompt_template + numbered_sentences_chunk
+            
+            try:
+                logging.info(f"Processing chunk {chunk_idx + 1}/{len(chunks)} with {len(sentence_chunk)} sentences")
+                response = self.llamacpp.call([chunk_prompt], temperature).strip()
+                
+                # Parse groups from response
+                lines = [ln.strip() for ln in response.strip().split('\n') if ln.strip()]
+                for ln in lines:
+                    if ':' in ln:
+                        parts = ln.split(':', 1)
+                        if len(parts) == 2:
+                            topic, nums = parts
+                            topic = topic.strip()
+                            nums = nums.strip()
+                            if nums and topic:
+                                # Create unique topic name if it already exists
+                                original_topic = topic
+                                counter = 1
+                                while topic in all_groups:
+                                    topic = f"{original_topic} (Part {counter})"
+                                    counter += 1
+                                all_groups[topic] = nums
+                                
+            except Exception as e:
+                logging.error(f"Chunked grouping failed for chunk {chunk_idx + 1}: %s", e)
+                continue
+        
+        # Combine results into the expected format
+        result_lines = []
+        for topic, nums in all_groups.items():
+            result_lines.append(f"{topic}: {nums}")
+        
+        return '\n'.join(result_lines)
 
     # TODO: delete or change or something other
     def on_get_posts_with_tags(self, user: dict, _: Request, s_tags: str) -> Response:

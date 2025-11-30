@@ -6,12 +6,12 @@ from openai import OpenAI, Completion
 class ROpenAI:
     def __init__(self, token: str):
         self.token = token
-        self.model = "gpt-4.1-mini"
+        self.model = "gpt-5-mini"
         self.client = OpenAI(
             api_key=self.token
         )
 
-    def call(self, user_msgs: List[str], system_msgs: Optional[List[str]]=None) -> str:
+    def call(self, user_msgs: List[str], system_msgs: Optional[List[str]]=None, temperature: float=0.7, reasoning: Optional[dict]=None) -> str:
         messages = []
         for msg in user_msgs:
             messages.append({"role": "user", "content": msg})
@@ -20,9 +20,11 @@ class ROpenAI:
             for msg in system_msgs:
                 messages.append({"role": "system", "content": msg})
         try:
-            resp: Completion  = self.client.chat.completions.create(
+            resp: Completion  = self.client.responses.create(
                 model=self.model,
-                messages=messages,
+                input=messages,
+                temperature=temperature,
+                reasoning=reasoning or {"effort": "low"}
             )
         except Exception as e:
             logging.error("OpenAI error: %s", e)
@@ -30,4 +32,4 @@ class ROpenAI:
 
         logging.info("OpenAI response: %s", resp)
 
-        return resp.choices[0].message.content
+        return resp.output[1].content[0].text
