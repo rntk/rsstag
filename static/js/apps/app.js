@@ -44,6 +44,7 @@ import {OpenAITool} from "../components/openai.js";
 import TagSunburst from "../components/sunburst.js";
 import TagTree from "../components/dendrogram.js";
 import SentenceTree from '../components/SentenceTree.js';
+import BigramsTable from '../components/bigrams-table.js';
 
 function handleTextSelection() {
     document.addEventListener('mouseup', () => {
@@ -162,6 +163,14 @@ window.onload = () => {
             <TagsList ES={window.EVSYS} is_bigram={true} />,
             document.getElementById('tags_page')
         );
+        // Render the bigrams table visualization
+        const bigramsTableContainer = document.getElementById('bigrams_table_page');
+        if (bigramsTableContainer) {
+            ReactDOM.render(
+                <BigramsTable ES={window.EVSYS} />,
+                bigramsTableContainer
+            );
+        }
         bi_grams_storage.start();
     } else if ( /^\/feed*/.test(path) || /^\/category*/.test(path) ||
             /^\/tag\/.*/.test(path) || /^\/posts\/with\/tags\/.*/.test(path) || /^\/bi-gram\/.*/.test(path) ||

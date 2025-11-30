@@ -815,3 +815,145 @@ h3.post_title {
 .highlite_tag {
     background-color: yellow;
 }
+
+/* BigramsTable component styles */
+.bigrams-table-container {
+    margin: 1em 0;
+}
+
+.bigrams-table-legend {
+    margin-bottom: 1em;
+    padding: 0.5em;
+    background-color: #f8f8f8;
+    border: 1px solid $my_gray;
+    @include vendor-prefix(border-radius, 0.5em);
+
+    h4 {
+        margin: 0 0 0.5em 0;
+        font-weight: normal;
+    }
+
+    .legend-items {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1em;
+    }
+
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 0.3em;
+        font-size: 10pt;
+    }
+
+    .legend-circle {
+        display: inline-block;
+        @include vendor-prefix(border-radius, 50%);
+    }
+}
+
+.bigrams-table-scroll {
+    max-width: 100%;
+    max-height: 70vh;
+    overflow: auto;
+    border: 1px solid $my_gray;
+    position: relative;
+}
+
+.bigrams-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    table-layout: auto;
+
+    th, td {
+        border: 1px solid #ddd;
+        padding: 4px;
+        text-align: center;
+        min-width: 40px;
+        background-color: #ffffff;
+    }
+
+    thead th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background-color: #f5f5f5;
+    }
+
+    .bigrams-corner-cell {
+        position: sticky;
+        top: 0;
+        left: 0;
+        z-index: 3;
+        background-color: #f5f5f5;
+    }
+
+    .bigrams-col-header {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background-color: #f5f5f5;
+        font-weight: normal;
+        font-size: 10pt;
+        white-space: nowrap;
+        max-width: 120px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+
+        a {
+            color: #333;
+            text-decoration: none;
+
+            &:hover {
+                text-decoration: underline;
+                color: #008aff;
+            }
+        }
+    }
+
+    .bigrams-row-header {
+        position: sticky;
+        left: 0;
+        z-index: 1;
+        background-color: #f5f5f5;
+        font-weight: normal;
+        font-size: 10pt;
+        text-align: right;
+        white-space: nowrap;
+        max-width: 120px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+
+        a {
+            color: #333;
+            text-decoration: none;
+
+            &:hover {
+                text-decoration: underline;
+                color: #008aff;
+            }
+        }
+    }
+
+    .bigrams-cell {
+        padding: 2px;
+        vertical-align: middle;
+    }
+}
+
+.bigram-cell-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+}
+
+.bigram-circle-svg {
+    display: block;
+
+    &:hover {
+        .bigram-circle {
+            stroke-width: 3;
+        }
+    }
+}
