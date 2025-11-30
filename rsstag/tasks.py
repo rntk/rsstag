@@ -66,7 +66,7 @@ class RssTagTasks:
                     "Can`t create index %s. May be already exists. Info: %s", index, e
                 )
 
-    def add_task(self, data: dict):
+    def add_task(self, data: dict, manual: bool = True):
         result = True
         if data and "type" in data:
             try:
@@ -79,6 +79,7 @@ class RssTagTasks:
                                 "type": TASK_DOWNLOAD,
                                 "processing": TASK_NOT_IN_PROCESSING,
                                 "host": data["host"],
+                                "manual": manual,
                             }
                         },
                         upsert=True,
@@ -96,6 +97,7 @@ class RssTagTasks:
                                 "user": data["user"],
                                 "type": data["type"],
                                 "processing": TASK_NOT_IN_PROCESSING,
+                                "manual": manual,
                             }
                         },
                         upsert=True,
@@ -118,7 +120,7 @@ class RssTagTasks:
         result = False
         if task_type in self._tasks_after:
             for_insert = [
-                {"user": user, "type": task, "processing": TASK_NOT_IN_PROCESSING}
+                {"user": user, "type": task, "processing": TASK_NOT_IN_PROCESSING, "manual": False}
                 for task in self._tasks_after[task_type]
             ]
             try:
@@ -150,6 +152,7 @@ class RssTagTasks:
             task["user"] = user
             task["_id"] = user_task["_id"]
             task["type"] = user_task["type"]
+            task["manual"] = user_task.get("manual", False)
             if user_task["type"] == TASK_TAGS:
                 data = []
                 ps = self._db.posts.find(
@@ -359,7 +362,7 @@ class RssTagTasks:
                 self._db.posts.bulk_write(updates, ordered=False)
             if remove_task:
                 removed = self.remove_task(task["data"]["_id"])
-                if removed:
+                if removed and not task.get("manual", False):
                     self.add_next_tasks(task["user"]["sid"], task["type"])
 
             result = True
