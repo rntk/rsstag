@@ -1338,9 +1338,10 @@ Output:"""
             next_start = min(last_tag + 1, max_marker)
             chapters.append({"title": "Remaining Content", "start_tag": next_start, "end_tag": max_marker})
 
-        # Split text sequentially
+        # Split text sequentially and also record absolute plain indices for each chapter
         chapter_texts_plain = []
         chapter_texts_html = []
+        chapter_ranges_plain = []  # list of tuples (start_pos, end_pos)
         start_html = 0
         pending_indices = []
 
@@ -1355,6 +1356,7 @@ Output:"""
                 print(f"WARNING: Chapter '{chapter['title']}' markers {start_tag}-{end_tag} resolve to empty range")
                 chapter_texts_plain.append("")
                 chapter_texts_html.append("")
+                chapter_ranges_plain.append((start_pos, end_pos))
                 continue
             
             chapter_plain = text_plain[start_pos:end_pos].strip()
@@ -1367,9 +1369,11 @@ Output:"""
                 # Just append empty?
                 chapter_texts_plain.append("")
                 chapter_texts_html.append("")
+                chapter_ranges_plain.append((start_pos, end_pos))
                 continue
                 
             chapter_texts_plain.append(chapter_plain)
+            chapter_ranges_plain.append((start_pos, end_pos))
             
             # Map to HTML
             html_cleaner_temp = HTMLCleaner()
@@ -1426,101 +1430,84 @@ Output:"""
                 title = chapters[i]["title"]
             else:
                 title = f"Chapter {i+1}"
-            result.append({"title": title, "text": html})
+            # include absolute plain text range for later sentence-to-topic mapping
+            start_pos_i, end_pos_i = chapter_ranges_plain[i] if i < len(chapter_ranges_plain) else (0, 0)
+            result.append({"title": title, "text": html, "plain_start": start_pos_i, "plain_end": end_pos_i})
         
         return result
 
     chapters = llm_split_chapters(full_content_plain, full_content_html)
     print(f"Generated {len(chapters)} chapters")
     
+    # Build a single list of sentences from the WHOLE content (no duplicates)
+    print("Splitting full content into sentences (single pass)...")
+    full_plain_norm = re.sub(r'\s+', ' ', full_content_plain.strip())
+
+    # Split into sentences in plain text
+    full_sentences_plain = split_sentences(full_plain_norm)
+    print(f"Total sentences (plain): {len(full_sentences_plain)}")
+
+    # Compute plain-text start/end offsets for each sentence by sequential matching
+    sentence_offsets_plain = []
+    cursor = 0
+    for sp in full_sentences_plain:
+        idx = full_plain_norm.find(sp, cursor)
+        if idx == -1:
+            # if not found due to whitespace normalization, fallback to approximate
+            idx = cursor
+        start_off = idx
+        end_off = idx + len(sp)
+        sentence_offsets_plain.append((start_off, end_off))
+        cursor = end_off
+
+    # Map plain sentences to HTML chunks in a single forward scan
     all_sentences = []
-    groups = {}
     sentence_counter = 1
-    
-    for chapter in chapters:
-        chapter_html = chapter["text"]
-        # Clean to plain for splitting
-        html_cleaner.purge()
-        html_cleaner.feed(chapter_html)
-        chapter_plain = " ".join(html_cleaner.get_content())
-        
-        # Split into sentences
-        chapter_sentences_plain = split_sentences(chapter_plain)
-        print(f"Chapter '{chapter['title']}': {len(chapter_sentences_plain)} sentences")
-        
-        # Map to HTML sentences
-        chapter_sentences_html = []
-        html_remaining = chapter_html
-        pending_indices = []
-        
-        for sent_plain in chapter_sentences_plain:
-            # Find in HTML
-            html_cleaner_temp = HTMLCleaner()
-            best_match_end = 0
-            match_found = False
-            
-            for end_pos in range(len(sent_plain), len(html_remaining) + 1):
-                html_cleaner_temp.purge()
-                html_cleaner_temp.feed(html_remaining[:end_pos])
-                extracted = " ".join(html_cleaner_temp.get_content()).strip()
-                extracted = re.sub(r'\s+', ' ', extracted)
-                if sent_plain in extracted:
-                    best_match_end = end_pos
-                    match_found = True
-                    break
-            
-            if match_found:
-                sent_html = html_remaining[:best_match_end].strip()
-                html_remaining = html_remaining[best_match_end:].strip()
-                
-                # Check for skipped content
-                html_cleaner_temp.purge()
-                html_cleaner_temp.feed(sent_html)
-                extracted_final = " ".join(html_cleaner_temp.get_content()).strip()
-                extracted_final = re.sub(r'\s+', ' ', extracted_final)
-                match_index = extracted_final.find(sent_plain)
-                
-                if match_index > 5 and pending_indices:
-                    # We skipped content and have pending fallbacks.
-                    # Merge into the first pending fallback.
-                    first_idx = pending_indices[0]
-                    chapter_sentences_html[first_idx] = sent_html
-                    
-                    # Clear others
-                    for p_idx in pending_indices[1:]:
-                        chapter_sentences_html[p_idx] = ""
-                    
-                    # Current becomes empty
-                    chapter_sentences_html.append("")
-                    pending_indices = []
-                else:
-                    chapter_sentences_html.append(sent_html)
-                    pending_indices = []
-            else:
-                # Fallback
-                chapter_sentences_html.append(sent_plain)
-                pending_indices.append(len(chapter_sentences_html) - 1)
-        
-        # Assign numbers
-        chapter_sentence_nums = []
-        for sent_html in chapter_sentences_html:
-            if not sent_html:
-                continue
-            all_sentences.append({"text": sent_html, "number": sentence_counter})
-            chapter_sentence_nums.append(sentence_counter)
-            sentence_counter += 1
-        
-        # Aggregate sentences per topic title (do not overwrite if title repeats)
-        title = chapter["title"]
-        if title in groups:
-            groups[title].extend(chapter_sentence_nums)
+    html_remaining = full_content_html
+    html_cleaner_temp = HTMLCleaner()
+    for sp in full_sentences_plain:
+        best_match_end = 0
+        match_found = False
+        for end_pos in range(len(sp), len(html_remaining) + 1):
+            html_cleaner_temp.purge()
+            html_cleaner_temp.feed(html_remaining[:end_pos])
+            extracted = " ".join(html_cleaner_temp.get_content()).strip()
+            extracted = re.sub(r'\s+', ' ', extracted)
+            if sp in extracted or extracted == sp:
+                best_match_end = end_pos
+                match_found = True
+                break
+        if match_found:
+            sent_html = html_remaining[:best_match_end].strip()
+            html_remaining = html_remaining[best_match_end:].strip()
         else:
-            groups[title] = chapter_sentence_nums
-        
-        print(f"Topic '{title}' assigned sentences: {chapter_sentence_nums}")
-    
+            sent_html = sp
+        all_sentences.append({"text": sent_html, "number": sentence_counter})
+        sentence_counter += 1
+
+    # Build groups by assigning sentence numbers based on chapter plain ranges
+    groups = {}
+    for chapter in chapters:
+        title = chapter["title"]
+        c_start = chapter.get("plain_start", 0)
+        c_end = chapter.get("plain_end", 0)
+        nums = []
+        for (sidx, (s_start, s_end)) in enumerate(sentence_offsets_plain, start=1):
+            # Overlap if sentence range intersects chapter range
+            if s_end > c_start and s_start < c_end:
+                nums.append(sidx)
+        if title in groups:
+            groups[title].extend(nums)
+        else:
+            groups[title] = nums
+        print(f"Topic '{title}' assigned sentences (by range): {nums}")
+
+    # Ensure sentence lists are deduplicated and sorted per group
+    for t in list(groups.keys()):
+        groups[t] = sorted(set(groups[t]))
+
     sentences_list = all_sentences
-    print(f"Total: {len(sentences_list)} sentences found")
+    print(f"Total: {len(sentences_list)} unique sentences")
     print(f"Groups: {list(groups.keys())}")
 
     feed_title = " | ".join(feed_titles) if feed_titles else "Unknown Feeds"
@@ -1539,7 +1526,17 @@ Output:"""
         light = 0.7
         return hsl_to_hex(hue, sat, light)
 
-    group_colors = {gid: group_color(gid) for gid in groups}
+    # Assign same color to topics that map to the same set of sentences
+    color_by_signature = {}
+    group_colors = {}
+    for gid, sentence_ids in groups.items():
+        signature = tuple(sentence_ids)
+        if signature in color_by_signature:
+            group_colors[gid] = color_by_signature[signature]
+        else:
+            clr = group_color("|".join(map(str, signature)) if signature else gid)
+            color_by_signature[signature] = clr
+            group_colors[gid] = clr
 
     page = app.template_env.get_template("post-grouped.html")
     return Response(
