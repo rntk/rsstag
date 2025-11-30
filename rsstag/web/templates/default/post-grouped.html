@@ -57,15 +57,7 @@
         <h3>Sentences (leaf segment highlighting)</h3>
         <div id="grouped_sentences">
             {% for sentence in sentences %}
-                {% set sentence_num = sentence.number %}
-                {% set group_for_sentence = sentence_num|find_group(groups) %}
-                {% if group_for_sentence %}
-                    <span class="sentence-group highlighted" style="background-color: {{ group_colors[group_for_sentence] | hex_to_rgba(0.22) }}; border-left: 3px solid {{ group_colors[group_for_sentence] }};">
-                        <span class="sentence">{{sentence.text|safe}}</span>
-                    </span>
-                {% else %}
-                    <span class="sentence-group"><span class="sentence">{{ sentence.text|safe }}</span></span>
-                {% endif %}
+                <span class="sentence-group"><span class="sentence">{{ sentence.text|safe }}</span></span>
             {% endfor %}
         </div>
       </div>
@@ -141,14 +133,20 @@
             el.style.borderLeft = '3px solid ' + color;
             el.textContent = topic + ' (' + nums.length + ' sentences)';
             el.onclick = () => {
-                // Clear previous highlights
-                document.querySelectorAll('#grouped_sentences .range-highlight').forEach(el=>{
-                    el.classList.remove('range-highlight');
+                // Clear previous highlights and inline styles
+                document.querySelectorAll('#grouped_sentences .sentence-group').forEach(elm => {
+                    elm.classList.remove('range-highlight');
+                    elm.style.backgroundColor = '';
+                    elm.style.borderLeft = '';
                 });
-                // Highlight sentences in this topic
+                // Highlight sentences in this topic with its color
                 nums.forEach(num => {
-                    const el = document.querySelector('[data-sentence="'+num+'"]');
-                    if(el){ el.classList.add('range-highlight'); }
+                    const elm = document.querySelector('[data-sentence="'+num+'"]');
+                    if(elm){
+                        elm.classList.add('range-highlight');
+                        elm.style.backgroundColor = color + '40'; // add alpha
+                        elm.style.borderLeft = '3px solid ' + color;
+                    }
                 });
                 // Scroll to first sentence
                 const firstNum = nums[0];
