@@ -89,7 +89,17 @@ class RssTagTasks:
                     else:
                         result = False
                 else:
-                    result = False
+                    self._db.tasks.update_one(
+                        {"user": data["user"], "type": data["type"]},
+                        {
+                            "$set": {
+                                "user": data["user"],
+                                "type": data["type"],
+                                "processing": TASK_NOT_IN_PROCESSING,
+                            }
+                        },
+                        upsert=True,
+                    )
             except Exception as e:
                 result = None
                 self._log.warning(

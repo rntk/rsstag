@@ -29,6 +29,7 @@ import rsstag.web.bigrams as bigrams_handlers
 import rsstag.web.openai as openai_handlers
 import rsstag.web.prefixes as prefixes_handlers
 import rsstag.web.chat as chat_handlers
+import rsstag.web.tasks as tasks_handlers
 
 from rsstag.openai import ROpenAI
 from rsstag.anthropic import Anthropic
@@ -130,7 +131,9 @@ class RSSTagApplication(object):
         )
         self.allow_not_ready = {
             "on_telegram_auth_post",
-            "on_settings_post"
+            "on_settings_post",
+            "on_tasks_get",
+            "on_tasks_post"
         }
 
         self.openai = ROpenAI(self.config["openai"]["token"])
@@ -251,6 +254,12 @@ class RSSTagApplication(object):
 
     def on_settings_post(self, user: dict, request: Request) -> Response:
         return users_handlers.on_settings_post(self, user, request)
+
+    def on_tasks_get(self, user: dict, request: Request) -> Response:
+        return tasks_handlers.on_tasks_get(self, user, request)
+
+    def on_tasks_post(self, user: dict, request: Request) -> Response:
+        return tasks_handlers.on_tasks_post(self, user, request)
 
     def on_error(self, _: Optional[dict], __: Request, e: HTTPException) -> Response:
         page = self.template_env.get_template("error.html")

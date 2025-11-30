@@ -314,6 +314,16 @@ class RSSTagRoutes:
                 "endpoint": "on_chat_post",
                 "methods": ["POST"],
             },
+            {
+                "url": "/tasks",
+                "endpoint": "on_tasks_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/tasks",
+                "endpoint": "on_tasks_post",
+                "methods": ["POST"],
+            },
         ]
 
         self._rules = []
