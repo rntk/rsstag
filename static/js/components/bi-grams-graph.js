@@ -85,26 +85,32 @@ export default class BiGramsGraph {
             return null;
         };
 
-        const freqById = new Map();
+        // Build a map of node data including frequency and bigram_frequency
+        const nodeDataById = new Map();
         for (const n of nodesIn) {
             if (!n || typeof n.id !== 'string' || !n.id) continue;
             const freq = Number(n.frequency ?? n.freq ?? n.count ?? 1);
-            freqById.set(n.id, Number.isFinite(freq) ? Math.max(1, freq) : 1);
+            const bigramFreq = Number(n.bigram_frequency ?? n.bigramFrequency ?? freq);
+            nodeDataById.set(n.id, {
+                frequency: Number.isFinite(freq) ? Math.max(1, freq) : 1,
+                bigram_frequency: Number.isFinite(bigramFreq) ? Math.max(1, bigramFreq) : 1,
+                type: n.type || 'related'
+            });
         }
 
         const nodeById = new Map();
 
-        // Ensure main node exists
-        if (!nodeById.has(primaryMainId)) {
-            const mainFreq = Number.isFinite(Number(freqById.get(primaryMainId)))
-                ? Number(freqById.get(primaryMainId))
-                : Number((this.meta && this.meta.main_tag_frequency) ? this.meta.main_tag_frequency : 1);
-            nodeById.set(primaryMainId, {
-                id: primaryMainId,
-                frequency: Number.isFinite(mainFreq) ? Math.max(1, mainFreq) : 1,
-                type: 'main'
-            });
-        }
+        // Ensure main node exists with proper frequency
+        const mainNodeData = nodeDataById.get(primaryMainId);
+        const mainFreq = mainNodeData 
+            ? mainNodeData.frequency
+            : Number((this.meta && this.meta.main_tag_frequency) ? this.meta.main_tag_frequency : 1);
+        
+        nodeById.set(primaryMainId, {
+            id: primaryMainId,
+            frequency: Number.isFinite(mainFreq) ? Math.max(1, mainFreq) : 1,
+            type: 'main'
+        });
 
         const buildStarLinks = (mainId) => {
             const weightByOther = new Map();
@@ -129,8 +135,18 @@ export default class BiGramsGraph {
                 weightByOther.set(otherId, (weightByOther.get(otherId) || 0) + w);
 
                 if (!nodeById.has(otherId)) {
-                    const f = freqById.get(otherId);
-                    nodeById.set(otherId, { id: otherId, frequency: Number.isFinite(Number(f)) ? Number(f) : 1, type: 'related' });
+                    // Get frequency from node data, fallback to link weight
+                    const otherNodeData = nodeDataById.get(otherId);
+                    const otherFreq = otherNodeData 
+                        ? otherNodeData.frequency 
+                        : w; // Use link weight as frequency fallback
+                    
+                    nodeById.set(otherId, { 
+                        id: otherId, 
+                        frequency: Number.isFinite(Number(otherFreq)) ? Math.max(1, Number(otherFreq)) : 1, 
+                        bigram_frequency: w, // Store the bi-gram co-occurrence frequency
+                        type: 'related' 
+                    });
                 }
             }
             return weightByOther;
@@ -165,6 +181,9 @@ export default class BiGramsGraph {
                 linksIn: linksIn.length
             });
         }
+
+        // Log frequency data for debugging
+        console.log('BiGramsGraph: Node frequencies', nodes.map(n => ({ id: n.id, freq: n.frequency })));
 
         return { nodes, links, mainId };
     }
@@ -293,14 +312,29 @@ export default class BiGramsGraph {
         this.zoomGroup = this.svg.append("g")
             .attr("class", "zoom-group");
 
+        // Calculate frequency extent for dynamic node sizing
+        const frequencies = this.data.nodes.map(d => d.frequency || 1);
+        const freqExtent = d3.extent(frequencies);
+        const minFreq = Math.max(1, freqExtent[0] || 1);
+        const maxFreq = Math.max(1, freqExtent[1] || 1);
+        
+        // Create a scale for node radius based on frequency
+        // Using sqrt scale for better visual perception (area scales with value)
+        this.nodeRadiusScale = d3.scaleSqrt()
+            .domain([minFreq, maxFreq])
+            .range([8, 60]); // Min radius 8, max radius 60
+
+        // Log the scale for debugging
+        console.log('BiGramsGraph: Frequency range', { minFreq, maxFreq });
+
         // Create forces with improved parameters for better connectivity and node distribution
         try {
             this.simulation = d3.forceSimulation(this.data.nodes)
                 .force("link", d3.forceLink(this.data.links).id(d => d.id)
                     .distance(d => {
                         // Dynamic distance based on node sizes - significantly increased for sparse layout
-                        const sourceSize = d.source && d.source.frequency ? Math.max(8, Math.min(60, 12 + Math.log1p(d.source.frequency) * 8)) : 12;
-                        const targetSize = d.target && d.target.frequency ? Math.max(8, Math.min(60, 12 + Math.log1p(d.target.frequency) * 8)) : 12;
+                        const sourceSize = this.nodeRadiusScale(d.source && d.source.frequency ? d.source.frequency : minFreq);
+                        const targetSize = this.nodeRadiusScale(d.target && d.target.frequency ? d.target.frequency : minFreq);
                         // Longer links to make edge width clearly visible
                         return Math.max(200, sourceSize + targetSize + 150);
                     })
@@ -309,28 +343,17 @@ export default class BiGramsGraph {
                 .force("charge", d3.forceManyBody()
                     .strength(d => {
                         // Strong repulsion to push nodes far apart for better edge visibility
-                        if (d && d.frequency) {
-                            const size = Math.max(8, Math.min(60, 12 + Math.log1p(d.frequency) * 8));
-                            return -Math.max(1500, size * 50); // Much stronger repulsion
-                        }
-                        return -1500;
+                        const size = this.nodeRadiusScale(d && d.frequency ? d.frequency : minFreq);
+                        return -Math.max(1500, size * 50); // Much stronger repulsion
                     })
                     .distanceMin(50)
                     .distanceMax(1500)
                 )
                 .force("center", d3.forceCenter(0, 0).strength(0.03)) // Slightly reduced to allow spreading
                 .force("collide", d3.forceCollide().radius(d => {
-                    // Calculate collision radius with large padding to prevent overlap
-                    const baseSize = 15;
-                    const scaleFactor = 6;
-                    const minSize = 12;
-                    const maxSize = 65;
-                    
-                    if (d && d.frequency) {
-                        const calculatedSize = baseSize + Math.log1p(d.frequency) * scaleFactor;
-                        return Math.max(minSize, Math.min(maxSize, calculatedSize)) + 60; // Much larger padding
-                    }
-                    return baseSize + 60;
+                    // Calculate collision radius using the same scale as node rendering
+                    const nodeSize = this.nodeRadiusScale(d && d.frequency ? d.frequency : minFreq);
+                    return nodeSize + 60; // Add padding for better edge visibility
                 }).strength(1).iterations(4)) // More iterations for better collision resolution
                 .alphaDecay(0.008) // Slower decay for better settling
                 .velocityDecay(0.25);
@@ -420,25 +443,16 @@ export default class BiGramsGraph {
                 tooltip.style("visibility", "hidden");
             });
 
-        // Add nodes with significantly different sizes and ensure they render as circles
+        // Add nodes with sizes based on tag frequency using the scale
+        const nodeRadiusScale = this.nodeRadiusScale; // Capture for use in callbacks
         const node = this.zoomGroup.append("g")
             .attr("class", "nodes")
             .selectAll("circle")
             .data(this.data.nodes)
             .join("circle")
             .attr("r", d => {
-                // Enhanced size calculation with logarithmic scaling for better differentiation
-                const baseSize = 12;
-                const scaleFactor = 8;
-                const minSize = 8;
-                const maxSize = 60;
-                
-                if (d && d.frequency) {
-                    // Use log1p to handle small frequency values better
-                    const calculatedSize = baseSize + Math.log1p(d.frequency) * scaleFactor;
-                    return Math.max(minSize, Math.min(maxSize, calculatedSize));
-                }
-                return baseSize;
+                // Use the pre-computed scale for consistent sizing
+                return nodeRadiusScale(d && d.frequency ? d.frequency : 1);
             })
             .attr("fill", d => d && d.id === mainId ? "#4a90b5" : "#c94663")
             .attr("stroke", d => d && d.id === mainId ? "#e0e6ed" : "#1a2f4a")
@@ -455,7 +469,7 @@ export default class BiGramsGraph {
             .text(d => d && d.id ? d.id : "")
             .attr("font-size", d => {
                 // Scale font size based on node size
-                const nodeSize = d && d.frequency ? Math.max(8, Math.min(60, 12 + Math.log1p(d.frequency) * 8)) : 12;
+                const nodeSize = nodeRadiusScale(d && d.frequency ? d.frequency : 1);
                 return Math.max(10, Math.min(16, nodeSize / 4)) + "px";
             })
             .attr("dx", d => d && d.id === mainId ? -10 : 15)
@@ -465,6 +479,25 @@ export default class BiGramsGraph {
             .attr("fill", "#e0e6ed")
             .attr("pointer-events", "none")
             .attr("opacity", 0.9);
+
+        // Add frequency labels inside nodes (similar to screenshot showing numbers)
+        const freqLabel = this.zoomGroup.append("g")
+            .attr("class", "freq-labels")
+            .selectAll("text")
+            .data(this.data.nodes)
+            .join("text")
+            .text(d => d && d.frequency ? d.frequency : "")
+            .attr("font-size", d => {
+                // Scale font size to fit inside node
+                const nodeSize = nodeRadiusScale(d && d.frequency ? d.frequency : 1);
+                return Math.max(8, Math.min(14, nodeSize / 3)) + "px";
+            })
+            .attr("text-anchor", "middle")
+            .attr("dominant-baseline", "central")
+            .attr("font-weight", "bold")
+            .attr("fill", "#ffffff")
+            .attr("pointer-events", "none")
+            .attr("opacity", 0.95);
 
         // Add tooltip with dark theme
         const tooltip = d3.select(this.containerSelector)
@@ -482,21 +515,28 @@ export default class BiGramsGraph {
             .style("max-width", "300px")
             .style("z-index", "1000");
 
-        // Mouse events with enhanced tooltip
+        // Mouse events with enhanced tooltip showing frequency
         node.on("mouseover", function(event, d) {
             if (d && d.id) {
                 const nodeType = d.id === mainId ? "Main Tag" : "Related Tag";
                 const frequency = d.frequency || 'N/A';
+                const bigramFreq = d.bigram_frequency || null;
                 
                 // Highlight node
                 d3.select(this)
                     .attr("stroke", "#ffa500")
                     .attr("stroke-width", 4);
                 
-                tooltip.style("visibility", "visible")
-                    .html(`<strong>${d.id}</strong><br/>
+                let tooltipContent = `<strong>${d.id}</strong><br/>
                            <strong>Type:</strong> ${nodeType}<br/>
-                           <strong>Frequency:</strong> ${frequency}`);
+                           <strong>Tag Frequency:</strong> ${frequency}`;
+                
+                if (bigramFreq && nodeType !== "Main Tag") {
+                    tooltipContent += `<br/><strong>Bi-gram Frequency:</strong> ${bigramFreq}`;
+                }
+                
+                tooltip.style("visibility", "visible")
+                    .html(tooltipContent);
             }
         })
         .on("mousemove", function(event) {
@@ -557,6 +597,11 @@ export default class BiGramsGraph {
                 .attr("cy", d => d.y);
 
             label
+                .attr("x", d => d.x)
+                .attr("y", d => d.y);
+            
+            // Update frequency labels position (centered on nodes)
+            freqLabel
                 .attr("x", d => d.x)
                 .attr("y", d => d.y);
             
@@ -686,6 +731,12 @@ export default class BiGramsGraph {
     }
     
     getNodeRadius(node) {
+        // Use the pre-computed scale if available, otherwise fall back to basic calculation
+        if (this.nodeRadiusScale && node && node.frequency) {
+            return this.nodeRadiusScale(node.frequency);
+        }
+        
+        // Fallback calculation
         if (!node || !node.frequency) return 12;
         
         const baseSize = 12;

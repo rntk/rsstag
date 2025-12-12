@@ -191,22 +191,24 @@ def on_get_tag_bi_grams_graph(app: "RSSTagApplication", user: dict, tag: str) ->
                     
                     # Add other tag as node if not already present
                     if other_tag not in nodes:
+                        other_tag_freq = bi_gram_freq  # Use bi-gram frequency as default
                         try:
                             other_tag_data = app.tags.get_by_tag(user["sid"], other_tag)
                             if other_tag_data:
-                                other_tag_freq = other_tag_data.get("posts_count", 1)
-                                if other_tag_freq is None:
-                                    other_tag_freq = 1
-                                
-                                nodes[other_tag] = {
-                                    "id": other_tag,
-                                    "frequency": other_tag_freq,
-                                    "type": "related"
-                                }
+                                tag_posts_count = other_tag_data.get("posts_count", None)
+                                if tag_posts_count is not None and tag_posts_count > 0:
+                                    other_tag_freq = tag_posts_count
                         except Exception as e:
+                            import logging
                             logging.warning(f"Failed to get tag data for {other_tag}: {e}")
-                            # Skip this tag but continue processing
-                            continue
+                            # Use bi-gram frequency as fallback
+                        
+                        nodes[other_tag] = {
+                            "id": other_tag,
+                            "frequency": other_tag_freq,
+                            "bigram_frequency": bi_gram_freq,  # Also include bi-gram frequency
+                            "type": "related"
+                        }
                     
                     # Add edge between main tag and other tag
                     # Check for existing edge and combine weights if duplicate
