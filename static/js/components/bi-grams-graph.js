@@ -298,28 +298,29 @@ export default class BiGramsGraph {
             this.simulation = d3.forceSimulation(this.data.nodes)
                 .force("link", d3.forceLink(this.data.links).id(d => d.id)
                     .distance(d => {
-                        // Dynamic distance based on node sizes to prevent overlapping
+                        // Dynamic distance based on node sizes - significantly increased for sparse layout
                         const sourceSize = d.source && d.source.frequency ? Math.max(8, Math.min(60, 12 + Math.log1p(d.source.frequency) * 8)) : 12;
                         const targetSize = d.target && d.target.frequency ? Math.max(8, Math.min(60, 12 + Math.log1p(d.target.frequency) * 8)) : 12;
-                        return Math.max(100, sourceSize + targetSize + 60); // Increased minimum distance
+                        // Longer links to make edge width clearly visible
+                        return Math.max(200, sourceSize + targetSize + 150);
                     })
-                    .strength(0.5)
+                    .strength(0.3) // Reduced strength for more flexibility
                 )
                 .force("charge", d3.forceManyBody()
                     .strength(d => {
-                        // Variable charge based on node size - larger nodes have stronger repulsion
+                        // Strong repulsion to push nodes far apart for better edge visibility
                         if (d && d.frequency) {
                             const size = Math.max(8, Math.min(60, 12 + Math.log1p(d.frequency) * 8));
-                            return -Math.max(800, size * 30); // Increased repulsion
+                            return -Math.max(1500, size * 50); // Much stronger repulsion
                         }
-                        return -800;
+                        return -1500;
                     })
-                    .distanceMin(30)
-                    .distanceMax(1000)
+                    .distanceMin(50)
+                    .distanceMax(1500)
                 )
-                .force("center", d3.forceCenter(0, 0).strength(0.05))
+                .force("center", d3.forceCenter(0, 0).strength(0.03)) // Slightly reduced to allow spreading
                 .force("collide", d3.forceCollide().radius(d => {
-                    // Calculate collision radius based on node size with additional padding
+                    // Calculate collision radius with large padding to prevent overlap
                     const baseSize = 15;
                     const scaleFactor = 6;
                     const minSize = 12;
@@ -327,12 +328,12 @@ export default class BiGramsGraph {
                     
                     if (d && d.frequency) {
                         const calculatedSize = baseSize + Math.log1p(d.frequency) * scaleFactor;
-                        return Math.max(minSize, Math.min(maxSize, calculatedSize)) + 25; // Increased padding
+                        return Math.max(minSize, Math.min(maxSize, calculatedSize)) + 60; // Much larger padding
                     }
-                    return baseSize + 25;
-                }).strength(1).iterations(3))
-                .alphaDecay(0.01)
-                .velocityDecay(0.3);
+                    return baseSize + 60;
+                }).strength(1).iterations(4)) // More iterations for better collision resolution
+                .alphaDecay(0.008) // Slower decay for better settling
+                .velocityDecay(0.25);
         } catch (error) {
             console.error('Error creating force simulation:', error);
             this.renderError('Failed to create graph simulation');
@@ -606,7 +607,7 @@ export default class BiGramsGraph {
 
     resolveNodeCollisions() {
         const nodes = this.data.nodes;
-        const collisionPadding = 5; // Additional padding between nodes
+        const collisionPadding = 20; // Larger padding for better edge visibility
         
         // Create a spatial index for faster collision detection
         const gridSize = 100;
@@ -709,16 +710,18 @@ export default class BiGramsGraph {
             mainNode.fy = 0;
         }
         
-        // Position other nodes in a circular pattern around the main node
-        const radius = 250;
+        // Position other nodes in a wide circular pattern for sparse initial layout
+        // Larger radius ensures edges are long enough to show their width clearly
+        const baseRadius = 350;
+        const radiusVariation = 100; // Add radius variation for visual interest
         const angleStep = (2 * Math.PI) / Math.max(1, otherNodes.length);
         
         otherNodes.forEach((node, index) => {
-            const angle = index * angleStep;
-            const distanceVariation = 0.8 + Math.random() * 0.4; // Add some randomness
+            const angle = index * angleStep + (Math.random() - 0.5) * 0.3; // Slight angle jitter
+            const nodeRadius = baseRadius + (Math.random() - 0.5) * radiusVariation;
             
-            node.x = Math.cos(angle) * radius * distanceVariation;
-            node.y = Math.sin(angle) * radius * distanceVariation;
+            node.x = Math.cos(angle) * nodeRadius;
+            node.y = Math.sin(angle) * nodeRadius;
         });
     }
 
