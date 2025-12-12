@@ -45,6 +45,9 @@ import TagSunburst from "../components/sunburst.js";
 import TagTree from "../components/dendrogram.js";
 import SentenceTree from '../components/SentenceTree.js';
 import BigramsTable from '../components/bigrams-table.js';
+import BiGramsGraphSimple from '../components/bi-grams-graph-simple.js';
+import BiGramsGraph from '../components/bi-grams-graph.js';
+
 
 function handleTextSelection() {
     document.addEventListener('mouseup', () => {
@@ -329,6 +332,33 @@ function tagWithContextInfoPage(tag) {
         document.getElementById('load_bi_grams')
     );
     bi_grams_storage.start();
+
+    // Bi-grams graph
+    const bi_grams_graph_evsys = new EventsSystem();
+    let bi_grams_graph;
+    
+    try {
+        // Try to use the D3.js visualization first
+        bi_grams_graph = new BiGramsGraph('#bi_grams_graph', tag.tag, bi_grams_graph_evsys);
+    } catch (e) {
+        console.warn('D3.js visualization failed to load, falling back to simple version:', e);
+        // Fall back to simple table visualization
+        bi_grams_graph = new BiGramsGraphSimple('#bi_grams_graph', tag.tag, bi_grams_graph_evsys);
+    }
+
+    // Create a simple load button for the graph
+    const loadGraphButton = document.createElement('button');
+    loadGraphButton.textContent = 'Load bi-grams graph';
+    loadGraphButton.addEventListener('click', () => {
+        loadGraphButton.disabled = true;
+        loadGraphButton.textContent = 'Loading...';
+        bi_grams_graph.start();
+    });
+
+    const loadGraphSpan = document.getElementById('load_bi_grams_graph');
+    if (loadGraphSpan) {
+        loadGraphSpan.appendChild(loadGraphButton);
+    }
 
     const pmi_evsys = new EventsSystem();
     const pmi_storage = new TagsStorage(pmi_evsys, '/tag-pmi');
