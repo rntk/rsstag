@@ -270,6 +270,11 @@ class RSSTagRoutes:
                 "methods": ["POST"],
             },
             {
+                "url": "/gmail-sort",
+                "endpoint": "on_gmail_sort_post",
+                "methods": ["POST"],
+            },
+            {
                 "url": "/tfidf-tags",
                 "endpoint": "on_tfidf_tags_get",
                 "methods": ["GET"],

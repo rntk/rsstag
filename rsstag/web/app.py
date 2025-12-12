@@ -1,4 +1,4 @@
-﻿import os
+import os
 import re
 import json
 from urllib.parse import quote_plus
@@ -1060,6 +1060,9 @@ class RSSTagApplication(object):
 
     def on_mark_telegram_posts_post(self, user: dict, request: Request):
         return posts_handlers.on_mark_telegram_posts_post(self, user, request)
+
+    def on_gmail_sort_post(self, user: dict, request: Request):
+        return posts_handlers.on_gmail_sort_post(self, user, request)
 
     def on_tfidf_tags_get(self, user: dict, rqst: Request):
         return tags_handlers.on_get_tfidf_tags(self, user, rqst)
