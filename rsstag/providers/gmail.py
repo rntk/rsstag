@@ -441,16 +441,21 @@ class GmailProvider:
                         await asyncio.sleep(batch_delay)
 
                 # 3. Create labels for each domain and apply them
+                # Optimization: Fetch all labels once
+                all_labels_map = await self.get_all_labels_map(session, user)
+
                 for domain, email_ids in domain_emails.items():
                     # Create or get label for this domain
-                    label_id = await self.get_or_create_domain_label(session, user, domain)
+                    label_id = await self.get_or_create_domain_label(session, user, domain, all_labels_map)
                     if not label_id:
                         logging.error(f"Failed to get or create label for domain {domain}")
                         continue
                     
-                    # Apply label to all emails from this domain
-                    for email_id in email_ids:
-                        await self.apply_label_to_email(session, user, email_id, label_id)
+                    # Apply label to all emails from this domain using batchModify
+                    chunk_size = 50
+                    for i in range(0, len(email_ids), chunk_size):
+                        chunk = email_ids[i:i + chunk_size]
+                        await self.batch_apply_label(session, user, chunk, label_id)
                         await asyncio.sleep(0.1)  # Small delay between API calls
                 
                 logging.info(f"Successfully sorted {len(domain_emails)} domains")
@@ -460,27 +465,28 @@ class GmailProvider:
         result = loop.run_until_complete(main())
         return result
 
-    async def get_or_create_domain_label(self, session, user: dict, domain: str) -> Optional[str]:
-        """Get or create a label for a specific domain"""
-        # First, try to get existing labels
+    async def get_all_labels_map(self, session, user: dict) -> dict:
+        """Fetch all labels and return a map of name -> id"""
         list_labels_url = f"https://{self._api_host}/gmail/v1/users/me/labels"
         resp = await self.make_authenticated_request(session, 'GET', list_labels_url, user)
         
         if not resp or resp.status != 200:
-            logging.error(f"Failed to list labels for domain {domain}: {resp.status if resp else 'No response'}")
-            return None
+            logging.error(f"Failed to list labels: {resp.status if resp else 'No response'}")
+            return {}
         
         labels_data = await resp.json()
-        labels = labels_data.get('labels', [])
-        
-        # Check if domain label already exists
+        return {label['name']: label['id'] for label in labels_data.get('labels', [])}
+
+    async def get_or_create_domain_label(self, session, user: dict, domain: str, labels_map: Optional[dict] = None) -> Optional[str]:
+        """Get or create a label for a specific domain"""
         domain_label_name = f"Domain/{domain}"
-        for label in labels:
-            if label['name'] == domain_label_name:
-                logging.info(f"Found existing label for domain {domain}: {label['id']}")
-                return label['id']
         
-        # Label doesn't exist, create it
+        # Check if label exists in the provided map
+        if labels_map and domain_label_name in labels_map:
+            logging.info(f"Found existing label for domain {domain} in cache: {labels_map[domain_label_name]}")
+            return labels_map[domain_label_name]
+        
+        # Label doesn't exist (or map not provided), create it
         create_label_url = f"https://{self._api_host}/gmail/v1/users/me/labels"
         label_payload = {
             "name": domain_label_name,
@@ -499,25 +505,36 @@ class GmailProvider:
         label_data = await resp.json()
         label_id = label_data.get('id')
         logging.info(f"Created new label for domain {domain}: {label_id}")
+        
+        # Update map if provided
+        if labels_map is not None:
+            labels_map[domain_label_name] = label_id
+            
         return label_id
+
+    async def batch_apply_label(self, session, user: dict, email_ids: List[str], label_id: str) -> bool:
+        """Apply a label to multiple emails using batchModify"""
+        url = f"https://{self._api_host}/gmail/v1/users/me/messages/batchModify"
+        payload = {
+            'ids': email_ids,
+            'addLabelIds': [label_id]
+        }
+        
+        resp = await self.make_authenticated_request(session, 'POST', url, user, json=payload)
+        if resp and (resp.status == 200 or resp.status == 204):
+            logging.debug(f"Successfully applied label {label_id} to {len(email_ids)} emails")
+            return True
+        else:
+            logging.error(f"Failed to batch apply label: {await resp.text() if resp else 'No response'}")
+            return False
 
     async def apply_label_to_email(self, session, user: dict, email_id: str, label_id: str) -> bool:
         """Apply a label to an email"""
-        url = f"https://{self._api_host}/gmail/v1/users/me/messages/{email_id}/modify"
-        payload = {'addLabelIds': [label_id]}
-        
-        resp = await self.make_authenticated_request(session, 'POST', url, user, json=payload)
-        if resp and resp.status == 200:
-            logging.debug(f"Successfully applied label {label_id} to email {email_id}")
-            return True
-        else:
-            logging.error(f"Failed to apply label to email {email_id}: {await resp.text() if resp else 'No response'}")
-            return False
+        return await self.batch_apply_label(session, user, [email_id], label_id)
 
     def extract_domain(self, from_header: str) -> Optional[str]:
         """Extract domain from email address in From header"""
         # Look for email address in angle brackets
-        import re
         email_match = re.search(r'<([^>]+)>', from_header)
         if email_match:
             email = email_match.group(1)
