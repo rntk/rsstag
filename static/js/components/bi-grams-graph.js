@@ -332,31 +332,31 @@ export default class BiGramsGraph {
             this.simulation = d3.forceSimulation(this.data.nodes)
                 .force("link", d3.forceLink(this.data.links).id(d => d.id)
                     .distance(d => {
-                        // Dynamic distance based on node sizes - significantly increased for sparse layout
+                        // Significantly increased distance for better node separation
                         const sourceSize = this.nodeRadiusScale(d.source && d.source.frequency ? d.source.frequency : minFreq);
                         const targetSize = this.nodeRadiusScale(d.target && d.target.frequency ? d.target.frequency : minFreq);
-                        // Longer links to make edge width clearly visible
-                        return Math.max(200, sourceSize + targetSize + 150);
+                        // Much longer links to create more space between nodes
+                        return Math.max(300, sourceSize + targetSize + 300);
                     })
-                    .strength(0.3) // Reduced strength for more flexibility
+                    .strength(0.2) // Further reduced strength for more flexibility
                 )
                 .force("charge", d3.forceManyBody()
                     .strength(d => {
-                        // Strong repulsion to push nodes far apart for better edge visibility
+                        // Much stronger repulsion to push nodes far apart
                         const size = this.nodeRadiusScale(d && d.frequency ? d.frequency : minFreq);
-                        return -Math.max(1500, size * 50); // Much stronger repulsion
+                        return -Math.max(2500, size * 80); // Increased repulsion
                     })
-                    .distanceMin(50)
-                    .distanceMax(1500)
+                    .distanceMin(100)
+                    .distanceMax(2000)
                 )
-                .force("center", d3.forceCenter(0, 0).strength(0.03)) // Slightly reduced to allow spreading
+                .force("center", d3.forceCenter(0, 0).strength(0.02)) // Further reduced to allow more spreading
                 .force("collide", d3.forceCollide().radius(d => {
-                    // Calculate collision radius using the same scale as node rendering
+                    // Calculate collision radius with more padding
                     const nodeSize = this.nodeRadiusScale(d && d.frequency ? d.frequency : minFreq);
-                    return nodeSize + 60; // Add padding for better edge visibility
-                }).strength(1).iterations(4)) // More iterations for better collision resolution
-                .alphaDecay(0.008) // Slower decay for better settling
-                .velocityDecay(0.25);
+                    return nodeSize + 100; // Increased padding for better separation
+                }).strength(1).iterations(6)) // More iterations for better collision resolution
+                .alphaDecay(0.005) // Even slower decay for better settling
+                .velocityDecay(0.2);
         } catch (error) {
             console.error('Error creating force simulation:', error);
             this.renderError('Failed to create graph simulation');
@@ -458,46 +458,56 @@ export default class BiGramsGraph {
             .attr("stroke", d => d && d.id === mainId ? "#e0e6ed" : "#1a2f4a")
             .attr("stroke-width", d => d && d.id === mainId ? 4 : 2)
             .attr("opacity", 0.9) // Slight transparency to see overlapping
-            .call(this.drag(this.simulation));
+            .call(this.drag(this.simulation))
+            .style("cursor", "pointer")
+            .on("click", (event, d) => {
+                if (d && d.id) {
+                    this.handleNodeClick(d.id);
+                }
+            });
 
-        // Add labels with better positioning and readability
-        const label = this.zoomGroup.append("g")
-            .attr("class", "labels")
-            .selectAll("text")
+        // Add labels with improved formatting - tag on first line, frequency on second line
+        const labelGroup = this.zoomGroup.append("g")
+            .attr("class", "label-groups")
+            .selectAll("g")
             .data(this.data.nodes)
-            .join("text")
+            .join("g")
+            .attr("class", "label-group")
+            .attr("pointer-events", "none");
+
+        // Add tag text (first line)
+        labelGroup.append("text")
+            .attr("class", "tag-label")
             .text(d => d && d.id ? d.id : "")
             .attr("font-size", d => {
                 // Scale font size based on node size
                 const nodeSize = nodeRadiusScale(d && d.frequency ? d.frequency : 1);
-                return Math.max(10, Math.min(16, nodeSize / 4)) + "px";
+                return Math.max(12, Math.min(18, nodeSize / 3.5)) + "px";
             })
-            .attr("dx", d => d && d.id === mainId ? -10 : 15)
-            .attr("dy", 4)
+            .attr("dx", d => d && d.id === mainId ? -15 : 20)
+            .attr("dy", -10) // Position above center
             .attr("text-anchor", d => d && d.id === mainId ? "end" : "start")
             .attr("font-weight", d => d && d.id === mainId ? "bold" : "normal")
             .attr("fill", "#e0e6ed")
-            .attr("pointer-events", "none")
-            .attr("opacity", 0.9);
+            .attr("opacity", 0.95)
+            .attr("text-shadow", "1px 1px 2px rgba(0,0,0,0.7)");
 
-        // Add frequency labels inside nodes (similar to screenshot showing numbers)
-        const freqLabel = this.zoomGroup.append("g")
-            .attr("class", "freq-labels")
-            .selectAll("text")
-            .data(this.data.nodes)
-            .join("text")
-            .text(d => d && d.frequency ? d.frequency : "")
+        // Add frequency text (second line)
+        labelGroup.append("text")
+            .attr("class", "freq-label")
+            .text(d => d && d.frequency ? d.frequency.toString() : "")
             .attr("font-size", d => {
-                // Scale font size to fit inside node
+                // Slightly smaller font for frequency
                 const nodeSize = nodeRadiusScale(d && d.frequency ? d.frequency : 1);
-                return Math.max(8, Math.min(14, nodeSize / 3)) + "px";
+                return Math.max(10, Math.min(14, nodeSize / 4)) + "px";
             })
-            .attr("text-anchor", "middle")
-            .attr("dominant-baseline", "central")
-            .attr("font-weight", "bold")
-            .attr("fill", "#ffffff")
-            .attr("pointer-events", "none")
-            .attr("opacity", 0.95);
+            .attr("dx", d => d && d.id === mainId ? -15 : 20)
+            .attr("dy", 10) // Position below center
+            .attr("text-anchor", d => d && d.id === mainId ? "end" : "start")
+            .attr("font-weight", "normal")
+            .attr("fill", "#a0b8d8")
+            .attr("opacity", 0.85)
+            .attr("text-shadow", "1px 1px 2px rgba(0,0,0,0.7)");
 
         // Add tooltip with dark theme
         const tooltip = d3.select(this.containerSelector)
@@ -596,14 +606,9 @@ export default class BiGramsGraph {
                 .attr("cx", d => d.x)
                 .attr("cy", d => d.y);
 
-            label
-                .attr("x", d => d.x)
-                .attr("y", d => d.y);
-            
-            // Update frequency labels position (centered on nodes)
-            freqLabel
-                .attr("x", d => d.x)
-                .attr("y", d => d.y);
+            // Update label group positions
+            labelGroup
+                .attr("transform", d => `translate(${d.x},${d.y})`);
             
             // Custom collision detection and resolution
             this.resolveNodeCollisions();
@@ -798,6 +803,23 @@ export default class BiGramsGraph {
             .on("start", dragstarted)
             .on("drag", dragged)
             .on("end", dragended);
+    }
+
+    handleNodeClick(tag) {
+        // Check if this is the main tag or a related tag
+        const isMainTag = tag === this.tag || tag === (this.meta && this.meta.main_tag);
+        
+        // For main tag, open entity page
+        // For related tags, open bi-gram page with the main tag and this tag
+        if (isMainTag) {
+            // Open entity page for the main tag
+            window.open(`/entity/${encodeURIComponent(tag)}`, '_blank');
+        } else {
+            // Open bi-gram page for the combination
+            const mainTag = (this.meta && this.meta.main_tag) ? this.meta.main_tag : this.tag;
+            const biGram = `${mainTag} ${tag}`;
+            window.open(`/bi-gram/${encodeURIComponent(biGram)}`, '_blank');
+        }
     }
 
     start() {
