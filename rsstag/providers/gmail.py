@@ -4,6 +4,7 @@ from email.header import decode_header
 import asyncio
 import json
 import logging
+import re
 from typing import Tuple, List, Optional, Iterator
 from datetime import datetime
 from hashlib import md5
@@ -376,3 +377,175 @@ class GmailProvider:
             
         loop = asyncio.get_event_loop()
         return loop.run_until_complete(main())
+
+    def sort_emails_by_domain(self, user: dict) -> Optional[bool]:
+        """Sort emails by sender domain - create labels for each domain and apply them"""
+        async def main():
+            async with aiohttp.ClientSession() as session:
+                # 1. Get list of all messages in inbox
+                list_url = f"https://{self._api_host}/gmail/v1/users/me/messages?q=in:inbox"
+                message_ids = []
+                while list_url:
+                    resp = await self.make_authenticated_request(session, 'GET', list_url, user, max_retries=5)
+                    if not resp:
+                        logging.error("Failed to authenticate Gmail request for sorting")
+                        return False
+                    if resp.status != 200:
+                        logging.error(f"Failed to list messages for sorting: {await resp.text()}")
+                        return False
+                    data = await resp.json()
+                    message_ids.extend(data.get('messages', []))
+                    next_token = data.get('nextPageToken')
+                    if next_token:
+                        # Add small delay before fetching next page
+                        await asyncio.sleep(0.5)
+                    list_url = f"https://{self._api_host}/gmail/v1/users/me/messages?q=in:inbox&pageToken={next_token}" if next_token else None
+
+                if not message_ids:
+                    logging.info("No messages found in inbox for sorting")
+                    return True
+
+                # 2. Process emails in batches to get sender domains
+                batch_size = 10
+                batch_delay = 0.5
+                domain_emails = {}
+                
+                logging.info(f"Processing {len(message_ids)} emails for domain sorting")
+                for i in range(0, len(message_ids), batch_size):
+                    batch = message_ids[i:i + batch_size]
+                    email_tasks = []
+                    for message in batch:
+                        email_url = f"https://{self._api_host}/gmail/v1/users/me/messages/{message['id']}"
+                        email_tasks.append(self.fetch_email_content_authenticated(session, email_url, user))
+                    
+                    batch_emails = await asyncio.gather(*email_tasks)
+                    
+                    for mail_data in batch_emails:
+                        if not mail_data:
+                            continue
+                        
+                        # Extract sender domain from headers
+                        headers_map = {h['name'].lower(): h['value'] for h in mail_data['payload']['headers']}
+                        from_header = headers_map.get('from', '')
+                        
+                        if from_header:
+                            # Extract domain from email address
+                            domain = self.extract_domain(from_header)
+                            if domain:
+                                if domain not in domain_emails:
+                                    domain_emails[domain] = []
+                                domain_emails[domain].append(mail_data['id'])
+                    
+                    # Add delay between batches
+                    if i + batch_size < len(message_ids):
+                        await asyncio.sleep(batch_delay)
+
+                # 3. Create labels for each domain and apply them
+                # Optimization: Fetch all labels once
+                all_labels_map = await self.get_all_labels_map(session, user)
+
+                for domain, email_ids in domain_emails.items():
+                    # Create or get label for this domain
+                    label_id = await self.get_or_create_domain_label(session, user, domain, all_labels_map)
+                    if not label_id:
+                        logging.error(f"Failed to get or create label for domain {domain}")
+                        continue
+                    
+                    # Apply label to all emails from this domain using batchModify
+                    chunk_size = 50
+                    for i in range(0, len(email_ids), chunk_size):
+                        chunk = email_ids[i:i + chunk_size]
+                        await self.batch_apply_label(session, user, chunk, label_id)
+                        await asyncio.sleep(0.1)  # Small delay between API calls
+                
+                logging.info(f"Successfully sorted {len(domain_emails)} domains")
+                return True
+        
+        loop = asyncio.get_event_loop()
+        result = loop.run_until_complete(main())
+        return result
+
+    async def get_all_labels_map(self, session, user: dict) -> dict:
+        """Fetch all labels and return a map of name -> id"""
+        list_labels_url = f"https://{self._api_host}/gmail/v1/users/me/labels"
+        resp = await self.make_authenticated_request(session, 'GET', list_labels_url, user)
+        
+        if not resp or resp.status != 200:
+            logging.error(f"Failed to list labels: {resp.status if resp else 'No response'}")
+            return {}
+        
+        labels_data = await resp.json()
+        return {label['name']: label['id'] for label in labels_data.get('labels', [])}
+
+    async def get_or_create_domain_label(self, session, user: dict, domain: str, labels_map: Optional[dict] = None) -> Optional[str]:
+        """Get or create a label for a specific domain"""
+        domain_label_name = f"Domain/{domain}"
+        
+        # Check if label exists in the provided map
+        if labels_map and domain_label_name in labels_map:
+            logging.info(f"Found existing label for domain {domain} in cache: {labels_map[domain_label_name]}")
+            return labels_map[domain_label_name]
+        
+        # Label doesn't exist (or map not provided), create it
+        create_label_url = f"https://{self._api_host}/gmail/v1/users/me/labels"
+        label_payload = {
+            "name": domain_label_name,
+            "messageListVisibility": "show",
+            "labelListVisibility": "labelShow"
+        }
+        
+        resp = await self.make_authenticated_request(
+            session, 'POST', create_label_url, user, json=label_payload
+        )
+        
+        if not resp or resp.status != 200:
+            logging.error(f"Failed to create label for domain {domain}: {await resp.text() if resp else 'No response'}")
+            return None
+        
+        label_data = await resp.json()
+        label_id = label_data.get('id')
+        logging.info(f"Created new label for domain {domain}: {label_id}")
+        
+        # Update map if provided
+        if labels_map is not None:
+            labels_map[domain_label_name] = label_id
+            
+        return label_id
+
+    async def batch_apply_label(self, session, user: dict, email_ids: List[str], label_id: str) -> bool:
+        """Apply a label to multiple emails using batchModify"""
+        url = f"https://{self._api_host}/gmail/v1/users/me/messages/batchModify"
+        payload = {
+            'ids': email_ids,
+            'addLabelIds': [label_id]
+        }
+        
+        resp = await self.make_authenticated_request(session, 'POST', url, user, json=payload)
+        if resp and (resp.status == 200 or resp.status == 204):
+            logging.debug(f"Successfully applied label {label_id} to {len(email_ids)} emails")
+            return True
+        else:
+            logging.error(f"Failed to batch apply label: {await resp.text() if resp else 'No response'}")
+            return False
+
+    async def apply_label_to_email(self, session, user: dict, email_id: str, label_id: str) -> bool:
+        """Apply a label to an email"""
+        return await self.batch_apply_label(session, user, [email_id], label_id)
+
+    def extract_domain(self, from_header: str) -> Optional[str]:
+        """Extract domain from email address in From header"""
+        # Look for email address in angle brackets
+        email_match = re.search(r'<([^>]+)>', from_header)
+        if email_match:
+            email = email_match.group(1)
+        else:
+            # Try to find email address directly
+            email_match = re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b', from_header)
+            if email_match:
+                email = email_match.group(0)
+            else:
+                return None
+        
+        # Extract domain part
+        domain = email.split('@')[-1]
+        return domain if domain else None

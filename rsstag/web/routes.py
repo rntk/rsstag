@@ -150,6 +150,16 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/api/tag-bi-grams-graph/<string:tag>",
+                "endpoint": "on_get_tag_bi_grams_graph",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/api/tag-bi-grams-graph-debug/<string:tag>",
+                "endpoint": "on_get_tag_bi_grams_graph_debug",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/tag-pmi/<string:tag>",
                 "endpoint": "on_get_tag_pmi",
                 "methods": ["GET"],
@@ -267,6 +277,11 @@ class RSSTagRoutes:
             {
                 "url": "/telegram-mark",
                 "endpoint": "on_mark_telegram_posts_post",
+                "methods": ["POST"],
+            },
+            {
+                "url": "/gmail-sort",
+                "endpoint": "on_gmail_sort_post",
                 "methods": ["POST"],
             },
             {

@@ -26,6 +26,7 @@ from rsstag.tasks import (
     TASK_DOWNLOAD,
     TASK_MARK,
     TASK_MARK_TELEGRAM,
+    TASK_GMAIL_SORT,
     TASK_TAGS,
     TASK_TAGS_GROUP,
     TAG_NOT_IN_PROCESSING,
@@ -701,6 +702,15 @@ def worker(config):
                     task_done = False
                 else:
                     task_done = marked
+            elif task["type"] == TASK_GMAIL_SORT:
+                provider = providers[data_providers.GMAIL]
+                sorted_emails = provider.sort_emails_by_domain(task["user"])
+                if sorted_emails is None:
+                    tasks.freeze_tasks(task["user"], task["type"])
+                    users.update_by_sid(task["user"]["sid"], {"retoken": True})
+                    task_done = False
+                else:
+                    task_done = sorted_emails
             elif task["type"] == TASK_TAGS:
                 if task["data"]:
                     task_done = wrkr.make_tags(task["data"], builder, cleaner)

@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from rsstag.web.app import RSSTagApplication
-from rsstag.tasks import TASK_MARK, TASK_MARK_TELEGRAM, TASK_NOT_IN_PROCESSING
+from rsstag.tasks import TASK_MARK, TASK_MARK_TELEGRAM, TASK_GMAIL_SORT, TASK_NOT_IN_PROCESSING
 from rsstag.utils import text_to_speech
 
 from werkzeug.wrappers import Request, Response
@@ -371,6 +371,24 @@ def on_mark_telegram_posts_post(
             {"type": TASK_MARK_TELEGRAM, "user": user["sid"], "data": for_insert}
     ):
         logging.error("Can't add task for mark telegram posts: %s", for_insert)
+
+    return redirect(app.routes.get_url_by_endpoint("on_root_get"))
+
+def on_gmail_sort_post(
+        app: "RSSTagApplication", user: dict, _: Request
+) -> Response:
+    for_insert = [
+        {
+            "user": user["sid"],
+            "id": "",
+            "processing": TASK_NOT_IN_PROCESSING,
+            "type": TASK_GMAIL_SORT,
+        }
+    ]
+    if not app.tasks.add_task(
+            {"type": TASK_GMAIL_SORT, "user": user["sid"], "data": for_insert}
+    ):
+        logging.error("Can't add task for gmail sort: %s", for_insert)
 
     return redirect(app.routes.get_url_by_endpoint("on_root_get"))
 

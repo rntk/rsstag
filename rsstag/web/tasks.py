@@ -18,7 +18,8 @@ from rsstag.tasks import (
     TASK_TAGS_RANK,
     TASK_FASTTEXT,
     TASK_CLEAN_BIGRAMS,
-    TASK_MARK_TELEGRAM
+    TASK_MARK_TELEGRAM,
+    TASK_GMAIL_SORT,
 )
 
 def on_tasks_get(app, user: dict, request: Request) -> Response:
@@ -39,7 +40,8 @@ def on_tasks_get(app, user: dict, request: Request) -> Response:
         TASK_TAGS_RANK: "Rank tags",
         TASK_FASTTEXT: "Train FastText",
         TASK_CLEAN_BIGRAMS: "Clean bigrams",
-        TASK_MARK_TELEGRAM: "Sync Telegram read state"
+        TASK_MARK_TELEGRAM: "Sync Telegram read state",
+        TASK_GMAIL_SORT: "Sort Gmail emails"
     }
     
     page = app.template_env.get_template("tasks.html")
