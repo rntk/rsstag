@@ -50,7 +50,12 @@
 
 <div class="page">
     <h2>Posts {{post_id}} - {{feed_title}}</h2>
-
+    
+    {% if processing_message %}
+    <div style="padding: 15px; background-color: #fff8e1; border-radius: 5px; margin-bottom: 20px;">
+        <p style="margin: 0; color: #ff8f00;">{{ processing_message }}</p>
+    </div>
+    {% endif %}
 
     <div style="display:flex; gap:20px; flex-wrap:wrap;">
       <div style="flex:2 1 600px; min-width:400px;">

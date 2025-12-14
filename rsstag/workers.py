@@ -38,7 +38,8 @@ from rsstag.tasks import (
     TASK_BIGRAMS_RANK,
     TASK_TAGS_RANK,
     TASK_FASTTEXT,
-    TASK_CLEAN_BIGRAMS
+    TASK_CLEAN_BIGRAMS,
+    TASK_POST_GROUPING
 )
 from rsstag.tasks import RssTagTasks
 from rsstag.letters import RssTagLetters
@@ -80,6 +81,39 @@ class Worker:
         self._db = db
         self._config = config
         self._stopw = set(stopwords.words("english") + stopwords.words("russian"))
+        
+        # Initialize LLM handlers
+        self._llamacpp = None
+        self._groqcom = None
+        self._openai = None
+        self._anthropic = None
+        
+        try:
+            from rsstag.llamacpp import LLamaCPP
+            self._llamacpp = LLamaCPP(self._config["llamacpp"]["host"])
+        except Exception as e:
+            logging.warning("Can't initialize LLamaCPP: %s", e)
+        
+        try:
+            from rsstag.llm.groqcom import GroqCom
+            self._groqcom = GroqCom(
+                host=self._config["groqcom"]["host"], 
+                token=self._config["groqcom"]["token"]
+            )
+        except Exception as e:
+            logging.warning("Can't initialize GroqCom: %s", e)
+        
+        try:
+            from rsstag.openai import ROpenAI
+            self._openai = ROpenAI(self._config["openai"]["token"])
+        except Exception as e:
+            logging.warning("Can't initialize OpenAI: %s", e)
+        
+        try:
+            from rsstag.anthropic import Anthropic
+            self._anthropic = Anthropic(self._config["anthropic"]["token"])
+        except Exception as e:
+            logging.warning("Can't initialize Anthropic: %s", e)
 
     def clear_user_data(self, user: dict):
         try:
@@ -619,6 +653,34 @@ class Worker:
         bi_grams = RssTagBiGrams(self._db)
         return bi_grams.remove_by_count(task["user"]["sid"], 1)
 
+    def make_post_grouping(self, task: dict) -> bool:
+        """Process post grouping for the given task"""
+        try:
+            from rsstag.post_grouping import RssTagPostGrouping
+            
+            owner = task["user"]["sid"]
+            posts = task["data"]
+            
+            if not posts:
+                return True  # No posts to process
+            
+            # Get feed IDs from posts
+            feed_ids = set(post.get("feed_id") for post in posts)
+            feeds = list(self._db.feeds.find({
+                "owner": owner,
+                "feed_id": {"$in": list(feed_ids)}
+            }))
+            
+            # Process post grouping with LLM handler
+            post_grouping = RssTagPostGrouping(self._db, self._llamacpp)
+            result = post_grouping.process_post_grouping(owner, posts, feeds)
+            
+            return result is not None
+            
+        except Exception as e:
+            logging.error("Can't make post grouping. Info: %s", e)
+            return False
+
 def worker(config):
     cl = MongoClient(
         config["settings"]["db_host"],
@@ -741,6 +803,12 @@ def worker(config):
                 task_done = wrkr.make_tags_rank(task)
             elif task["type"] == TASK_CLEAN_BIGRAMS:
                 task_done = wrkr.make_clean_bigrams(task)
+            elif task["type"] == TASK_POST_GROUPING:
+                if task["data"]:
+                    task_done = wrkr.make_post_grouping(task)
+                else:
+                    task_done = True
+                    logging.warning("Error while make post grouping: %s", task)
             """elif task['type'] == TASK_WORDS:
                 task_done = wrkr.process_words(task['data'])"""
             # TODO: add tags_coords, add D2V?

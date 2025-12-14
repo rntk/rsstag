@@ -24,12 +24,14 @@ TASK_FASTTEXT = 15
 TASK_CLEAN_BIGRAMS = 16
 TASK_MARK_TELEGRAM = 17
 TASK_GMAIL_SORT = 18
+TASK_POST_GROUPING = 19
 
 POST_NOT_IN_PROCESSING = 0
 BIGRAM_NOT_IN_PROCESSING = 0
 TASK_NOT_IN_PROCESSING = 0
 TASK_FREEZED = -1
 TAG_NOT_IN_PROCESSING = 0
+POST_GROUPING_NOT_IN_PROCESSING = 0
 
 
 class RssTagTasks:
@@ -47,6 +49,7 @@ class RssTagTasks:
         TASK_NER: [TASK_CLUSTERING],
         TASK_CLUSTERING: [TASK_W2V],
         TASK_W2V: [TASK_FASTTEXT],
+        TASK_FASTTEXT: [TASK_POST_GROUPING],
         #TASK_W2V: [TASK_TAGS_GROUP],
         #TASK_TAGS_GROUP: [TASK_FASTTEXT]
     }
@@ -219,6 +222,43 @@ class RssTagTasks:
                     self.add_next_tasks(
                         task["user"]["sid"], user_task["type"]
                     )
+            elif user_task["type"] == TASK_POST_GROUPING:
+                data = []
+                # Get posts that need grouping
+                ps = self._db.posts.find(
+                    {
+                        "owner": task["user"]["sid"],
+                        "grouping": {"$exists": False},
+                        "processing": POST_NOT_IN_PROCESSING,
+                    }
+                ).limit(1)
+                ids = []
+                for p in ps:
+                    data.append(p)
+                    ids.append(p["_id"])
+                unlock_task = True
+                if ids:
+                    self._db.posts.update_many(
+                        {"_id": {"$in": ids}},
+                        {"$set": {"processing": time.time()}},
+                    )
+                else:
+                    task["type"] = TASK_NOOP
+                    psc = self._db.posts.count_documents(
+                        {
+                            "owner": task["user"]["sid"],
+                            "grouping": {"$exists": False}
+                        }
+                    )
+                    if psc == 0:
+                        if self.add_next_tasks(task["user"]["sid"], user_task["type"]):
+                            self._db.tasks.delete_one({"_id": user_task["_id"]})
+                            unlock_task = False
+                if unlock_task:
+                    self._db.tasks.update_one(
+                        {"_id": user_task["_id"]},
+                        {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
+                    )
             elif user_task["type"] == TASK_TAGS_RANK:
                 data = []
                 tags_dt = self._db.tags.find(
@@ -361,6 +401,15 @@ class RssTagTasks:
                         {"$set": {"processing": POST_NOT_IN_PROCESSING, "ner": 1}},
                     ))
                 self._db.posts.bulk_write(updates, ordered=False)
+            elif task["type"] == TASK_POST_GROUPING:
+                remove_task = False
+                updates = []
+                for post in task["data"]:
+                    updates.append(UpdateOne(
+                        {"_id": post["_id"]},
+                        {"$set": {"processing": POST_NOT_IN_PROCESSING, "grouping": 1}},
+                    ))
+                self._db.posts.bulk_write(updates, ordered=False)
             if remove_task:
                 removed = self.remove_task(task["data"]["_id"])
                 if removed and not task.get("manual", False):
@@ -413,7 +462,8 @@ class RssTagTasks:
             TASK_TAGS_COORDS: "Searching geo objects in tags",
             TASK_BIGRAMS_RANK: "Bi-grams ranking",
             TASK_TAGS_RANK: "Tags ranking",
-            TASK_CLEAN_BIGRAMS: "Clean bi-grams"
+            TASK_CLEAN_BIGRAMS: "Clean bi-grams",
+            TASK_POST_GROUPING: "Post grouping"
         }
 
         if task_type in task_titles:

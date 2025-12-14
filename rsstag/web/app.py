@@ -116,6 +116,7 @@ class RSSTagApplication(object):
         self.update_endpoints()
         self.tasks = RssTagTasks(self.db)
         self.tasks.prepare()
+        
         self.count_showed_numbers = 4
         self.models = {"d2v": "d2v", "w2v": "w2v", "fasttext": "fasttext"}
         self.allow_not_logged = (
@@ -140,6 +141,11 @@ class RSSTagApplication(object):
         self.anthropic = Anthropic(self.config["anthropic"]["token"])
         self.llamacpp = LLamaCPP(self.config["llamacpp"]["host"])
         self.groqcom = GroqCom(host=self.config["groqcom"]["host"], token=self.config["groqcom"]["token"])
+        
+        # Initialize post grouping (after LLM handlers are available)
+        from rsstag.post_grouping import RssTagPostGrouping
+        self.post_grouping = RssTagPostGrouping(self.db, self.llamacpp)
+        self.post_grouping.prepare()
 
     def _find_group_for_sentence(self, sentence_num, groups):
         """Custom filter to find which group a sentence belongs to"""
