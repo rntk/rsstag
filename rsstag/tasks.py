@@ -185,7 +185,12 @@ class RssTagTasks:
                         }
                     )
                     if psc == 0:
-                        if self.add_next_tasks(task["user"]["sid"], user_task["type"]):
+                        can_delete = False
+                        if user_task.get("manual", False):
+                            can_delete = True
+                        elif self.add_next_tasks(task["user"]["sid"], user_task["type"]):
+                            can_delete = True
+                        if can_delete:
                             self._db.tasks.delete_one({"_id": user_task["_id"]})
                             unlock_task = False
                 if unlock_task:
@@ -218,10 +223,13 @@ class RssTagTasks:
                     )
                 else:
                     task["type"] = TASK_NOOP
-                    self._db.tasks.delete_one({"_id": user_task["_id"]})
-                    self.add_next_tasks(
-                        task["user"]["sid"], user_task["type"]
-                    )
+                    can_delete = False
+                    if user_task.get("manual", False):
+                        can_delete = True
+                    elif self.add_next_tasks(task["user"]["sid"], user_task["type"]):
+                        can_delete = True
+                    if can_delete:
+                        self._db.tasks.delete_one({"_id": user_task["_id"]})
             elif user_task["type"] == TASK_POST_GROUPING:
                 data = []
                 # Get posts that need grouping
@@ -251,7 +259,12 @@ class RssTagTasks:
                         }
                     )
                     if psc == 0:
-                        if self.add_next_tasks(task["user"]["sid"], user_task["type"]):
+                        can_delete = False
+                        if user_task.get("manual", False):
+                            can_delete = True
+                        elif self.add_next_tasks(task["user"]["sid"], user_task["type"]):
+                            can_delete = True
+                        if can_delete:
                             self._db.tasks.delete_one({"_id": user_task["_id"]})
                             unlock_task = False
                 if unlock_task:
@@ -284,10 +297,13 @@ class RssTagTasks:
                     )
                 else:
                     task["type"] = TASK_NOOP
-                    self._db.tasks.delete_one({"_id": user_task["_id"]})
-                    self.add_next_tasks(
-                        task["user"]["sid"], user_task["type"]
-                    )
+                    can_delete = False
+                    if user_task.get("manual", False):
+                        can_delete = True
+                    elif self.add_next_tasks(task["user"]["sid"], user_task["type"]):
+                        can_delete = True
+                    if can_delete:
+                        self._db.tasks.delete_one({"_id": user_task["_id"]})
             elif user_task["type"] == TASK_NER:
                 data = []
                 ps = self._db.posts.find(
@@ -316,7 +332,12 @@ class RssTagTasks:
                         }
                     )
                     if psc == 0:
-                        if self.add_next_tasks(task["user"]["sid"], user_task["type"]):
+                        can_delete = False
+                        if user_task.get("manual", False):
+                            can_delete = True
+                        elif self.add_next_tasks(task["user"]["sid"], user_task["type"]):
+                            can_delete = True
+                        if can_delete:
                             self._db.tasks.delete_one({"_id": user_task["_id"]})
                             unlock_task = False
                 if unlock_task:
