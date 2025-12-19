@@ -1,0 +1,180 @@
+﻿<html>
+<head>
+<title>Topics/Chapters List</title>
+{% include "head-data.html" %}
+</head>
+<body>
+{% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
+
+<div id="global_tools">
+    <div class="left_half">
+        <div id="link_on_root" class="global_tools_button">
+            <a href="/">main</a>
+        </div>
+        <div id="help_button" class="global_tools_button">
+            <a href="#">help</a>
+        </div>
+    </div>
+    <div class="right_half">
+        {{ g_status.global_status() }}
+        {{ menu.settings_menu() }}
+    </div>
+</div>
+
+<div class="page">
+    <h1>Topics/Chapters List</h1>
+    
+    <div id="topics_list_container">
+        <table id="topics_table" class="topics-table">
+            <thead>
+                <tr>
+                    <th>Topic/Chapter Title</th>
+                    <th>Number of Posts</th>
+                    <th>Posts</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for topic_name, topic_data in topics %}
+                <tr>
+                    <td class="topic-title">
+                        {% set all_post_ids = topic_data.posts|join('_') %}
+                        <a href="/post-grouped/{{ all_post_ids }}">{{ topic_name }}</a>
+                    </td>
+                    <td class="topic-count">
+                        {{ topic_data.count }}
+                    </td>
+                    <td class="topic-posts">
+                        {% for post_id in topic_data.posts %}
+                            {% if loop.index <= 3 %}
+                                {% set post_info = post_topic_mapping[post_id] %}
+                                <div class="post-info">
+                                    <a href="/post-grouped/{{ post_id }}">{{ post_info.feed_title }}</a>
+                                </div>
+                            {% endif %}
+                        {% endfor %}
+                        {% if topic_data.posts|length > 3 %}
+                            <div class="more-posts">
+                                and {{ topic_data.posts|length - 3 }} more...
+                            </div>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    
+    {% if pagination.total_pages > 1 %}
+    <div class="pagination-controls">
+        {% if pagination.has_prev %}
+        <a href="/topics-list/{{ pagination.prev_page }}" class="pagination-link">← Previous</a>
+        {% endif %}
+        
+        <span class="pagination-info">
+            Page {{ pagination.current_page }} of {{ pagination.total_pages }}
+        </span>
+        
+        {% if pagination.has_next %}
+        <a href="/topics-list/{{ pagination.next_page }}" class="pagination-link">Next →</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.pagination-controls {
+    margin-top: 20px;
+    text-align: center;
+    padding: 15px;
+    border-top: 1px solid #ddd;
+}
+
+.pagination-link {
+    display: inline-block;
+    padding: 8px 16px;
+    margin: 0 10px;
+    background-color: #f5f5f5;
+    color: #333;
+    text-decoration: none;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+}
+
+.pagination-link:hover {
+    background-color: #e5e5e5;
+}
+
+.pagination-info {
+    display: inline-block;
+    padding: 8px 16px;
+    margin: 0 10px;
+    color: #666;
+    font-size: 0.9em;
+}
+
+=======
+.topics-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+.topics-table th {
+    background-color: #f5f5f5;
+    padding: 12px;
+    text-align: left;
+    border-bottom: 2px solid #ddd;
+}
+
+.topics-table td {
+    padding: 12px;
+    border-bottom: 1px solid #ddd;
+    vertical-align: top;
+}
+
+.topic-title {
+    font-weight: bold;
+    width: 40%;
+}
+
+.topic-title a {
+    color: #333;
+    text-decoration: none;
+}
+
+.topic-title a:hover {
+    text-decoration: underline;
+}
+
+.topic-count {
+    text-align: center;
+    width: 20%;
+}
+
+.topic-posts {
+    width: 40%;
+}
+
+.post-info {
+    margin-bottom: 5px;
+}
+
+.post-info a {
+    color: #666;
+    text-decoration: none;
+    font-size: 0.9em;
+}
+
+.post-info a:hover {
+    text-decoration: underline;
+}
+
+.more-posts {
+    color: #999;
+    font-size: 0.8em;
+    font-style: italic;
+}
+</style>
+
+</body>
+</html>

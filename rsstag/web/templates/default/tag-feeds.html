@@ -1,0 +1,145 @@
+<html>
+<head>
+
+<title>Tags per feed</title>
+{%  include "head-data.html" %}
+<style>
+    .table-container {
+        overflow: auto;
+        max-height: 80vh;
+    }
+    .table-bordered th, .table-bordered td {
+        border: 1px solid #ddd;
+        padding: 8px;
+    }
+    .table-bordered {
+        border-collapse: collapse;
+        width: 100%;
+    }
+    .table-bordered td a {
+        color: #337ab7;
+        text-decoration: none;
+    }
+    .table-bordered td a:hover {
+        color: #23527c;
+        text-decoration: underline;
+    }
+    .table-bordered td {
+        cursor: help;
+    }
+    .table-bordered thead th {
+        position: sticky;
+        top: 0;
+        background-color: #f2f2f2;
+        z-index: 1;
+    }
+    .table-bordered tbody td:first-child {
+        position: sticky;
+        left: 0;
+        background-color: #f2f2f2;
+    }
+    .table-bordered tbody tr:hover td {
+        background-color: #f5f5f5;
+    }
+    .table-bordered .hover-column {
+        background-color: #e8e8e8;
+    }
+    .table-bordered thead th:first-child {
+        left: 0;
+        z-index: 2;
+    }
+</style>
+</head>
+<body>
+
+{% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
+<div id="global_tools">
+    <div class="left_half">
+        <div id="link_on_root" class="global_tools_button">
+            <a href="/">main</a>
+        </div>
+        <div id="help_button" class="global_tools_button">
+            <a href="#">help</a>
+        </div>
+    </div>
+    <div class="right_half">
+        {{ g_status.global_status() }}
+        {{ menu.settings_menu() }}
+    </div>
+</div>
+<div class="page">
+    <h1>Tags per feed</h1>
+    <div class="table-container">
+    <table class="table-bordered">
+        <thead>
+            <tr>
+                <th>&nbsp;</th>
+                {% for header in headers %}
+                    <th><a href="{{ header.url }}">{{ header.title }}</a></th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in table_data %}
+            <tr>
+                <td><a href="{{ row.tag_url }}">{{ row.tag }}</a></td>
+                {% for cell in row.cells %}
+                    <td title="{{ cell.hint }}">
+                        {% if cell.url and cell.count > 0 %}
+                            <a href="{{ cell.url }}">{{ cell.count }}</a>
+                        {% else %}
+                            {{ cell.count }}
+                        {% endif %}
+                    </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+<div id="global_tools_bottom">
+    <ul id="paginator"></ul>
+</div>
+<div id="help_window">
+<ul>
+    <li>Table shows tag occurrences per feed.</li>
+    <li>Hover over numbers to see detailed information.</li>
+</ul>
+</div>
+<div id="progressbar"></div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const table = document.querySelector('.table-bordered');
+    if (!table) return;
+
+    table.addEventListener('mouseover', e => {
+        if (e.target.matches('td, th')) {
+            const colIndex = e.target.cellIndex;
+            // Don't highlight the first column which contains row headers
+            if (colIndex > 0) {
+                for (const row of table.rows) {
+                    if (row.cells[colIndex]) {
+                        row.cells[colIndex].classList.add('hover-column');
+                    }
+                }
+            }
+        }
+    });
+
+    table.addEventListener('mouseout', e => {
+        if (e.target.matches('td, th')) {
+            const colIndex = e.target.cellIndex;
+            if (colIndex > 0) {
+                for (const row of table.rows) {
+                     if (row.cells[colIndex]) {
+                        row.cells[colIndex].classList.remove('hover-column');
+                    }
+                }
+            }
+        }
+    });
+});
+</script>
+</body>
+</html>

@@ -167,9 +167,7 @@ Topic Title
 Another Topic
 
 Article:
-
 {text_plain}
-
 """
             
             response1 = self._llamacpp_handler.call([prompt1], temperature=0.0).strip()
@@ -201,12 +199,6 @@ Article:
             topics_list = '\n'.join([f"{i+1}. {topic}" for i, topic in enumerate(topics)])
             prompt2 = f"""You are a text analysis expert. Split the following article into chapters based on the topics provided. For each topic, extract the relevant content from the article.
 
-Topics:
-{topics_list}
-
-Article:
-{text_plain}
-
 Output format:
 
 Topic Title
@@ -215,6 +207,11 @@ Content for this topic
 Another Topic
 Content for this topic
 
+Topics:
+{topics_list}
+
+Article:
+{text_plain}
 """
             
             response2 = self._llamacpp_handler.call([prompt2], temperature=0.0).strip()

@@ -1065,40 +1065,160 @@ def on_post_grouped_get(app: "RSSTagApplication", user: dict, request: Request, 
     if not post_ids:
         return app.on_error(user, request, NotFound())
 
-    # Check if grouped data already exists in DB
-    existing_data = app.post_grouping.get_grouped_posts(user["sid"], post_ids)
+    # Get the full posts first, we'll need them regardless
+    all_posts = []
+    feed_titles = []
+    for post_id in post_ids:
+        post = app.posts.get_by_pid(user["sid"], post_id, projection)
+        if post:
+            feed = app.feeds.get_by_feed_id(user["sid"], post["feed_id"])
+            feed_title = feed["title"] if feed else f"Post {post_id}"
+            if feed_title not in feed_titles:
+                feed_titles.append(feed_title)
+            
+            content = gzip.decompress(post["content"]["content"]).decode("utf-8", "replace")
+            if post["content"]["title"]:
+                content = post["content"]["title"] + ". " + content
+            
+            all_posts.append({
+                "post_id": post_id,
+                "content": content,
+                "feed_title": feed_title,
+                "url": post.get("url", "") or ""
+            })
     
-    if existing_data:
-        # Return existing data from DB
-        page = app.template_env.get_template("post-grouped.html")
-        return Response(
-            page.render(
-                post_id=pids,
-                sentences=existing_data["sentences"],
-                groups=existing_data["groups"],
-                group_colors=existing_data["group_colors"],
-                hierarchical_segments=[],
-                feed_title=existing_data["feed_title"],
-                user_settings=user["settings"],
-                provider=user["provider"],
-            ),
-            mimetype="text/html",
-        )
+    post_to_index_map = {post["post_id"]: idx for idx, post in enumerate(all_posts)}
+    combined_feed_title = " | ".join(feed_titles) if feed_titles else "Multiple Posts"
 
-    # Data doesn't exist yet, show processing message
-    # The worker will process this as part of the regular task pipeline
+    # Collect grouped data from all posts (single or multiple)
+    all_sentences = []
+    all_groups = {}
+    all_group_colors = {}
+    sentence_offset = 0
+    has_grouped_data = False
+
+    for post in all_posts:
+        # Check if this individual post has grouped data
+        post_grouped_data = app.post_grouping.get_grouped_posts(user["sid"], [post["post_id"]])
+        
+        if post_grouped_data and post_grouped_data.get("sentences"):
+            has_grouped_data = True
+            # Add sentences with adjusted indices and post_id reference
+            for sentence in post_grouped_data["sentences"]:
+                all_sentences.append({
+                    "text": sentence["text"],
+                    "number": sentence_offset + sentence["number"],
+                    "post_id": post["post_id"]
+                })
+            
+            # Add groups with adjusted sentence indices
+            for group_name, sentence_indices in post_grouped_data["groups"].items():
+                # Prefix group name with post info if multiple posts
+                if len(all_posts) > 1:
+                    full_group_name = f"[{post['feed_title'][:20]}...] {group_name}" if len(post['feed_title']) > 20 else f"[{post['feed_title']}] {group_name}"
+                else:
+                    full_group_name = group_name
+                
+                # Adjust sentence indices by offset
+                adjusted_indices = [idx + sentence_offset for idx in sentence_indices]
+                all_groups[full_group_name] = adjusted_indices
+                
+                # Use the same color for the group
+                if group_name in post_grouped_data.get("group_colors", {}):
+                    all_group_colors[full_group_name] = post_grouped_data["group_colors"][group_name]
+                else:
+                    all_group_colors[full_group_name] = "#4a6baf"
+            
+            # Update offset for next post
+            sentence_offset += len(post_grouped_data["sentences"])
+    
+    # If no grouped data exists for any post, create default grouping by post
+    if not has_grouped_data:
+        for post in all_posts:
+            group_name = f"Post {post['post_id']}"
+            all_groups[group_name] = [post["post_id"]]
+            all_group_colors[group_name] = "#4a6baf"
+    
     page = app.template_env.get_template("post-grouped.html")
     return Response(
         page.render(
             post_id=pids,
-            sentences=[],
-            groups={},
-            group_colors={},
+            posts=all_posts,
+            sentences=all_sentences,
+            groups=all_groups,
+            group_colors=all_group_colors,
             hierarchical_segments=[],
-            feed_title="Processing...",
+            feed_title=combined_feed_title,
             user_settings=user["settings"],
             provider=user["provider"],
-            processing_message="Post grouping is being processed as part of the background task pipeline. Please refresh the page later."
+            post_to_index_map=post_to_index_map,
+            has_grouped_data=has_grouped_data,
+        ),
+        mimetype="text/html",
+    )
+
+def on_topics_list_get(app: "RSSTagApplication", user: dict, request: Request, page_number: int = 1) -> Response:
+    """Handler for topics/chapters list page with pagination"""
+    # Pagination settings
+    topics_per_page = 20
+    
+    # Get all grouped posts data from the database
+    grouped_posts = list(app.db.post_grouping.find(
+        {"owner": user["sid"]},
+        {"_id": 0, "groups": 1, "post_ids": 1, "feed_title": 1}
+    ))
+    
+    # Count topics/chapters across all posts
+    topic_counts = {}
+    post_topic_mapping = {}
+    
+    for post_data in grouped_posts:
+        post_id_str = "_".join(str(pid) for pid in post_data["post_ids"])
+        post_topic_mapping[post_id_str] = {
+            "feed_title": post_data["feed_title"],
+            "topics": list(post_data["groups"].keys())
+        }
+        
+        for topic in post_data["groups"].keys():
+            if topic not in topic_counts:
+                topic_counts[topic] = {
+                    "count": 0,
+                    "posts": []
+                }
+            topic_counts[topic]["count"] += 1
+            topic_counts[topic]["posts"].append(post_id_str)
+    
+    # Sort topics by count (descending)
+    sorted_topics = sorted(topic_counts.items(), key=lambda x: x[1]["count"], reverse=True)
+    
+    # Calculate pagination
+    total_topics = len(sorted_topics)
+    total_pages = max(1, (total_topics + topics_per_page - 1) // topics_per_page)
+    page_number = max(1, min(page_number, total_pages))
+    
+    # Get topics for current page
+    start_idx = (page_number - 1) * topics_per_page
+    end_idx = start_idx + topics_per_page
+    paginated_topics = sorted_topics[start_idx:end_idx]
+    
+    # Generate pagination links
+    pagination = {
+        "current_page": page_number,
+        "total_pages": total_pages,
+        "has_prev": page_number > 1,
+        "has_next": page_number < total_pages,
+        "prev_page": page_number - 1 if page_number > 1 else None,
+        "next_page": page_number + 1 if page_number < total_pages else None,
+    }
+    
+    page = app.template_env.get_template("topics-list.html")
+    return Response(
+        page.render(
+            topics=paginated_topics,
+            post_topic_mapping=post_topic_mapping,
+            pagination=pagination,
+            user_settings=user["settings"],
+            provider=user["provider"],
         ),
         mimetype="text/html",
     )
