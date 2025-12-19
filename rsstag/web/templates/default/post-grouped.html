@@ -35,6 +35,10 @@
     .topic-item.active { outline: 2px solid #333; }
     .topic-count { font-size: 11px; opacity: 0.7; margin-left: 4px; }
     .section-header { font-weight: bold; margin: 15px 0 8px 0; padding-bottom: 5px; border-bottom: 1px solid #ddd; }
+        .topic-line { display:flex; align-items:center; justify-content:space-between; gap:6px; }
+        .topic-controls { display:flex; gap:4px; }
+        .topic-btn { border:1px solid #999; background:#fff; color:#333; padding:2px 6px; border-radius:3px; cursor:pointer; font-size:11px; }
+        .topic-btn:hover { background:#f0f0f0; }
       </style>
 </head>
 <body>
@@ -130,6 +134,10 @@
     window.has_grouped_data = {{ has_grouped_data|default(false)|tojson }};
     
     (function(){
+        // Global state
+        const topicState = {};
+        let isContentReady = false;
+        
         // Add data-post-id attributes to post sections
         document.querySelectorAll('#grouped_posts .post-section').forEach((section) => {
             const postId = section.getAttribute('data-post-id');
@@ -151,6 +159,9 @@
         // If we have grouped data with sentences, wrap content in sentence spans
         if (window.has_grouped_data && window.sentences && window.sentences.length > 0) {
             wrapSentencesInContent();
+            isContentReady = true;
+        } else {
+            isContentReady = true;
         }
         
         // Build topics list
@@ -159,33 +170,98 @@
         
         if (groupKeys.length > 0) {
             groupKeys.forEach(groupName => {
-                const sentenceIndices = window.groups[groupName];
+                const sentenceIndices = (window.groups[groupName] || []).slice().sort((a, b) => a - b);
                 const color = window.group_colors[groupName] || '#4a6baf';
                 const el = document.createElement('div');
                 el.className = 'topic-item';
                 el.style.backgroundColor = color + '40'; // add alpha
                 el.style.borderLeft = '4px solid ' + color;
-                
-                // Display name and count
+
+                // Display name, count and nav buttons
                 const countLabel = sentenceIndices.length;
-                el.innerHTML = '<span class="topic-name">' + escapeHtml(groupName) + '</span>' +
-                               '<span class="topic-count">(' + countLabel + ')</span>';
-                
+                const line = document.createElement('div');
+                line.className = 'topic-line';
+
+                const titleWrap = document.createElement('div');
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'topic-name';
+                nameSpan.textContent = groupName;
+                const countSpan = document.createElement('span');
+                countSpan.className = 'topic-count';
+                countSpan.textContent = '(' + countLabel + ')';
+                titleWrap.appendChild(nameSpan);
+                titleWrap.appendChild(countSpan);
+
+                const controls = document.createElement('div');
+                controls.className = 'topic-controls';
+                const prevBtn = document.createElement('button');
+                prevBtn.className = 'topic-btn topic-btn-prev';
+                prevBtn.title = 'Previous sentence';
+                prevBtn.textContent = 'Prev';
+                const nextBtn = document.createElement('button');
+                nextBtn.className = 'topic-btn topic-btn-next';
+                nextBtn.title = 'Next sentence';
+                nextBtn.textContent = 'Next';
+                controls.appendChild(prevBtn);
+                controls.appendChild(nextBtn);
+
+                line.appendChild(titleWrap);
+                line.appendChild(controls);
+                el.appendChild(line);
+
+                // Track sentence order per topic for navigation
+                topicState[groupName] = {
+                    sentences: sentenceIndices,
+                    index: 0,
+                    color
+                };
+
                 el.onclick = () => {
+                    if (!isContentReady) return;
+                    
                     // Clear previous active state
                     document.querySelectorAll('.topic-item.active').forEach(item => {
                         item.classList.remove('active');
                     });
                     el.classList.add('active');
-                    
-                    if (window.has_grouped_data) {
-                        // Highlight sentences for this topic
-                        highlightSentences(sentenceIndices, color);
+
+                    if (window.has_grouped_data && topicState[groupName]) {
+                        // Highlight sentences for this topic and scroll to the first
+                        topicState[groupName].index = 0;
+                        highlightSentences(sentenceIndices, color, 0);
                     } else {
                         // Fallback: highlight post sections
                         highlightPosts(sentenceIndices, color);
                     }
                 };
+
+                // Prev/Next buttons navigate within this topic sentences
+                prevBtn.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    ev.preventDefault();
+                    if (!isContentReady) return;
+                    
+                    // Ensure topic stays active
+                    document.querySelectorAll('.topic-item.active').forEach(item => {
+                        item.classList.remove('active');
+                    });
+                    el.classList.add('active');
+                    
+                    moveTopicPointer(groupName, -1);
+                });
+                nextBtn.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    ev.preventDefault();
+                    if (!isContentReady) return;
+                    
+                    // Ensure topic stays active
+                    document.querySelectorAll('.topic-item.active').forEach(item => {
+                        item.classList.remove('active');
+                    });
+                    el.classList.add('active');
+                    
+                    moveTopicPointer(groupName, 1);
+                });
                 topicsList.appendChild(el);
             });
         } else {
@@ -205,12 +281,15 @@
                 el.onclick = () => {
                     const section = document.querySelector('[data-post-id="' + post.post_id + '"]');
                     if (section) {
-                        section.scrollIntoView({behavior: 'smooth', block: 'center'});
-                        // Flash highlight
-                        section.classList.add('range-highlight', 'pulse');
+                        // Use setTimeout to ensure DOM is settled
                         setTimeout(() => {
-                            section.classList.remove('range-highlight', 'pulse');
-                        }, 2000);
+                            section.scrollIntoView({behavior: 'smooth', block: 'center'});
+                            // Flash highlight
+                            section.classList.add('range-highlight', 'pulse');
+                            setTimeout(() => {
+                                section.classList.remove('range-highlight', 'pulse');
+                            }, 2000);
+                        }, 50);
                     }
                 };
                 postsList.appendChild(el);
@@ -307,52 +386,76 @@
             
             // Add click handlers to sentence spans
             document.querySelectorAll('.sentence-group').forEach(span => {
-                span.addEventListener('click', function() {
+                span.addEventListener('click', function(ev) {
+                    ev.stopPropagation();
                     const sentNum = parseInt(this.getAttribute('data-sentence'));
+                    if (!sentNum) return;
+                    
                     // Find which topic this sentence belongs to
                     let topicName = null;
+                    let topicElement = null;
+                    
                     Object.keys(window.groups).forEach(groupName => {
                         if (window.groups[groupName].includes(sentNum)) {
                             topicName = groupName;
                         }
                     });
+                    
                     if (topicName) {
-                        // Simulate click on the topic
+                        // Find and trigger the topic element
                         const topicItems = document.querySelectorAll('.topic-item');
-                        topicItems.forEach(item => {
-                            if (item.querySelector('.topic-name').textContent === topicName) {
-                                item.click();
+                        for (let item of topicItems) {
+                            const nameEl = item.querySelector('.topic-name');
+                            if (nameEl && nameEl.textContent.trim() === topicName) {
+                                topicElement = item;
+                                break;
                             }
-                        });
+                        }
+                        
+                        if (topicElement && typeof topicElement.onclick === 'function') {
+                            topicElement.onclick();
+                        }
                     }
                 });
             });
         }
         
-        function highlightSentences(sentenceIndices, color) {
+        function highlightSentences(sentenceIndices, color, focusIndex) {
+            if (!sentenceIndices || sentenceIndices.length === 0) return;
+            
             // Clear previous highlights
             document.querySelectorAll('.sentence-group.highlighted').forEach(span => {
                 span.classList.remove('highlighted');
             });
             
             // Highlight sentences in the list
+            const highlightedElements = [];
             sentenceIndices.forEach(sentNum => {
                 const span = document.querySelector('.sentence-group[data-sentence="' + sentNum + '"]');
                 if (span) {
                     span.classList.add('highlighted');
+                    highlightedElements.push(span);
                 }
             });
             
-            // Scroll to the first highlighted sentence
-            if (sentenceIndices.length > 0) {
-                const firstSpan = document.querySelector('.sentence-group[data-sentence="' + sentenceIndices[0] + '"]');
-                if (firstSpan) {
-                    firstSpan.scrollIntoView({behavior: 'smooth', block: 'center'});
+            // Scroll to the specified sentence
+            if (highlightedElements.length > 0) {
+                const targetIdx = Number.isFinite(focusIndex) ? Math.max(0, Math.min(highlightedElements.length - 1, focusIndex)) : 0;
+                const targetSpan = highlightedElements[targetIdx];
+                if (targetSpan) {
+                    // Use setTimeout to ensure DOM updates are complete
+                    setTimeout(() => {
+                        targetSpan.scrollIntoView({behavior: 'smooth', block: 'center'});
+                        targetSpan.classList.add('pulse');
+                        setTimeout(() => targetSpan.classList.remove('pulse'), 1200);
+                    }, 100);
                 }
             }
         }
         
         function highlightPosts(postIds, color) {
+            if (!postIds || postIds.length === 0) return;
+            
             // Clear previous highlights
             document.querySelectorAll('#grouped_posts .post-section').forEach(section => {
                 section.classList.remove('range-highlight');
@@ -361,21 +464,47 @@
             });
             
             // Highlight posts in this group
+            const highlightedSections = [];
             postIds.forEach(postId => {
                 const section = document.querySelector('[data-post-id="' + postId + '"]');
                 if (section) {
                     section.classList.add('range-highlight');
                     section.style.backgroundColor = color + '40';
                     section.style.borderLeft = '3px solid ' + color;
+                    highlightedSections.push(section);
                 }
             });
             
             // Scroll to first post
-            if (postIds.length > 0) {
-                const target = document.querySelector('[data-post-id="' + postIds[0] + '"]');
-                if (target) {
+            if (highlightedSections.length > 0) {
+                const target = highlightedSections[0];
+                // Use setTimeout to ensure DOM updates are complete
+                setTimeout(() => {
                     target.scrollIntoView({behavior: 'smooth', block: 'center'});
+                }, 100);
+            }
+        }
+
+        function moveTopicPointer(topicName, delta) {
+            const state = topicState[topicName];
+            if (!state) return;
+            
+            if (!state.sentences || state.sentences.length === 0) {
+                // Fallback: if there is no sentence data, try to highlight posts for this group
+                if (!window.has_grouped_data && window.groups[topicName]) {
+                    highlightPosts(window.groups[topicName], state.color || '#4a6baf');
                 }
+                return;
+            }
+
+            const total = state.sentences.length;
+            // Wrap around the index
+            state.index = ((state.index + delta) % total + total) % total;
+            
+            if (window.has_grouped_data) {
+                highlightSentences(state.sentences, state.color, state.index);
+            } else {
+                highlightPosts(state.sentences, state.color);
             }
         }
     })();
