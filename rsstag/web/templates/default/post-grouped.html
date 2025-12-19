@@ -167,9 +167,7 @@
                 el.style.borderLeft = '4px solid ' + color;
                 
                 // Display name and count
-                const countLabel = window.has_grouped_data ? 
-                    sentenceIndices.length + ' sentence(s)' : 
-                    sentenceIndices.length + ' post(s)';
+                const countLabel = sentenceIndices.length;
                 el.innerHTML = '<span class="topic-name">' + escapeHtml(groupName) + '</span>' +
                                '<span class="topic-count">(' + countLabel + ')</span>';
                 

@@ -1113,21 +1113,19 @@ def on_post_grouped_get(app: "RSSTagApplication", user: dict, request: Request, 
             
             # Add groups with adjusted sentence indices
             for group_name, sentence_indices in post_grouped_data["groups"].items():
-                # Prefix group name with post info if multiple posts
-                if len(all_posts) > 1:
-                    full_group_name = f"[{post['feed_title'][:20]}...] {group_name}" if len(post['feed_title']) > 20 else f"[{post['feed_title']}] {group_name}"
-                else:
-                    full_group_name = group_name
-                
                 # Adjust sentence indices by offset
                 adjusted_indices = [idx + sentence_offset for idx in sentence_indices]
-                all_groups[full_group_name] = adjusted_indices
+                
+                if group_name not in all_groups:
+                    all_groups[group_name] = []
+                all_groups[group_name].extend(adjusted_indices)
                 
                 # Use the same color for the group
-                if group_name in post_grouped_data.get("group_colors", {}):
-                    all_group_colors[full_group_name] = post_grouped_data["group_colors"][group_name]
-                else:
-                    all_group_colors[full_group_name] = "#4a6baf"
+                if group_name not in all_group_colors:
+                    if group_name in post_grouped_data.get("group_colors", {}):
+                        all_group_colors[group_name] = post_grouped_data["group_colors"][group_name]
+                    else:
+                        all_group_colors[group_name] = "#4a6baf"
             
             # Update offset for next post
             sentence_offset += len(post_grouped_data["sentences"])
