@@ -42,7 +42,7 @@ import TagsClustersList from '../components/tags-clusters.js';
 import OpenAIStorage from "../storages/openai-storage.js";
 import {OpenAITool} from "../components/openai.js";
 import TagSunburst from "../components/sunburst.js";
-import TagTree from "../components/dendrogram.js";
+import TagTree, { BidirectionalTagTree } from "../components/dendrogram.js";
 import SentenceTree from '../components/SentenceTree.js';
 import BigramsTable from '../components/bigrams-table.js';
 import BiGramsGraphSimple from '../components/bi-grams-graph-simple.js';
@@ -140,8 +140,8 @@ window.onload = () => {
         if (window.posts_graphs) {
             window.posts_graphs.forEach(post => {
                 if (post.graph_data) {
-                    let tree = new TagTree(post.graph_data);
-                    tree.render("#graph_" + post.post_id);
+                    const sunburst = new TagSunburst(post.graph_data);
+                    sunburst.render("#graph_" + post.post_id);
                 }
             });
         }

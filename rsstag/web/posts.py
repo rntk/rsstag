@@ -1226,7 +1226,7 @@ def on_post_graph_get(app: "RSSTagApplication", user: dict, request: Request, pi
     if not post_ids:
         return app.on_error(user, request, NotFound())
 
-    posts_data = []
+    all_topic_sequences = []
     feed_titles = []
     
     for post_id in post_ids:
@@ -1241,33 +1241,110 @@ def on_post_graph_get(app: "RSSTagApplication", user: dict, request: Request, pi
             
         post_grouped_data = app.post_grouping.get_grouped_posts(user["sid"], [post_id])
         
-        graph_data = None
         if post_grouped_data and post_grouped_data.get("groups"):
-            # Sort topics by their first sentence index
             topic_order = []
             for topic, indices in post_grouped_data["groups"].items():
                 if indices:
                     topic_order.append((min(indices), topic))
-            
             topic_order.sort()
-            
-            # Build tree structure: Root -> Topic 1 -> Topic 2 -> ...
-            if topic_order:
-                # We start from the last topic and wrap it into its predecessor
-                # to build the nested children structure TagTree expects
-                current_node = {"name": topic_order[-1][1], "children": []}
-                for i in range(len(topic_order) - 2, -1, -1):
-                    current_node = {
-                        "name": topic_order[i][1],
-                        "children": [current_node]
-                    }
-                graph_data = current_node
+            all_topic_sequences.append([topic for _, topic in topic_order])
 
-        posts_data.append({
-            "post_id": post_id,
-            "feed_title": feed_title,
-            "graph_data": graph_data
-        })
+    # Find common topics
+    topic_counts = defaultdict(int)
+    for sequence in all_topic_sequences:
+        for topic in set(sequence):
+            topic_counts[topic] += 1
+    
+    common_topics = [topic for topic, count in topic_counts.items() if count > 1]
+    
+    graphs_data = []
+    if common_topics:
+        for i, common_topic in enumerate(common_topics):
+            before_children = []
+            after_children = []
+            
+            for sequence in all_topic_sequences:
+                if common_topic in sequence:
+                    idx = sequence.index(common_topic)
+                    
+                    # Process topics BEFORE the common topic (reverse order for tree)
+                    before_seq = sequence[:idx][::-1]
+                    current_node_list = before_children
+                    for topic in before_seq:
+                        # Find or create child
+                        found_node = None
+                        for child in current_node_list:
+                            if child["name"] == topic:
+                                found_node = child
+                                break
+                        if not found_node:
+                            new_node = {"name": topic, "children": [], "value": 1}
+                            current_node_list.append(new_node)
+                            current_node_list = new_node["children"]
+                        else:
+                            current_node_list = found_node["children"]
+                            
+                    # Process topics AFTER the common topic
+                    after_seq = sequence[idx+1:]
+                    current_node_list = after_children
+                    for topic in after_seq:
+                        found_node = None
+                        for child in current_node_list:
+                            if child["name"] == topic:
+                                found_node = child
+                                break
+                        if not found_node:
+                            new_node = {"name": topic, "children": [], "value": 1}
+                            current_node_list.append(new_node)
+                            current_node_list = new_node["children"]
+                        else:
+                            current_node_list = found_node["children"]
+            
+            # Prepare standard hierarchical data for Sunburst
+            graph_data = {
+                "name": common_topic,
+                "children": [],
+                "value": 1
+            }
+            if before_children:
+                graph_data["children"].append({
+                    "name": "Before",
+                    "children": before_children,
+                    "value": 1
+                })
+            if after_children:
+                graph_data["children"].append({
+                    "name": "After",
+                    "children": after_children,
+                    "value": 1
+                })
+                
+            graphs_data.append({
+                "post_id": i, 
+                "label": common_topic,
+                "feed_title": "Common Topic",
+                "graph_data": graph_data,
+                "is_bidirectional": True
+            })
+    else:
+        # Fallback to per-post graphs if no common topics
+        # (This keeps current behavior if no commonality found)
+        for i, sequence in enumerate(all_topic_sequences):
+            if sequence:
+                current_node = {"name": sequence[-1], "children": [], "value": 1}
+                for j in range(len(sequence) - 2, -1, -1):
+                    current_node = {
+                        "name": sequence[j],
+                        "children": [current_node],
+                        "value": 1
+                    }
+                graphs_data.append({
+                    "post_id": post_ids[i],
+                    "label": f"Post {post_ids[i]}",
+                    "feed_title": feed_titles[i] if i < len(feed_titles) else f"Post {post_ids[i]}",
+                    "graph_data": current_node,
+                    "is_bidirectional": False
+                })
 
     combined_feed_title = " | ".join(feed_titles) if feed_titles else "Multiple Posts"
     
@@ -1275,7 +1352,7 @@ def on_post_graph_get(app: "RSSTagApplication", user: dict, request: Request, pi
     return Response(
         page.render(
             pids=pids,
-            posts=posts_data,
+            posts=graphs_data,
             feed_title=combined_feed_title,
             user_settings=user["settings"],
             provider=user["provider"],
