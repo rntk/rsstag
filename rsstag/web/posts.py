@@ -1158,7 +1158,7 @@ def on_post_grouped_get(app: "RSSTagApplication", user: dict, request: Request, 
 def on_topics_list_get(app: "RSSTagApplication", user: dict, request: Request, page_number: int = 1) -> Response:
     """Handler for topics/chapters list page with pagination"""
     # Pagination settings
-    topics_per_page = 20
+    topics_per_page = 100
 
     # Get all grouped posts data from the database
     grouped_posts = list(app.db.post_grouping.find(
