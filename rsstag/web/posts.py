@@ -1230,12 +1230,14 @@ def on_post_graph_get(app: "RSSTagApplication", user: dict, request: Request, pi
 
     all_topic_sequences = []
     feed_titles = []
+    post_tags = {}
     
     for post_id in post_ids:
-        post = app.posts.get_by_pid(user["sid"], post_id, {"content": True, "feed_id": True})
+        post = app.posts.get_by_pid(user["sid"], post_id, {"content": True, "feed_id": True, "tags": True})
         if not post:
             continue
             
+        post_tags[post_id] = post.get("tags", [])
         feed = app.feeds.get_by_feed_id(user["sid"], post["feed_id"])
         feed_title = feed["title"] if feed else f"Post {post_id}"
         if feed_title not in feed_titles:
@@ -1305,25 +1307,15 @@ def on_post_graph_get(app: "RSSTagApplication", user: dict, request: Request, pi
             # Prepare standard hierarchical data for Sunburst
             graph_data = {
                 "name": common_topic,
-                "children": [],
+                "before": before_children,
+                "after": after_children,
                 "value": 1
             }
-            if before_children:
-                graph_data["children"].append({
-                    "name": "Before",
-                    "children": before_children,
-                    "value": 1
-                })
-            if after_children:
-                graph_data["children"].append({
-                    "name": "After",
-                    "children": after_children,
-                    "value": 1
-                })
                 
             graphs_data.append({
                 "post_id": i, 
                 "label": common_topic,
+                "tag": common_topic,
                 "feed_title": "Common Topic",
                 "graph_data": graph_data,
                 "is_bidirectional": True
@@ -1340,10 +1332,13 @@ def on_post_graph_get(app: "RSSTagApplication", user: dict, request: Request, pi
                         "children": [current_node],
                         "value": 1
                     }
+                
+                p_id = post_ids[i]
                 graphs_data.append({
-                    "post_id": post_ids[i],
-                    "label": f"Post {post_ids[i]}",
-                    "feed_title": feed_titles[i] if i < len(feed_titles) else f"Post {post_ids[i]}",
+                    "post_id": p_id,
+                    "label": f"Post {p_id}",
+                    "tag": post_tags[p_id][0] if post_tags.get(p_id) else "",
+                    "feed_title": feed_titles[i] if i < len(feed_titles) else f"Post {p_id}",
                     "graph_data": current_node,
                     "is_bidirectional": False
                 })

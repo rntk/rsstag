@@ -138,11 +138,52 @@ window.onload = () => {
         tree.render(".page");
     } else if (/^\/post-graph\//.test(path)) {
         if (window.posts_graphs) {
+            const treeGraphs = {};
+
             window.posts_graphs.forEach(post => {
                 if (post.graph_data) {
                     const sunburst = new TagSunburst(post.graph_data);
                     sunburst.render("#graph_" + post.post_id);
                 }
+            });
+
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.addEventListener('click', () => {
+                    const postId = button.getAttribute('data-post-id');
+                    const tabType = button.getAttribute('data-tab');
+                    
+                    // Update active button
+                    button.parentElement.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+                    
+                    // Update active content
+                    const container = button.closest('.post-section');
+                    container.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+                    
+                    if (tabType === 'sunburst') {
+                        container.querySelector(`#sunburst_content_${postId}`).classList.add('active');
+                    } else if (tabType === 'tree') {
+                        container.querySelector(`#tree_content_${postId}`).classList.add('active');
+                        
+                        // Initialize tree graph if not already done
+                        if (!treeGraphs[postId]) {
+                            const postData = window.posts_graphs.find(p => String(p.post_id) === String(postId));
+                            if (postData && postData.graph_data) {
+                                const selector = `#tree_graph_${postId}`;
+                                const containerWidth = container.querySelector(selector).clientWidth || 1152;
+                                
+                                if (postData.is_bidirectional) {
+                                    treeGraphs[postId] = new BidirectionalTagTree(postData.graph_data);
+                                } else {
+                                    treeGraphs[postId] = new TagTree(postData.graph_data);
+                                }
+                                treeGraphs[postId].render(selector, containerWidth, 800);
+                            } else {
+                                container.querySelector(`#tree_graph_${postId}`).innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">No tree data available.</div>';
+                            }
+                        }
+                    }
+                });
             });
         }
     } else if (path === '/group/category') {

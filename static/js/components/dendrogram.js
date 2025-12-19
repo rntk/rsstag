@@ -6,7 +6,7 @@ export default class TagTree {
         this.data = data;
     }
 
-    render(selector) {
+    render(selector, width = 1152, height = 1152) {
         let link_fn = (d, n) => {
             let lst = n.ancestors().reverse().map(d => d.data.name);
             let link = document.location.origin + "/tree/";
@@ -21,13 +21,231 @@ export default class TagTree {
             label: d => d.name,
             title: (d, n) => `${n.ancestors().reverse().map(d => d.data.name).join(" ")}`, // hover text
             link: link_fn,
-            width: 1152,
-            height: 1152,
+            width: width,
+            height: height,
             margin: 100
           })
         let pg = document.querySelector(selector);
-        pg.appendChild(chart);
+        if (pg) {
+            pg.innerHTML = '';
+            pg.appendChild(chart);
+        }
     }
+}
+
+export class BidirectionalTagTree {
+    constructor(data) {
+        this.data = data;
+    }
+
+    render(selector, width = 1152, height = 600) {
+        let link_fn = (d, n) => {
+            let lst = n.ancestors().reverse().map(d => d.data.name);
+            let link = document.location.origin + "/tree/";
+            let url_tag = lst[0];
+            if (lst.length > 2) {
+                url_tag += " " + lst[2];
+            } 
+
+            return link + encodeURIComponent(url_tag);
+        };
+        let chart = BidirectionalHorizontalTree(this.data, {
+            label: d => d.name,
+            title: (d, n) => `${n.ancestors().reverse().map(d => d.data.name).join(" ")}`, // hover text
+            link: link_fn,
+            width: width,
+            height: height,
+            margin: 100
+          })
+        let pg = document.querySelector(selector);
+        if (pg) {
+            pg.innerHTML = '';
+            pg.appendChild(chart);
+        }
+    }
+}
+
+function BidirectionalHorizontalTree(data, {
+    children,
+    tree = d3.tree,
+    sort,
+    label,
+    title,
+    link,
+    linkTarget = "_blank",
+    width = 640,
+    height = 400,
+    r = 3,
+    fill = "#999",
+    stroke = "#555",
+    strokeWidth = 1.5,
+    strokeOpacity = 0.4,
+    halo = "#d7d7af",
+    haloWidth = 3,
+    curve = d3.curveBumpX,
+} = {}) {
+    const root = d3.hierarchy(data, children);
+    if (sort != null) root.sort(sort);
+
+    // Split root into left and right branches
+    // data structure now has "before" and "after" arrays
+    const leftRoot = d3.hierarchy({name: "root", children: data.before || []});
+    const rightRoot = d3.hierarchy({name: "root", children: data.after || []});
+
+    if (sort != null) {
+        leftRoot.sort(sort);
+        rightRoot.sort(sort);
+    }
+
+    const dx = 40; // Vertical spacing (increased from 25)
+    const dy = 200; // Horizontal spacing (increased from 150)
+
+    const treeLayout = tree().nodeSize([dx, dy]);
+
+    treeLayout(leftRoot);
+    treeLayout(rightRoot);
+
+    // Root position
+    root.x = 0;
+    root.y = 0;
+
+    const svg = d3.create("svg")
+        .attr("viewBox", [-width / 2, -height / 2, width, height])
+        .attr("width", width)
+        .attr("height", height)
+        .attr("style", "max-width: 100%; height: auto; font-family: sans-serif; font-size: 14px; background: #fff;");
+
+    const g = svg.append("g");
+
+    // Add zoom
+    svg.call(d3.zoom()
+        .extent([[0, 0], [width, height]])
+        .scaleExtent([0.1, 8])
+        .on("zoom", (event) => {
+            g.attr("transform", event.transform);
+        }));
+
+    // Add CSS transitions for smooth highlighting
+    svg.append("style").text(`
+        .link {
+            transition: stroke-opacity 0.3s;
+        }
+        .node {
+            transition: fill-opacity 0.3s;
+        }
+    `);
+
+    // Helper function to find connected nodes and paths
+    function findConnected(d) {
+        const nodes = new Set();
+        const links = new Set();
+        d.ancestors().forEach(node => {
+            if (node.data.name !== "root") {
+                nodes.add(node);
+                if (node.parent && node.parent.data.name !== "root") {
+                    links.add(node.parent);
+                }
+            }
+        });
+        return { nodes, links };
+    }
+
+    // Mouse event handlers for highlighting
+    function handleMouseOver(event, d) {
+        const { nodes, links } = findConnected(d);
+        g.selectAll(".link")
+            .filter(link => !links.has(link.source))
+            .attr("stroke-opacity", 0.1);
+        g.selectAll(".node")
+            .filter(node => !nodes.has(node))
+            .attr("fill-opacity", 0.1);
+    }
+
+    function handleMouseOut() {
+        g.selectAll(".link")
+            .attr("stroke-opacity", strokeOpacity);
+        g.selectAll(".node")
+            .attr("fill-opacity", 1);
+    }
+
+    const links = [];
+    const nodes = [root];
+
+    if (leftRoot.children) {
+        leftRoot.children.forEach(child => {
+            child.parent = root;
+            child.descendants().forEach(d => {
+                d.y = -d.y - dy; // Mirror horizontal position and offset
+                nodes.push(d);
+            });
+            
+            links.push({source: root, target: child});
+            child.links().forEach(l => {
+                links.push(l);
+            });
+        });
+    }
+
+    if (rightRoot.children) {
+        rightRoot.children.forEach(child => {
+            child.parent = root;
+            child.descendants().forEach(d => {
+                d.y = d.y + dy; // Offset
+                nodes.push(d);
+            });
+            
+            links.push({source: root, target: child});
+            child.links().forEach(l => {
+                links.push(l);
+            });
+        });
+    }
+
+    // Filter out "Before" and "After" nodes from display if they are just placeholders?
+    // Actually they might be useful, but let's see. 
+    // The requirement is "common topic in center and before and after should be the next and previous topics"
+    
+    g.append("g")
+        .attr("fill", "none")
+        .attr("stroke", stroke)
+        .attr("stroke-opacity", strokeOpacity)
+        .attr("stroke-width", strokeWidth)
+      .selectAll("path")
+      .data(links)
+      .join("path")
+        .attr("d", d3.link(curve)
+            .x(d => d.y)
+            .y(d => d.x))
+        .attr("class", "link");
+
+    const node = g.append("g")
+      .selectAll("a")
+      .data(nodes)
+      .join("a")
+        .attr("xlink:href", link == null ? null : d => link(d.data, d))
+        .attr("target", link == null ? null : linkTarget)
+        .attr("transform", d => `translate(${d.y},${d.x})`)
+        .attr("class", "node")
+        .on("mouseover", handleMouseOver)
+        .on("mouseout", handleMouseOut);
+
+    node.append("circle")
+        .attr("fill", d => d.children ? stroke : fill)
+        .attr("r", r);
+
+    if (title != null) node.append("title")
+        .text(d => title(d.data, d));
+
+    if (label) node.append("text")
+        .attr("dy", "0.32em")
+        .attr("x", d => d.y < 0 ? -6 : 6)
+        .attr("text-anchor", d => d.y < 0 ? "end" : "start")
+        .attr("paint-order", "stroke")
+        .attr("stroke", halo)
+        .attr("stroke-width", haloWidth)
+        .text((d) => label(d.data, d));
+
+    return svg.node();
 }
 
 // Copyright 2021-2023 Observable, Inc.
@@ -76,8 +294,8 @@ function Tree(data, { // data is either tabular (array of objects) or hierarchy 
     const L = label == null ? null : descendants.map(d => label(d.data, d));
   
     // Compute the layout.
-    const dx = 10;
-    const dy = width / (root.height + padding);
+    const dx = 25;
+    const dy = 200;
     tree().nodeSize([dx, dy])(root);
   
     // Center the tree.
@@ -101,6 +319,16 @@ function Tree(data, { // data is either tabular (array of objects) or hierarchy 
         .attr("style", "max-width: 100%; height: auto; height: intrinsic;")
         .attr("font-family", "sans-serif")
         .attr("font-size", 14);
+
+    const g = svg.append("g");
+
+    // Add zoom
+    svg.call(d3.zoom()
+        .extent([[0, 0], [width, height]])
+        .scaleExtent([0.1, 8])
+        .on("zoom", (event) => {
+            g.attr("transform", event.transform);
+        }));
 
     // Add CSS transitions for smooth highlighting
     svg.append("style").text(`
@@ -128,22 +356,22 @@ function Tree(data, { // data is either tabular (array of objects) or hierarchy 
     // Mouse event handlers for highlighting
     function handleMouseOver(event, d) {
         const { nodes, links } = findConnected(d);
-        svg.selectAll(".link")
+        g.selectAll(".link")
             .filter(link => !links.has(link.source))
             .attr("stroke-opacity", 0.1);
-        svg.selectAll(".node")
+        g.selectAll(".node")
             .filter(node => !nodes.has(node))
             .attr("fill-opacity", 0.1);
     }
 
     function handleMouseOut() {
-        svg.selectAll(".link")
+        g.selectAll(".link")
             .attr("stroke-opacity", strokeOpacity);
-        svg.selectAll(".node")
+        g.selectAll(".node")
             .attr("fill-opacity", 1);
     }
   
-    svg.append("g")
+    g.append("g")
         .attr("fill", "none")
         .attr("stroke", stroke)
         .attr("stroke-opacity", strokeOpacity)
@@ -158,7 +386,7 @@ function Tree(data, { // data is either tabular (array of objects) or hierarchy 
               .y(d => d.x))
           .attr("class", "link");
   
-    const node = svg.append("g")
+    const node = g.append("g")
       .selectAll("a")
       .data(root.descendants())
       .join("a")
