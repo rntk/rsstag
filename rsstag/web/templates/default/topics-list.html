@@ -64,55 +64,45 @@
         </table>
     </div>
     
-    {% if pagination.total_pages > 1 %}
-    <div class="pagination-controls">
-        {% if pagination.has_prev %}
-        <a href="/topics-list/{{ pagination.prev_page }}" class="pagination-link">← Previous</a>
+</div>
+
+<div id="global_tools_bottom">
+    <ul id="paginator">
+        {% if pages_map['start'] %}
+            {% for number in pages_map['start'] %}
+                {% if number['p'] == current_page %}
+                    <li class="current_page">{{number['p']}}</li>
+                {% else %}
+                    <li><a href="{{number['url']}}">{{number['p']}}</a></li>
+                {% endif %}
+            {% endfor %}
+            {% if pages_map['middle'] %}
+                <li>....</li>
+            {% endif %}
         {% endif %}
-        
-        <span class="pagination-info">
-            Page {{ pagination.current_page }} of {{ pagination.total_pages }}
-        </span>
-        
-        {% if pagination.has_next %}
-        <a href="/topics-list/{{ pagination.next_page }}" class="pagination-link">Next →</a>
+        {% if pages_map['middle'] %}
+            {% for number in pages_map['middle'] %}
+                {% if number['p'] == current_page %}
+                    <li class="current_page">{{number['p']}}</li>
+                {% else %}
+                    <li><a href="{{number['url']}}">{{number['p']}}</a></li>
+                {% endif %}
+            {% endfor %}
         {% endif %}
-    </div>
-    {% endif %}
+        {% if pages_map['end'] %}
+            <li>....</li>
+            {% for number in pages_map['end'] %}
+                {% if number['p'] == current_page %}
+                    <li class="current_page">{{number['p']}}</li>
+                {% else %}
+                    <li><a href="{{number['url']}}">{{number['p']}}</a></li>
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+    </ul>
 </div>
 
 <style>
-.pagination-controls {
-    margin-top: 20px;
-    text-align: center;
-    padding: 15px;
-    border-top: 1px solid #ddd;
-}
-
-.pagination-link {
-    display: inline-block;
-    padding: 8px 16px;
-    margin: 0 10px;
-    background-color: #f5f5f5;
-    color: #333;
-    text-decoration: none;
-    border-radius: 4px;
-    border: 1px solid #ddd;
-}
-
-.pagination-link:hover {
-    background-color: #e5e5e5;
-}
-
-.pagination-info {
-    display: inline-block;
-    padding: 8px 16px;
-    margin: 0 10px;
-    color: #666;
-    font-size: 0.9em;
-}
-
-=======
 .topics-table {
     width: 100%;
     border-collapse: collapse;

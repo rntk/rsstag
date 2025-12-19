@@ -1159,24 +1159,24 @@ def on_topics_list_get(app: "RSSTagApplication", user: dict, request: Request, p
     """Handler for topics/chapters list page with pagination"""
     # Pagination settings
     topics_per_page = 20
-    
+
     # Get all grouped posts data from the database
     grouped_posts = list(app.db.post_grouping.find(
         {"owner": user["sid"]},
         {"_id": 0, "groups": 1, "post_ids": 1, "feed_title": 1}
     ))
-    
+
     # Count topics/chapters across all posts
     topic_counts = {}
     post_topic_mapping = {}
-    
+
     for post_data in grouped_posts:
         post_id_str = "_".join(str(pid) for pid in post_data["post_ids"])
         post_topic_mapping[post_id_str] = {
             "feed_title": post_data["feed_title"],
             "topics": list(post_data["groups"].keys())
         }
-        
+
         for topic in post_data["groups"].keys():
             if topic not in topic_counts:
                 topic_counts[topic] = {
@@ -1185,36 +1185,38 @@ def on_topics_list_get(app: "RSSTagApplication", user: dict, request: Request, p
                 }
             topic_counts[topic]["count"] += 1
             topic_counts[topic]["posts"].append(post_id_str)
-    
+
     # Sort topics by count (descending)
     sorted_topics = sorted(topic_counts.items(), key=lambda x: x[1]["count"], reverse=True)
-    
+
     # Calculate pagination
     total_topics = len(sorted_topics)
-    total_pages = max(1, (total_topics + topics_per_page - 1) // topics_per_page)
-    page_number = max(1, min(page_number, total_pages))
-    
+    page_count = app.get_page_count(total_topics, topics_per_page)
+    p_number = page_number
+    if page_number <= 0:
+        p_number = 1
+    elif page_number > page_count:
+        p_number = page_count
+
+    new_cookie_page_value = p_number
+    p_number -= 1
+    if p_number < 0:
+        p_number = 0
+
+    pages_map, start_topics_range, end_topics_range = app.calc_pager_data(
+        p_number, page_count, topics_per_page, "on_topics_list_get"
+    )
+
     # Get topics for current page
-    start_idx = (page_number - 1) * topics_per_page
-    end_idx = start_idx + topics_per_page
-    paginated_topics = sorted_topics[start_idx:end_idx]
-    
-    # Generate pagination links
-    pagination = {
-        "current_page": page_number,
-        "total_pages": total_pages,
-        "has_prev": page_number > 1,
-        "has_next": page_number < total_pages,
-        "prev_page": page_number - 1 if page_number > 1 else None,
-        "next_page": page_number + 1 if page_number < total_pages else None,
-    }
-    
+    paginated_topics = sorted_topics[start_topics_range:end_topics_range]
+
     page = app.template_env.get_template("topics-list.html")
     return Response(
         page.render(
             topics=paginated_topics,
             post_topic_mapping=post_topic_mapping,
-            pagination=pagination,
+            pages_map=pages_map,
+            current_page=new_cookie_page_value,
             user_settings=user["settings"],
             provider=user["provider"],
         ),
