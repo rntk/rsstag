@@ -1220,3 +1220,65 @@ def on_topics_list_get(app: "RSSTagApplication", user: dict, request: Request, p
         ),
         mimetype="text/html",
     )
+
+def on_post_graph_get(app: "RSSTagApplication", user: dict, request: Request, pids: str) -> Response:
+    post_ids = [int(pid) for pid in pids.split('_') if pid]
+    if not post_ids:
+        return app.on_error(user, request, NotFound())
+
+    posts_data = []
+    feed_titles = []
+    
+    for post_id in post_ids:
+        post = app.posts.get_by_pid(user["sid"], post_id, {"content": True, "feed_id": True})
+        if not post:
+            continue
+            
+        feed = app.feeds.get_by_feed_id(user["sid"], post["feed_id"])
+        feed_title = feed["title"] if feed else f"Post {post_id}"
+        if feed_title not in feed_titles:
+            feed_titles.append(feed_title)
+            
+        post_grouped_data = app.post_grouping.get_grouped_posts(user["sid"], [post_id])
+        
+        graph_data = None
+        if post_grouped_data and post_grouped_data.get("groups"):
+            # Sort topics by their first sentence index
+            topic_order = []
+            for topic, indices in post_grouped_data["groups"].items():
+                if indices:
+                    topic_order.append((min(indices), topic))
+            
+            topic_order.sort()
+            
+            # Build tree structure: Root -> Topic 1 -> Topic 2 -> ...
+            if topic_order:
+                # We start from the last topic and wrap it into its predecessor
+                # to build the nested children structure TagTree expects
+                current_node = {"name": topic_order[-1][1], "children": []}
+                for i in range(len(topic_order) - 2, -1, -1):
+                    current_node = {
+                        "name": topic_order[i][1],
+                        "children": [current_node]
+                    }
+                graph_data = current_node
+
+        posts_data.append({
+            "post_id": post_id,
+            "feed_title": feed_title,
+            "graph_data": graph_data
+        })
+
+    combined_feed_title = " | ".join(feed_titles) if feed_titles else "Multiple Posts"
+    
+    page = app.template_env.get_template("post-graph.html")
+    return Response(
+        page.render(
+            pids=pids,
+            posts=posts_data,
+            feed_title=combined_feed_title,
+            user_settings=user["settings"],
+            provider=user["provider"],
+        ),
+        mimetype="text/html"
+    )

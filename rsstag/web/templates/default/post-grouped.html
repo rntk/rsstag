@@ -66,6 +66,10 @@
 <div class="page">
     <h2>Posts {{post_id}} - {{feed_title}}</h2>
     
+    <div style="margin-bottom: 20px;">
+        <a href="/post-graph/{{post_id}}" class="topic-btn" style="text-decoration: none; padding: 6px 12px; font-size: 14px;">View Topics Graph</a>
+    </div>
+    
     {% if feed_title and feed_title != "Processing..." %}
     <div style="padding: 15px; background-color: #e8f5e9; border-radius: 5px; margin-bottom: 20px;">
         <p style="margin: 0; color: #2e7d32;">

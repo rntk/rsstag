@@ -495,6 +495,9 @@ class RSSTagApplication(object):
     def on_topics_list_get(self, user: dict, request: Request, page_number: int = 1) -> Response:
         return posts_handlers.on_topics_list_get(self, user, request, page_number)
 
+    def on_post_graph_get(self, user: dict, request: Request, pids: str) -> Response:
+        return posts_handlers.on_post_graph_get(self, user, request, pids)
+
     def _handle_sentence_grouping_chunking(self, sentences_list: list, original_prompt: str, temperature: float = 0.0, max_sentences_per_chunk: int = 10) -> str:
         """
         Handle chunking for sentence grouping when request is too large.

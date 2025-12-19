@@ -136,6 +136,15 @@ window.onload = () => {
     } else if (/^\/tree\//.test(path) || (/^\/prefixes\/prefix\//.test(path)))  {
         let tree = new TagTree(window.tag_sunburst_initial_root);
         tree.render(".page");
+    } else if (/^\/post-graph\//.test(path)) {
+        if (window.posts_graphs) {
+            window.posts_graphs.forEach(post => {
+                if (post.graph_data) {
+                    let tree = new TagTree(post.graph_data);
+                    tree.render("#graph_" + post.post_id);
+                }
+            });
+        }
     } else if (path === '/group/category') {
         ReactDOM.render(
             <CategoriesList ES={window.EVSYS} />,
