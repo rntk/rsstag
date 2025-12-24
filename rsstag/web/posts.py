@@ -1060,6 +1060,23 @@ def on_cluster_get(app: "RSSTagApplication", user: dict, cluster: int) -> Respon
     )
 
 def on_post_grouped_get(app: "RSSTagApplication", user: dict, request: Request, pids: str) -> Response:
+    """Handler for grouped posts view with color generation"""
+    
+    def _hsl_to_hex(h: float, s: float, l: float) -> str:
+        """Convert HSL to HEX color"""
+        import colorsys
+        r, g, b = colorsys.hls_to_rgb(h, l, s)
+        return '#' + ''.join(f'{int(c*255):02x}' for c in (r, g, b))
+    
+    def _group_color(group_id: str) -> str:
+        """Generate color for a group"""
+        import hashlib
+        digest = hashlib.md5(group_id.encode('utf-8')).hexdigest()
+        hue = (int(digest[:8], 16) % 360) / 360.0
+        sat = 0.6
+        light = 0.7
+        return _hsl_to_hex(hue, sat, light)
+    
     projection = {"content": True, "feed_id": True, "url": True}
     post_ids = [int(pid) for pid in pids.split('_') if pid]
     if not post_ids:
@@ -1093,7 +1110,6 @@ def on_post_grouped_get(app: "RSSTagApplication", user: dict, request: Request, 
     # Collect grouped data from all posts (single or multiple)
     all_sentences = []
     all_groups = {}
-    all_group_colors = {}
     sentence_offset = 0
     has_grouped_data = False
 
@@ -1119,23 +1135,19 @@ def on_post_grouped_get(app: "RSSTagApplication", user: dict, request: Request, 
                 if group_name not in all_groups:
                     all_groups[group_name] = []
                 all_groups[group_name].extend(adjusted_indices)
-                
-                # Use the same color for the group
-                if group_name not in all_group_colors:
-                    if group_name in post_grouped_data.get("group_colors", {}):
-                        all_group_colors[group_name] = post_grouped_data["group_colors"][group_name]
-                    else:
-                        all_group_colors[group_name] = "#4a6baf"
             
             # Update offset for next post
             sentence_offset += len(post_grouped_data["sentences"])
+    
+    # Generate colors dynamically from group keys
+    all_group_colors = {group: _group_color(group) for group in all_groups.keys()}
     
     # If no grouped data exists for any post, create default grouping by post
     if not has_grouped_data:
         for post in all_posts:
             group_name = f"Post {post['post_id']}"
             all_groups[group_name] = [post["post_id"]]
-            all_group_colors[group_name] = "#4a6baf"
+            all_group_colors[group_name] = _group_color(group_name)
     
     page = app.template_env.get_template("post-grouped.html")
     return Response(
@@ -1163,8 +1175,34 @@ def on_topics_list_get(app: "RSSTagApplication", user: dict, request: Request, p
     # Get all grouped posts data from the database
     grouped_posts = list(app.db.post_grouping.find(
         {"owner": user["sid"]},
-        {"_id": 0, "groups": 1, "post_ids": 1, "feed_title": 1}
+        {"_id": 0, "groups": 1, "post_ids": 1}
     ))
+
+    # Get all unique post IDs for feed title lookups
+    all_post_ids = set()
+    for post_data in grouped_posts:
+        all_post_ids.update(post_data["post_ids"])
+    
+    # Fetch posts to get feed_ids
+    posts_data = {
+        post["pid"]: post["feed_id"]
+        for post in app.db.posts.find(
+            {"owner": user["sid"], "pid": {"$in": list(all_post_ids)}},
+            {"_id": 0, "pid": 1, "feed_id": 1}
+        )
+    }
+    
+    # Get unique feed IDs
+    feed_ids = set(posts_data.values())
+    
+    # Fetch feeds to get titles
+    feeds_data = {
+        feed["feed_id"]: feed.get("title", "Unknown Feed")
+        for feed in app.db.feeds.find(
+            {"owner": user["sid"], "feed_id": {"$in": list(feed_ids)}},
+            {"_id": 0, "feed_id": 1, "title": 1}
+        )
+    }
 
     # Count topics/chapters across all posts
     topic_counts = {}
@@ -1172,8 +1210,14 @@ def on_topics_list_get(app: "RSSTagApplication", user: dict, request: Request, p
 
     for post_data in grouped_posts:
         post_id_str = "_".join(str(pid) for pid in post_data["post_ids"])
+        
+        # Derive feed_title from first post's feed
+        first_post_id = post_data["post_ids"][0] if post_data["post_ids"] else None
+        feed_id = posts_data.get(first_post_id) if first_post_id else None
+        feed_title = feeds_data.get(feed_id, "Unknown Feed") if feed_id else "Unknown Feed"
+        
         post_topic_mapping[post_id_str] = {
-            "feed_title": post_data["feed_title"],
+            "feed_title": feed_title,
             "topics": list(post_data["groups"].keys())
         }
 

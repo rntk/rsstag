@@ -657,6 +657,8 @@ class Worker:
         """Process post grouping for the given task"""
         try:
             from rsstag.post_grouping import RssTagPostGrouping
+            from pymongo import UpdateOne
+            from rsstag.tasks import POST_NOT_IN_PROCESSING
             
             owner = task["user"]["sid"]
             posts = task["data"]
@@ -664,18 +666,53 @@ class Worker:
             if not posts:
                 return True  # No posts to process
             
-            # Get feed IDs from posts
-            feed_ids = set(post.get("feed_id") for post in posts)
-            feeds = list(self._db.feeds.find({
-                "owner": owner,
-                "feed_id": {"$in": list(feed_ids)}
-            }))
-            
-            # Process post grouping with LLM handler
+            # Initialize post grouping handler with LLM
             post_grouping = RssTagPostGrouping(self._db, self._llamacpp)
-            result = post_grouping.process_post_grouping(owner, posts, feeds)
             
-            return result is not None
+            # Process each post individually
+            updates = []
+            for post in posts:
+                try:
+                    # Extract content and title
+                    content = gzip.decompress(post["content"]["content"]).decode("utf-8", "replace")
+                    title = post["content"].get("title", "")
+                    
+                    # Generate grouped data
+                    result = post_grouping.generate_grouped_data(content, title)
+                    
+                    if result:
+                        # Save to DB
+                        save_success = post_grouping.save_grouped_posts(
+                            owner,
+                            [post["pid"]],
+                            result["sentences"],
+                            result["groups"]
+                        )
+                        
+                        if save_success:
+                            # Mark post as processed
+                            updates.append(UpdateOne(
+                                {"_id": post["_id"]},
+                                {"$set": {"processing": POST_NOT_IN_PROCESSING, "grouping": 1}}
+                            ))
+                        else:
+                            logging.error("Failed to save grouped data for post %s", post["pid"])
+                    else:
+                        logging.error("Failed to generate grouped data for post %s", post["pid"])
+                        
+                except Exception as e:
+                    logging.error("Error processing post %s: %s", post.get("pid"), e)
+                    continue
+            
+            # Apply updates to mark posts as processed
+            if updates:
+                try:
+                    self._db.posts.bulk_write(updates, ordered=False)
+                except Exception as e:
+                    logging.error("Failed to update post grouping flags: %s", e)
+                    return False
+            
+            return True
             
         except Exception as e:
             logging.error("Can't make post grouping. Info: %s", e)
