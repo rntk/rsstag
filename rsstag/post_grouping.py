@@ -120,63 +120,66 @@ class RssTagPostGrouping:
         text_plain = text_plain.replace('\n', ' ').replace('\r', ' ')
         text_plain = re.sub(r'\s+', ' ', text_plain).strip()
 
-        # Word splitter window size
-        SPLITTER_WINDOW = 15
-        MIN_MARKER_DISTANCE = 6
-        SAFETY_SKIP_WINDOW = 5
-        LOOKAHEAD_WINDOW = 4
+        # Word splitter parameters
+        SPLITTER_WINDOW = 40          # Max words between forced markers
+        WEAK_PUNCT_DIST = 200         # Min characters for weak punctuation markers
+        SAFETY_WORDS_DIST = 35        # Words between markers if no punctuation found
+        LOOKAHEAD_WINDOW = 6          # Lookahead to avoid double markers near punctuation
 
         # Insert word splitters - number them from START to END
         positions = []
         matches = list(re.finditer(r'\s+', text_plain))
         word_count = 0
-        split_punct = set('.!?,;:)]}"\'')
+        sentence_end_punct = set('.!?')
+        weak_punct = set(',;:)]}"\'')
         last_added_pos = 0
-        words_since_punct_marker = 0
+        words_since_last_marker = 0
         
         for i, m in enumerate(matches):
             if m.start() > 0:
                 last_char = text_plain[m.start() - 1]
                 word_count += 1
-                words_since_punct_marker += 1
+                words_since_last_marker += 1
 
-                is_punct = last_char in split_punct
+                is_sentence_end = last_char in sentence_end_punct
+                is_weak_punct = last_char in weak_punct
                 is_safety = word_count >= SPLITTER_WINDOW
 
-                if m.end() - last_added_pos < MIN_MARKER_DISTANCE:
-                    continue
+                dist = m.end() - last_added_pos
+                
+                # Check if we should add a marker
+                should_add = False
+                
+                if is_sentence_end:
+                    # Always mark sentence ends (Priority 1)
+                    # Small 5-char buffer just to avoid markers after "e.g." or similar if followed by space
+                    if dist > 5:
+                        should_add = True
+                elif is_weak_punct:
+                    # Only mark weak punctuation if we've gone a long time without a marker
+                    if dist >= WEAK_PUNCT_DIST:
+                        should_add = True
+                elif is_safety:
+                    # Last resort if no punctuation is found
+                    if words_since_last_marker >= SAFETY_WORDS_DIST:
+                        # Check ahead to see if punctuation is coming up soon
+                        punct_ahead = False
+                        for j in range(i + 1, min(i + 1 + LOOKAHEAD_WINDOW, len(matches))):
+                            future_match = matches[j]
+                            if future_match.start() > 0:
+                                future_last_char = text_plain[future_match.start() - 1]
+                                if future_last_char in sentence_end_punct or future_last_char in weak_punct:
+                                    punct_ahead = True
+                                    break
+                        
+                        if not punct_ahead:
+                            should_add = True
 
-                if is_punct:
+                if should_add:
                     positions.append(m.end())
                     last_added_pos = m.end()
                     word_count = 0
-                    words_since_punct_marker = 0
-                elif is_safety:
-                    if words_since_punct_marker < SAFETY_SKIP_WINDOW:
-                        continue
-
-                    punct_ahead = False
-                    for j in range(i + 1, min(i + 1 + LOOKAHEAD_WINDOW, len(matches))):
-                        future_match = matches[j]
-                        if future_match.start() > 0:
-                            future_last_char = text_plain[future_match.start() - 1]
-                            if future_last_char in split_punct:
-                                punct_ahead = True
-                                break
-                    
-                    # Special check: also check if the very end of text ends with punctuation
-                    # If we ran out of matches to check (consumed all up to end), check the text tail
-                    if not punct_ahead:
-                        end_check_range = i + 1 + LOOKAHEAD_WINDOW
-                        if end_check_range >= len(matches):
-                             # We are looking close to the end of the text
-                            if text_plain and text_plain[-1] in split_punct:
-                                punct_ahead = True
-                    
-                    if not punct_ahead:
-                        positions.append(m.end())
-                        last_added_pos = m.end()
-                        word_count = 0
+                    words_since_last_marker = 0
         
         # NOTE: Fallback removed to avoid forcing a split when safety logic explicitly skipped it
         # (e.g. at end of text). If positions is empty, we return 0 markers, which is valid.
