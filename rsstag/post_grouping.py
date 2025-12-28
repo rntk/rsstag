@@ -433,7 +433,9 @@ Output:"""
                 end_tag = chapter["end_tag"]      # marker number (1-based)
                 
                 # Convert marker numbers to text positions using precomputed map
-                start_pos = marker_positions.get(start_tag, 0)
+                # Use start_tag - 1 to include the text segment ending at start_tag
+                start_pos = marker_positions.get(start_tag - 1, 0)
+
                 end_pos = marker_positions.get(end_tag, len(text_plain))
                 if start_pos >= end_pos:
                     self._log.warning(f"Chapter '{chapter['title']}' markers {start_tag}-{end_tag} resolve to empty range")
