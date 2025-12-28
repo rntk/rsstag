@@ -89,14 +89,16 @@ class RssTagPostGrouping:
             html_cleaner = HTMLCleaner()
             html_cleaner.purge()
             html_cleaner.feed(full_content_html)
-            full_content_plain = " ".join(html_cleaner.get_content())
+            # Consistently normalize plain text for both chapters and sentences
+            content_v0 = " ".join(html_cleaner.get_content())
+            full_content_plain = re.sub(r'\s+', ' ', content_v0.replace('\n', ' ').replace('\r', ' ')).strip()
             
             # Generate chapters using LLM
             chapters = self._llm_split_chapters(full_content_plain, full_content_html)
             
             # Split into sentences and create groups
             sentences, groups = self._create_sentences_and_groups(
-                full_content_plain, full_content_html, chapters
+                full_content_plain, chapters
             )
             
             return {
@@ -264,6 +266,142 @@ Output:"""
         except Exception as e:
             self._log.error("LLM topics failed: %s", e)
             return []
+
+    def _resolve_gaps(self, topic_boundaries: List[tuple], marker_positions: Dict[int, int], text_plain: str) -> List[tuple]:
+        """Resolve gaps between topics by asking LLM"""
+        if not topic_boundaries:
+            self._log.info("No topic boundaries to resolve gaps for.")
+            return topic_boundaries
+
+        self._log.info(f"Starting gap resolution for {len(topic_boundaries)} boundaries.")
+
+        resolved_boundaries = []
+        # Add initial boundary if needed, but usually we just process gaps between existing ones
+        # For simplicity, we process:
+        # 1. Gap before first topic (if first topic start > 1)
+        # 2. Gaps between topics
+        # 3. Gap after last topic (not handled here, usually "Remaining Content")
+
+        # Sort boundaries just in case
+        sorted_boundaries = sorted(topic_boundaries, key=lambda x: x[1])
+        
+        # Check initial gap
+        first_title, first_start, _ = sorted_boundaries[0]
+        if first_start > 1:
+            # We strictly only care about "unassigned" sentences. 
+            # If there is a gap at start, it has no "previous" topic.
+            # We can ask if it belongs to "Next" (first topic) or is "Unassigned".
+            gap_start_marker = 1
+            gap_end_marker = first_start - 1
+            self._log.info(f"Found initial gap: 1-{gap_end_marker}")
+            # ... Logic for initial gap could be similar, but let's focus on inter-topic gaps first as requested.
+            # actually user request implies generally "sentences without topic".
+            
+        current_boundaries = sorted_boundaries
+        i = 0
+        while i < len(current_boundaries) - 1:
+            prev_title, prev_start, prev_end = current_boundaries[i]
+            next_title, next_start, next_end = current_boundaries[i+1]
+            
+            # Check for gap
+            if next_start > prev_end + 1:
+                gap_start = prev_end + 1
+                gap_end = next_start - 1
+                self._log.info(f"Gap found between '{prev_title}' and '{next_title}': markers {gap_start}-{gap_end}")
+                
+                # Get text for context
+                # Previous topic last sentence
+                prev_text_end = marker_positions.get(prev_end, len(text_plain))
+                # To get last sentence, we might need to look back a bit. 
+                # Let's approximate by taking the text of the last marker interval of previous chapter
+                prev_last_marker_start = marker_positions.get(prev_end - 1, 0) # This might be too small
+                # Better: Get the full previous chapter text and extract last sentence? 
+                # Or just take a chunk ending at prev_end.
+                prev_chunk_start = marker_positions.get(max(prev_start, prev_end - 5), 0) # Last 5 markers range?
+                prev_text_chunk = text_plain[prev_chunk_start:prev_text_end].strip()
+                # We can refine this to be actual sentences later if needed, prompt asks for "last sentence".
+                
+                # Next topic first sentence
+                next_text_start = marker_positions.get(next_start-1, 0)
+                next_chunk_end = marker_positions.get(min(next_end, next_start + 5), len(text_plain))
+                next_text_chunk = text_plain[next_text_start:next_chunk_end].strip()
+
+                # Gap text
+                gap_text_start = marker_positions.get(gap_start-1, 0)
+                gap_text_end = marker_positions.get(gap_end, len(text_plain))
+                gap_text = text_plain[gap_text_start:gap_text_end].strip()
+                
+                if not gap_text:
+                     self._log.info(f"Gap {gap_start}-{gap_end} has no text, skipping.")
+                     i += 1
+                     continue
+
+                self._log.info(f"Resolving gap between '{prev_title}' and '{next_title}': markers {gap_start}-{gap_end}")
+                self._log.info(f"Gap text length: {len(gap_text)}")
+                
+                prompt = f"""You are a text analysis expert.
+We have a gap of unassigned text between two topics.
+Determine if this text belongs to the Previous Topic, the Next Topic, or neither.
+Instruction:
+- If the text in <gap> continues the thought of the topic in <previous_topic>, answer "P".
+- If the text in <gap> introduces the topic in <next_topic>, answer "N".
+- If it is a distinct or unrelated point, answer "X".
+
+
+<previous_topic>
+{prev_title}
+</previous_topic>
+
+<context_previous>
+...{prev_text_chunk[-200:]}
+</context_previous>
+
+<next_topic>
+{next_title}
+</next_topic>
+
+<context_next>
+{next_text_chunk[:200]}...
+</context_next>
+
+<gap>
+{gap_text}
+</gap>
+
+Response (one letter P/N/X):"""
+                
+                try:
+                    decision = self._llamacpp_handler.call([prompt], temperature=0.0, max_tokens=10).strip()
+                    self._log.info(f"Gap resolution decision: {decision}")
+                    
+                    if "P" in decision and "N" not in decision and "X" not in decision: # Simple check
+                        self._log.info(f"Merging gap {gap_start}-{gap_end} to previous topic: '{prev_title}'")
+                        # Merge to previous
+                        current_boundaries[i] = (prev_title, prev_start, gap_end)
+                        # We don't advance i yet, incase we merged and created new adjacency? 
+                        # actually we just closed the gap. Next iteration checks next pair.
+                        # But wait, we modified current_boundaries[i], so next loop checks (modified_prev, next).
+                        # That pair is now adjacent (gap_end + 1 == next_start). So no gap.
+                    elif "N" in decision and "P" not in decision:
+                        self._log.info(f"Merging gap {gap_start}-{gap_end} to next topic: '{next_title}'")
+                        # Merge to next
+                        current_boundaries[i+1] = (next_title, gap_start, next_end)
+                    else:
+                        self._log.info(f"Assigning gap {gap_start}-{gap_end} as 'Unassigned'")
+                        # Neither - insert new unassigned topic
+                        current_boundaries.insert(i+1, ("Unassigned", gap_start, gap_end))
+                        # Now we have [prev, unassigned, next]. 
+                        # Loop continues. Next check will be (unassigned, next). They are adjacent.
+                        # So we effectively skip.
+                        i += 1 
+
+                except Exception as e:
+                     self._log.error(f"Gap resolution failed: {e}")
+            
+            i += 1
+            
+        self._log.info(f"Gap resolution finished. Resulting boundaries: {len(current_boundaries)}")
+        return current_boundaries
 
     def _get_llm_topic_mapping(self, topics: List[str], tagged_text: str) -> str:
         """Fetch topic mapping from LLM"""
@@ -485,7 +623,7 @@ Output:"""
             tagged_text = marker_data["tagged_text"]
             max_marker = marker_data["max_marker"]
             marker_positions = marker_data["marker_positions"]
-            text_plain = marker_data.get("text_plain", text_plain)
+            # text_plain is already normalized in generate_grouped_data
 
             if max_marker == 0:
                 return [{"title": "Main Content", "text": text_html, "plain_start": 0, "plain_end": len(text_plain)}]
@@ -508,13 +646,19 @@ Output:"""
             self._log.info(f"Total markers: {max_marker}")
             
             validated_boundaries = self._validate_boundaries(topic_boundaries, max_marker)
+            
+            # Resolve Gaps
+            if self._llamacpp_handler:
+                 validated_boundaries = self._resolve_gaps(validated_boundaries, marker_positions, text_plain)
+                 self._log.info(f"Total boundaries after gap resolution: {len(validated_boundaries)}")
+
             return self._map_chapters_to_html(text_plain, text_html, validated_boundaries, marker_positions, max_marker)
             
         except Exception as e:
             self._log.error("LLM chapter splitting failed: %s", e)
             return [{"title": "Main Content", "text": text_html, "plain_start": 0, "plain_end": len(text_plain)}]
 
-    def _create_sentences_and_groups(self, full_content_plain: str, full_content_html: str, 
+    def _create_sentences_and_groups(self, full_content_plain: str, 
                                     chapters: List[Dict[str, Any]]) -> tuple:
         """Create sentences and groups from chapters
         
@@ -532,28 +676,54 @@ Output:"""
             title = chapters[0]["title"]
             groups[title] = list(range(1, len(sentences) + 1))
         else:
+            # Map sentences to their positions in full_content_plain
+            sentence_info = []
+            sentence_offset = 0
+            for i, sentence in enumerate(sentences, 1):
+                sentence_text = sentence["text"]
+                sentence_start = full_content_plain.find(sentence_text, sentence_offset)
+                if sentence_start != -1:
+                    sentence_end = sentence_start + len(sentence_text)
+                    sentence_info.append({
+                        "id": i,
+                        "start": sentence_start,
+                        "end": sentence_end
+                    })
+                    sentence_offset = sentence_end
+                else:
+                    # Fallback for minor mismatch - should not happen with fixed normalization
+                    self._log.warning(f"Could not find exact sentence {i} in text")
+
             # For multiple chapters, map sentences to chapters using plain_start/plain_end ranges
             for chapter in chapters:
                 title = chapter["title"]
                 plain_start = chapter.get("plain_start", 0)
                 plain_end = chapter.get("plain_end", len(full_content_plain))
                 
-                # Find sentences that fall within this chapter's range
+                # Find sentences that fall within or overlap this chapter's range
                 chapter_sentence_numbers = []
-                sentence_offset = 0
-                for i, sentence in enumerate(sentences, 1):
-                    sentence_text = sentence["text"]
-                    sentence_start = full_content_plain.find(sentence_text, sentence_offset)
-                    if sentence_start != -1:
-                        sentence_end = sentence_start + len(sentence_text)
-                        sentence_offset = sentence_end
-                        
-                        # Check if sentence overlaps with chapter range
-                        if sentence_start >= plain_start and sentence_start < plain_end:
-                            chapter_sentence_numbers.append(i)
+                for s_info in sentence_info:
+                    s_id = s_info["id"]
+                    s_start = s_info["start"]
+                    s_end = s_info["end"]
+                    
+                    # Logic: sentence is in chapter if its start is within the range, 
+                    # OR if it's the very first sentence and chapter starts at 0,
+                    # OR if it's the last sentence and chapter ends at the very end.
+                    # We use a 2-character tolerance for start mismatch due to markers being added in whitespace.
+                    if (s_start >= plain_start - 2 and s_start < plain_end) or \
+                       (s_end > plain_start + 2 and s_end <= plain_end + 2) or \
+                       (s_start < plain_start and s_end > plain_end):
+                        chapter_sentence_numbers.append(s_id)
                 
                 if chapter_sentence_numbers:
-                    groups[title] = chapter_sentence_numbers
+                    if title not in groups:
+                        groups[title] = []
+                    groups[title].extend(chapter_sentence_numbers)
+
+            # Cleanup groups: deduplicate and sort
+            for title in groups:
+                groups[title] = sorted(list(set(groups[title])))
         
         return sentences, groups
 
