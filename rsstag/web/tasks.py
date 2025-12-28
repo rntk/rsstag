@@ -24,7 +24,7 @@ from rsstag.tasks import (
 )
 
 def on_tasks_get(app, user: dict, request: Request) -> Response:
-    current_tasks = app.tasks.get_current_tasks_titles(user["sid"])
+    current_tasks = app.tasks.get_current_tasks(user["sid"])
     available_tasks = {
         TASK_DOWNLOAD: "Download posts",
         TASK_MARK: "Sync read state",
@@ -72,5 +72,11 @@ def on_tasks_post(app, user: dict, request: Request) -> Response:
             })
         except ValueError:
             logging.error("Invalid task type: %s", task_type)
+    
+    return redirect("/tasks")
+
+def on_tasks_remove_post(app, user: dict, request: Request, task_id: str) -> Response:
+    if task_id:
+        app.tasks.remove_task(task_id)
     
     return redirect("/tasks")

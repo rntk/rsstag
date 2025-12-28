@@ -27,7 +27,15 @@
         {% if current_tasks %}
             <ul class="tasks-list">
             {% for task in current_tasks %}
-                <li>{{ task }}</li>
+                <li>
+                    {{ task.title }} 
+                    {% if task.processing > 0 %}
+                        (Processing...)
+                    {% endif %}
+                    <form action="/tasks/remove/{{ task.id }}" method="post" style="display: inline;">
+                        <input type="submit" value="Remove" onclick="return confirm('Are you sure?')">
+                    </form>
+                </li>
             {% endfor %}
             </ul>
         {% else %}

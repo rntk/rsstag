@@ -134,7 +134,8 @@ class RSSTagApplication(object):
             "on_telegram_auth_post",
             "on_settings_post",
             "on_tasks_get",
-            "on_tasks_post"
+            "on_tasks_post",
+            "on_tasks_remove_post"
         }
 
         self.openai = ROpenAI(self.config["openai"]["token"])
@@ -266,6 +267,9 @@ class RSSTagApplication(object):
 
     def on_tasks_post(self, user: dict, request: Request) -> Response:
         return tasks_handlers.on_tasks_post(self, user, request)
+
+    def on_tasks_remove_post(self, user: dict, request: Request, task_id: str) -> Response:
+        return tasks_handlers.on_tasks_remove_post(self, user, request, task_id)
 
     def on_error(self, _: Optional[dict], __: Request, e: HTTPException) -> Response:
         page = self.template_env.get_template("error.html")

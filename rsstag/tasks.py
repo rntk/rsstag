@@ -3,6 +3,7 @@ import time
 from typing import Optional, List
 from rsstag.users import RssTagUsers
 from pymongo import MongoClient, UpdateOne
+from bson.objectid import ObjectId
 
 TASK_ALL = -1
 TASK_NOOP = 0
@@ -365,9 +366,11 @@ class RssTagTasks:
         # self._log.info('Get task: %s', task)
         return task
 
-    def remove_task(self, _id: str) -> Optional[bool]:
+    def remove_task(self, _id) -> Optional[bool]:
         try:
-            self._db.tasks.delete_one({"_id": _id})  # TODO: check result?
+            if isinstance(_id, str):
+                _id = ObjectId(_id)
+            self._db.tasks.delete_one({"_id": _id})
             result = True
         except Exception as e:
             result = None
@@ -432,8 +435,8 @@ class RssTagTasks:
                     ))
                 self._db.posts.bulk_write(updates, ordered=False)
             if remove_task:
-                removed = self.remove_task(task["data"]["_id"])
-                if removed and not task.get("manual", False):
+                removed = self.remove_task(task["_id"])
+                if not task.get("manual", False):
                     self.add_next_tasks(task["user"]["sid"], task["type"])
 
             result = True
@@ -445,6 +448,24 @@ class RssTagTasks:
                 task["type"],
                 e,
             )
+
+        return result
+
+    def get_current_tasks(self, user_id: str) -> List[dict]:
+        try:
+            curr = self._db.tasks.find({"user": user_id})
+            result = []
+            for task in curr:
+                result.append({
+                    "id": str(task["_id"]),
+                    "type": task["type"],
+                    "title": self.get_task_title(task["type"]),
+                    "processing": task.get("processing", 0)
+                })
+
+        except Exception as e:
+            result = []
+            self._log.error("Can`t get user tasks states %s. Info: %s", user_id, e)
 
         return result
 
