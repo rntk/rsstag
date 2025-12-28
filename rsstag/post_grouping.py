@@ -164,14 +164,25 @@ class RssTagPostGrouping:
                                 punct_ahead = True
                                 break
                     
+                    # Special check: also check if the very end of text ends with punctuation
+                    # If we ran out of matches to check (consumed all up to end), check the text tail
+                    if not punct_ahead:
+                        end_check_range = i + 1 + LOOKAHEAD_WINDOW
+                        if end_check_range >= len(matches):
+                             # We are looking close to the end of the text
+                            if text_plain and text_plain[-1] in split_punct:
+                                punct_ahead = True
+                    
                     if not punct_ahead:
                         positions.append(m.end())
                         last_added_pos = m.end()
                         word_count = 0
         
-        if not positions and matches:
-             # Force at least one split if we have whitespace but no triggers
-             positions.append(matches[-1].end())
+        # NOTE: Fallback removed to avoid forcing a split when safety logic explicitly skipped it
+        # (e.g. at end of text). If positions is empty, we return 0 markers, which is valid.
+        # if not positions and matches:
+        #      # Force at least one split if we have whitespace but no triggers
+        #      positions.append(matches[-1].end())
 
         if not positions:
             return {
