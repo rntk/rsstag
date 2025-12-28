@@ -108,6 +108,103 @@ class RssTagPostGrouping:
             self._log.error("Error generating grouped data. Info: %s", e)
             return None
 
+    def add_markers_to_text(self, text_plain: str) -> dict:
+        """Add word split markers to the text.
+        
+        Returns a dict with:
+            tagged_text: the text with {wsN} markers
+            max_marker: the number of the last marker
+            marker_positions: map of marker numbers to character positions
+        """
+        # Remove newlines to avoid confusing the LLM
+        text_plain = text_plain.replace('\n', ' ').replace('\r', ' ')
+        text_plain = re.sub(r'\s+', ' ', text_plain).strip()
+
+        # Word splitter window size
+        SPLITTER_WINDOW = 15
+        MIN_MARKER_DISTANCE = 6
+        SAFETY_SKIP_WINDOW = 5
+        LOOKAHEAD_WINDOW = 4
+
+        # Insert word splitters - number them from START to END
+        positions = []
+        matches = list(re.finditer(r'\s+', text_plain))
+        word_count = 0
+        split_punct = set('.!?,;:)]}"\'')
+        last_added_pos = 0
+        words_since_punct_marker = 0
+        
+        for i, m in enumerate(matches):
+            if m.start() > 0:
+                last_char = text_plain[m.start() - 1]
+                word_count += 1
+                words_since_punct_marker += 1
+
+                is_punct = last_char in split_punct
+                is_safety = word_count >= SPLITTER_WINDOW
+
+                if m.end() - last_added_pos < MIN_MARKER_DISTANCE:
+                    continue
+
+                if is_punct:
+                    positions.append(m.end())
+                    last_added_pos = m.end()
+                    word_count = 0
+                    words_since_punct_marker = 0
+                elif is_safety:
+                    if words_since_punct_marker < SAFETY_SKIP_WINDOW:
+                        continue
+
+                    punct_ahead = False
+                    for j in range(i + 1, min(i + 1 + LOOKAHEAD_WINDOW, len(matches))):
+                        future_match = matches[j]
+                        if future_match.start() > 0:
+                            future_last_char = text_plain[future_match.start() - 1]
+                            if future_last_char in split_punct:
+                                punct_ahead = True
+                                break
+                    
+                    if not punct_ahead:
+                        positions.append(m.end())
+                        last_added_pos = m.end()
+                        word_count = 0
+        
+        if not positions and matches:
+             # Force at least one split if we have whitespace but no triggers
+             positions.append(matches[-1].end())
+
+        if not positions:
+            return {
+                "tagged_text": text_plain,
+                "max_marker": 0,
+                "marker_positions": {0: 0}
+            }
+
+        max_marker = len(positions) + 1  # include final sentinel inserted later
+
+        # Map marker numbers to absolute character positions for easier slicing later
+        marker_positions = {0: 0}
+        for idx, pos in enumerate(positions, start=1):
+            marker_positions[idx] = pos
+        marker_positions[max_marker] = len(text_plain)
+
+        # Insert markers in reverse order to maintain position indices
+        tagged_text = text_plain
+        for counter, pos in enumerate(reversed(positions), 1):
+            # Insert from end to start, but number from start to end
+            marker_num = len(positions) - counter + 1
+            tagged_text = tagged_text[:pos] + '{ws' + str(marker_num) + '}' + tagged_text[pos:]
+
+        # Add final end marker to indicate end of text
+        tagged_text = tagged_text + '{ws' + str(max_marker) + '}'
+
+        return {
+            "tagged_text": tagged_text,
+            "max_marker": max_marker,
+            "marker_positions": marker_positions,
+            "text_plain": text_plain # return cleaned text as well
+        }
+
     def _llm_split_chapters(self, text_plain: str, text_html: str) -> List[Dict[str, Any]]:
         """Split content into chapters using LLM with word splitters
         
@@ -117,12 +214,15 @@ class RssTagPostGrouping:
             if not self._llamacpp_handler:
                 return [{"title": "Main Content", "text": text_html, "plain_start": 0, "plain_end": len(text_plain)}]
             
-            # Remove newlines to avoid confusing the LLM
-            text_plain = text_plain.replace('\n', ' ').replace('\r', ' ')
-            text_plain = re.sub(r'\s+', ' ', text_plain).strip()
+            # Prepare markers
+            marker_data = self.add_markers_to_text(text_plain)
+            tagged_text = marker_data["tagged_text"]
+            max_marker = marker_data["max_marker"]
+            marker_positions = marker_data["marker_positions"]
+            text_plain = marker_data["text_plain"] # use cleaned text
 
-            # Word splitter window size
-            SPLITTER_WINDOW = 
+            if max_marker == 0:
+                return [{"title": "Main Content", "text": text_html, "plain_start": 0, "plain_end": len(text_plain)}]
 
             # First LLM call: get list of topics
             prompt1 = f"""You are a text analysis expert. Analyze the following article and provide a list of main topics or chapters. Each topic should be a brief title (1-3 words).
@@ -165,60 +265,6 @@ Article:
             
             if not topics:
                 return [{"title": "Main Content", "text": text_html, "plain_start": 0, "plain_end": len(text_plain)}]
-            
-            # Insert word splitters - number them from START to END
-            positions = []
-            matches = list(re.finditer(r'\s+', text_plain))
-            word_count = 0
-            split_punct = set('.!?,;:)]}"\'')
-            
-            for m in matches:
-                if m.start() > 0:
-                    last_char = text_plain[m.start() - 1]
-                    word_count += 1
-                    if last_char in split_punct or word_count >= SPLITTER_WINDOW:
-                        positions.append(m.end())
-                        word_count = 0
-            
-            if not positions and matches:
-                 # Force at least one split if we have whitespace but no triggers
-                 positions.append(matches[-1].end())
-
-            if not positions:
-                return [{"title": "Main Content", "text": text_html, "plain_start": 0, "plain_end": len(text_plain)}]
-
-            max_marker = len(positions) + 1  # include final sentinel inserted later
-
-            # Map marker numbers to absolute character positions for easier slicing later
-            marker_positions = {0: 0}
-            for idx, pos in enumerate(positions, start=1):
-                marker_positions[idx] = pos
-            marker_positions[max_marker] = len(text_plain)
-
-            def clamp_marker(marker: int) -> int:
-                if marker < 1:
-                    return 1
-                if marker > max_marker:
-                    return max_marker
-                return marker
-
-            def marker_start_index(marker: int) -> int:
-                marker = clamp_marker(marker)
-                return marker_positions.get(marker - 1, len(text_plain))
-
-            def marker_end_index(marker: int) -> int:
-                marker = clamp_marker(marker)
-                return marker_positions.get(marker, len(text_plain))
-
-            # Insert markers in reverse order to maintain position indices
-            tagged_text = text_plain
-            for counter, pos in enumerate(reversed(positions), 1):
-                # Insert from end to start, but number from start to end
-                marker_num = len(positions) - counter + 1
-                tagged_text = tagged_text[:pos] + '{ws' + str(marker_num) + '}' + tagged_text[pos:]
-
-            # Add final end marker to indicate end of text
-            tagged_text = tagged_text + '{ws' + str(max_marker) + '}'
             
             # Numbered topics
             numbered_topics = "\n".join(f"{i+1}. {topic}" for i, topic in enumerate(topics))
