@@ -233,7 +233,7 @@ class RssTagPostGrouping:
             tagged_text = marker_data["tagged_text"]
             max_marker = marker_data["max_marker"]
             marker_positions = marker_data["marker_positions"]
-            text_plain = marker_data["text_plain"] # use cleaned text
+            text_plain = marker_data.get("text_plain", text_plain) # use cleaned text
 
             if max_marker == 0:
                 return [{"title": "Main Content", "text": text_html, "plain_start": 0, "plain_end": len(text_plain)}]
@@ -366,7 +366,7 @@ Output:"""
             
             self._log.info(f"Total topics from first call: {len(topics)}")
             self._log.info(f"Total topic boundaries parsed: {len(topic_boundaries)}")
-            self._log.info(f"Total word positions: {len(positions)}")
+            self._log.info(f"Total word positions: {len(marker_positions)}")
             
             if not topic_boundaries:
                 self._log.warning("No topic boundaries parsed, falling back to single section")
@@ -405,7 +405,7 @@ Output:"""
 
             # Add remaining text if any
             last_tag = chapters[-1]["end_tag"] if chapters else 0
-            last_pos = marker_end_index(last_tag) if last_tag else 0
+            last_pos = marker_positions.get(last_tag, 0) if last_tag else 0
             
             if last_pos < len(text_plain):
                 self._log.info("Adding remaining content chapter")
@@ -424,8 +424,8 @@ Output:"""
                 end_tag = chapter["end_tag"]      # marker number (1-based)
                 
                 # Convert marker numbers to text positions using precomputed map
-                start_pos = marker_start_index(start_tag)
-                end_pos = marker_end_index(end_tag)
+                start_pos = marker_positions.get(start_tag, 0)
+                end_pos = marker_positions.get(end_tag, len(text_plain))
                 if start_pos >= end_pos:
                     self._log.warning(f"Chapter '{chapter['title']}' markers {start_tag}-{end_tag} resolve to empty range")
                     chapter_texts_plain.append("")
