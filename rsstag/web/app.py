@@ -835,6 +835,11 @@ class RSSTagApplication(object):
     def on_tag_clusters_get(self, user: dict, _: Request, tag: str) -> Response:
         return tags_handlers.on_tag_clusters_get(self, user, tag)
 
+    def on_tag_contexts_classification_get(
+        self, user: dict, request: Request, tag: str
+    ) -> Response:
+        return tags_handlers.on_tag_contexts_classification_get(self, user, request, tag)
+
     def on_posts_get(self, user: dict, request: Request, pids: str) -> Response:
         return posts_handlers.on_posts_get(self, user, request, pids)
 

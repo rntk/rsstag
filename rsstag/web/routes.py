@@ -337,6 +337,11 @@ class RSSTagRoutes:
                 "methods": ["POST"],
             },
             {
+                "url": "/tag-contexts-classification/<string:tag>",
+                "endpoint": "on_tag_contexts_classification_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/tasks",
                 "endpoint": "on_tasks_get",
                 "methods": ["GET"],

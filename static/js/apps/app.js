@@ -44,6 +44,7 @@ import {OpenAITool} from "../components/openai.js";
 import TagSunburst from "../components/sunburst.js";
 import TagTree, { BidirectionalTagTree } from "../components/dendrogram.js";
 import SentenceTree from '../components/SentenceTree.js';
+import TagContextsClassificationStorage from '../storages/tag-contexts-classification-storage.js';
 import BigramsTable from '../components/bigrams-table.js';
 import BiGramsGraphSimple from '../components/bi-grams-graph-simple.js';
 import BiGramsGraph from '../components/bi-grams-graph.js';
@@ -370,6 +371,18 @@ function tagWithContextInfoPage(tag) {
         document.getElementById('load_clusters')
     );
     clusters_storage.start();
+
+    const contexts_classification_evsys = new EventsSystem();
+    const contexts_classification_storage = new TagContextsClassificationStorage(contexts_classification_evsys);
+    ReactDOM.render(
+        <TagsList ES={contexts_classification_evsys} />,
+        document.getElementById('tag_contexts_classification')
+    );
+    ReactDOM.render(
+        <TagButton ES={contexts_classification_evsys} title="contexts" tag={tag} />,
+        document.getElementById('load_contexts_classification')
+    );
+    contexts_classification_storage.start();
 
     const bi_grams_evsys = new EventsSystem();
     const bi_grams_storage = new TagsStorage(bi_grams_evsys, '/tag-bi-grams');
