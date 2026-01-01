@@ -1091,6 +1091,9 @@ class RSSTagApplication(object):
     def on_mark_telegram_posts_post(self, user: dict, request: Request):
         return posts_handlers.on_mark_telegram_posts_post(self, user, request)
 
+    def on_read_snippet_post(self, user: dict, request: Request) -> Response:
+        return posts_handlers.on_read_snippet_post(self, user, request)
+
     def on_gmail_sort_post(self, user: dict, request: Request):
         return posts_handlers.on_gmail_sort_post(self, user, request)
 

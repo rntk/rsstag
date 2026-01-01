@@ -348,6 +348,8 @@ def on_read_posts_post(
                 app.letters.change_unread(user["sid"], letters, readed)
                 changed = True
             if changed:
+                for pid in post_ids:
+                    app.post_grouping.mark_sequences_read(user["sid"], pid, readed)
                 code = 200
                 result = {"data": "ok"}
             else:
@@ -1219,7 +1221,7 @@ def on_post_grouped_snippets_get(app: "RSSTagApplication", user: dict, request: 
     for post_id in post_ids:
         post_grouped_data = app.post_grouping.get_grouped_posts(user["sid"], [post_id])
         if post_grouped_data and post_grouped_data.get("groups") and post_grouped_data.get("sentences"):
-            sentences_map = {s["number"]: s["text"] for s in post_grouped_data["sentences"]}
+            sentences_map = {s["number"]: s for s in post_grouped_data["sentences"]}
             
             for group, indices in post_grouped_data["groups"].items():
                 if requested_topic and group != requested_topic:
@@ -1240,7 +1242,10 @@ def on_post_grouped_snippets_get(app: "RSSTagApplication", user: dict, request: 
                 for idx in sorted_indices:
                     # If indices are sequential (allow small gap), merge them? 
                     # For now just list them all. Or maybe combine sequential sentences into a block.
-                    text = sentences_map.get(idx, "")
+                    s_obj = sentences_map.get(idx)
+                    if not s_obj:
+                         continue
+                    text = s_obj.get("text", "")
                     if not text:
                          continue
                          
@@ -1250,7 +1255,8 @@ def on_post_grouped_snippets_get(app: "RSSTagApplication", user: dict, request: 
                         "post_id": post_id,
                         "post_title": all_posts[post_id]["title"],
                         "index": idx,
-                        "url": all_posts[post_id]["url"]
+                        "url": all_posts[post_id]["url"],
+                        "read": s_obj.get("read", False)
                     })
     
     # Sort topics by name or maybe by number of snippets?
@@ -1502,3 +1508,72 @@ def on_post_graph_get(app: "RSSTagApplication", user: dict, request: Request, pi
         ),
         mimetype="text/html"
     )
+
+def on_read_snippet_post(
+    app: "RSSTagApplication", user: dict, request: Request
+) -> Response:
+    try:
+        data = json.loads(request.get_data(as_text=True))
+        post_id = int(data["post_id"])
+        sentence_index = int(data["sentence_index"])
+        readed = bool(data["readed"])
+    except Exception as e:
+        logging.warning("Send wrong data for read snippet. Cause: %s", e)
+        return Response(json.dumps({"error": "Bad data"}), mimetype="application/json", status=400)
+
+    # Update snippet status
+    all_read = app.post_grouping.update_snippet_read_status(user["sid"], post_id, sentence_index, readed)
+    
+    if all_read is None:
+        return Response(json.dumps({"error": "Grouping not found"}), mimetype="application/json", status=404)
+
+    # Now handle post status synchronization
+    # If we mark snippet as UNREAD, we MUST mark the whole post as UNREAD
+    # If we mark snippet as READ and all snippets are now READ, we mark the whole post as READ
+    
+    projection = {"pid": True, "read": True, "id": True, "tags": True, "bi_grams": True}
+    post = app.posts.get_by_pid(user["sid"], post_id, projection)
+    
+    if not post:
+        return Response(json.dumps({"error": "Post not found"}), mimetype="application/json", status=404)
+
+    should_change_post = False
+    if not readed:
+        if post["read"]:
+            should_change_post = True
+    else:
+        if all_read and not post["read"]:
+            should_change_post = True
+            
+    if should_change_post:
+        # Replicate logic from on_read_posts_post but for a single post
+        post_ids = [post_id]
+        tags = defaultdict(int)
+        bi_grams = defaultdict(int)
+        letters = defaultdict(int)
+        
+        for t in post["tags"]:
+            tags[t] += 1
+            if t:
+                letters[t[0]] += 1
+        for bi_g in post.get("bi_grams", []):
+            bi_grams[bi_g] += 1
+            
+        for_insert = [{
+            "user": user["sid"],
+            "id": post["id"],
+            "status": readed,
+            "processing": TASK_NOT_IN_PROCESSING,
+            "type": TASK_MARK,
+        }]
+        
+        if app.tasks.add_task({"type": TASK_MARK, "user": user["sid"], "data": for_insert}):
+            changed = app.posts.change_status(user["sid"], post_ids, readed)
+            if changed and tags:
+                app.tags.change_unread(user["sid"], tags, readed)
+            if changed and bi_grams:
+                app.bi_grams.change_unread(user["sid"], bi_grams, readed)
+            if changed and letters:
+                app.letters.change_unread(user["sid"], letters, readed)
+        
+    return Response(json.dumps({"data": "ok", "post_status_changed": should_change_post}), mimetype="application/json", status=200)

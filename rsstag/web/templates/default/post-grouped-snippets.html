@@ -106,6 +106,19 @@
         .snippet-actions .source-tag:hover {
             filter: brightness(0.9);
         }
+
+        .snippet-item.read {
+            opacity: 0.6;
+        }
+
+        .snippet-item.read .snippet-text {
+            text-decoration: none;
+        }
+
+        .toggle-read-btn {
+            cursor: pointer;
+            user-select: none;
+        }
     </style>
 </head>
 
@@ -155,13 +168,20 @@
 
                 <div class="snippets-list">
                     {% for snippet in data.snippets %}
-                    <div class="snippet-item">
+                    <div class="snippet-item {{ 'read' if snippet.read else '' }}"
+                        id="snippet_{{ snippet.post_id }}_{{ snippet.index }}">
                         <div class="snippet-meta">
                             <span>
                                 From <span class="source-tag" style="background:#f5f5f5; color:#666;">{{
                                     snippet.post_title }}</span>
                             </span>
                             <span class="snippet-actions">
+                                <span class="source-tag toggle-read-btn"
+                                    style="background: {{ '#eee' if snippet.read else '#c8e6c9' }}; color: {{ '#666' if snippet.read else '#2e7d32' }};"
+                                    onclick="toggleRead({{ snippet.post_id }}, {{ snippet.index }}, {{ 'true' if snippet.read else 'false' }})"
+                                    title="Mark as {{ 'unread' if snippet.read else 'read' }}">
+                                    {{ 'Mark Unread' if snippet.read else 'Mark Read' }}
+                                </span>
                                 <a href="/post-grouped/{{post_id}}?highlight_sentence={{snippet.index}}#post_{{snippet.post_id}}"
                                     class="source-tag" title="See this sentence in the grouped full posts view">See in
                                     context</a>
@@ -190,6 +210,58 @@
     </div>
 
     <div id="progressbar"></div>
+
+    <script>
+        function toggleRead(postId, sentenceIndex, currentlyRead) {
+            const newState = !currentlyRead;
+            const data = {
+                post_id: postId,
+                sentence_index: sentenceIndex,
+                readed: newState
+            };
+
+            fetch('/read/snippet', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+                .then(response => response.json())
+                .then(result => {
+                    if (result.data === 'ok') {
+                        const snippetEl = document.getElementById(`snippet_${postId}_${sentenceIndex}`);
+                        if (snippetEl) {
+                            if (newState) {
+                                snippetEl.classList.add('read');
+                            } else {
+                                snippetEl.classList.remove('read');
+                            }
+
+                            // Update btn
+                            const btn = snippetEl.querySelector('.toggle-read-btn');
+                            if (btn) {
+                                btn.textContent = newState ? 'Mark Unread' : 'Mark Read';
+                                btn.style.background = newState ? '#eee' : '#c8e6c9';
+                                btn.style.color = newState ? '#666' : '#2e7d32';
+                                btn.title = newState ? 'Mark as unread' : 'Mark as read';
+                                btn.onclick = () => toggleRead(postId, sentenceIndex, newState);
+                            }
+                        }
+
+                        if (result.post_status_changed) {
+                            console.log(`Post ${postId} status was also updated to ${newState ? 'read' : 'unread'}`);
+                        }
+                    } else {
+                        alert('Error updating status: ' + (result.error || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Failed to update snippet status');
+                });
+        }
+    </script>
 </body>
 
 </html>

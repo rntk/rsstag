@@ -62,6 +62,59 @@ class RssTagPostGrouping:
             self._log.error("Can't save grouped posts data. Info: %s", e)
             return False
 
+    def update_snippet_read_status(self, owner: str, post_id: int, sentence_index: int, read_status: bool) -> Optional[bool]:
+        """Update read status for a specific sentence in a post's grouping
+        
+        Returns True if ALL sentences in the post are now read, False otherwise.
+        Returns None if post grouping not found.
+        """
+        post_ids = [post_id]
+        post_ids_hash = self._generate_post_ids_hash(post_ids)
+        
+        # We need to find the sentence by its 'number' which is 1-indexed sentence_index
+        # But wait, sentence_index passed here might be the 'number' field
+        
+        doc = self.get_grouped_posts(owner, post_ids)
+        if not doc:
+            return None
+            
+        sentences = doc.get("sentences", [])
+        all_read = True
+        found = False
+        for s in sentences:
+            if s.get("number") == sentence_index:
+                s["read"] = read_status
+                found = True
+            if not s.get("read", False):
+                all_read = False
+        
+        if found:
+            self._db.post_grouping.update_one(
+                {"owner": owner, "post_ids_hash": post_ids_hash},
+                {"$set": {"sentences": sentences}}
+            )
+            return all_read
+        return False
+
+    def mark_sequences_read(self, owner: str, post_id: int, read_status: bool) -> bool:
+        """Mark ALL sentences in a post's grouping as read/unread"""
+        post_ids = [post_id]
+        post_ids_hash = self._generate_post_ids_hash(post_ids)
+        
+        doc = self.get_grouped_posts(owner, post_ids)
+        if not doc:
+            return False
+            
+        sentences = doc.get("sentences", [])
+        for s in sentences:
+            s["read"] = read_status
+            
+        self._db.post_grouping.update_one(
+            {"owner": owner, "post_ids_hash": post_ids_hash},
+            {"$set": {"sentences": sentences}}
+        )
+        return True
+
     def _generate_post_ids_hash(self, post_ids: List[int]) -> str:
         """Generate a hash from post IDs for unique identification"""
         post_ids_sorted = sorted(post_ids)
@@ -744,7 +797,8 @@ Output:"""
             if sentence and len(sentence.strip()) > 0:
                 result.append({
                     "text": sentence.strip(),
-                    "number": i + 1
+                    "number": i + 1,
+                    "read": False
                 })
         
         return result

@@ -361,6 +361,11 @@ class RSSTagRoutes:
                 "endpoint": "on_tasks_remove_post",
                 "methods": ["POST"],
             },
+            {
+                "url": "/read/snippet",
+                "endpoint": "on_read_snippet_post",
+                "methods": ["POST"],
+            },
         ]
 
         self._rules = []
