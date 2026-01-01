@@ -273,3 +273,10 @@ class RssTagTags:
         )
         for dt in cursor:
             return dt["counter"]
+
+    def add_classifications(self, owner: str, tag: str, classifications: list) -> bool:
+        self._db.tags.update_one(
+            {"owner": owner, "tag": tag}, {"$set": {"classifications": classifications}}
+        )
+
+        return True
