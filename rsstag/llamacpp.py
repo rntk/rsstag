@@ -11,16 +11,17 @@ class LLamaCPP:
         self.__host = u.netloc
         self.__is_https = u.scheme.lower() == "https"
 
-    def call(self, user_msgs: List[str], temperature: float=0.0) -> str:
+    def call(self, user_msgs: List[str], temperature: float=0.0, max_tokens: Optional[int] = None) -> str:
         conn = self.get_connection()
-        body = json.dumps(
-            {
-                "model": "gpt-3.5-turbo",
-                "messages": [{"role": "user", "content": user_msgs[0]}],
-                "temperature": temperature,
-                "cache_prompt": True
-            }
-        )
+        payload = {
+            "model": "gpt-3.5-turbo",
+            "messages": [{"role": "user", "content": user_msgs[0]}],
+            "temperature": temperature,
+            "cache_prompt": True
+        }
+        if max_tokens is not None:
+            payload["max_tokens"] = max_tokens
+        body = json.dumps(payload)
         headers = {'Content-type': 'application/json'}
         conn.request("POST", "/v1/chat/completions", body, headers)
         res = conn.getresponse()
