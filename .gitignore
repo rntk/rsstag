@@ -15,4 +15,5 @@ jquery*
 node_modules
 bundle.js
 .ipynb_checkpoints
+.vscode
 

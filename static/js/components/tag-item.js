@@ -37,6 +37,11 @@ export default class TagItem extends React.Component{
         let sents_link = <a href={"/sentences/with/tags/" + encodeURIComponent(this.state.tag.tag)} className="tag_sentences_link">sents</a>;
         let ctx_link = <a href={"/context-tags/" + encodeURIComponent(this.state.tag.tag)} className="context_tags_link">ctx</a>;
 
+        let words = '';
+        if (this.state.tag.words && this.state.tag.words.length) {
+            words = `(${this.state.tag.words.join(', ')})`;
+        }
+
         return (
             <div style={style}>
                 <a name={this.state.tag.tag}></a>
@@ -48,7 +53,7 @@ export default class TagItem extends React.Component{
                     {(sub_tags.length)? sents_link: ""}
                     {(sub_tags.length)? ctx_link: ""}
                     {(sub_tags.length)? <br />: ""}
-                    ({this.state.tag.words.join(', ')})<br />
+                    {words}{(words)? <br />: ""}
                     {(hide_tag_info_link)? "": <a href={'/tag-info/' + this.state.tag.tag} className="get_tag_siblings">...</a>}
                     {(hide_tag_info_link)? "": sents_link}
                     {(hide_tag_info_link)? "": <a href={'/sunburst/' + this.state.tag.tag} className="get_tag_sunburst">sunburst</a>}

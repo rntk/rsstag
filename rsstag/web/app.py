@@ -116,6 +116,7 @@ class RSSTagApplication(object):
         self.update_endpoints()
         self.tasks = RssTagTasks(self.db)
         self.tasks.prepare()
+        
         self.count_showed_numbers = 4
         self.models = {"d2v": "d2v", "w2v": "w2v", "fasttext": "fasttext"}
         self.allow_not_logged = (
@@ -133,13 +134,19 @@ class RSSTagApplication(object):
             "on_telegram_auth_post",
             "on_settings_post",
             "on_tasks_get",
-            "on_tasks_post"
+            "on_tasks_post",
+            "on_tasks_remove_post"
         }
 
         self.openai = ROpenAI(self.config["openai"]["token"])
         self.anthropic = Anthropic(self.config["anthropic"]["token"])
         self.llamacpp = LLamaCPP(self.config["llamacpp"]["host"])
         self.groqcom = GroqCom(host=self.config["groqcom"]["host"], token=self.config["groqcom"]["token"])
+        
+        # Initialize post grouping (after LLM handlers are available)
+        from rsstag.post_grouping import RssTagPostGrouping
+        self.post_grouping = RssTagPostGrouping(self.db, self.llamacpp)
+        self.post_grouping.prepare()
 
     def _find_group_for_sentence(self, sentence_num, groups):
         """Custom filter to find which group a sentence belongs to"""
@@ -260,6 +267,9 @@ class RSSTagApplication(object):
 
     def on_tasks_post(self, user: dict, request: Request) -> Response:
         return tasks_handlers.on_tasks_post(self, user, request)
+
+    def on_tasks_remove_post(self, user: dict, request: Request, task_id: str) -> Response:
+        return tasks_handlers.on_tasks_remove_post(self, user, request, task_id)
 
     def on_error(self, _: Optional[dict], __: Request, e: HTTPException) -> Response:
         page = self.template_env.get_template("error.html")
@@ -485,6 +495,12 @@ class RSSTagApplication(object):
 
     def on_post_grouped_get(self, user: dict, request: Request, pids: str) -> Response:
         return posts_handlers.on_post_grouped_get(self, user, request, pids)
+
+    def on_topics_list_get(self, user: dict, request: Request, page_number: int = 1) -> Response:
+        return posts_handlers.on_topics_list_get(self, user, request, page_number)
+
+    def on_post_graph_get(self, user: dict, request: Request, pids: str) -> Response:
+        return posts_handlers.on_post_graph_get(self, user, request, pids)
 
     def _handle_sentence_grouping_chunking(self, sentences_list: list, original_prompt: str, temperature: float = 0.0, max_sentences_per_chunk: int = 10) -> str:
         """
@@ -818,6 +834,11 @@ class RSSTagApplication(object):
 
     def on_tag_clusters_get(self, user: dict, _: Request, tag: str) -> Response:
         return tags_handlers.on_tag_clusters_get(self, user, tag)
+
+    def on_tag_contexts_classification_get(
+        self, user: dict, request: Request, tag: str
+    ) -> Response:
+        return tags_handlers.on_tag_contexts_classification_get(self, user, request, tag)
 
     def on_posts_get(self, user: dict, request: Request, pids: str) -> Response:
         return posts_handlers.on_posts_get(self, user, request, pids)

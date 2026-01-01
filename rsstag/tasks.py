@@ -3,6 +3,7 @@ import time
 from typing import Optional, List
 from rsstag.users import RssTagUsers
 from pymongo import MongoClient, UpdateOne
+from bson.objectid import ObjectId
 
 TASK_ALL = -1
 TASK_NOOP = 0
@@ -24,12 +25,15 @@ TASK_FASTTEXT = 15
 TASK_CLEAN_BIGRAMS = 16
 TASK_MARK_TELEGRAM = 17
 TASK_GMAIL_SORT = 18
+TASK_POST_GROUPING = 19
+TASK_TAG_CLASSIFICATION = 20
 
 POST_NOT_IN_PROCESSING = 0
 BIGRAM_NOT_IN_PROCESSING = 0
 TASK_NOT_IN_PROCESSING = 0
 TASK_FREEZED = -1
 TAG_NOT_IN_PROCESSING = 0
+POST_GROUPING_NOT_IN_PROCESSING = 0
 
 
 class RssTagTasks:
@@ -47,6 +51,7 @@ class RssTagTasks:
         TASK_NER: [TASK_CLUSTERING],
         TASK_CLUSTERING: [TASK_W2V],
         TASK_W2V: [TASK_FASTTEXT],
+        TASK_FASTTEXT: [TASK_POST_GROUPING],
         #TASK_W2V: [TASK_TAGS_GROUP],
         #TASK_TAGS_GROUP: [TASK_FASTTEXT]
     }
@@ -182,7 +187,12 @@ class RssTagTasks:
                         }
                     )
                     if psc == 0:
-                        if self.add_next_tasks(task["user"]["sid"], user_task["type"]):
+                        can_delete = False
+                        if user_task.get("manual", False):
+                            can_delete = True
+                        elif self.add_next_tasks(task["user"]["sid"], user_task["type"]):
+                            can_delete = True
+                        if can_delete:
                             self._db.tasks.delete_one({"_id": user_task["_id"]})
                             unlock_task = False
                 if unlock_task:
@@ -215,9 +225,54 @@ class RssTagTasks:
                     )
                 else:
                     task["type"] = TASK_NOOP
-                    self._db.tasks.delete_one({"_id": user_task["_id"]})
-                    self.add_next_tasks(
-                        task["user"]["sid"], user_task["type"]
+                    can_delete = False
+                    if user_task.get("manual", False):
+                        can_delete = True
+                    elif self.add_next_tasks(task["user"]["sid"], user_task["type"]):
+                        can_delete = True
+                    if can_delete:
+                        self._db.tasks.delete_one({"_id": user_task["_id"]})
+            elif user_task["type"] == TASK_POST_GROUPING:
+                data = []
+                # Get posts that need grouping
+                ps = self._db.posts.find(
+                    {
+                        "owner": task["user"]["sid"],
+                        "grouping": {"$exists": False},
+                        "processing": POST_NOT_IN_PROCESSING,
+                    }
+                ).limit(1)
+                ids = []
+                for p in ps:
+                    data.append(p)
+                    ids.append(p["_id"])
+                unlock_task = True
+                if ids:
+                    self._db.posts.update_many(
+                        {"_id": {"$in": ids}},
+                        {"$set": {"processing": time.time()}},
+                    )
+                else:
+                    task["type"] = TASK_NOOP
+                    psc = self._db.posts.count_documents(
+                        {
+                            "owner": task["user"]["sid"],
+                            "grouping": {"$exists": False}
+                        }
+                    )
+                    if psc == 0:
+                        can_delete = False
+                        if user_task.get("manual", False):
+                            can_delete = True
+                        elif self.add_next_tasks(task["user"]["sid"], user_task["type"]):
+                            can_delete = True
+                        if can_delete:
+                            self._db.tasks.delete_one({"_id": user_task["_id"]})
+                            unlock_task = False
+                if unlock_task:
+                    self._db.tasks.update_one(
+                        {"_id": user_task["_id"]},
+                        {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
                     )
             elif user_task["type"] == TASK_TAGS_RANK:
                 data = []
@@ -244,10 +299,13 @@ class RssTagTasks:
                     )
                 else:
                     task["type"] = TASK_NOOP
-                    self._db.tasks.delete_one({"_id": user_task["_id"]})
-                    self.add_next_tasks(
-                        task["user"]["sid"], user_task["type"]
-                    )
+                    can_delete = False
+                    if user_task.get("manual", False):
+                        can_delete = True
+                    elif self.add_next_tasks(task["user"]["sid"], user_task["type"]):
+                        can_delete = True
+                    if can_delete:
+                        self._db.tasks.delete_one({"_id": user_task["_id"]})
             elif user_task["type"] == TASK_NER:
                 data = []
                 ps = self._db.posts.find(
@@ -276,7 +334,53 @@ class RssTagTasks:
                         }
                     )
                     if psc == 0:
-                        if self.add_next_tasks(task["user"]["sid"], user_task["type"]):
+                        can_delete = False
+                        if user_task.get("manual", False):
+                            can_delete = True
+                        elif self.add_next_tasks(task["user"]["sid"], user_task["type"]):
+                            can_delete = True
+                        if can_delete:
+                            self._db.tasks.delete_one({"_id": user_task["_id"]})
+                            unlock_task = False
+                if unlock_task:
+                    self._db.tasks.update_one(
+                        {"_id": user_task["_id"]},
+                        {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
+                    )
+            elif user_task["type"] == TASK_TAG_CLASSIFICATION:
+                data = []
+                unlock_task = True
+                tags_dt = self._db.tags.find(
+                    {
+                        "owner": task["user"]["sid"],
+                        "classifications": {"$exists": False},
+                        "processing": TAG_NOT_IN_PROCESSING,
+                    }
+                ).limit(self._tags_bath_size)
+                ids = []
+                for tag_dt in tags_dt:
+                    data.append(tag_dt)
+                    ids.append(tag_dt["_id"])
+                if ids:
+                    self._db.tags.update_many(
+                        {"_id": {"$in": ids}},
+                        {"$set": {"processing": time.time()}},
+                    )
+                else:
+                    task["type"] = TASK_NOOP
+                    psc = self._db.tags.count_documents(
+                        {
+                            "owner": task["user"]["sid"],
+                            "classifications": {"$exists": False}
+                        }
+                    )
+                    if psc == 0:
+                        can_delete = False
+                        if user_task.get("manual", False):
+                            can_delete = True
+                        elif self.add_next_tasks(task["user"]["sid"], user_task["type"]):
+                            can_delete = True
+                        if can_delete:
                             self._db.tasks.delete_one({"_id": user_task["_id"]})
                             unlock_task = False
                 if unlock_task:
@@ -304,9 +408,11 @@ class RssTagTasks:
         # self._log.info('Get task: %s', task)
         return task
 
-    def remove_task(self, _id: str) -> Optional[bool]:
+    def remove_task(self, _id) -> Optional[bool]:
         try:
-            self._db.tasks.delete_one({"_id": _id})  # TODO: check result?
+            if isinstance(_id, str):
+                _id = ObjectId(_id)
+            self._db.tasks.delete_one({"_id": _id})
             result = True
         except Exception as e:
             result = None
@@ -361,9 +467,27 @@ class RssTagTasks:
                         {"$set": {"processing": POST_NOT_IN_PROCESSING, "ner": 1}},
                     ))
                 self._db.posts.bulk_write(updates, ordered=False)
+            elif task["type"] == TASK_POST_GROUPING:
+                remove_task = False
+                updates = []
+                for post in task["data"]:
+                    updates.append(UpdateOne(
+                        {"_id": post["_id"]},
+                        {"$set": {"processing": POST_NOT_IN_PROCESSING, "grouping": 1}},
+                    ))
+                self._db.posts.bulk_write(updates, ordered=False)
+            elif task["type"] == TASK_TAG_CLASSIFICATION:
+                remove_task = False
+                updates = []
+                for tag in task["data"]:
+                    updates.append(UpdateOne(
+                        {"_id": tag["_id"]},
+                        {"$set": {"processing": TAG_NOT_IN_PROCESSING}},
+                    ))
+                self._db.tags.bulk_write(updates, ordered=False)
             if remove_task:
-                removed = self.remove_task(task["data"]["_id"])
-                if removed and not task.get("manual", False):
+                removed = self.remove_task(task["_id"])
+                if not task.get("manual", False):
                     self.add_next_tasks(task["user"]["sid"], task["type"])
 
             result = True
@@ -375,6 +499,24 @@ class RssTagTasks:
                 task["type"],
                 e,
             )
+
+        return result
+
+    def get_current_tasks(self, user_id: str) -> List[dict]:
+        try:
+            curr = self._db.tasks.find({"user": user_id})
+            result = []
+            for task in curr:
+                result.append({
+                    "id": str(task["_id"]),
+                    "type": task["type"],
+                    "title": self.get_task_title(task["type"]),
+                    "processing": task.get("processing", 0)
+                })
+
+        except Exception as e:
+            result = []
+            self._log.error("Can`t get user tasks states %s. Info: %s", user_id, e)
 
         return result
 
@@ -413,7 +555,9 @@ class RssTagTasks:
             TASK_TAGS_COORDS: "Searching geo objects in tags",
             TASK_BIGRAMS_RANK: "Bi-grams ranking",
             TASK_TAGS_RANK: "Tags ranking",
-            TASK_CLEAN_BIGRAMS: "Clean bi-grams"
+            TASK_CLEAN_BIGRAMS: "Clean bi-grams",
+            TASK_POST_GROUPING: "Post grouping",
+            TASK_TAG_CLASSIFICATION: "Tags classification"
         }
 
         if task_type in task_titles:

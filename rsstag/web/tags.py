@@ -8,6 +8,7 @@ import logging
 from collections import Counter, defaultdict
 from urllib.parse import unquote_plus, quote
 from typing import Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from typing import TYPE_CHECKING
 
@@ -1440,3 +1441,31 @@ def on_get_chain(app: "RSSTagApplication", user: dict, tags: str) -> Response:
         ),
         mimetype="text/html",
     )
+
+
+def on_tag_contexts_classification_get(
+    app: "RSSTagApplication", user: dict, request: Request, tag: str
+) -> Response:
+    tag_data = app.tags.get_by_tag(user["sid"], tag)
+    if not tag_data:
+        return app.on_error(user, request, NotFound())
+
+    classifications = tag_data.get("classifications", [])
+    result = []
+    for cl in classifications:
+        pids_str = "_".join(str(pid) for pid in sorted(cl["pids"]))
+        result.append(
+            {
+                "tag": cl["category"],
+                "count": cl["count"],
+                "words": [],
+                "sentiment": [],
+                "url": app.routes.get_url_by_endpoint(
+                    endpoint="on_posts_get", params={"pids": pids_str}
+                ),
+            }
+        )
+
+    result.sort(key=lambda x: x["count"], reverse=True)
+
+    return Response(json.dumps(result), mimetype="application/json")

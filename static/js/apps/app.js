@@ -42,8 +42,9 @@ import TagsClustersList from '../components/tags-clusters.js';
 import OpenAIStorage from "../storages/openai-storage.js";
 import {OpenAITool} from "../components/openai.js";
 import TagSunburst from "../components/sunburst.js";
-import TagTree from "../components/dendrogram.js";
+import TagTree, { BidirectionalTagTree } from "../components/dendrogram.js";
 import SentenceTree from '../components/SentenceTree.js';
+import TagContextsClassificationStorage from '../storages/tag-contexts-classification-storage.js';
 import BigramsTable from '../components/bigrams-table.js';
 import BiGramsGraphSimple from '../components/bi-grams-graph-simple.js';
 import BiGramsGraph from '../components/bi-grams-graph.js';
@@ -136,6 +137,56 @@ window.onload = () => {
     } else if (/^\/tree\//.test(path) || (/^\/prefixes\/prefix\//.test(path)))  {
         let tree = new TagTree(window.tag_sunburst_initial_root);
         tree.render(".page");
+    } else if (/^\/post-graph\//.test(path)) {
+        if (window.posts_graphs) {
+            const treeGraphs = {};
+
+            window.posts_graphs.forEach(post => {
+                if (post.graph_data) {
+                    const sunburst = new TagSunburst(post.graph_data);
+                    sunburst.render("#graph_" + post.post_id);
+                }
+            });
+
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.addEventListener('click', () => {
+                    const postId = button.getAttribute('data-post-id');
+                    const tabType = button.getAttribute('data-tab');
+                    
+                    // Update active button
+                    button.parentElement.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+                    
+                    // Update active content
+                    const container = button.closest('.post-section');
+                    container.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+                    
+                    if (tabType === 'sunburst') {
+                        container.querySelector(`#sunburst_content_${postId}`).classList.add('active');
+                    } else if (tabType === 'tree') {
+                        container.querySelector(`#tree_content_${postId}`).classList.add('active');
+                        
+                        // Initialize tree graph if not already done
+                        if (!treeGraphs[postId]) {
+                            const postData = window.posts_graphs.find(p => String(p.post_id) === String(postId));
+                            if (postData && postData.graph_data) {
+                                const selector = `#tree_graph_${postId}`;
+                                const containerWidth = container.querySelector(selector).clientWidth || 1152;
+                                
+                                if (postData.is_bidirectional) {
+                                    treeGraphs[postId] = new BidirectionalTagTree(postData.graph_data);
+                                } else {
+                                    treeGraphs[postId] = new TagTree(postData.graph_data);
+                                }
+                                treeGraphs[postId].render(selector, containerWidth, 800);
+                            } else {
+                                container.querySelector(`#tree_graph_${postId}`).innerHTML = '<div style="padding: 20px; text-align: center; color: #666;">No tree data available.</div>';
+                            }
+                        }
+                    }
+                });
+            });
+        }
     } else if (path === '/group/category') {
         ReactDOM.render(
             <CategoriesList ES={window.EVSYS} />,
@@ -320,6 +371,18 @@ function tagWithContextInfoPage(tag) {
         document.getElementById('load_clusters')
     );
     clusters_storage.start();
+
+    const contexts_classification_evsys = new EventsSystem();
+    const contexts_classification_storage = new TagContextsClassificationStorage(contexts_classification_evsys);
+    ReactDOM.render(
+        <TagsList ES={contexts_classification_evsys} />,
+        document.getElementById('tag_contexts_classification')
+    );
+    ReactDOM.render(
+        <TagButton ES={contexts_classification_evsys} title="contexts" tag={tag} />,
+        document.getElementById('load_contexts_classification')
+    );
+    contexts_classification_storage.start();
 
     const bi_grams_evsys = new EventsSystem();
     const bi_grams_storage = new TagsStorage(bi_grams_evsys, '/tag-bi-grams');

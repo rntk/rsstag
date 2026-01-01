@@ -107,6 +107,13 @@ class RSSTagRoutes:
                 "endpoint": "on_post_grouped_get",
                 "methods": ["GET"],
             },
+            {
+                "url": "/post-graph/<string:pids>",
+                "endpoint": "on_post_graph_get",
+                "methods": ["GET"],
+            },
+            {"url": "/topics-list", "endpoint": "on_topics_list_get", "methods": ["GET"]},
+            {"url": "/topics-list/<int:page_number>", "endpoint": "on_topics_list_get", "methods": ["GET"]},
             {"url": "/status", "endpoint": "on_status_get", "methods": ["GET"]},
             {"url": "/settings", "endpoint": "on_settings_post", "methods": ["POST"]},
             {
@@ -330,6 +337,11 @@ class RSSTagRoutes:
                 "methods": ["POST"],
             },
             {
+                "url": "/tag-contexts-classification/<string:tag>",
+                "endpoint": "on_tag_contexts_classification_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/tasks",
                 "endpoint": "on_tasks_get",
                 "methods": ["GET"],
@@ -337,6 +349,11 @@ class RSSTagRoutes:
             {
                 "url": "/tasks",
                 "endpoint": "on_tasks_post",
+                "methods": ["POST"],
+            },
+            {
+                "url": "/tasks/remove/<string:task_id>",
+                "endpoint": "on_tasks_remove_post",
                 "methods": ["POST"],
             },
         ]

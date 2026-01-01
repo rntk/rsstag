@@ -1,0 +1,86 @@
+<!DOCTYPE html/>
+<html>
+<head>
+<title>Post Graph | {{feed_title}}</title>
+{% include "head-data.html" %}
+    <style>
+    .post-section { margin-bottom: 25px; padding: 15px; background-color: #fafafa; border-radius: 8px; border: 1px solid #e0e0e0; }
+    .post-header { margin-bottom: 12px; }
+    .post-label { display: inline-block; padding: 4px 12px; background-color: #4285f4; color: white; border-radius: 16px; font-size: 12px; font-weight: bold; margin-bottom: 8px; }
+    .post-divider { height: 2px; background: linear-gradient(90deg, transparent, #4285f4, transparent); margin: 6px 0; }
+    .graph-container { width: 100%; min-height: 800px; overflow: auto; background: #fff; border: 1px solid #ddd; border-radius: 4px; }
+    
+    .tabs-container { margin-top: 10px; }
+    .tab-buttons { display: flex; border-bottom: 1px solid #ddd; margin-bottom: 10px; }
+    .tab-button { padding: 8px 16px; cursor: pointer; border: 1px solid transparent; border-bottom: none; background: #f0f0f0; margin-right: 4px; border-radius: 4px 4px 0 0; }
+    .tab-button.active { background: #fff; border-color: #ddd; border-bottom: 1px solid #fff; margin-bottom: -1px; font-weight: bold; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    </style>
+</head>
+<body>
+{% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
+
+<div id="global_tools">
+    <div class="left_half">
+        <div id="link_on_root" class="global_tools_button">
+            <a href="/">main</a>
+        </div>
+    </div>
+    <div class="right_half">
+        <div id="player_block" class="global_tools_button"></div>
+        <div id="posts_stat" class="global_tools_button"></div>
+        {{ g_status.global_status() }}
+        {{ menu.settings_menu() }}
+    </div>
+</div>
+
+<div class="page">
+    <h2>Posts Graph {{pids}} - {{feed_title}}</h2>
+    
+    <div id="posts_graphs">
+        {% for post in posts %}
+            <div class="post-section">
+                <div class="post-header">
+                    <span class="post-label">{{ post.label }}</span>
+                    {% if post.feed_title %}
+                        <span class="post-feed" style="margin-left: 10px; font-weight: normal; color: #666;">
+                            from {{ post.feed_title }}
+                        </span>
+                    {% endif %}
+                    <div class="post-divider"></div>
+                </div>
+                
+                <div class="tabs-container">
+                    <div class="tab-buttons">
+                        <div class="tab-button active" data-tab="sunburst" data-post-id="{{ post.post_id }}">Sunburst</div>
+                        <div class="tab-button" data-tab="tree" data-post-id="{{ post.post_id }}">Tree</div>
+                    </div>
+                    
+                    <div id="sunburst_content_{{ post.post_id }}" class="tab-content active">
+                        {% if post.graph_data %}
+                            <div id="graph_{{ post.post_id }}" class="graph-container"></div>
+                        {% else %}
+                            <div style="padding: 20px; text-align: center; color: #666;">
+                                No sunburst data available for this post.
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div id="tree_content_{{ post.post_id }}" class="tab-content">
+                        <div id="tree_graph_{{ post.post_id }}" class="graph-container"></div>
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script type="text/javascript">
+    window.posts_graphs = {{ posts|tojson }};
+    window.user_settings = {{ user_settings|tojson }};
+</script>
+
+<div id="progressbar"></div>
+</body>
+</html>

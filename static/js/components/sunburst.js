@@ -14,6 +14,14 @@ export default class TagSunburst {
     }
 
     initializeCharts() {
+        // Prepare children for sunburst if they are split into before/after
+        if (!this.data.children && (this.data.before || this.data.after)) {
+            this.data.children = [
+                ...(this.data.before || []),
+                ...(this.data.after || [])
+            ];
+        }
+
         // Check if we need to split the data
         if (this.data.children && this.data.children.length > this.maxChildrenPerChart) {
             this.splitData = this.createSplitData();
