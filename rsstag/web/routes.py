@@ -112,6 +112,11 @@ class RSSTagRoutes:
                 "endpoint": "on_post_graph_get",
                 "methods": ["GET"],
             },
+            {
+                "url": "/post-grouped-snippets/<string:pids>",
+                "endpoint": "on_post_grouped_snippets_get",
+                "methods": ["GET"],
+            },
             {"url": "/topics-list", "endpoint": "on_topics_list_get", "methods": ["GET"]},
             {"url": "/topics-list/<int:page_number>", "endpoint": "on_topics_list_get", "methods": ["GET"]},
             {"url": "/status", "endpoint": "on_status_get", "methods": ["GET"]},

@@ -1,0 +1,195 @@
+<!DOCTYPE html />
+<html>
+
+<head>
+    <title>Grouped Snippets | {{feed_title}}</title>
+    {% include "head-data.html" %}
+    <style>
+        .topic-card {
+            margin-bottom: 25px;
+            padding: 15px;
+            background-color: #fafafa;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+            border-left-width: 5px;
+        }
+
+        .topic-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .topic-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .topic-count {
+            font-size: 0.9em;
+            color: #888;
+            background: #eee;
+            padding: 2px 8px;
+            border-radius: 12px;
+        }
+
+        .snippet-item {
+            margin-bottom: 12px;
+            padding: 10px;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #eee;
+            transition: all 0.2s;
+        }
+
+        .snippet-item:hover {
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+
+        .snippet-meta {
+            font-size: 11px;
+            color: #999;
+            margin-bottom: 4px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .snippet-text {
+            font-size: 14px;
+            line-height: 1.5;
+            color: #444;
+        }
+
+        .back-nav {
+            margin-bottom: 20px;
+        }
+
+        .back-btn {
+            display: inline-block;
+            padding: 6px 12px;
+            background: #f0f0f0;
+            border-radius: 4px;
+            color: #555;
+            text-decoration: none;
+            border: 1px solid #ddd;
+        }
+
+        .back-btn:hover {
+            background: #e0e0e0;
+        }
+
+        .source-tag {
+            display: inline-block;
+            padding: 2px 6px;
+            background: #e3f2fd;
+            color: #1976d2;
+            border-radius: 4px;
+            text-decoration: none;
+        }
+
+        .snippet-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .snippet-actions .source-tag {
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .snippet-actions .source-tag:hover {
+            filter: brightness(0.9);
+        }
+    </style>
+</head>
+
+<body>
+    {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
+
+    <div id="global_tools">
+        <div class="left_half">
+            <div id="link_on_root" class="global_tools_button">
+                <a href="/">main</a>
+            </div>
+            <div id="help_button" class="global_tools_button">
+                <a href="#">help</a>
+            </div>
+        </div>
+        <div class="right_half">
+            <div id="player_block" class="global_tools_button"></div>
+            <div id="posts_stat" class="global_tools_button"></div>
+            <div id="read_all" class="global_tools_button"></div>
+            <div id="show_all" class="global_tools_button"></div>
+            {{ g_status.global_status() }}
+            {{ menu.settings_menu() }}
+        </div>
+    </div>
+
+    <div class="page">
+        <div class="back-nav">
+            <a href="/post-grouped/{{post_id}}" class="back-btn">&larr; Back to Full Posts Grouped View</a>
+            {% if current_topic %}
+            <a href="/post-grouped-snippets/{{post_id}}" class="back-btn" style="margin-left: 10px;">Show All Topics</a>
+            {% endif %}
+        </div>
+
+        <h2>Grouped Snippets: {{feed_title}}</h2>
+        {% if current_topic %}
+        <h3 style="color: #666; font-weight: normal;">Filter: {{ current_topic }}</h3>
+        {% endif %}
+
+        <div id="snippets_container">
+            {% if topics %}
+            {% for topic_name, data in topics %}
+            <div class="topic-card" style="border-left-color: {{ data.color }};">
+                <div class="topic-header">
+                    <span class="topic-title">{{ topic_name }}</span>
+                    <span class="topic-count">{{ data.snippets|length }} snippets</span>
+                </div>
+
+                <div class="snippets-list">
+                    {% for snippet in data.snippets %}
+                    <div class="snippet-item">
+                        <div class="snippet-meta">
+                            <span>
+                                From <span class="source-tag" style="background:#f5f5f5; color:#666;">{{
+                                    snippet.post_title }}</span>
+                            </span>
+                            <span class="snippet-actions">
+                                <a href="/post-grouped/{{post_id}}?highlight_sentence={{snippet.index}}#post_{{snippet.post_id}}"
+                                    class="source-tag" title="See this sentence in the grouped full posts view">See in
+                                    context</a>
+                                <a href="/posts/{{snippet.post_id}}" class="source-tag"
+                                    style="background: #e1f5fe; color: #0288d1;"
+                                    title="Show only this post content">Show full post</a>
+                                {% if snippet.url %}
+                                <a href="{{ snippet.url }}" target="_blank" class="source-tag"
+                                    style="background: #efebe9; color: #5d4037;" title="Go to source article">Original
+                                    &nearr;</a>
+                                {% endif %}
+                            </span>
+                        </div>
+                        <div class="snippet-text">{{ snippet.text }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div style="padding: 40px; text-align: center; color: #888; font-style: italic;">
+                No grouped snippets found. The posts might not be processed yet or contain no recognized topics.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div id="progressbar"></div>
+</body>
+
+</html>
