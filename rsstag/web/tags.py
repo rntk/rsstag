@@ -1451,13 +1451,29 @@ def on_tag_contexts_classification_get(
         return app.on_error(user, request, NotFound())
 
     classifications = tag_data.get("classifications", [])
-    result = []
+    aggregated = {}
     for cl in classifications:
-        pids_str = "_".join(str(pid) for pid in sorted(cl["pids"]))
+        category = cl.get("category", "")
+        if not category:
+            continue
+        category = category.strip().replace("\u2011", "-")
+        norm_cat = category.casefold()
+        if norm_cat not in aggregated:
+            aggregated[norm_cat] = {
+                "category": category,
+                "count": 0,
+                "pids": set(),
+            }
+        aggregated[norm_cat]["count"] += cl.get("count", 0)
+        aggregated[norm_cat]["pids"].update(cl.get("pids", []))
+
+    result = []
+    for data in aggregated.values():
+        pids_str = "_".join(str(pid) for pid in sorted(data["pids"]))
         result.append(
             {
-                "tag": cl["category"],
-                "count": cl["count"],
+                "tag": data["category"],
+                "count": data["count"],
                 "words": [],
                 "sentiment": [],
                 "url": app.routes.get_url_by_endpoint(
