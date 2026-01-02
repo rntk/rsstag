@@ -4,13 +4,18 @@ import gzip
 import logging
 from collections import defaultdict
 from urllib.parse import unquote_plus, unquote
-import requests # Add requests import
+import requests  # Add requests import
 
 from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from rsstag.web.app import RSSTagApplication
-from rsstag.tasks import TASK_MARK, TASK_MARK_TELEGRAM, TASK_GMAIL_SORT, TASK_NOT_IN_PROCESSING
+from rsstag.tasks import (
+    TASK_MARK,
+    TASK_MARK_TELEGRAM,
+    TASK_GMAIL_SORT,
+    TASK_NOT_IN_PROCESSING,
+)
 from rsstag.utils import text_to_speech
 
 from werkzeug.wrappers import Request, Response
@@ -356,8 +361,9 @@ def on_read_posts_post(
 
     return Response(json.dumps(result), mimetype="application/json", status=code)
 
+
 def on_mark_telegram_posts_post(
-        app: "RSSTagApplication", user: dict, _: Request
+    app: "RSSTagApplication", user: dict, _: Request
 ) -> Response:
     for_insert = [
         {
@@ -368,15 +374,14 @@ def on_mark_telegram_posts_post(
         }
     ]
     if not app.tasks.add_task(
-            {"type": TASK_MARK_TELEGRAM, "user": user["sid"], "data": for_insert}
+        {"type": TASK_MARK_TELEGRAM, "user": user["sid"], "data": for_insert}
     ):
         logging.error("Can't add task for mark telegram posts: %s", for_insert)
 
     return redirect(app.routes.get_url_by_endpoint("on_root_get"))
 
-def on_gmail_sort_post(
-        app: "RSSTagApplication", user: dict, _: Request
-) -> Response:
+
+def on_gmail_sort_post(app: "RSSTagApplication", user: dict, _: Request) -> Response:
     for_insert = [
         {
             "user": user["sid"],
@@ -386,11 +391,12 @@ def on_gmail_sort_post(
         }
     ]
     if not app.tasks.add_task(
-            {"type": TASK_GMAIL_SORT, "user": user["sid"], "data": for_insert}
+        {"type": TASK_GMAIL_SORT, "user": user["sid"], "data": for_insert}
     ):
         logging.error("Can't add task for gmail sort: %s", for_insert)
 
     return redirect(app.routes.get_url_by_endpoint("on_root_get"))
+
 
 def on_posts_content_post(
     app: "RSSTagApplication", user: dict, request: Request
@@ -538,8 +544,14 @@ def on_get_posts_with_tags(
         )
 
 
-def on_entity_get(app: "RSSTagApplication", user: dict, quoted_tag: str, window: Optional[int]=10, rerank: Optional[str]=None) -> Response:
-    #print(rerank)
+def on_entity_get(
+    app: "RSSTagApplication",
+    user: dict,
+    quoted_tag: str,
+    window: Optional[int] = 10,
+    rerank: Optional[str] = None,
+) -> Response:
+    # print(rerank)
     tag = unquote(quoted_tag)
     tag_words = tag.split()
     projection = {"_id": False}
@@ -549,9 +561,7 @@ def on_entity_get(app: "RSSTagApplication", user: dict, quoted_tag: str, window:
         only_unread = user["settings"]["only_unread"]
     else:
         only_unread = None
-    db_posts_c = app.posts.get_by_tags(
-        user["sid"], tag_words, only_unread, projection
-    )
+    db_posts_c = app.posts.get_by_tags(user["sid"], tag_words, only_unread, projection)
     db_posts = list(db_posts_c)
 
     if user["settings"]["similar_posts"]:
@@ -565,14 +575,16 @@ def on_entity_get(app: "RSSTagApplication", user: dict, quoted_tag: str, window:
     pids = set()
     multi_word_tag = len(tag_words) > 1
     tag_words_set = set(tag_words)
-    
+
     # Maximum length for reranking API
     MAX_CHUNK_LENGTH = 1024
     # Overlap percentage (50%)
     OVERLAP_PERCENT = 0.5
-    
-    rerank_url = "http://127.0.0.1:8257/v1/rerank" #app.config.get("rerank", {}).get("url")
-    
+
+    rerank_url = (
+        "http://127.0.0.1:8257/v1/rerank"  # app.config.get("rerank", {}).get("url")
+    )
+
     for post in db_posts:
         post["lemmas"] = gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
 
@@ -582,7 +594,7 @@ def on_entity_get(app: "RSSTagApplication", user: dict, quoted_tag: str, window:
             words_positions = {}
 
             # Find positions of all tag words in lemmas
-            
+
             for i, lemma in enumerate(lemmas_list):
                 if lemma in tag_words_set:
                     if lemma not in words_positions:
@@ -640,70 +652,84 @@ def on_entity_get(app: "RSSTagApplication", user: dict, quoted_tag: str, window:
                     "feed_title": by_feed[post["feed_id"]]["title"],
                     "favicon": by_feed[post["feed_id"]]["favicon"],
                 }
-                
+
                 # Process reranking individually for each post
                 if rerank and rerank_url:
                     try:
                         # Get content
-                        content = gzip.decompress(post["content"]["content"]).decode("utf-8", "replace")
-                        
+                        content = gzip.decompress(post["content"]["content"]).decode(
+                            "utf-8", "replace"
+                        )
+
                         # Split content into chunks with 50% overlap
                         chunks = []
                         words = content.split()
                         chunk_size = MAX_CHUNK_LENGTH
                         stride = int(chunk_size * (1 - OVERLAP_PERCENT))
-                        
+
                         if len(words) <= chunk_size:
                             # Content fits in one chunk
                             chunks.append(" ".join(words))
                         else:
                             # Split into overlapping chunks
                             for i in range(0, len(words), stride):
-                                chunk = words[i:i + chunk_size]
+                                chunk = words[i : i + chunk_size]
                                 if chunk:
                                     chunks.append(" ".join(chunk))
                                 # Stop if this chunk or next would be too small
                                 if i + chunk_size >= len(words):
                                     break
-                        
+
                         # Prepare all chunks for a single request
                         rerank_data = [[rerank, chunk] for chunk in chunks]
-                        
+
                         # Send a single request with all chunks
-                        response = requests.post(rerank_url, json=rerank_data, timeout=300)
+                        response = requests.post(
+                            rerank_url, json=rerank_data, timeout=300
+                        )
                         response.raise_for_status()
                         scores = response.json()
-                        #print(scores)
-                        
+                        # print(scores)
+
                         # Find the maximum score from all chunks
-                        max_score = -float('inf')
+                        max_score = -float("inf")
                         if isinstance(scores, list) and scores:
                             for score in scores:
                                 max_score = max(max_score, score)
-                        
+
                         # Only add the score if we found a valid one
-                        if max_score > -float('inf'):
-                            post_data['rerank_score'] = max_score
-                            
+                        if max_score > -float("inf"):
+                            post_data["rerank_score"] = max_score
+
                     except requests.exceptions.RequestException as e:
-                        logging.error('Rerank API call failed for post %d: %s', post["pid"], e)
+                        logging.error(
+                            "Rerank API call failed for post %d: %s", post["pid"], e
+                        )
                     except json.JSONDecodeError as e:
-                        logging.error('Failed to decode rerank API JSON response for post %d: %s', post["pid"], e)
+                        logging.error(
+                            "Failed to decode rerank API JSON response for post %d: %s",
+                            post["pid"],
+                            e,
+                        )
                     except Exception as e:
-                        logging.error('Unexpected error during reranking for post %d: %s', post["pid"], e)
-                    
+                        logging.error(
+                            "Unexpected error during reranking for post %d: %s",
+                            post["pid"],
+                            e,
+                        )
+
                     # Remove content to save memory
                     if "content" in post and "content" in post["content"]:
                         del post["content"]["content"]
-                
+
                 posts.append(post_data)
 
     # Sort posts by rerank score if available
     if rerank and rerank_url:
-        posts.sort(key=lambda x: x.get('rerank_score', -float('inf')), reverse=True)
-        
+        posts.sort(key=lambda x: x.get("rerank_score", -float("inf")), reverse=True)
+
         # Filter to keep only positively scored posts if we have enough
-        filtered_posts = [p for p in posts if p.get('rerank_score', 0) > 0]
+        filtered_posts = [p for p in posts if p.get("rerank_score", 0) > 0]
         if len(filtered_posts) > 3:
             posts = filtered_posts
         else:
@@ -729,15 +755,23 @@ def on_entity_get(app: "RSSTagApplication", user: dict, quoted_tag: str, window:
         mimetype="text/html",
     )
 
+
 def get_embeddings(texts: list[str]) -> list[list[float]]:
     from http.client import HTTPConnection
+
     conn = HTTPConnection("192.168.178.26:8256")
-    conn.request("POST", "/v1/embeddings", json.dumps(texts), {"Content-Type": "application/json"})
+    conn.request(
+        "POST",
+        "/v1/embeddings",
+        json.dumps(texts),
+        {"Content-Type": "application/json"},
+    )
     resp = conn.getresponse()
     data = resp.read()
     conn.close()
 
     return json.loads(data)
+
 
 def cosine_similarity(v1: list[float], v2: list[float]) -> float:
     """Calculate cosine similarity between two vectors."""
@@ -748,8 +782,15 @@ def cosine_similarity(v1: list[float], v2: list[float]) -> float:
         return 0
     return dot_product / (norm_v1 * norm_v2)
 
-def on_entity_get_(app: "RSSTagApplication", user: dict, quoted_tag: str, window: Optional[int]=10, rerank: Optional[str]=None) -> Response:
-    #print(rerank)
+
+def on_entity_get_(
+    app: "RSSTagApplication",
+    user: dict,
+    quoted_tag: str,
+    window: Optional[int] = 10,
+    rerank: Optional[str] = None,
+) -> Response:
+    # print(rerank)
     tag = unquote(quoted_tag)
     tag_words = tag.split()
     projection = {"_id": False}
@@ -759,9 +800,7 @@ def on_entity_get_(app: "RSSTagApplication", user: dict, quoted_tag: str, window
         only_unread = user["settings"]["only_unread"]
     else:
         only_unread = None
-    db_posts_c = app.posts.get_by_tags(
-        user["sid"], tag_words, only_unread, projection
-    )
+    db_posts_c = app.posts.get_by_tags(user["sid"], tag_words, only_unread, projection)
     db_posts = list(db_posts_c)
 
     if user["settings"]["similar_posts"]:
@@ -775,12 +814,12 @@ def on_entity_get_(app: "RSSTagApplication", user: dict, quoted_tag: str, window
     pids = set()
     multi_word_tag = len(tag_words) > 1
     tag_words_set = set(tag_words)
-    
+
     # Maximum length for chunking
     MAX_CHUNK_LENGTH = 1024
     # Overlap percentage (50%)
     OVERLAP_PERCENT = 0.5
-    
+
     # Get the query embedding only once if reranking is requested
     query_embedding = None
     if rerank:
@@ -791,7 +830,7 @@ def on_entity_get_(app: "RSSTagApplication", user: dict, quoted_tag: str, window
                 query_embedding = query_embeddings[0]
         except Exception as e:
             logging.error('Failed to get embedding for query "%s": %s', rerank, e)
-    
+
     for post in db_posts:
         post["lemmas"] = gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
 
@@ -801,7 +840,7 @@ def on_entity_get_(app: "RSSTagApplication", user: dict, quoted_tag: str, window
             words_positions = {}
 
             # Find positions of all tag words in lemmas
-            
+
             for i, lemma in enumerate(lemmas_list):
                 if lemma in tag_words_set:
                     if lemma not in words_positions:
@@ -859,61 +898,70 @@ def on_entity_get_(app: "RSSTagApplication", user: dict, quoted_tag: str, window
                     "feed_title": by_feed[post["feed_id"]]["title"],
                     "favicon": by_feed[post["feed_id"]]["favicon"],
                 }
-                
+
                 # Process embeddings for reranking if requested and query embedding was obtained
                 if rerank and query_embedding:
                     try:
                         # Get content
-                        content = gzip.decompress(post["content"]["content"]).decode("utf-8", "replace")
-                        
+                        content = gzip.decompress(post["content"]["content"]).decode(
+                            "utf-8", "replace"
+                        )
+
                         # Split content into chunks with 50% overlap
                         chunks = []
                         words = content.split()
                         chunk_size = MAX_CHUNK_LENGTH
                         stride = int(chunk_size * (1 - OVERLAP_PERCENT))
-                        
+
                         if len(words) <= chunk_size:
                             # Content fits in one chunk
                             chunks.append(" ".join(words))
                         else:
                             # Split into overlapping chunks
                             for i in range(0, len(words), stride):
-                                chunk = words[i:i + chunk_size]
+                                chunk = words[i : i + chunk_size]
                                 if chunk:
                                     chunks.append(" ".join(chunk))
                                 # Stop if this chunk or next would be too small
                                 if i + chunk_size >= len(words):
                                     break
-                        
+
                         # Get embeddings for chunks only (query embedding already obtained)
                         chunk_embeddings = get_embeddings(chunks)
-                        
+
                         if chunk_embeddings:
                             # Calculate cosine similarity between query and each chunk
-                            similarities = [cosine_similarity(query_embedding, chunk_emb) for chunk_emb in chunk_embeddings]
-                            
+                            similarities = [
+                                cosine_similarity(query_embedding, chunk_emb)
+                                for chunk_emb in chunk_embeddings
+                            ]
+
                             # Find the highest similarity score
                             max_similarity = max(similarities) if similarities else 0
-                            
+
                             # Store the similarity as score
-                            post_data['rerank_score'] = max_similarity
-                            
+                            post_data["rerank_score"] = max_similarity
+
                     except Exception as e:
-                        logging.error('Embedding/similarity calculation failed for post %d: %s', post["pid"], e)
-                    
+                        logging.error(
+                            "Embedding/similarity calculation failed for post %d: %s",
+                            post["pid"],
+                            e,
+                        )
+
                     # Remove content to save memory
                     if "content" in post and "content" in post["content"]:
                         del post["content"]["content"]
-                
+
                 posts.append(post_data)
 
     # Sort posts by similarity score if available
     if rerank and query_embedding:
-        posts.sort(key=lambda x: x.get('rerank_score', -float('inf')), reverse=True)
-        
+        posts.sort(key=lambda x: x.get("rerank_score", -float("inf")), reverse=True)
+
         # Filter to keep only posts with similarity above threshold if we have enough
         threshold = 0.5  # Adjusted threshold for cosine similarity
-        filtered_posts = [p for p in posts if p.get('rerank_score', 0) > threshold]
+        filtered_posts = [p for p in posts if p.get("rerank_score", 0) > threshold]
         if len(filtered_posts) > 3:
             posts = filtered_posts
         else:
@@ -938,6 +986,7 @@ def on_entity_get_(app: "RSSTagApplication", user: dict, quoted_tag: str, window
         ),
         mimetype="text/html",
     )
+
 
 def on_posts_get(
     app: "RSSTagApplication", user: dict, request: Request, pids: str
@@ -1059,26 +1108,31 @@ def on_cluster_get(app: "RSSTagApplication", user: dict, cluster: int) -> Respon
         mimetype="text/html",
     )
 
-def on_post_grouped_get(app: "RSSTagApplication", user: dict, request: Request, pids: str) -> Response:
+
+def on_post_grouped_get(
+    app: "RSSTagApplication", user: dict, request: Request, pids: str
+) -> Response:
     """Handler for grouped posts view with color generation"""
-    
+
     def _hsl_to_hex(h: float, s: float, lightness: float) -> str:
         """Convert HSL to HEX color"""
         import colorsys
+
         r, g, b = colorsys.hls_to_rgb(h, lightness, s)
-        return '#' + ''.join(f'{int(c*255):02x}' for c in (r, g, b))
-    
+        return "#" + "".join(f"{int(c*255):02x}" for c in (r, g, b))
+
     def _group_color(group_id: str) -> str:
         """Generate color for a group"""
         import hashlib
-        digest = hashlib.md5(group_id.encode('utf-8')).hexdigest()
+
+        digest = hashlib.md5(group_id.encode("utf-8")).hexdigest()
         hue = (int(digest[:8], 16) % 360) / 360.0
         sat = 0.6
         light = 0.7
         return _hsl_to_hex(hue, sat, light)
-    
+
     projection = {"content": True, "feed_id": True, "url": True}
-    post_ids = [int(pid) for pid in pids.split('_') if pid]
+    post_ids = [int(pid) for pid in pids.split("_") if pid]
     if not post_ids:
         return app.on_error(user, request, NotFound())
 
@@ -1092,18 +1146,22 @@ def on_post_grouped_get(app: "RSSTagApplication", user: dict, request: Request, 
             feed_title = feed["title"] if feed else f"Post {post_id}"
             if feed_title not in feed_titles:
                 feed_titles.append(feed_title)
-            
-            content = gzip.decompress(post["content"]["content"]).decode("utf-8", "replace")
+
+            content = gzip.decompress(post["content"]["content"]).decode(
+                "utf-8", "replace"
+            )
             if post["content"]["title"]:
                 content = post["content"]["title"] + ". " + content
-            
-            all_posts.append({
-                "post_id": post_id,
-                "content": content,
-                "feed_title": feed_title,
-                "url": post.get("url", "") or ""
-            })
-    
+
+            all_posts.append(
+                {
+                    "post_id": post_id,
+                    "content": content,
+                    "feed_title": feed_title,
+                    "url": post.get("url", "") or "",
+                }
+            )
+
     post_to_index_map = {post["post_id"]: idx for idx, post in enumerate(all_posts)}
     combined_feed_title = " | ".join(feed_titles) if feed_titles else "Multiple Posts"
 
@@ -1115,41 +1173,44 @@ def on_post_grouped_get(app: "RSSTagApplication", user: dict, request: Request, 
 
     for post in all_posts:
         # Check if this individual post has grouped data
-        post_grouped_data = app.post_grouping.get_grouped_posts(user["sid"], [post["post_id"]])
-        
+        post_grouped_data = app.post_grouping.get_grouped_posts(
+            user["sid"], [post["post_id"]]
+        )
+
         if post_grouped_data and post_grouped_data.get("sentences"):
             has_grouped_data = True
             # Add sentences with adjusted indices and post_id reference
             for sentence in post_grouped_data["sentences"]:
-                all_sentences.append({
-                    "text": sentence["text"],
-                    "number": sentence_offset + sentence["number"],
-                    "post_id": post["post_id"]
-                })
-            
+                all_sentences.append(
+                    {
+                        "text": sentence["text"],
+                        "number": sentence_offset + sentence["number"],
+                        "post_id": post["post_id"],
+                    }
+                )
+
             # Add groups with adjusted sentence indices
             for group_name, sentence_indices in post_grouped_data["groups"].items():
                 # Adjust sentence indices by offset
                 adjusted_indices = [idx + sentence_offset for idx in sentence_indices]
-                
+
                 if group_name not in all_groups:
                     all_groups[group_name] = []
                 all_groups[group_name].extend(adjusted_indices)
-            
+
             # Update offset for next post
             sentence_offset += len(post_grouped_data["sentences"])
-    
+
     # Generate colors dynamically from group keys
     all_group_colors = {group: _group_color(group) for group in all_groups.keys()}
-    
+
     # If no grouped data exists for any post, create default grouping by post
     if not has_grouped_data:
         for post in all_posts:
             group_name = f"Post {post['post_id']}"
             all_groups[group_name] = [post["post_id"]]
             all_group_colors[group_name] = _group_color(group_name)
-    
-    
+
     page = app.template_env.get_template("post-grouped.html")
     return Response(
         page.render(
@@ -1168,28 +1229,33 @@ def on_post_grouped_get(app: "RSSTagApplication", user: dict, request: Request, 
         mimetype="text/html",
     )
 
-def on_post_grouped_snippets_get(app: "RSSTagApplication", user: dict, request: Request, pids: str) -> Response:
+
+def on_post_grouped_snippets_get(
+    app: "RSSTagApplication", user: dict, request: Request, pids: str
+) -> Response:
     """Handler for grouped snippets view"""
-    
+
     def _hsl_to_hex(h: float, s: float, lightness: float) -> str:
         """Convert HSL to HEX color"""
         import colorsys
+
         r, g, b = colorsys.hls_to_rgb(h, lightness, s)
-        return '#' + ''.join(f'{int(c*255):02x}' for c in (r, g, b))
-    
+        return "#" + "".join(f"{int(c*255):02x}" for c in (r, g, b))
+
     def _group_color(group_id: str) -> str:
         """Generate color for a group"""
         import hashlib
-        digest = hashlib.md5(group_id.encode('utf-8')).hexdigest()
+
+        digest = hashlib.md5(group_id.encode("utf-8")).hexdigest()
         hue = (int(digest[:8], 16) % 360) / 360.0
         sat = 0.6
         light = 0.7
         return _hsl_to_hex(hue, sat, light)
-        
-    post_ids = [int(pid) for pid in pids.split('_') if pid]
+
+    post_ids = [int(pid) for pid in pids.split("_") if pid]
     if not post_ids:
         return app.on_error(user, request, NotFound())
-        
+
     requested_topic = request.args.get("topic")
     if requested_topic:
         requested_topic = unquote(requested_topic)
@@ -1197,64 +1263,69 @@ def on_post_grouped_snippets_get(app: "RSSTagApplication", user: dict, request: 
     projection = {"content": True, "feed_id": True, "url": True}
     all_posts = {}
     feed_titles = set()
-    
+
     for post_id in post_ids:
         post = app.posts.get_by_pid(user["sid"], post_id, projection)
         if post:
             feed = app.feeds.get_by_feed_id(user["sid"], post["feed_id"])
             feed_title = feed["title"] if feed else f"Post {post_id}"
             feed_titles.add(feed_title)
-            
+
             all_posts[post_id] = {
                 "feed_title": feed_title,
                 "url": post.get("url"),
-                "title": post.get("content", {}).get("title", f"Post {post_id}")
+                "title": post.get("content", {}).get("title", f"Post {post_id}"),
             }
-            
-    combined_feed_title = " | ".join(sorted(list(feed_titles))) if feed_titles else "Multiple Posts"
-    
+
+    combined_feed_title = (
+        " | ".join(sorted(list(feed_titles))) if feed_titles else "Multiple Posts"
+    )
+
     # Collect snippets
     topics_data = {}
-    
+
     for post_id in post_ids:
         post_grouped_data = app.post_grouping.get_grouped_posts(user["sid"], [post_id])
-        if post_grouped_data and post_grouped_data.get("groups") and post_grouped_data.get("sentences"):
+        if (
+            post_grouped_data
+            and post_grouped_data.get("groups")
+            and post_grouped_data.get("sentences")
+        ):
             sentences_map = {s["number"]: s for s in post_grouped_data["sentences"]}
-            
+
             for group, indices in post_grouped_data["groups"].items():
                 if requested_topic and group != requested_topic:
                     continue
-                    
+
                 if group not in topics_data:
-                    topics_data[group] = {
-                        "color": _group_color(group),
-                        "snippets": []
-                    }
-                
+                    topics_data[group] = {"color": _group_color(group), "snippets": []}
+
                 sorted_indices = sorted(indices)
                 for idx in sorted_indices:
-                    # If indices are sequential (allow small gap), merge them? 
+                    # If indices are sequential (allow small gap), merge them?
                     # For now just list them all. Or maybe combine sequential sentences into a block.
                     s_obj = sentences_map.get(idx)
                     if not s_obj:
-                         continue
+                        continue
                     text = s_obj.get("text", "")
                     if not text:
-                         continue
-                         
+                        continue
+
                     # Add context about which post this is from
-                    topics_data[group]["snippets"].append({
-                        "text": text,
-                        "post_id": post_id,
-                        "post_title": all_posts[post_id]["title"],
-                        "index": idx,
-                        "url": all_posts[post_id]["url"],
-                        "read": s_obj.get("read", False)
-                    })
-    
+                    topics_data[group]["snippets"].append(
+                        {
+                            "text": text,
+                            "post_id": post_id,
+                            "post_title": all_posts[post_id]["title"],
+                            "index": idx,
+                            "url": all_posts[post_id]["url"],
+                            "read": s_obj.get("read", False),
+                        }
+                    )
+
     # Sort topics by name or maybe by number of snippets?
     sorted_topics = sorted(topics_data.items(), key=lambda x: x[0])
-    
+
     page = app.template_env.get_template("post-grouped-snippets.html")
     return Response(
         page.render(
@@ -1268,40 +1339,44 @@ def on_post_grouped_snippets_get(app: "RSSTagApplication", user: dict, request: 
         mimetype="text/html",
     )
 
-def on_topics_list_get(app: "RSSTagApplication", user: dict, request: Request, page_number: int = 1) -> Response:
+
+def on_topics_list_get(
+    app: "RSSTagApplication", user: dict, request: Request, page_number: int = 1
+) -> Response:
     """Handler for topics/chapters list page with pagination"""
     # Pagination settings
     topics_per_page = 100
 
     # Get all grouped posts data from the database
-    grouped_posts = list(app.db.post_grouping.find(
-        {"owner": user["sid"]},
-        {"_id": 0, "groups": 1, "post_ids": 1}
-    ))
+    grouped_posts = list(
+        app.db.post_grouping.find(
+            {"owner": user["sid"]}, {"_id": 0, "groups": 1, "post_ids": 1}
+        )
+    )
 
     # Get all unique post IDs for feed title lookups
     all_post_ids = set()
     for post_data in grouped_posts:
         all_post_ids.update(post_data["post_ids"])
-    
+
     # Fetch posts to get feed_ids
     posts_data = {
         post["pid"]: post["feed_id"]
         for post in app.db.posts.find(
             {"owner": user["sid"], "pid": {"$in": list(all_post_ids)}},
-            {"_id": 0, "pid": 1, "feed_id": 1}
+            {"_id": 0, "pid": 1, "feed_id": 1},
         )
     }
-    
+
     # Get unique feed IDs
     feed_ids = set(posts_data.values())
-    
+
     # Fetch feeds to get titles
     feeds_data = {
         feed["feed_id"]: feed.get("title", "Unknown Feed")
         for feed in app.db.feeds.find(
             {"owner": user["sid"], "feed_id": {"$in": list(feed_ids)}},
-            {"_id": 0, "feed_id": 1, "title": 1}
+            {"_id": 0, "feed_id": 1, "title": 1},
         )
     }
 
@@ -1311,28 +1386,29 @@ def on_topics_list_get(app: "RSSTagApplication", user: dict, request: Request, p
 
     for post_data in grouped_posts:
         post_id_str = "_".join(str(pid) for pid in post_data["post_ids"])
-        
+
         # Derive feed_title from first post's feed
         first_post_id = post_data["post_ids"][0] if post_data["post_ids"] else None
         feed_id = posts_data.get(first_post_id) if first_post_id else None
-        feed_title = feeds_data.get(feed_id, "Unknown Feed") if feed_id else "Unknown Feed"
-        
+        feed_title = (
+            feeds_data.get(feed_id, "Unknown Feed") if feed_id else "Unknown Feed"
+        )
+
         post_topic_mapping[post_id_str] = {
             "feed_title": feed_title,
-            "topics": list(post_data["groups"].keys())
+            "topics": list(post_data["groups"].keys()),
         }
 
         for topic in post_data["groups"].keys():
             if topic not in topic_counts:
-                topic_counts[topic] = {
-                    "count": 0,
-                    "posts": []
-                }
+                topic_counts[topic] = {"count": 0, "posts": []}
             topic_counts[topic]["count"] += 1
             topic_counts[topic]["posts"].append(post_id_str)
 
     # Sort topics by count (descending)
-    sorted_topics = sorted(topic_counts.items(), key=lambda x: x[1]["count"], reverse=True)
+    sorted_topics = sorted(
+        topic_counts.items(), key=lambda x: x[1]["count"], reverse=True
+    )
 
     # Calculate pagination
     total_topics = len(sorted_topics)
@@ -1368,28 +1444,33 @@ def on_topics_list_get(app: "RSSTagApplication", user: dict, request: Request, p
         mimetype="text/html",
     )
 
-def on_post_graph_get(app: "RSSTagApplication", user: dict, request: Request, pids: str) -> Response:
-    post_ids = [int(pid) for pid in pids.split('_') if pid]
+
+def on_post_graph_get(
+    app: "RSSTagApplication", user: dict, request: Request, pids: str
+) -> Response:
+    post_ids = [int(pid) for pid in pids.split("_") if pid]
     if not post_ids:
         return app.on_error(user, request, NotFound())
 
     all_topic_sequences = []
     feed_titles = []
     post_tags = {}
-    
+
     for post_id in post_ids:
-        post = app.posts.get_by_pid(user["sid"], post_id, {"content": True, "feed_id": True, "tags": True})
+        post = app.posts.get_by_pid(
+            user["sid"], post_id, {"content": True, "feed_id": True, "tags": True}
+        )
         if not post:
             continue
-            
+
         post_tags[post_id] = post.get("tags", [])
         feed = app.feeds.get_by_feed_id(user["sid"], post["feed_id"])
         feed_title = feed["title"] if feed else f"Post {post_id}"
         if feed_title not in feed_titles:
             feed_titles.append(feed_title)
-            
+
         post_grouped_data = app.post_grouping.get_grouped_posts(user["sid"], [post_id])
-        
+
         if post_grouped_data and post_grouped_data.get("groups"):
             topic_order = []
             for topic, indices in post_grouped_data["groups"].items():
@@ -1403,19 +1484,19 @@ def on_post_graph_get(app: "RSSTagApplication", user: dict, request: Request, pi
     for sequence in all_topic_sequences:
         for topic in set(sequence):
             topic_counts[topic] += 1
-    
+
     common_topics = [topic for topic, count in topic_counts.items() if count > 1]
-    
+
     graphs_data = []
     if common_topics:
         for i, common_topic in enumerate(common_topics):
             before_children = []
             after_children = []
-            
+
             for sequence in all_topic_sequences:
                 if common_topic in sequence:
                     idx = sequence.index(common_topic)
-                    
+
                     # Process topics BEFORE the common topic (reverse order for tree)
                     before_seq = sequence[:idx][::-1]
                     current_node_list = before_children
@@ -1432,9 +1513,9 @@ def on_post_graph_get(app: "RSSTagApplication", user: dict, request: Request, pi
                             current_node_list = new_node["children"]
                         else:
                             current_node_list = found_node["children"]
-                            
+
                     # Process topics AFTER the common topic
-                    after_seq = sequence[idx+1:]
+                    after_seq = sequence[idx + 1 :]
                     current_node_list = after_children
                     for topic in after_seq:
                         found_node = None
@@ -1448,23 +1529,25 @@ def on_post_graph_get(app: "RSSTagApplication", user: dict, request: Request, pi
                             current_node_list = new_node["children"]
                         else:
                             current_node_list = found_node["children"]
-            
+
             # Prepare standard hierarchical data for Sunburst
             graph_data = {
                 "name": common_topic,
                 "before": before_children,
                 "after": after_children,
-                "value": 1
+                "value": 1,
             }
-                
-            graphs_data.append({
-                "post_id": i, 
-                "label": common_topic,
-                "tag": common_topic,
-                "feed_title": "Common Topic",
-                "graph_data": graph_data,
-                "is_bidirectional": True
-            })
+
+            graphs_data.append(
+                {
+                    "post_id": i,
+                    "label": common_topic,
+                    "tag": common_topic,
+                    "feed_title": "Common Topic",
+                    "graph_data": graph_data,
+                    "is_bidirectional": True,
+                }
+            )
     else:
         # Fallback to per-post graphs if no common topics
         # (This keeps current behavior if no commonality found)
@@ -1475,21 +1558,25 @@ def on_post_graph_get(app: "RSSTagApplication", user: dict, request: Request, pi
                     current_node = {
                         "name": sequence[j],
                         "children": [current_node],
-                        "value": 1
+                        "value": 1,
                     }
-                
+
                 p_id = post_ids[i]
-                graphs_data.append({
-                    "post_id": p_id,
-                    "label": f"Post {p_id}",
-                    "tag": post_tags[p_id][0] if post_tags.get(p_id) else "",
-                    "feed_title": feed_titles[i] if i < len(feed_titles) else f"Post {p_id}",
-                    "graph_data": current_node,
-                    "is_bidirectional": False
-                })
+                graphs_data.append(
+                    {
+                        "post_id": p_id,
+                        "label": f"Post {p_id}",
+                        "tag": post_tags[p_id][0] if post_tags.get(p_id) else "",
+                        "feed_title": feed_titles[i]
+                        if i < len(feed_titles)
+                        else f"Post {p_id}",
+                        "graph_data": current_node,
+                        "is_bidirectional": False,
+                    }
+                )
 
     combined_feed_title = " | ".join(feed_titles) if feed_titles else "Multiple Posts"
-    
+
     page = app.template_env.get_template("post-graph.html")
     return Response(
         page.render(
@@ -1499,8 +1586,9 @@ def on_post_graph_get(app: "RSSTagApplication", user: dict, request: Request, pi
             user_settings=user["settings"],
             provider=user["provider"],
         ),
-        mimetype="text/html"
+        mimetype="text/html",
     )
+
 
 def on_read_snippet_post(
     app: "RSSTagApplication", user: dict, request: Request
@@ -1512,23 +1600,35 @@ def on_read_snippet_post(
         readed = bool(data["readed"])
     except Exception as e:
         logging.warning("Send wrong data for read snippet. Cause: %s", e)
-        return Response(json.dumps({"error": "Bad data"}), mimetype="application/json", status=400)
+        return Response(
+            json.dumps({"error": "Bad data"}), mimetype="application/json", status=400
+        )
 
     # Update snippet status
-    all_read = app.post_grouping.update_snippet_read_status(user["sid"], post_id, sentence_index, readed)
-    
+    all_read = app.post_grouping.update_snippet_read_status(
+        user["sid"], post_id, sentence_index, readed
+    )
+
     if all_read is None:
-        return Response(json.dumps({"error": "Grouping not found"}), mimetype="application/json", status=404)
+        return Response(
+            json.dumps({"error": "Grouping not found"}),
+            mimetype="application/json",
+            status=404,
+        )
 
     # Now handle post status synchronization
     # If we mark snippet as UNREAD, we MUST mark the whole post as UNREAD
     # If we mark snippet as READ and all snippets are now READ, we mark the whole post as READ
-    
+
     projection = {"pid": True, "read": True, "id": True, "tags": True, "bi_grams": True}
     post = app.posts.get_by_pid(user["sid"], post_id, projection)
-    
+
     if not post:
-        return Response(json.dumps({"error": "Post not found"}), mimetype="application/json", status=404)
+        return Response(
+            json.dumps({"error": "Post not found"}),
+            mimetype="application/json",
+            status=404,
+        )
 
     should_change_post = False
     if not readed:
@@ -1537,30 +1637,34 @@ def on_read_snippet_post(
     else:
         if all_read and not post["read"]:
             should_change_post = True
-            
+
     if should_change_post:
         # Replicate logic from on_read_posts_post but for a single post
         post_ids = [post_id]
         tags = defaultdict(int)
         bi_grams = defaultdict(int)
         letters = defaultdict(int)
-        
+
         for t in post["tags"]:
             tags[t] += 1
             if t:
                 letters[t[0]] += 1
         for bi_g in post.get("bi_grams", []):
             bi_grams[bi_g] += 1
-            
-        for_insert = [{
-            "user": user["sid"],
-            "id": post["id"],
-            "status": readed,
-            "processing": TASK_NOT_IN_PROCESSING,
-            "type": TASK_MARK,
-        }]
-        
-        if app.tasks.add_task({"type": TASK_MARK, "user": user["sid"], "data": for_insert}):
+
+        for_insert = [
+            {
+                "user": user["sid"],
+                "id": post["id"],
+                "status": readed,
+                "processing": TASK_NOT_IN_PROCESSING,
+                "type": TASK_MARK,
+            }
+        ]
+
+        if app.tasks.add_task(
+            {"type": TASK_MARK, "user": user["sid"], "data": for_insert}
+        ):
             changed = app.posts.change_status(user["sid"], post_ids, readed)
             if changed and tags:
                 app.tags.change_unread(user["sid"], tags, readed)
@@ -1568,5 +1672,9 @@ def on_read_snippet_post(
                 app.bi_grams.change_unread(user["sid"], bi_grams, readed)
             if changed and letters:
                 app.letters.change_unread(user["sid"], letters, readed)
-        
-    return Response(json.dumps({"data": "ok", "post_status_changed": should_change_post}), mimetype="application/json", status=200)
+
+    return Response(
+        json.dumps({"data": "ok", "post_status_changed": should_change_post}),
+        mimetype="application/json",
+        status=200,
+    )

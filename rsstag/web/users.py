@@ -66,9 +66,9 @@ async def _exchange_code_for_token(app: "RSSTagApplication", code: str):
     redirect_uri = f"http://{host_name}{callback_path}"
     client_id = app.config["gmail"]["client_id"]
     client_secret = app.config["gmail"]["client_secret"]
-    
+
     logging.info(f"Exchanging code for token with redirect_uri: {redirect_uri}")
-    
+
     payload = {
         "client_id": client_id,
         "client_secret": client_secret,
@@ -76,50 +76,60 @@ async def _exchange_code_for_token(app: "RSSTagApplication", code: str):
         "redirect_uri": redirect_uri,
         "grant_type": "authorization_code",
     }
-    
+
     async with aiohttp.ClientSession() as session:
         # Step 1: Exchange code for tokens
         try:
             async with session.post(token_url, data=payload) as resp:
                 resp_text = await resp.text()
                 if resp.status != 200:
-                    logging.error(f"Failed to get token (status {resp.status}): {resp_text}")
+                    logging.error(
+                        f"Failed to get token (status {resp.status}): {resp_text}"
+                    )
                     return None, None
                 token_data = await resp.json()
-                logging.info(f"Token exchange successful. Token data keys: {list(token_data.keys())}")
+                logging.info(
+                    f"Token exchange successful. Token data keys: {list(token_data.keys())}"
+                )
         except aiohttp.ClientError as e:
             logging.error(f"Aiohttp client error during token exchange: {e}")
             return None, None
         except json.JSONDecodeError as e:
             logging.error(f"Failed to parse token response: {e}, Response: {resp_text}")
             return None, None
-        
+
         access_token = token_data.get("access_token")
         if not access_token:
             logging.error("No access token in response")
             return None, None
-        
+
         # Step 2: Get user info using the OpenID Connect UserInfo endpoint
         # This endpoint is part of the OpenID Connect standard and works with gmail.readonly + openid scopes
         userinfo_url = "https://www.googleapis.com/oauth2/v3/userinfo"
         headers = {"Authorization": f"Bearer {access_token}"}
-        
+
         logging.info(f"Fetching user info from {userinfo_url}")
-        
+
         try:
             async with session.get(userinfo_url, headers=headers) as resp:
                 resp_text = await resp.text()
                 if resp.status != 200:
-                    logging.error(f"Failed to get user info (status {resp.status}): {resp_text}")
+                    logging.error(
+                        f"Failed to get user info (status {resp.status}): {resp_text}"
+                    )
                     return token_data, None
                 user_info = await resp.json()
-                logging.info(f"User info retrieved successfully. Keys: {list(user_info.keys())}")
+                logging.info(
+                    f"User info retrieved successfully. Keys: {list(user_info.keys())}"
+                )
                 return token_data, user_info
         except aiohttp.ClientError as e:
             logging.error(f"Aiohttp client error getting user info: {e}")
             return token_data, None
         except json.JSONDecodeError as e:
-            logging.error(f"Failed to parse user info response: {e}, Response: {resp_text}")
+            logging.error(
+                f"Failed to parse user info response: {e}, Response: {resp_text}"
+            )
             return token_data, None
 
 
@@ -127,50 +137,50 @@ def on_oauth2callback_get(app: "RSSTagApplication", request: Request) -> Respons
     """Handle OAuth callback from Google."""
     code = request.args.get("code")
     error = request.args.get("error")
-    
+
     if error:
         logging.error(f"OAuth error from Google: {error}")
         return app.on_login_get(None, request, [f"Gmail login failed: {error}"])
-    
+
     if not code:
         logging.error("OAuth callback received without code")
-        return app.on_login_get(None, request, ["Gmail login failed: no code provided."])
-    
+        return app.on_login_get(
+            None, request, ["Gmail login failed: no code provided."]
+        )
+
     logging.info(f"OAuth callback received with code: {code[:20]}...")
-    
+
     try:
         loop = asyncio.get_event_loop()
     except RuntimeError:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-    
-    token_data, user_info = loop.run_until_complete(
-        _exchange_code_for_token(app, code)
-    )
-    
+
+    token_data, user_info = loop.run_until_complete(_exchange_code_for_token(app, code))
+
     if not token_data:
         logging.error("Failed to exchange code for token")
         return app.on_login_get(
             None, request, ["Failed to authenticate with Google. Please try again."]
         )
-    
+
     if not user_info:
         logging.error("Failed to get user info from Google")
         return app.on_login_get(
             None, request, ["Failed to get user information from Google."]
         )
-    
+
     email = user_info.get("email")
     if not email:
         logging.error(f"No email in user info. Keys: {list(user_info.keys())}")
         return app.on_login_get(None, request, ["Failed to get email from Google."])
-    
+
     logging.info(f"Successfully authenticated user: {email}")
-    
+
     user = app.users.get_by_login(email)
     access_token = token_data["access_token"]
     refresh_token = token_data.get("refresh_token")
-    
+
     if not user:
         logging.info(f"Creating new user for email: {email}")
         # create_user returns sid (string), not user object
@@ -202,22 +212,22 @@ def on_login_google_auth_get(app: "RSSTagApplication", _: Request) -> Response:
     callback_path = app.routes.get_url_by_endpoint(endpoint="on_oauth2callback_get")
     redirect_uri = f"http://{host_name}{callback_path}"
     client_id = app.config["gmail"]["client_id"]
-    
+
     # Request OpenID Connect scopes which include email access
     # openid: Required for OpenID Connect
-    # email: Access to user's email address  
+    # email: Access to user's email address
     # profile: Access to basic profile info
     # gmail.readonly: Read-only access to Gmail
     # gmail.modify: Allows adding/removing labels (needed for marking emails)
     scopes = [
         "openid",
-        "email", 
+        "email",
         "profile",
         "https://www.googleapis.com/auth/gmail.readonly",
         "https://www.googleapis.com/auth/gmail.modify",
-        "https://www.googleapis.com/auth/gmail.labels"
+        "https://www.googleapis.com/auth/gmail.labels",
     ]
-    
+
     # Build OAuth URL with proper parameter encoding
     params = {
         "client_id": client_id,
@@ -225,17 +235,15 @@ def on_login_google_auth_get(app: "RSSTagApplication", _: Request) -> Response:
         "scope": " ".join(scopes),  # Space-separated scopes
         "response_type": "code",
         "access_type": "offline",  # Request refresh token
-        "prompt": "consent"  # Force consent screen to get refresh token
+        "prompt": "consent",  # Force consent screen to get refresh token
     }
-    
+
     oauth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
-    
+
     logging.info(f"Redirecting to Google OAuth with scopes: {scopes}")
     logging.info(f"Redirect URI: {redirect_uri}")
-    
+
     return redirect(oauth_url)
-
-
 
 
 def on_login_post(app: "RSSTagApplication", request: Request) -> Response:
@@ -381,7 +389,9 @@ def on_status_get(app: "RSSTagApplication", user: Optional[dict]) -> Response:
             result = {"data": {"is_ok": True, "msgs": task_titles}}
             if (TELEGRAM_CODE_FIELD in user) and (user[TELEGRAM_CODE_FIELD] == ""):
                 result["data"][TELEGRAM_CODE_FIELD] = True
-            if (TELEGRAM_PASSWORD_FIELD in user) and (user[TELEGRAM_PASSWORD_FIELD] == ""):
+            if (TELEGRAM_PASSWORD_FIELD in user) and (
+                user[TELEGRAM_PASSWORD_FIELD] == ""
+            ):
                 result["data"][TELEGRAM_PASSWORD_FIELD] = True
     else:
         result = {
@@ -459,7 +469,10 @@ def on_root_get(
 
     return response
 
-def on_telegram_auth_post(app: "RSSTagApplication", user: dict, request: Request) -> Response:
+
+def on_telegram_auth_post(
+    app: "RSSTagApplication", user: dict, request: Request
+) -> Response:
     tlg_data = json.loads(request.get_data(as_text=True))
     result = {"error": "Something wrong with telegram auth"}
     code = 400

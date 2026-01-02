@@ -1,6 +1,7 @@
 """
 Determine words sentiment
 """
+
 import os
 import logging
 import textwrap

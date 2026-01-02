@@ -1,5 +1,6 @@
 from typing import List, Tuple
 
+
 def create_svg_histogram(data: List[Tuple[str, int]]) -> str:
     """
     Author: ChatGPT
@@ -25,7 +26,9 @@ def create_svg_histogram(data: List[Tuple[str, int]]) -> str:
     bar_height = 20
     margin = 5
     text_width = 150  # Space reserved for text
-    max_bar_length = (width - text_width * 2 - margin * 2) // 2  # Bars split on both sides
+    max_bar_length = (
+        width - text_width * 2 - margin * 2
+    ) // 2  # Bars split on both sides
     max_frequency = max(f for _, f in data)
     height = (bar_height + margin) * max(len(left_data), len(right_data)) + margin
 

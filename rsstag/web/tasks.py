@@ -23,6 +23,7 @@ from rsstag.tasks import (
     TASK_GMAIL_SORT,
 )
 
+
 def on_tasks_get(app, user: dict, request: Request) -> Response:
     current_tasks = app.tasks.get_current_tasks(user["sid"])
     available_tasks = {
@@ -44,9 +45,9 @@ def on_tasks_get(app, user: dict, request: Request) -> Response:
         TASK_POST_GROUPING: "Group posts",
         TASK_TAG_CLASSIFICATION: "Classify tags",
         TASK_MARK_TELEGRAM: "Sync Telegram read state",
-        TASK_GMAIL_SORT: "Sort Gmail emails"
+        TASK_GMAIL_SORT: "Sort Gmail emails",
     }
-    
+
     page = app.template_env.get_template("tasks.html")
     return Response(
         page.render(
@@ -60,24 +61,30 @@ def on_tasks_get(app, user: dict, request: Request) -> Response:
         mimetype="text/html",
     )
 
+
 def on_tasks_post(app, user: dict, request: Request) -> Response:
     task_type = request.form.get("task_type")
     if task_type:
         try:
             task_type = int(task_type)
-            app.tasks.add_task({
-                "user": user["sid"],
-                "type": task_type,
-                "data": [], # Some tasks might need data, but for general ones empty list/dict might suffice or be ignored
-                "host": app.config["settings"]["host_name"] # TASK_DOWNLOAD needs host
-            })
+            app.tasks.add_task(
+                {
+                    "user": user["sid"],
+                    "type": task_type,
+                    "data": [],  # Some tasks might need data, but for general ones empty list/dict might suffice or be ignored
+                    "host": app.config["settings"][
+                        "host_name"
+                    ],  # TASK_DOWNLOAD needs host
+                }
+            )
         except ValueError:
             logging.error("Invalid task type: %s", task_type)
-    
+
     return redirect("/tasks")
+
 
 def on_tasks_remove_post(app, user: dict, request: Request, task_id: str) -> Response:
     if task_id:
         app.tasks.remove_task(task_id)
-    
+
     return redirect("/tasks")

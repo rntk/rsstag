@@ -52,8 +52,8 @@ class RssTagTasks:
         TASK_CLUSTERING: [TASK_W2V],
         TASK_W2V: [TASK_FASTTEXT],
         TASK_FASTTEXT: [TASK_POST_GROUPING],
-        #TASK_W2V: [TASK_TAGS_GROUP],
-        #TASK_TAGS_GROUP: [TASK_FASTTEXT]
+        # TASK_W2V: [TASK_TAGS_GROUP],
+        # TASK_TAGS_GROUP: [TASK_FASTTEXT]
     }
 
     def __init__(self, db: MongoClient) -> None:
@@ -126,7 +126,12 @@ class RssTagTasks:
         result = False
         if task_type in self._tasks_after:
             for_insert = [
-                {"user": user, "type": task, "processing": TASK_NOT_IN_PROCESSING, "manual": False}
+                {
+                    "user": user,
+                    "type": task,
+                    "processing": TASK_NOT_IN_PROCESSING,
+                    "manual": False,
+                }
                 for task in self._tasks_after[task_type]
             ]
             try:
@@ -149,7 +154,7 @@ class RssTagTasks:
             # monopolizing the workers through its subtasks/batches.
             pipeline = [
                 {"$match": {"processing": TASK_NOT_IN_PROCESSING}},
-                {"$sample": {"size": 5}}
+                {"$sample": {"size": 5}},
             ]
             candidates = list(self._db.tasks.aggregate(pipeline))
             if not candidates:
@@ -207,7 +212,9 @@ class RssTagTasks:
                         can_delete = False
                         if user_task.get("manual", False):
                             can_delete = True
-                        elif self.add_next_tasks(task["user"]["sid"], user_task["type"]):
+                        elif self.add_next_tasks(
+                            task["user"]["sid"], user_task["type"]
+                        ):
                             can_delete = True
                         if can_delete:
                             self._db.tasks.delete_one({"_id": user_task["_id"]})
@@ -272,16 +279,15 @@ class RssTagTasks:
                 else:
                     task["type"] = TASK_NOOP
                     psc = self._db.posts.count_documents(
-                        {
-                            "owner": task["user"]["sid"],
-                            "grouping": {"$exists": False}
-                        }
+                        {"owner": task["user"]["sid"], "grouping": {"$exists": False}}
                     )
                     if psc == 0:
                         can_delete = False
                         if user_task.get("manual", False):
                             can_delete = True
-                        elif self.add_next_tasks(task["user"]["sid"], user_task["type"]):
+                        elif self.add_next_tasks(
+                            task["user"]["sid"], user_task["type"]
+                        ):
                             can_delete = True
                         if can_delete:
                             self._db.tasks.delete_one({"_id": user_task["_id"]})
@@ -345,16 +351,15 @@ class RssTagTasks:
                 else:
                     task["type"] = TASK_NOOP
                     psc = self._db.posts.count_documents(
-                        {
-                            "owner": task["user"]["sid"],
-                            "ner": {"$exists": False}
-                        }
+                        {"owner": task["user"]["sid"], "ner": {"$exists": False}}
                     )
                     if psc == 0:
                         can_delete = False
                         if user_task.get("manual", False):
                             can_delete = True
-                        elif self.add_next_tasks(task["user"]["sid"], user_task["type"]):
+                        elif self.add_next_tasks(
+                            task["user"]["sid"], user_task["type"]
+                        ):
                             can_delete = True
                         if can_delete:
                             self._db.tasks.delete_one({"_id": user_task["_id"]})
@@ -388,14 +393,16 @@ class RssTagTasks:
                     psc = self._db.tags.count_documents(
                         {
                             "owner": task["user"]["sid"],
-                            "classifications": {"$exists": False}
+                            "classifications": {"$exists": False},
                         }
                     )
                     if psc == 0:
                         can_delete = False
                         if user_task.get("manual", False):
                             can_delete = True
-                        elif self.add_next_tasks(task["user"]["sid"], user_task["type"]):
+                        elif self.add_next_tasks(
+                            task["user"]["sid"], user_task["type"]
+                        ):
                             can_delete = True
                         if can_delete:
                             self._db.tasks.delete_one({"_id": user_task["_id"]})
@@ -444,10 +451,12 @@ class RssTagTasks:
                 remove_task = False
                 updates = []
                 for post in task["data"]:
-                    updates.append(UpdateOne(
-                        {"_id": post["_id"]},
-                        {"$set": {"processing": POST_NOT_IN_PROCESSING}},
-                    ))
+                    updates.append(
+                        UpdateOne(
+                            {"_id": post["_id"]},
+                            {"$set": {"processing": POST_NOT_IN_PROCESSING}},
+                        )
+                    )
                 self._db.posts.bulk_write(updates, ordered=False)
                 """elif task['type'] == TASK_WORDS:
                     self._db.tags.find_one_and_update(
@@ -461,46 +470,61 @@ class RssTagTasks:
                 remove_task = False
                 updates = []
                 for bigram in task["data"]:
-                    updates.append(UpdateOne(
-                        {"_id": bigram["_id"]},
-                        {"$set": {"processing": BIGRAM_NOT_IN_PROCESSING}},
-                    ))
+                    updates.append(
+                        UpdateOne(
+                            {"_id": bigram["_id"]},
+                            {"$set": {"processing": BIGRAM_NOT_IN_PROCESSING}},
+                        )
+                    )
                 self._db.bi_grams.bulk_write(updates, ordered=False)
             elif task["type"] == TASK_TAGS_RANK:
                 remove_task = False
                 updates = []
                 for tag in task["data"]:
-                    updates.append(UpdateOne(
-                        {"_id": tag["_id"]},
-                        {"$set": {"processing": TAG_NOT_IN_PROCESSING}},
-                    ))
+                    updates.append(
+                        UpdateOne(
+                            {"_id": tag["_id"]},
+                            {"$set": {"processing": TAG_NOT_IN_PROCESSING}},
+                        )
+                    )
                 self._db.tags.bulk_write(updates, ordered=False)
             elif task["type"] == TASK_NER:
                 remove_task = False
                 updates = []
                 for post in task["data"]:
-                    updates.append(UpdateOne(
-                        {"_id": post["_id"]},
-                        {"$set": {"processing": POST_NOT_IN_PROCESSING, "ner": 1}},
-                    ))
+                    updates.append(
+                        UpdateOne(
+                            {"_id": post["_id"]},
+                            {"$set": {"processing": POST_NOT_IN_PROCESSING, "ner": 1}},
+                        )
+                    )
                 self._db.posts.bulk_write(updates, ordered=False)
             elif task["type"] == TASK_POST_GROUPING:
                 remove_task = False
                 updates = []
                 for post in task["data"]:
-                    updates.append(UpdateOne(
-                        {"_id": post["_id"]},
-                        {"$set": {"processing": POST_NOT_IN_PROCESSING, "grouping": 1}},
-                    ))
+                    updates.append(
+                        UpdateOne(
+                            {"_id": post["_id"]},
+                            {
+                                "$set": {
+                                    "processing": POST_NOT_IN_PROCESSING,
+                                    "grouping": 1,
+                                }
+                            },
+                        )
+                    )
                 self._db.posts.bulk_write(updates, ordered=False)
             elif task["type"] == TASK_TAG_CLASSIFICATION:
                 remove_task = False
                 updates = []
                 for tag in task["data"]:
-                    updates.append(UpdateOne(
-                        {"_id": tag["_id"]},
-                        {"$set": {"processing": TAG_NOT_IN_PROCESSING}},
-                    ))
+                    updates.append(
+                        UpdateOne(
+                            {"_id": tag["_id"]},
+                            {"$set": {"processing": TAG_NOT_IN_PROCESSING}},
+                        )
+                    )
                 self._db.tags.bulk_write(updates, ordered=False)
             if remove_task:
                 self.remove_task(task["_id"])
@@ -524,12 +548,14 @@ class RssTagTasks:
             curr = self._db.tasks.find({"user": user_id})
             result = []
             for task in curr:
-                result.append({
-                    "id": str(task["_id"]),
-                    "type": task["type"],
-                    "title": self.get_task_title(task["type"]),
-                    "processing": task.get("processing", 0)
-                })
+                result.append(
+                    {
+                        "id": str(task["_id"]),
+                        "type": task["type"],
+                        "title": self.get_task_title(task["type"]),
+                        "processing": task.get("processing", 0),
+                    }
+                )
 
         except Exception as e:
             result = []
@@ -558,7 +584,7 @@ class RssTagTasks:
             TASK_DOWNLOAD: "Downloading posts from provider",
             TASK_MARK: 'Sync posts "read" state with provider',
             TASK_MARK_TELEGRAM: 'Sync posts "read" state with Telegram',
-            TASK_GMAIL_SORT: 'Sort Gmail emails by sender domain',
+            TASK_GMAIL_SORT: "Sort Gmail emails by sender domain",
             TASK_TAGS: "Bulding posts tags",
             TASK_WORDS: "",
             TASK_LETTERS: "Buildings first letters dictionary",
@@ -574,7 +600,7 @@ class RssTagTasks:
             TASK_TAGS_RANK: "Tags ranking",
             TASK_CLEAN_BIGRAMS: "Clean bi-grams",
             TASK_POST_GROUPING: "Post grouping",
-            TASK_TAG_CLASSIFICATION: "Tags classification"
+            TASK_TAG_CLASSIFICATION: "Tags classification",
         }
 
         if task_type in task_titles:

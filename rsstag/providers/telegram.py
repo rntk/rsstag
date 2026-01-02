@@ -1,4 +1,5 @@
 """RSSTag downloaders"""
+
 import time
 import gzip
 import logging
@@ -24,7 +25,16 @@ from pymongo import MongoClient
 
 from telegram.client import Telegram
 from telegram.client import Result as TelegramResult
-from telegram.queries import get_message_link, get_chat, get_chats, get_chat_history, search_channel, open_chat, close_chat, view_messages
+from telegram.queries import (
+    get_message_link,
+    get_chat,
+    get_chats,
+    get_chat_history,
+    search_channel,
+    open_chat,
+    close_chat,
+    view_messages,
+)
 
 NOT_CATEGORIZED = "NotCategorized"
 TELEGRAM_LOCK = Lock()
@@ -37,30 +47,32 @@ ME_UNDERLINE = "textEntityTypeUnderline"
 ME_PRE = "textEntityTypePre"
 ME_TEXT_URL = "textEntityTypeTextUrl"
 
+
 def tlg_poll_to_html(post: dict) -> str:
     if post["content"]["poll"]["@type"] != "poll":
         return ""
 
     result_html = StringIO()
-    question_text = post["content"]["poll"]["question"].get("text", "") if isinstance(post["content"]["poll"]["question"], dict) else str(post["content"]["poll"]["question"])
-    result_html.write(
-        "<p>" +
-        question_text +
-        "</p><ol>"
+    question_text = (
+        post["content"]["poll"]["question"].get("text", "")
+        if isinstance(post["content"]["poll"]["question"], dict)
+        else str(post["content"]["poll"]["question"])
     )
+    result_html.write("<p>" + question_text + "</p><ol>")
     for opt in post["content"]["poll"]["options"]:
         if opt["@type"] != "pollOption":
             continue
 
-        option_text = opt["text"].get("text", "") if isinstance(opt["text"], dict) else str(opt["text"])
-        result_html.write(
-            "<li>" +
-            option_text +
-            "</li>"
+        option_text = (
+            opt["text"].get("text", "")
+            if isinstance(opt["text"], dict)
+            else str(opt["text"])
         )
+        result_html.write("<li>" + option_text + "</li>")
     result_html.write("</ol>")
 
     return result_html.getvalue()
+
 
 def tlg_webpage_to_html(post: dict) -> str:
     if "content" not in post:
@@ -84,6 +96,7 @@ def tlg_webpage_to_html(post: dict) -> str:
     html_s = '<br /><p><a href="{}">{}</a></p>'.format(link, html_s)
 
     return html_s
+
 
 # https://core.telegram.org/type/MessageEntity
 # https://core.telegram.org/api/entities
@@ -181,6 +194,7 @@ def tlg_post_to_html(post: dict) -> str:
 
     return s
 
+
 def tlg_forward_to_query(post: dict) -> Optional[dict]:
     if "forward_info" not in post:
         return None
@@ -205,6 +219,7 @@ def tlg_forward_to_query(post: dict) -> Optional[dict]:
         return None
 
     return {"chat_id": chat_id, "message_id": msg_id}
+
 
 class TelegramProvider:
     def __init__(self, config: dict, db: MongoClient):
@@ -258,9 +273,11 @@ class TelegramProvider:
                 if limit <= 0:
                     has_posts = False
                     continue
-                posts_req = self.__requests_repeater(get_chat_history(
-                    channel["id"], limit=limit, from_message_id=from_id
-                ))
+                posts_req = self.__requests_repeater(
+                    get_chat_history(
+                        channel["id"], limit=limit, from_message_id=from_id
+                    )
+                )
                 posts_data = posts_req.update
                 if (not posts_req.update) or (len(posts_data["messages"]) == 0):
                     has_posts = False
@@ -268,7 +285,7 @@ class TelegramProvider:
                         logging.warning(
                             "Channel history error %s: %s",
                             channel["id"],
-                            posts_req.error
+                            posts_req.error,
                         )
                     continue
                 logging.info(
@@ -284,20 +301,24 @@ class TelegramProvider:
                 posts_n += len(posts_data["messages"])
                 posts_links = []
                 for post in posts_data["messages"]:
-                    resp = self.__requests_repeater(get_message_link(post["chat_id"], post["id"]))
+                    resp = self.__requests_repeater(
+                        get_message_link(post["chat_id"], post["id"])
+                    )
                     frw_q = tlg_forward_to_query(post)
                     post_l = resp.update["link"]
                     if frw_q:
-                        #resp = self.__requests_repeater(get_message_link(frw_q["chat_id"], frw_q["message_id"]))
-                        #if resp.update:
+                        # resp = self.__requests_repeater(get_message_link(frw_q["chat_id"], frw_q["message_id"]))
+                        # if resp.update:
                         # TODO: refactor may be add link as additional field
                         #    post_l += "\n" + resp.update["link"]
-                        post_l += "\n" + "https://t.me/{}/{}".format(frw_q["chat_id"], frw_q["message_id"])
+                        post_l += "\n" + "https://t.me/{}/{}".format(
+                            frw_q["chat_id"], frw_q["message_id"]
+                        )
 
                     posts_links.append(post_l)
 
                 results_q.put_nowait((channel["id"], posts_data, posts_links))
-                time.sleep(uniform(1,3))
+                time.sleep(uniform(1, 3))
 
             tasks_q.task_done()
             logging.info("Downloaded: %s - %s", channel["title"], posts_n)
@@ -310,13 +331,15 @@ class TelegramProvider:
         r = None
         while True:
             if all_repeats > 0:
-                logging.warning("Repeat telegram request: %d. %s. %s", all_repeats, query, r)
+                logging.warning(
+                    "Repeat telegram request: %d. %s. %s", all_repeats, query, r
+                )
             all_repeats += 1
             r = self._tlg.request(query)
             if r.update is not None:
                 return r
             if r.error:
-                #example: {'@type': 'error', 'code': 429, 'message': 'Too Many Requests: retry after 77616', '@extra': {'req_id': '1643864060.31774_9523'}, '@client_id': 1}
+                # example: {'@type': 'error', 'code': 429, 'message': 'Too Many Requests: retry after 77616', '@extra': {'req_id': '1643864060.31774_9523'}, '@client_id': 1}
                 if "code" in r.error and r.error["code"] == 429:
                     time.sleep(randint(7, 20))
                     continue
@@ -365,10 +388,12 @@ class TelegramProvider:
                     continue
                 channel_req = self.__requests_repeater(search_channel(telegram_channel))
                 if not channel_req.update:
-                    logging.warning("No channel: %s. %s", telegram_channel, channel_req.error)
+                    logging.warning(
+                        "No channel: %s. %s", telegram_channel, channel_req.error
+                    )
                     continue
-                    #self._tlg.close()
-                    #return ([], [])
+                    # self._tlg.close()
+                    # return ([], [])
                 channels.append(channel_req.update)
         tasks_q = Queue()
         results_q = Queue()
@@ -397,7 +422,7 @@ class TelegramProvider:
                     "favicon": "",
                 }
         workers = []
-        workers_n = 1 #int(self._config["settings"]["downloaders_count"])
+        workers_n = 1  # int(self._config["settings"]["downloaders_count"])
         if not workers_n:
             workers_n = 1
         if len(channels) == 1:
@@ -449,7 +474,11 @@ class TelegramProvider:
                         if t != "messageCustomServiceAction":
                             entities = post["content"]["text"]["entities"]
                 except Exception as e:
-                    logging.error("tlg_post_to_html: {}. {}. {}".format(post, e, traceback.format_exc()))
+                    logging.error(
+                        "tlg_post_to_html: {}. {}. {}".format(
+                            post, e, traceback.format_exc()
+                        )
+                    )
                     continue
                 for entity in entities:
                     if "type" in entity and "url" in entity["type"]:
@@ -500,7 +529,7 @@ class TelegramProvider:
                 app_hash=t_cfg["app_hash"],
                 phone=phone,
                 db_key=t_cfg["encryption_key"],
-                db_path=t_cfg["db_dir"]
+                db_path=t_cfg["db_dir"],
             )
             tlg_code = TelegramAuthData(self._db, sid)
             if not tlg.login(tlg_code.get_code, tlg_code.get_password):
@@ -542,11 +571,13 @@ class TelegramProvider:
         tlg_ids = []
         for feed in feeds:
             feed_id = int(feed["feed_id"])
-            posts = list(posts_h.get_by_feed_id(
-                user_id,
-                str(feed_id),
-                projection={"id": True, "_id": False, "read": True},
-            ))
+            posts = list(
+                posts_h.get_by_feed_id(
+                    user_id,
+                    str(feed_id),
+                    projection={"id": True, "_id": False, "read": True},
+                )
+            )
             posts.sort(key=lambda x: x["id"], reverse=False)
             p_id = 0
             n = 0

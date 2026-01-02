@@ -18,6 +18,7 @@ import aiohttp
 
 NOT_CATEGORIZED = "NotCategorized"
 
+
 class BazquxProvider:
     """rss downloader from bazqux.com"""
 
@@ -35,7 +36,7 @@ class BazquxProvider:
         }
 
     async def fetch(
-            self, data: dict, loop: Optional[asyncio.AbstractEventLoop]
+        self, data: dict, loop: Optional[asyncio.AbstractEventLoop]
     ) -> Tuple[dict, str]:
         posts = []
         max_repetitions = 5

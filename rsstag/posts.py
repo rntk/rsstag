@@ -38,7 +38,11 @@ class RssTagPosts:
         else:
             sort = [("unix_date", DESCENDING)]
 
-        return self._db.posts.find(query, projection=projection).allow_disk_use(True).sort(sort)
+        return (
+            self._db.posts.find(query, projection=projection)
+            .allow_disk_use(True)
+            .sort(sort)
+        )
 
     def get_all(
         self,
@@ -87,7 +91,11 @@ class RssTagPosts:
             query["read"] = not only_unread
         sort_data = [("feed_id", DESCENDING), ("unix_date", DESCENDING)]
 
-        return self._db.posts.find(query, projection=projection).allow_disk_use(True).sort(sort_data)
+        return (
+            self._db.posts.find(query, projection=projection)
+            .allow_disk_use(True)
+            .sort(sort_data)
+        )
 
     def get_by_bi_grams(
         self,
@@ -101,7 +109,11 @@ class RssTagPosts:
             query["read"] = not only_unread
         sort_data = [("feed_id", DESCENDING), ("unix_date", DESCENDING)]
 
-        return self._db.posts.find(query, projection=projection).allow_disk_use(True).sort(sort_data)
+        return (
+            self._db.posts.find(query, projection=projection)
+            .allow_disk_use(True)
+            .sort(sort_data)
+        )
 
     def get_by_feed_id(
         self,
@@ -117,7 +129,11 @@ class RssTagPosts:
         else:
             sort = [("unix_date", DESCENDING)]
 
-        return self._db.posts.find(query, projection=projection).allow_disk_use(True).sort(sort)
+        return (
+            self._db.posts.find(query, projection=projection)
+            .allow_disk_use(True)
+            .sort(sort)
+        )
 
     def get_by_pid(
         self, owner: str, pid: int, projection: Optional[dict] = None
@@ -127,7 +143,7 @@ class RssTagPosts:
         return self._db.posts.find_one(query, projection=projection)
 
     def get_by_id(
-            self, owner: str, pid: int, projection: Optional[dict] = None
+        self, owner: str, pid: int, projection: Optional[dict] = None
     ) -> Optional[dict]:
         query = {"owner": owner, "id": pid}
 
@@ -192,7 +208,11 @@ class RssTagPosts:
             query["read"] = not only_unread
         sort_data = [("feed_id", DESCENDING), ("unix_date", DESCENDING)]
 
-        return self._db.posts.find(query, projection=projection).allow_disk_use(True).sort(sort_data)
+        return (
+            self._db.posts.find(query, projection=projection)
+            .allow_disk_use(True)
+            .sort(sort_data)
+        )
 
     def get_clusters(self, posts: List[dict]) -> set:
         result = set()
@@ -214,16 +234,15 @@ class PostLemmaSentence:
         self.__split = split
 
     def __iter__(self):
-            cursor = self.__db.posts.find(
-                {"owner": self.__owner},
-                projection={"lemmas": True}
-            )
-            if self.__split:
-                for p in cursor:
-                    yield gzip.decompress(p["lemmas"]).decode("utf-8", "replace").split()
-            else:
-                for p in cursor:
-                    yield gzip.decompress(p["lemmas"]).decode("utf-8", "replace")
+        cursor = self.__db.posts.find(
+            {"owner": self.__owner}, projection={"lemmas": True}
+        )
+        if self.__split:
+            for p in cursor:
+                yield gzip.decompress(p["lemmas"]).decode("utf-8", "replace").split()
+        else:
+            for p in cursor:
+                yield gzip.decompress(p["lemmas"]).decode("utf-8", "replace")
 
     def count(self) -> int:
         return self.__db.posts.count_documents({"owner": self.__owner})

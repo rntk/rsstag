@@ -1,4 +1,5 @@
 """Utility functions"""
+
 from typing import Optional, List
 from configparser import ConfigParser
 from collections import OrderedDict, defaultdict

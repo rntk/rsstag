@@ -5,28 +5,34 @@ import re
 from urllib.parse import urlparse
 from http.client import HTTPConnection, HTTPSConnection
 
+
 class LLamaCPP:
     def __init__(self, host: str):
         u = urlparse(host)
         self.__host = u.netloc
         self.__is_https = u.scheme.lower() == "https"
 
-    def call(self, user_msgs: List[str], temperature: float=0.0, max_tokens: Optional[int] = None) -> str:
+    def call(
+        self,
+        user_msgs: List[str],
+        temperature: float = 0.0,
+        max_tokens: Optional[int] = None,
+    ) -> str:
         conn = self.get_connection()
         payload = {
             "model": "gpt-3.5-turbo",
             "messages": [{"role": "user", "content": user_msgs[0]}],
             "temperature": temperature,
-            "cache_prompt": True
+            "cache_prompt": True,
         }
         if max_tokens is not None:
             payload["max_tokens"] = max_tokens
         body = json.dumps(payload)
-        headers = {'Content-type': 'application/json'}
+        headers = {"Content-type": "application/json"}
         conn.request("POST", "/v1/chat/completions", body, headers)
         res = conn.getresponse()
         resp_body = res.read()
-        #logging.info("server response: %s", resp_body)
+        # logging.info("server response: %s", resp_body)
         if res.status != 200:
             err_msg = f"{res.status} - {res.reason} - {resp_body}"
             logging.error(err_msg)
@@ -38,7 +44,7 @@ class LLamaCPP:
 
         content = resp["choices"][0]["message"]["content"]
         # Remove <think></think> tags and their content
-        content = re.sub(r'<think>.*?</think>', '', content, flags=re.DOTALL)
+        content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL)
         return content
 
     def get_connection(self) -> Union[HTTPConnection, HTTPSConnection]:
@@ -51,20 +57,17 @@ class LLamaCPP:
         conn = self.get_connection()
         body = json.dumps(
             {
-                #"model":"GPT-4",
-                "model":"text-embedding-3-small",
+                # "model":"GPT-4",
+                "model": "text-embedding-3-small",
                 "encoding_format": "float",
-                "input": texts
+                "input": texts,
             }
         )
-        headers = {
-            'Content-type': 'application/json',
-            'Authorization': 'Bearer '
-        }
+        headers = {"Content-type": "application/json", "Authorization": "Bearer "}
         conn.request("POST", "/v1/embeddings", body, headers)
         res = conn.getresponse()
         resp_body = res.read()
-        #logging.info("server response: %s", resp_body)
+        # logging.info("server response: %s", resp_body)
         if res.status != 200:
             err_msg = f"{res.status} - {res.reason} - {resp_body}"
             logging.error(err_msg)
@@ -76,7 +79,9 @@ class LLamaCPP:
 
         return embeds
 
-    def rerank(self, query: str, documents: List[str], top_n: int = None) -> Optional[List[Dict[str, Any]]]:
+    def rerank(
+        self, query: str, documents: List[str], top_n: int = None
+    ) -> Optional[List[Dict[str, Any]]]:
         """
         Reranks documents according to their relevance to the query.
 
@@ -93,19 +98,13 @@ class LLamaCPP:
             Sorted by relevance_score in descending order, or None if the API call fails.
         """
         conn = self.get_connection()
-        request_body = {
-            "query": query,
-            "documents": documents
-        }
+        request_body = {"query": query, "documents": documents}
 
         if top_n is not None:
             request_body["top_n"] = top_n
 
         body = json.dumps(request_body)
-        headers = {
-            'Content-type': 'application/json',
-            'Authorization': 'Bearer '
-        }
+        headers = {"Content-type": "application/json", "Authorization": "Bearer "}
 
         conn.request("POST", "/v1/rerank", body, headers)
         res = conn.getresponse()

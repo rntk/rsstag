@@ -1,4 +1,5 @@
 """Remove all html tags"""
+
 from html.parser import HTMLParser
 from html import unescape
 

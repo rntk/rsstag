@@ -12,6 +12,7 @@ from rsstag.providers.providers import TELEGRAM, TEXT_FILE
 TELEGRAM_CODE_FIELD = "telegram_code"
 TELEGRAM_PASSWORD_FIELD = "telegram_password"
 
+
 class RssTagUsers:
     indexes = ["sid"]
 
@@ -25,7 +26,7 @@ class RssTagUsers:
             "hot_tags": False,
             "similar_posts": True,
             "context_n": 5,
-            "telegram_limit": 1000
+            "telegram_limit": 1000,
         }
 
     def prepare(self) -> None:
@@ -57,7 +58,9 @@ class RssTagUsers:
             "lp": lp,
             "retoken": False,
             "w2v": "{}_{}.w2v".format(created.timestamp(), randint(0, 999999)),
-            "fasttext": "{}_{}.fasttext".format(created.timestamp(), randint(0, 999999))
+            "fasttext": "{}_{}.fasttext".format(
+                created.timestamp(), randint(0, 999999)
+            ),
         }
         if provider == TELEGRAM:
             user["phone"] = password
@@ -65,9 +68,10 @@ class RssTagUsers:
 
         if provider == TEXT_FILE:
             user["text_file"] = login
-        
+
         # Store login/email for OAuth providers (Gmail, etc.) to enable lookup by email
         from rsstag.providers.providers import GMAIL
+
         if provider == GMAIL:
             user["login"] = login
 
@@ -129,6 +133,7 @@ class RssTagUsers:
 
         return True
 
+
 class TelegramAuthData:
     def __init__(self, db: MongoClient, sid: str):
         self._db = db
@@ -146,7 +151,11 @@ class TelegramAuthData:
             if not user:
                 raise Exception("User not found: " + self._sid)
             if field_name not in user:
-                raise Exception("User field not '{}' found not found: {}".format(field_name, self._sid))
+                raise Exception(
+                    "User field not '{}' found not found: {}".format(
+                        field_name, self._sid
+                    )
+                )
             if user[field_name] == "":
                 time.sleep(2)
                 continue
@@ -167,7 +176,11 @@ class TelegramAuthData:
             if not user:
                 raise Exception("User not found: " + self._sid)
             if field_name not in user:
-                raise Exception("User field not '{}' found not found: {}".format(field_name, self._sid))
+                raise Exception(
+                    "User field not '{}' found not found: {}".format(
+                        field_name, self._sid
+                    )
+                )
             if user[field_name] == "":
                 time.sleep(2)
                 continue

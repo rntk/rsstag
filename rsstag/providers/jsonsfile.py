@@ -10,6 +10,7 @@ from rsstag.web.routes import RSSTagRoutes
 
 NOT_CATEGORIZED = "NotCategorized"
 
+
 class JSONSFileProvider:
     def __init__(self, config: dict):
         self._config = config
@@ -94,6 +95,7 @@ class JSONSFileProvider:
         content = self.recursive_text(json["data"]["dapi"])
 
         return (title, content)
+
     def recursive_text(self, json: dict) -> str:
         content = ""
         for key, value in json.items():

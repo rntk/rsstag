@@ -102,41 +102,51 @@ def on_get_tag_bi_grams(app: "RSSTagApplication", user: dict, tag: str) -> Respo
     return Response(json.dumps({"data": all_bi_grams}), mimetype="application/json")
 
 
-def on_get_tag_bi_grams_graph_debug(app: "RSSTagApplication", user: dict, tag: str) -> Response:
+def on_get_tag_bi_grams_graph_debug(
+    app: "RSSTagApplication", user: dict, tag: str
+) -> Response:
     """
     Debug endpoint to test basic connectivity
     """
     try:
         return Response(
-            json.dumps({
-                "debug": "success",
-                "tag": tag,
-                "message": "Endpoint is working"
-            }),
-            mimetype="application/json"
+            json.dumps(
+                {"debug": "success", "tag": tag, "message": "Endpoint is working"}
+            ),
+            mimetype="application/json",
         )
     except Exception as e:
         return Response(
             json.dumps({"debug": "error", "error": str(e)}),
             mimetype="application/json",
-            status=500
+            status=500,
         )
 
 
-def on_get_tag_bi_grams_graph(app: "RSSTagApplication", user: dict, tag: str) -> Response:
+def on_get_tag_bi_grams_graph(
+    app: "RSSTagApplication", user: dict, tag: str
+) -> Response:
     """
     Get bi-grams graph data for visualization.
     Returns nodes (tags) and edges (bi-grams) for force-directed graph.
     """
     try:
         if not tag:
-            return Response(json.dumps({"error": "Tag parameter is required"}), mimetype="application/json", status=400)
-        
+            return Response(
+                json.dumps({"error": "Tag parameter is required"}),
+                mimetype="application/json",
+                status=400,
+            )
+
         # Get the main tag data
         main_tag_data = app.tags.get_by_tag(user["sid"], tag)
         if not main_tag_data:
-            return Response(json.dumps({"error": "Tag not found"}), mimetype="application/json", status=404)
-        
+            return Response(
+                json.dumps({"error": "Tag not found"}),
+                mimetype="application/json",
+                status=404,
+            )
+
         # Get bi-grams containing the main tag
         try:
             # Always fetch all bi-grams regardless of read status for the graph
@@ -147,22 +157,18 @@ def on_get_tag_bi_grams_graph(app: "RSSTagApplication", user: dict, tag: str) ->
         except Exception as e:
             logging.warning(f"Failed to get bi-grams for tag {tag}: {e}")
             bi_grams = []
-        
+
         # Build nodes and edges
         nodes = {}
         edges = []
-        
+
         # Add main tag as primary node
         main_tag_freq = main_tag_data.get("posts_count", 1)
         if main_tag_freq is None:
             main_tag_freq = 1
-        
-        nodes[tag] = {
-            "id": tag,
-            "frequency": main_tag_freq,
-            "type": "main"
-        }
-        
+
+        nodes[tag] = {"id": tag, "frequency": main_tag_freq, "type": "main"}
+
         # Process bi-grams to build the graph
         for bi_gram in bi_grams:
             try:
@@ -170,70 +176,76 @@ def on_get_tag_bi_grams_graph(app: "RSSTagApplication", user: dict, tag: str) ->
                 bi_gram_freq = bi_gram.get("posts_count", 1)
                 if bi_gram_freq is None:
                     bi_gram_freq = 1
-                
+
                 # Skip if frequency is too low
                 if bi_gram_freq < 1:
                     continue
-                
+
                 # Split bi-gram into individual tags
                 tags_in_bi_gram = bi_gram_tag.split()
-                
+
                 # Skip if not a valid bi-gram (should have exactly 2 tags)
                 if len(tags_in_bi_gram) != 2:
                     continue
-                
+
                 # Find the other tag in the bi-gram (not the main tag)
                 other_tags = [t for t in tags_in_bi_gram if t != tag]
-                
+
                 for other_tag in other_tags:
                     # Skip if the other tag is the same as the main tag
                     if other_tag == tag:
                         continue
-                    
+
                     # Add other tag as node if not already present
                     if other_tag not in nodes:
-                        other_tag_freq = bi_gram_freq  # Use bi-gram frequency as default
+                        other_tag_freq = (
+                            bi_gram_freq  # Use bi-gram frequency as default
+                        )
                         try:
                             other_tag_data = app.tags.get_by_tag(user["sid"], other_tag)
                             if other_tag_data:
-                                tag_posts_count = other_tag_data.get("posts_count", None)
+                                tag_posts_count = other_tag_data.get(
+                                    "posts_count", None
+                                )
                                 if tag_posts_count is not None and tag_posts_count > 0:
                                     other_tag_freq = tag_posts_count
                         except Exception as e:
                             import logging
-                            logging.warning(f"Failed to get tag data for {other_tag}: {e}")
+
+                            logging.warning(
+                                f"Failed to get tag data for {other_tag}: {e}"
+                            )
                             # Use bi-gram frequency as fallback
-                        
+
                         nodes[other_tag] = {
                             "id": other_tag,
                             "frequency": other_tag_freq,
                             "bigram_frequency": bi_gram_freq,  # Also include bi-gram frequency
-                            "type": "related"
+                            "type": "related",
                         }
-                    
+
                     # Add edge between main tag and other tag
                     # Check for existing edge and combine weights if duplicate
                     existing_edge_index = None
                     for i, edge in enumerate(edges):
-                        if (edge["source"] == tag and edge["target"] == other_tag) or \
-                           (edge["source"] == other_tag and edge["target"] == tag):
+                        if (edge["source"] == tag and edge["target"] == other_tag) or (
+                            edge["source"] == other_tag and edge["target"] == tag
+                        ):
                             existing_edge_index = i
                             break
-                    
+
                     if existing_edge_index is not None:
                         # Combine weights for duplicate edges
                         edges[existing_edge_index]["weight"] += bi_gram_freq
                     else:
                         # Add new edge
-                        edges.append({
-                            "source": tag,
-                            "target": other_tag,
-                            "weight": bi_gram_freq
-                        })
+                        edges.append(
+                            {"source": tag, "target": other_tag, "weight": bi_gram_freq}
+                        )
             except Exception:
                 # Skip problematic bi-grams but continue processing
                 continue
-        
+
         # Convert nodes dict to list
         try:
             nodes_list = list(nodes.values())
@@ -241,74 +253,77 @@ def on_get_tag_bi_grams_graph(app: "RSSTagApplication", user: dict, tag: str) ->
                 nodes_list = []
         except Exception:
             nodes_list = []
-        
+
         # Ensure we have at least the main node even if no bi-grams found
         if not nodes_list:
             nodes_list = [{"id": tag, "frequency": main_tag_freq, "type": "main"}]
-        
+
         # Limit the graph size for performance (max 100 nodes, 200 edges)
         max_nodes = 100
         max_edges = 200
-        
+
         # Sort nodes by frequency and keep top nodes
         if len(nodes_list) > max_nodes:
             # Separate main tag to ensure it's preserved
             main_node = next((n for n in nodes_list if n["id"] == tag), None)
             other_nodes = [n for n in nodes_list if n["id"] != tag]
-            
+
             other_nodes.sort(key=lambda x: x["frequency"], reverse=True)
             # Keep top (max_nodes - 1) other nodes
-            other_nodes = other_nodes[:max_nodes - 1]
-            
+            other_nodes = other_nodes[: max_nodes - 1]
+
             nodes_list = [main_node] + other_nodes if main_node else other_nodes
-        
+
         # Filter edges to only include those between remaining nodes
         remaining_node_ids = {node["id"] for node in nodes_list}
-        edges = [edge for edge in edges 
-                if edge["source"] in remaining_node_ids and edge["target"] in remaining_node_ids]
-        
+        edges = [
+            edge
+            for edge in edges
+            if edge["source"] in remaining_node_ids
+            and edge["target"] in remaining_node_ids
+        ]
+
         # Sort edges by weight and keep top edges
         if len(edges) > max_edges:
             edges.sort(key=lambda x: x["weight"], reverse=True)
             edges = edges[:max_edges]
-        
+
         # Add some metadata about the graph
         original_nodes_count = len(nodes)
         original_edges_count = len(edges)
-        
+
         result = {
-            "data": {
-                "nodes": nodes_list,
-                "links": edges
-            },
+            "data": {"nodes": nodes_list, "links": edges},
             "meta": {
                 "main_tag": tag if tag else "unknown",
                 "main_tag_frequency": max(0, main_tag_freq),
                 "related_tags_count": max(0, len(nodes_list) - 1),
                 "bi_grams_count": max(0, len(edges)),
                 "has_bigrams": bool(len(edges) > 0),
-                "truncated": bool(len(nodes.values()) > max_nodes or len(edges) > max_edges),
+                "truncated": bool(
+                    len(nodes.values()) > max_nodes or len(edges) > max_edges
+                ),
                 "original_nodes_count": max(0, original_nodes_count),
-                "original_edges_count": max(0, original_edges_count if original_edges_count is not None else 0)
-            }
+                "original_edges_count": max(
+                    0, original_edges_count if original_edges_count is not None else 0
+                ),
+            },
         }
-        
-        return Response(
-            json.dumps(result),
-            mimetype="application/json"
-        )
-        
+
+        return Response(json.dumps(result), mimetype="application/json")
+
     except Exception as e:
         # Log the error for debugging
         import traceback
         import logging
+
         logging.error(f"Error in on_get_tag_bi_grams_graph: {e}")
         logging.error(traceback.format_exc())
-        
+
         return Response(
             json.dumps({"error": f"Internal server error: {str(e)}"}),
             mimetype="application/json",
-            status=500
+            status=500,
         )
 
 
@@ -338,6 +353,7 @@ def on_bigrams_dates_get(app: "RSSTagApplication", user: dict, tag: str) -> Resp
         code = 400
 
     return Response(json.dumps(result), mimetype="application/json", status=code)
+
 
 def on_group_by_bigrams_dyn_get(
     app: "RSSTagApplication", user: dict, page_number: int = 1
@@ -371,7 +387,7 @@ def on_group_by_bigrams_dyn_get(
         tfidf_words.add(wf[0])
 
     stopw = set(stopwords.words("english") + stopwords.words("russian"))
-    #stopw.update([wf[0] for wf in tfidfs[words_n * 2:]])
+    # stopw.update([wf[0] for wf in tfidfs[words_n * 2:]])
     stopw.update([wf[0] for wf in tfidfs[:words_n]])
 
     window = 20

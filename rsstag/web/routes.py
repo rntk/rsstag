@@ -1,4 +1,5 @@
 """Routes for rsstag"""
+
 from typing import List, Optional
 from werkzeug.routing import Map, Rule
 
@@ -117,8 +118,16 @@ class RSSTagRoutes:
                 "endpoint": "on_post_grouped_snippets_get",
                 "methods": ["GET"],
             },
-            {"url": "/topics-list", "endpoint": "on_topics_list_get", "methods": ["GET"]},
-            {"url": "/topics-list/<int:page_number>", "endpoint": "on_topics_list_get", "methods": ["GET"]},
+            {
+                "url": "/topics-list",
+                "endpoint": "on_topics_list_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/topics-list/<int:page_number>",
+                "endpoint": "on_topics_list_get",
+                "methods": ["GET"],
+            },
             {"url": "/status", "endpoint": "on_status_get", "methods": ["GET"]},
             {"url": "/settings", "endpoint": "on_settings_post", "methods": ["POST"]},
             {
@@ -280,7 +289,11 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {"url": "/clusters", "endpoint": "on_clusters_get", "methods": ["GET"]},
-            {"url": "/clusters-dyn", "endpoint": "on_clusters_dyn_get", "methods": ["GET"]},
+            {
+                "url": "/clusters-dyn",
+                "endpoint": "on_clusters_dyn_get",
+                "methods": ["GET"],
+            },
             {
                 "url": "/telegram-auth",
                 "endpoint": "on_telegram_auth_post",

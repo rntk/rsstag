@@ -1,4 +1,5 @@
 """Post grouping functionality"""
+
 import logging
 from typing import Optional, List, Dict, Any
 from pymongo import MongoClient
@@ -20,23 +21,31 @@ class RssTagPostGrouping:
         try:
             self._db.post_grouping.create_index("owner")
             self._db.post_grouping.create_index("post_ids_hash")
-            self._db.post_grouping.create_index([("owner", 1), ("post_ids_hash", 1)], unique=True)
+            self._db.post_grouping.create_index(
+                [("owner", 1), ("post_ids_hash", 1)], unique=True
+            )
         except Exception as e:
-            self._log.warning("Can't create post_grouping indexes. May already exist. Info: %s", e)
+            self._log.warning(
+                "Can't create post_grouping indexes. May already exist. Info: %s", e
+            )
 
     def get_grouped_posts(self, owner: str, post_ids: List[int]) -> Optional[dict]:
         """Get grouped posts data by owner and post IDs"""
         post_ids_hash = self._generate_post_ids_hash(post_ids)
-        return self._db.post_grouping.find_one({
-            "owner": owner,
-            "post_ids_hash": post_ids_hash
-        })
+        return self._db.post_grouping.find_one(
+            {"owner": owner, "post_ids_hash": post_ids_hash}
+        )
 
-    def save_grouped_posts(self, owner: str, post_ids: List[int], 
-                          sentences: List[Dict[str, Any]], groups: Dict[str, List[int]]) -> bool:
+    def save_grouped_posts(
+        self,
+        owner: str,
+        post_ids: List[int],
+        sentences: List[Dict[str, Any]],
+        groups: Dict[str, List[int]],
+    ) -> bool:
         """Save grouped posts data"""
         post_ids_hash = self._generate_post_ids_hash(post_ids)
-        
+
         data = {
             "owner": owner,
             "post_ids": post_ids,
@@ -44,39 +53,36 @@ class RssTagPostGrouping:
             "sentences": sentences,
             "groups": groups,
         }
-        
+
         try:
             self._db.post_grouping.update_one(
-                {
-                    "owner": owner,
-                    "post_ids_hash": post_ids_hash
-                },
-                {
-                    "$set": data
-                },
-                upsert=True
+                {"owner": owner, "post_ids_hash": post_ids_hash},
+                {"$set": data},
+                upsert=True,
             )
             return True
         except Exception as e:
             self._log.error("Can't save grouped posts data. Info: %s", e)
             return False
 
-    def update_snippet_read_status(self, owner: str, post_id: int, sentence_index: int, read_status: bool) -> Optional[bool]:
+    def update_snippet_read_status(
+        self, owner: str, post_id: int, sentence_index: int, read_status: bool
+    ) -> Optional[bool]:
         """Update read status for a specific sentence in a post's grouping
-        
+
         Returns True if ALL sentences in the post are now read, False otherwise.
         Returns None if post grouping not found.
         """
         post_ids = [post_id]
         post_ids_hash = self._generate_post_ids_hash(post_ids)
-        
+
         # We need to find the sentence by its 'number' which is 1-indexed sentence_index
         # But wait, sentence_index passed here might be the 'number' field
-        
+
         doc = self.get_grouped_posts(owner, post_ids)
         if not doc:
             return None
-            
+
         sentences = doc.get("sentences", [])
         all_read = True
         found = False
@@ -86,11 +92,11 @@ class RssTagPostGrouping:
                 found = True
             if not s.get("read", False):
                 all_read = False
-        
+
         if found:
             self._db.post_grouping.update_one(
                 {"owner": owner, "post_ids_hash": post_ids_hash},
-                {"$set": {"sentences": sentences}}
+                {"$set": {"sentences": sentences}},
             )
             return all_read
         return False
@@ -99,18 +105,18 @@ class RssTagPostGrouping:
         """Mark ALL sentences in a post's grouping as read/unread"""
         post_ids = [post_id]
         post_ids_hash = self._generate_post_ids_hash(post_ids)
-        
+
         doc = self.get_grouped_posts(owner, post_ids)
         if not doc:
             return False
-            
+
         sentences = doc.get("sentences", [])
         for s in sentences:
             s["read"] = read_status
-            
+
         self._db.post_grouping.update_one(
             {"owner": owner, "post_ids_hash": post_ids_hash},
-            {"$set": {"sentences": sentences}}
+            {"$set": {"sentences": sentences}},
         )
         return True
 
@@ -120,13 +126,15 @@ class RssTagPostGrouping:
         post_ids_str = ",".join(str(pid) for pid in post_ids_sorted)
         return hashlib.md5(post_ids_str.encode("utf-8")).hexdigest()
 
-    def generate_grouped_data(self, content: str, title: str) -> Optional[Dict[str, Any]]:
+    def generate_grouped_data(
+        self, content: str, title: str
+    ) -> Optional[Dict[str, Any]]:
         """Generate grouped data from raw content and title
-        
+
         Args:
             content: Raw HTML content
             title: Content title
-            
+
         Returns:
             Dict with 'sentences' and 'groups' keys, or None on failure
         """
@@ -136,59 +144,61 @@ class RssTagPostGrouping:
                 full_content_html = title + ". " + content
             else:
                 full_content_html = content
-                
+
             # Clean HTML tags for LLM processing
             html_cleaner = HTMLCleaner()
             html_cleaner.purge()
             html_cleaner.feed(full_content_html)
             # Consistently normalize plain text for both chapters and sentences
             content_v0 = " ".join(html_cleaner.get_content())
-            full_content_plain = re.sub(r'\s+', ' ', content_v0.replace('\n', ' ').replace('\r', ' ')).strip()
-            
+            full_content_plain = re.sub(
+                r"\s+", " ", content_v0.replace("\n", " ").replace("\r", " ")
+            ).strip()
+
             # Generate chapters using LLM
             chapters = self._llm_split_chapters(full_content_plain, full_content_html)
-            
+
             # Split into sentences and create groups
             sentences, groups = self._create_sentences_and_groups(
                 full_content_plain, chapters
             )
-            
+
             return {
                 "sentences": sentences,
                 "groups": groups,
             }
-            
+
         except Exception as e:
             self._log.error("Error generating grouped data. Info: %s", e)
             return None
 
     def add_markers_to_text(self, text_plain: str) -> dict:
         """Add word split markers to the text.
-        
+
         Returns a dict with:
             tagged_text: the text with {wsN} markers
             max_marker: the number of the last marker
             marker_positions: map of marker numbers to character positions
         """
         # Remove newlines to avoid confusing the LLM
-        text_plain = text_plain.replace('\n', ' ').replace('\r', ' ')
-        text_plain = re.sub(r'\s+', ' ', text_plain).strip()
+        text_plain = text_plain.replace("\n", " ").replace("\r", " ")
+        text_plain = re.sub(r"\s+", " ", text_plain).strip()
 
         # Word splitter parameters
-        SPLITTER_WINDOW = 40          # Max words between forced markers
-        WEAK_PUNCT_DIST = 200         # Min characters for weak punctuation markers
-        SAFETY_WORDS_DIST = 35        # Words between markers if no punctuation found
-        LOOKAHEAD_WINDOW = 6          # Lookahead to avoid double markers near punctuation
+        SPLITTER_WINDOW = 40  # Max words between forced markers
+        WEAK_PUNCT_DIST = 200  # Min characters for weak punctuation markers
+        SAFETY_WORDS_DIST = 35  # Words between markers if no punctuation found
+        LOOKAHEAD_WINDOW = 6  # Lookahead to avoid double markers near punctuation
 
         # Insert word splitters - number them from START to END
         positions = []
-        matches = list(re.finditer(r'\s+', text_plain))
+        matches = list(re.finditer(r"\s+", text_plain))
         word_count = 0
-        sentence_end_punct = set('.!?')
-        weak_punct = set(',;:)]}"\'')
+        sentence_end_punct = set(".!?")
+        weak_punct = set(",;:)]}\"'")
         last_added_pos = 0
         words_since_last_marker = 0
-        
+
         for i, m in enumerate(matches):
             if m.start() > 0:
                 last_char = text_plain[m.start() - 1]
@@ -200,10 +210,10 @@ class RssTagPostGrouping:
                 is_safety = word_count >= SPLITTER_WINDOW
 
                 dist = m.end() - last_added_pos
-                
+
                 # Check if we should add a marker
                 should_add = False
-                
+
                 if is_sentence_end:
                     # Always mark sentence ends (Priority 1)
                     # Small 5-char buffer just to avoid markers after "e.g." or similar if followed by space
@@ -218,14 +228,19 @@ class RssTagPostGrouping:
                     if words_since_last_marker >= SAFETY_WORDS_DIST:
                         # Check ahead to see if punctuation is coming up soon
                         punct_ahead = False
-                        for j in range(i + 1, min(i + 1 + LOOKAHEAD_WINDOW, len(matches))):
+                        for j in range(
+                            i + 1, min(i + 1 + LOOKAHEAD_WINDOW, len(matches))
+                        ):
                             future_match = matches[j]
                             if future_match.start() > 0:
                                 future_last_char = text_plain[future_match.start() - 1]
-                                if future_last_char in sentence_end_punct or future_last_char in weak_punct:
+                                if (
+                                    future_last_char in sentence_end_punct
+                                    or future_last_char in weak_punct
+                                ):
                                     punct_ahead = True
                                     break
-                        
+
                         if not punct_ahead:
                             should_add = True
 
@@ -234,7 +249,7 @@ class RssTagPostGrouping:
                     last_added_pos = m.end()
                     word_count = 0
                     words_since_last_marker = 0
-        
+
         # NOTE: Fallback removed to avoid forcing a split when safety logic explicitly skipped it
         # (e.g. at end of text). If positions is empty, we return 0 markers, which is valid.
         # if not positions and matches:
@@ -245,7 +260,7 @@ class RssTagPostGrouping:
             return {
                 "tagged_text": text_plain,
                 "max_marker": 0,
-                "marker_positions": {0: 0}
+                "marker_positions": {0: 0},
             }
 
         max_marker = len(positions) + 1  # include final sentinel inserted later
@@ -261,16 +276,18 @@ class RssTagPostGrouping:
         for counter, pos in enumerate(reversed(positions), 1):
             # Insert from end to start, but number from start to end
             marker_num = len(positions) - counter + 1
-            tagged_text = tagged_text[:pos] + '{ws' + str(marker_num) + '}' + tagged_text[pos:]
+            tagged_text = (
+                tagged_text[:pos] + "{ws" + str(marker_num) + "}" + tagged_text[pos:]
+            )
 
         # Add final end marker to indicate end of text
-        tagged_text = tagged_text + '{ws' + str(max_marker) + '}'
+        tagged_text = tagged_text + "{ws" + str(max_marker) + "}"
 
         return {
             "tagged_text": tagged_text,
             "max_marker": max_marker,
             "marker_positions": marker_positions,
-            "text_plain": text_plain # return cleaned text as well
+            "text_plain": text_plain,  # return cleaned text as well
         }
 
     def _get_llm_topics(self, text_plain: str) -> List[str]:
@@ -295,16 +312,16 @@ Output:"""
         try:
             response = self._llamacpp_handler.call([prompt], temperature=0.0).strip()
             self._log.info("LLM topics response: %s", response)
-            
+
             # Parse topics
-            lines = [ln.strip() for ln in response.strip().split('\n') if ln.strip()]
+            lines = [ln.strip() for ln in response.strip().split("\n") if ln.strip()]
             topics = []
             for ln in lines:
                 ln = ln.strip()
                 if not ln:
                     continue
-                if ln[0].isdigit() and '. ' in ln:
-                    parts = ln.split('. ', 1)
+                if ln[0].isdigit() and ". " in ln:
+                    parts = ln.split(". ", 1)
                     if len(parts) == 2:
                         topic = parts[1].strip()
                     else:
@@ -312,20 +329,27 @@ Output:"""
                 else:
                     topic = ln
                 # Clean the count
-                topic = re.sub(r'\s*\(\d+ sentences?\)', '', topic).strip()
+                topic = re.sub(r"\s*\(\d+ sentences?\)", "", topic).strip()
                 topics.append(topic)
             return topics
         except Exception as e:
             self._log.error("LLM topics failed: %s", e)
             return []
 
-    def _resolve_gaps(self, topic_boundaries: List[tuple], marker_positions: Dict[int, int], text_plain: str) -> List[tuple]:
+    def _resolve_gaps(
+        self,
+        topic_boundaries: List[tuple],
+        marker_positions: Dict[int, int],
+        text_plain: str,
+    ) -> List[tuple]:
         """Resolve gaps between topics by asking LLM"""
         if not topic_boundaries:
             self._log.info("No topic boundaries to resolve gaps for.")
             return topic_boundaries
 
-        self._log.info(f"Starting gap resolution for {len(topic_boundaries)} boundaries.")
+        self._log.info(
+            f"Starting gap resolution for {len(topic_boundaries)} boundaries."
+        )
 
         # Add initial boundary if needed, but usually we just process gaps between existing ones
         # For simplicity, we process:
@@ -335,58 +359,66 @@ Output:"""
 
         # Sort boundaries just in case
         sorted_boundaries = sorted(topic_boundaries, key=lambda x: x[1])
-        
+
         # Check initial gap
         first_title, first_start, _ = sorted_boundaries[0]
         if first_start > 1:
-            # We strictly only care about "unassigned" sentences. 
+            # We strictly only care about "unassigned" sentences.
             # If there is a gap at start, it has no "previous" topic.
             # We can ask if it belongs to "Next" (first topic) or is "Unassigned".
             gap_end_marker = first_start - 1
             self._log.info(f"Found initial gap: 1-{gap_end_marker}")
             # ... Logic for initial gap could be similar, but let's focus on inter-topic gaps first as requested.
             # actually user request implies generally "sentences without topic".
-            
+
         current_boundaries = sorted_boundaries
         i = 0
         while i < len(current_boundaries) - 1:
             prev_title, prev_start, prev_end = current_boundaries[i]
-            next_title, next_start, next_end = current_boundaries[i+1]
-            
+            next_title, next_start, next_end = current_boundaries[i + 1]
+
             # Check for gap
             if next_start > prev_end + 1:
                 gap_start = prev_end + 1
                 gap_end = next_start - 1
-                self._log.info(f"Gap found between '{prev_title}' and '{next_title}': markers {gap_start}-{gap_end}")
-                
+                self._log.info(
+                    f"Gap found between '{prev_title}' and '{next_title}': markers {gap_start}-{gap_end}"
+                )
+
                 # Get text for context
                 # Previous topic last sentence
                 prev_text_end = marker_positions.get(prev_end, len(text_plain))
-                # To get last sentence, we might need to look back a bit. 
-                # Better: Get the full previous chapter text and extract last sentence? 
+                # To get last sentence, we might need to look back a bit.
+                # Better: Get the full previous chapter text and extract last sentence?
                 # Or just take a chunk ending at prev_end.
-                prev_chunk_start = marker_positions.get(max(prev_start, prev_end - 5), 0) # Last 5 markers range?
+                prev_chunk_start = marker_positions.get(
+                    max(prev_start, prev_end - 5), 0
+                )  # Last 5 markers range?
                 prev_text_chunk = text_plain[prev_chunk_start:prev_text_end].strip()
                 # We can refine this to be actual sentences later if needed, prompt asks for "last sentence".
-                
+
                 # Next topic first sentence
-                next_text_start = marker_positions.get(next_start-1, 0)
-                next_chunk_end = marker_positions.get(min(next_end, next_start + 5), len(text_plain))
+                next_text_start = marker_positions.get(next_start - 1, 0)
+                next_chunk_end = marker_positions.get(
+                    min(next_end, next_start + 5), len(text_plain)
+                )
                 next_text_chunk = text_plain[next_text_start:next_chunk_end].strip()
 
                 # Gap text
-                gap_text_start = marker_positions.get(gap_start-1, 0)
+                gap_text_start = marker_positions.get(gap_start - 1, 0)
                 gap_text_end = marker_positions.get(gap_end, len(text_plain))
                 gap_text = text_plain[gap_text_start:gap_text_end].strip()
-                
-                if not gap_text:
-                     self._log.info(f"Gap {gap_start}-{gap_end} has no text, skipping.")
-                     i += 1
-                     continue
 
-                self._log.info(f"Resolving gap between '{prev_title}' and '{next_title}': markers {gap_start}-{gap_end}")
+                if not gap_text:
+                    self._log.info(f"Gap {gap_start}-{gap_end} has no text, skipping.")
+                    i += 1
+                    continue
+
+                self._log.info(
+                    f"Resolving gap between '{prev_title}' and '{next_title}': markers {gap_start}-{gap_end}"
+                )
                 self._log.info(f"Gap text length: {len(gap_text)}")
-                
+
                 prompt = f"""You are a text analysis expert.
 We have a gap of unassigned text between two topics.
 Determine if this text belongs to the Previous Topic, the Next Topic, or neither.
@@ -417,38 +449,52 @@ Instruction:
 </gap>
 
 Response (one letter P/N/X):"""
-                
+
                 try:
-                    decision = self._llamacpp_handler.call([prompt], temperature=0.0, max_tokens=10).strip()
+                    decision = self._llamacpp_handler.call(
+                        [prompt], temperature=0.0, max_tokens=10
+                    ).strip()
                     self._log.info(f"Gap resolution decision: {decision}")
-                    
-                    if "P" in decision and "N" not in decision and "X" not in decision: # Simple check
-                        self._log.info(f"Merging gap {gap_start}-{gap_end} to previous topic: '{prev_title}'")
+
+                    if (
+                        "P" in decision and "N" not in decision and "X" not in decision
+                    ):  # Simple check
+                        self._log.info(
+                            f"Merging gap {gap_start}-{gap_end} to previous topic: '{prev_title}'"
+                        )
                         # Merge to previous
                         current_boundaries[i] = (prev_title, prev_start, gap_end)
-                        # We don't advance i yet, incase we merged and created new adjacency? 
+                        # We don't advance i yet, incase we merged and created new adjacency?
                         # actually we just closed the gap. Next iteration checks next pair.
                         # But wait, we modified current_boundaries[i], so next loop checks (modified_prev, next).
                         # That pair is now adjacent (gap_end + 1 == next_start). So no gap.
                     elif "N" in decision and "P" not in decision:
-                        self._log.info(f"Merging gap {gap_start}-{gap_end} to next topic: '{next_title}'")
+                        self._log.info(
+                            f"Merging gap {gap_start}-{gap_end} to next topic: '{next_title}'"
+                        )
                         # Merge to next
-                        current_boundaries[i+1] = (next_title, gap_start, next_end)
+                        current_boundaries[i + 1] = (next_title, gap_start, next_end)
                     else:
-                        self._log.info(f"Assigning gap {gap_start}-{gap_end} as 'Unassigned'")
+                        self._log.info(
+                            f"Assigning gap {gap_start}-{gap_end} as 'Unassigned'"
+                        )
                         # Neither - insert new unassigned topic
-                        current_boundaries.insert(i+1, ("Unassigned", gap_start, gap_end))
-                        # Now we have [prev, unassigned, next]. 
+                        current_boundaries.insert(
+                            i + 1, ("Unassigned", gap_start, gap_end)
+                        )
+                        # Now we have [prev, unassigned, next].
                         # Loop continues. Next check will be (unassigned, next). They are adjacent.
                         # So we effectively skip.
-                        i += 1 
+                        i += 1
 
                 except Exception as e:
-                     self._log.error(f"Gap resolution failed: {e}")
-            
+                    self._log.error(f"Gap resolution failed: {e}")
+
             i += 1
-            
-        self._log.info(f"Gap resolution finished. Resulting boundaries: {len(current_boundaries)}")
+
+        self._log.info(
+            f"Gap resolution finished. Resulting boundaries: {len(current_boundaries)}"
+        )
         return current_boundaries
 
     def _get_llm_topic_mapping(self, topics: List[str], tagged_text: str) -> str:
@@ -498,11 +544,11 @@ Output:"""
 
     def _parse_llm_mapping(self, response: str, topics: List[str]) -> List[tuple]:
         """Parse LLM mapping response into list of (title, start_marker, end_marker) tuples"""
-        lines = [ln.strip() for ln in response.strip().split('\n') if ln.strip()]
+        lines = [ln.strip() for ln in response.strip().split("\n") if ln.strip()]
         topic_boundaries = []
         for ln in lines:
-            if ':' in ln:
-                parts = ln.split(':', 1)
+            if ":" in ln:
+                parts = ln.split(":", 1)
                 t_num_str = parts[0].strip()
                 ranges_str = parts[1].strip()
 
@@ -516,44 +562,60 @@ Output:"""
                 title = topics[t_num - 1]
 
                 # Split multiple ranges by comma/semicolon and parse pairs like "a - b" or "a-b"
-                range_chunks = re.split(r'[;,]', ranges_str)
+                range_chunks = re.split(r"[;,]", ranges_str)
                 for chunk in range_chunks:
                     chunk = chunk.strip()
                     if not chunk:
                         continue
                     m = re.match(r"(\d+)\s*[-–]\s*(\d+)", chunk)
                     if not m:
-                        self._log.warning(f"Skipping unparsable range chunk for '{title}': {chunk}")
+                        self._log.warning(
+                            f"Skipping unparsable range chunk for '{title}': {chunk}"
+                        )
                         continue
                     try:
                         start_marker = int(m.group(1))
                         end_marker = int(m.group(2))
                         topic_boundaries.append((title, start_marker, end_marker))
-                        self._log.info(f"Parsed topic boundary: '{title}' ({t_num}) starts at {start_marker} ends at {end_marker}")
+                        self._log.info(
+                            f"Parsed topic boundary: '{title}' ({t_num}) starts at {start_marker} ends at {end_marker}"
+                        )
                     except ValueError:
-                        self._log.warning(f"Failed to parse numbers from chunk: {chunk}")
+                        self._log.warning(
+                            f"Failed to parse numbers from chunk: {chunk}"
+                        )
                         continue
         return topic_boundaries
 
-    def _validate_boundaries(self, boundaries: List[tuple], max_marker: int) -> List[tuple]:
+    def _validate_boundaries(
+        self, boundaries: List[tuple], max_marker: int
+    ) -> List[tuple]:
         """Validate and clamp boundaries to valid range"""
         validated_boundaries = []
         for title, start_marker, end_marker in boundaries:
             if start_marker < 1:
-                self._log.warning(f"Topic '{title}' has invalid start marker {start_marker}, setting to 1")
+                self._log.warning(
+                    f"Topic '{title}' has invalid start marker {start_marker}, setting to 1"
+                )
                 start_marker = 1
             if start_marker > max_marker:
-                self._log.warning(f"Topic '{title}' start marker {start_marker} exceeds max {max_marker}, clamping to max")
+                self._log.warning(
+                    f"Topic '{title}' start marker {start_marker} exceeds max {max_marker}, clamping to max"
+                )
                 start_marker = max_marker
             if end_marker > max_marker:
-                self._log.warning(f"Topic '{title}' has end marker {end_marker} > max {max_marker}, clamping to max")
+                self._log.warning(
+                    f"Topic '{title}' has end marker {end_marker} > max {max_marker}, clamping to max"
+                )
                 end_marker = max_marker
             if start_marker > end_marker:
-                 self._log.warning(f"Topic '{title}' has start {start_marker} > end {end_marker}, swapping")
-                 start_marker, end_marker = end_marker, start_marker
-            
+                self._log.warning(
+                    f"Topic '{title}' has start {start_marker} > end {end_marker}, swapping"
+                )
+                start_marker, end_marker = end_marker, start_marker
+
             validated_boundaries.append((title, start_marker, end_marker))
-        
+
         # Sort by start marker to process in reading order
         return sorted(validated_boundaries, key=lambda x: x[1])
 
@@ -564,239 +626,271 @@ Output:"""
         where mapping_list[plain_index] = html_index
         """
         from html import unescape
-        
+
         mapping = []
         plain_accum = []
-        
+
         n = len(html_text)
         i = 0
         in_tag = False
-        
+
         # State for whitespace normalization
         last_was_space = False
-        
+
         while i < n:
             if in_tag:
-                if html_text[i] == '>':
+                if html_text[i] == ">":
                     in_tag = False
                 i += 1
                 continue
-            
+
             # Start of a tag?
-            if html_text[i] == '<':
+            if html_text[i] == "<":
                 in_tag = True
                 i += 1
                 continue
-            
+
             # Find next tag start or end of string for bulk processing text chunks
-            next_tag = html_text.find('<', i)
+            next_tag = html_text.find("<", i)
             if next_tag == -1:
                 chunk_end = n
             else:
                 chunk_end = next_tag
-            
+
             # Process text chunk
             chunk = html_text[i:chunk_end]
-            
+
             # Unescape entities (careful: unescape might change length)
-            # To be 100% precise with mapping, we ideally need character-by-character or 
+            # To be 100% precise with mapping, we ideally need character-by-character or
             # entity-aware processing. However, standard unescape works on strings.
-            # 
+            #
             # Complex approach: Find entities &amp; etc.
             # Simple approach approximation:
-            # Since unescape shrinks text (mostly), we can map the *start* of the entity 
+            # Since unescape shrinks text (mostly), we can map the *start* of the entity
             # to the resulting char.
             #
             # Let's iterate character by character to handle whitespace normalization strictly
             # akin to the original logic: " ".join().strip() then re.sub(r'\s+', ' ')
-            
+
             j = 0
             while j < len(chunk):
                 char = chunk[j]
-                
+
                 # Check for entity start
-                if char == '&':
+                if char == "&":
                     # Find entity end
-                    ent_end = chunk.find(';', j)
-                    if ent_end != -1 and ent_end - j < 10: # Entities are usually short
-                        entity = chunk[j:ent_end+1]
+                    ent_end = chunk.find(";", j)
+                    if ent_end != -1 and ent_end - j < 10:  # Entities are usually short
+                        entity = chunk[j : ent_end + 1]
                         decoded_char = unescape(entity)
-                        
+
                         # Add decoded char
                         if decoded_char.isspace():
                             if not last_was_space:
-                                plain_accum.append(' ')
-                                mapping.append(i + j) # Map to start of entity
+                                plain_accum.append(" ")
+                                mapping.append(i + j)  # Map to start of entity
                                 last_was_space = True
                         else:
                             for dc in decoded_char:
                                 plain_accum.append(dc)
-                                mapping.append(i + j) # Map to start of entity
+                                mapping.append(i + j)  # Map to start of entity
                                 last_was_space = False
-                        
+
                         j = ent_end + 1
                         continue
-                
+
                 # Normal character
                 if char.isspace():
                     if not last_was_space:
-                        plain_accum.append(' ')
+                        plain_accum.append(" ")
                         mapping.append(i + j)
                         last_was_space = True
                 else:
                     plain_accum.append(char)
                     mapping.append(i + j)
                     last_was_space = False
-                
+
                 j += 1
-                
+
             i = chunk_end
 
         # Handle leading/trailing whitespace which strict .strip() would remove
         # The accumulated plain_text might start/end with ' ' if the HTML did.
         # But our target is .strip()-ed text.
-        
+
         # We perform post-processing to strip
         if not plain_accum:
             return "", []
 
         start_offset = 0
-        while start_offset < len(plain_accum) and plain_accum[start_offset] == ' ':
+        while start_offset < len(plain_accum) and plain_accum[start_offset] == " ":
             start_offset += 1
-            
+
         end_offset = len(plain_accum)
-        while end_offset > start_offset and plain_accum[end_offset-1] == ' ':
+        while end_offset > start_offset and plain_accum[end_offset - 1] == " ":
             end_offset -= 1
-            
+
         final_plain = "".join(plain_accum[start_offset:end_offset])
         final_mapping = mapping[start_offset:end_offset]
-        
+
         # Add a sentinel to the end of mapping to handle the closing slice
         if final_mapping:
-            final_mapping.append(n) # Maps to end of HTML
+            final_mapping.append(n)  # Maps to end of HTML
         else:
-            final_mapping = [0] # Handle empty case
+            final_mapping = [0]  # Handle empty case
 
         return final_plain, final_mapping
 
-    def _map_chapters_to_html(self, text_plain: str, text_html: str, chapter_boundaries: List[tuple], 
-                              marker_positions: Dict[int, int], max_marker: int) -> List[Dict[str, Any]]:
+    def _map_chapters_to_html(
+        self,
+        text_plain: str,
+        text_html: str,
+        chapter_boundaries: List[tuple],
+        marker_positions: Dict[int, int],
+        max_marker: int,
+    ) -> List[Dict[str, Any]]:
         """Split text into chapters and map to HTML content using optimized linear mapping"""
-        
+
         # 1. Build Global Map (O(N))
         # This gives us the "Golden Standard" plain text derived from the HTML
-        # which might differ very slightly from text_plain (from LLM context) due to 
+        # which might differ very slightly from text_plain (from LLM context) due to
         # artifacts, but should be structurally identical for slicing.
         mapped_plain, mapping = self._build_html_mapping(text_html)
-        
+
         # 2. Build chapter targets
         chapters = []
         for title, start_marker, end_marker in chapter_boundaries:
-            chapters.append({
-                "title": title,
-                "start_tag": start_marker,
-                "end_tag": end_marker
-            })
+            chapters.append(
+                {"title": title, "start_tag": start_marker, "end_tag": end_marker}
+            )
 
         # Add remaining
         last_tag = chapters[-1]["end_tag"] if chapters else 0
         last_pos = marker_positions.get(last_tag, 0) if last_tag else 0
         if last_pos < len(text_plain):
-             next_start = min(last_tag + 1, max_marker)
-             chapters.append({"title": "Remaining Content", "start_tag": next_start, "end_tag": max_marker})
+            next_start = min(last_tag + 1, max_marker)
+            chapters.append(
+                {
+                    "title": "Remaining Content",
+                    "start_tag": next_start,
+                    "end_tag": max_marker,
+                }
+            )
 
         result = []
-        
+
         # We need to map 'text_plain' ranges to 'mapped_plain' indices.
         # Since 'text_plain' was generated from 'text_html' earlier, they should match.
         # However, to be robust, we use the marker positions which are indices into 'text_plain'.
-        
+
         # Fallback: if lengths differ significantly, we might have an issue.
         # But assuming consistency:
-        
+
         for ch in chapters:
             start_tag = ch["start_tag"]
             end_tag = ch["end_tag"]
-            
+
             # These are indices into 'text_plain'
             p_start = marker_positions.get(start_tag - 1, 0)
             p_end = marker_positions.get(end_tag, len(text_plain))
-            
+
             # Get the plain text snippet we want
             target_snippet = text_plain[p_start:p_end].strip()
-            
+
             if not target_snippet:
-                result.append({"title": ch["title"], "text": "", "plain_start": p_start, "plain_end": p_end})
+                result.append(
+                    {
+                        "title": ch["title"],
+                        "text": "",
+                        "plain_start": p_start,
+                        "plain_end": p_end,
+                    }
+                )
                 continue
-            
+
             # Find this snippet in our 'mapped_plain'
             # We can use find(), or we can rely on relative positions if we track offset.
             # Using find() is safer against minor drifts.
             # Optimization: search from the end of the previous chapter.
-            
+
             # Since chapters are ordered, we search forward.
-            search_start_idx = getattr(self, '_last_map_idx', 0) 
-            
+            search_start_idx = getattr(self, "_last_map_idx", 0)
+
             # If we restarted or jumped, reset
             if search_start_idx >= len(mapped_plain):
                 search_start_idx = 0
 
             snippet_idx = mapped_plain.find(target_snippet, search_start_idx)
-            
+
             # If not found forward, try from beginning (just in case of out of order processing?)
             if snippet_idx == -1:
                 snippet_idx = mapped_plain.find(target_snippet)
-                
+
             html_content = ""
             if snippet_idx != -1:
                 # Calculate end index in mapped_plain
                 snippet_end_idx = snippet_idx + len(target_snippet)
-                
+
                 # Update last index for next iteration
                 self._last_map_idx = snippet_end_idx
-                
+
                 # Map back to HTML using our lookup table
                 # existing mapping list has length of plain text + 1 sentinel
                 if snippet_idx < len(mapping) and snippet_end_idx < len(mapping):
-                   h_start = mapping[snippet_idx]
-                   h_end = mapping[snippet_end_idx]
-                   
-                   # Slice HTML. 
-                   # Note: heuristic logic might be needed if heuristic cutoff split a tag 
-                   # but our mapping maps to start of char/entity so it shouldn't split inside a tag name.
-                   # It might split a parent container though (e.g. <div>text...|cut|...</div>)
-                   # The original code just sliced raw strings, so we duplicate that "dumb slice" behavior.
-                   html_content = text_html[h_start:h_end]
-                   
-                else:
-                    self._log.warning(f"Map index out of bounds for chapter '{ch['title']}'")
-            else:
-                 self._log.warning(f"Could not align chapter '{ch['title']}' to HTML using fast map")
-                 # Fallback? Or just leave empty
-                 html_content = target_snippet # fallback to plain
+                    h_start = mapping[snippet_idx]
+                    h_end = mapping[snippet_end_idx]
 
-            result.append({
-                "title": ch["title"], 
-                "text": html_content.strip(), 
-                "plain_start": p_start, 
-                "plain_end": p_end
-            })
+                    # Slice HTML.
+                    # Note: heuristic logic might be needed if heuristic cutoff split a tag
+                    # but our mapping maps to start of char/entity so it shouldn't split inside a tag name.
+                    # It might split a parent container though (e.g. <div>text...|cut|...</div>)
+                    # The original code just sliced raw strings, so we duplicate that "dumb slice" behavior.
+                    html_content = text_html[h_start:h_end]
+
+                else:
+                    self._log.warning(
+                        f"Map index out of bounds for chapter '{ch['title']}'"
+                    )
+            else:
+                self._log.warning(
+                    f"Could not align chapter '{ch['title']}' to HTML using fast map"
+                )
+                # Fallback? Or just leave empty
+                html_content = target_snippet  # fallback to plain
+
+            result.append(
+                {
+                    "title": ch["title"],
+                    "text": html_content.strip(),
+                    "plain_start": p_start,
+                    "plain_end": p_end,
+                }
+            )
 
         # Cleanup temp state
-        if hasattr(self, '_last_map_idx'):
+        if hasattr(self, "_last_map_idx"):
             del self._last_map_idx
-            
+
         return result
 
-    def _llm_split_chapters(self, text_plain: str, text_html: str) -> List[Dict[str, Any]]:
+    def _llm_split_chapters(
+        self, text_plain: str, text_html: str
+    ) -> List[Dict[str, Any]]:
         """Split content into chapters using LLM with word splitters
-        
+
         Returns list of chapters with title, text, plain_start, and plain_end
         """
         try:
             if not self._llamacpp_handler:
-                return [{"title": "Main Content", "text": text_html, "plain_start": 0, "plain_end": len(text_plain)}]
-            
+                return [
+                    {
+                        "title": "Main Content",
+                        "text": text_html,
+                        "plain_start": 0,
+                        "plain_end": len(text_plain),
+                    }
+                ]
+
             marker_data = self.add_markers_to_text(text_plain)
             tagged_text = marker_data["tagged_text"]
             max_marker = marker_data["max_marker"]
@@ -804,51 +898,101 @@ Output:"""
             # text_plain is already normalized in generate_grouped_data
 
             if max_marker == 0:
-                return [{"title": "Main Content", "text": text_html, "plain_start": 0, "plain_end": len(text_plain)}]
+                return [
+                    {
+                        "title": "Main Content",
+                        "text": text_html,
+                        "plain_start": 0,
+                        "plain_end": len(text_plain),
+                    }
+                ]
 
             topics = self._get_llm_topics(text_plain)
             if not topics:
-                return [{"title": "Main Content", "text": text_html, "plain_start": 0, "plain_end": len(text_plain)}]
-            
+                return [
+                    {
+                        "title": "Main Content",
+                        "text": text_html,
+                        "plain_start": 0,
+                        "plain_end": len(text_plain),
+                    }
+                ]
+
             mapping_response = self._get_llm_topic_mapping(topics, tagged_text)
             if not mapping_response:
-                return [{"title": "Main Content", "text": text_html, "plain_start": 0, "plain_end": len(text_plain)}]
-            
+                return [
+                    {
+                        "title": "Main Content",
+                        "text": text_html,
+                        "plain_start": 0,
+                        "plain_end": len(text_plain),
+                    }
+                ]
+
             topic_boundaries = self._parse_llm_mapping(mapping_response, topics)
             if not topic_boundaries:
-                self._log.warning("No topic boundaries parsed, falling back to single section")
-                return [{"title": "Main Content", "text": text_html, "plain_start": 0, "plain_end": len(text_plain)}]
-            
+                self._log.warning(
+                    "No topic boundaries parsed, falling back to single section"
+                )
+                return [
+                    {
+                        "title": "Main Content",
+                        "text": text_html,
+                        "plain_start": 0,
+                        "plain_end": len(text_plain),
+                    }
+                ]
+
             self._log.info(f"Total topics: {len(topics)}")
             self._log.info(f"Total boundaries: {len(topic_boundaries)}")
             self._log.info(f"Total markers: {max_marker}")
-            
-            validated_boundaries = self._validate_boundaries(topic_boundaries, max_marker)
-            
+
+            validated_boundaries = self._validate_boundaries(
+                topic_boundaries, max_marker
+            )
+
             # Resolve Gaps
             if self._llamacpp_handler:
-                 validated_boundaries = self._resolve_gaps(validated_boundaries, marker_positions, text_plain)
-                 self._log.info(f"Total boundaries after gap resolution: {len(validated_boundaries)}")
+                validated_boundaries = self._resolve_gaps(
+                    validated_boundaries, marker_positions, text_plain
+                )
+                self._log.info(
+                    f"Total boundaries after gap resolution: {len(validated_boundaries)}"
+                )
 
-            return self._map_chapters_to_html(text_plain, text_html, validated_boundaries, marker_positions, max_marker)
-            
+            return self._map_chapters_to_html(
+                text_plain,
+                text_html,
+                validated_boundaries,
+                marker_positions,
+                max_marker,
+            )
+
         except Exception as e:
             self._log.error("LLM chapter splitting failed: %s", e)
-            return [{"title": "Main Content", "text": text_html, "plain_start": 0, "plain_end": len(text_plain)}]
+            return [
+                {
+                    "title": "Main Content",
+                    "text": text_html,
+                    "plain_start": 0,
+                    "plain_end": len(text_plain),
+                }
+            ]
 
-    def _create_sentences_and_groups(self, full_content_plain: str, 
-                                    chapters: List[Dict[str, Any]]) -> tuple:
+    def _create_sentences_and_groups(
+        self, full_content_plain: str, chapters: List[Dict[str, Any]]
+    ) -> tuple:
         """Create sentences and groups from chapters
-        
+
         Returns:
             Tuple of (sentences, groups)
         """
         # Split into sentences
         sentences = self._split_sentences(full_content_plain)
-        
+
         # Create groups based on chapters
         groups = {}
-        
+
         # If only one chapter, assign all sentences to it
         if len(chapters) == 1:
             title = chapters[0]["title"]
@@ -862,11 +1006,9 @@ Output:"""
                 sentence_start = full_content_plain.find(sentence_text, sentence_offset)
                 if sentence_start != -1:
                     sentence_end = sentence_start + len(sentence_text)
-                    sentence_info.append({
-                        "id": i,
-                        "start": sentence_start,
-                        "end": sentence_end
-                    })
+                    sentence_info.append(
+                        {"id": i, "start": sentence_start, "end": sentence_end}
+                    )
                     sentence_offset = sentence_end
                 else:
                     # Fallback for minor mismatch - should not happen with fixed normalization
@@ -877,23 +1019,25 @@ Output:"""
                 title = chapter["title"]
                 plain_start = chapter.get("plain_start", 0)
                 plain_end = chapter.get("plain_end", len(full_content_plain))
-                
+
                 # Find sentences that fall within or overlap this chapter's range
                 chapter_sentence_numbers = []
                 for s_info in sentence_info:
                     s_id = s_info["id"]
                     s_start = s_info["start"]
                     s_end = s_info["end"]
-                    
-                    # Logic: sentence is in chapter if its start is within the range, 
+
+                    # Logic: sentence is in chapter if its start is within the range,
                     # OR if it's the very first sentence and chapter starts at 0,
                     # OR if it's the last sentence and chapter ends at the very end.
                     # We use a 2-character tolerance for start mismatch due to markers being added in whitespace.
-                    if (s_start >= plain_start - 2 and s_start < plain_end) or \
-                       (s_end > plain_start + 2 and s_end <= plain_end + 2) or \
-                       (s_start < plain_start and s_end > plain_end):
+                    if (
+                        (s_start >= plain_start - 2 and s_start < plain_end)
+                        or (s_end > plain_start + 2 and s_end <= plain_end + 2)
+                        or (s_start < plain_start and s_end > plain_end)
+                    ):
                         chapter_sentence_numbers.append(s_id)
-                
+
                 if chapter_sentence_numbers:
                     if title not in groups:
                         groups[title] = []
@@ -902,7 +1046,7 @@ Output:"""
             # Cleanup groups: deduplicate and sort
             for title in groups:
                 groups[title] = sorted(list(set(groups[title])))
-        
+
         return sentences, groups
 
     def _split_sentences(self, text: str) -> List[Dict[str, Any]]:
@@ -911,19 +1055,17 @@ Output:"""
         txt = re.sub(r"\s+", " ", text.strip())
         if not txt:
             return []
-        
+
         # Simple sentence splitting by punctuation followed by space and capital letter
         # Use positive lookbehind to include punctuation with the sentence
-        sentences = re.split(r'(?<=[.!?])\s+(?=[A-ZА-Я])', txt)
-        
+        sentences = re.split(r"(?<=[.!?])\s+(?=[A-ZА-Я])", txt)
+
         # Clean up and filter empty sentences
         result = []
         for i, sentence in enumerate(sentences):
             if sentence and len(sentence.strip()) > 0:
-                result.append({
-                    "text": sentence.strip(),
-                    "number": i + 1,
-                    "read": False
-                })
-        
+                result.append(
+                    {"text": sentence.strip(), "number": i + 1, "read": False}
+                )
+
         return result

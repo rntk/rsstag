@@ -9,9 +9,12 @@ from rsstag.html_cleaner import HTMLCleaner
 
 from werkzeug.wrappers import Response
 
-prefixes_builders: dict[str: PrefixTreeBuilder] = {}
+prefixes_builders: dict[str:PrefixTreeBuilder] = {}
 
-def on_prefixes_all_get(app: "RSSTagApplication", user: dict, prefix_len: int) -> Response:
+
+def on_prefixes_all_get(
+    app: "RSSTagApplication", user: dict, prefix_len: int
+) -> Response:
     if user["sid"] not in prefixes_builders:
         cleaner = HTMLCleaner()
         prefix_builder = PrefixTreeBuilder()
@@ -51,7 +54,7 @@ def on_prefixes_all_get(app: "RSSTagApplication", user: dict, prefix_len: int) -
             sort_by_title="tags",
             sort_by_link=app.routes.get_url_by_endpoint(
                 endpoint="on_group_by_tags_get",
-                params={"page_number":1},
+                params={"page_number": 1},
             ),
             group_by_link=app.routes.get_url_by_endpoint(
                 endpoint="on_group_by_category_get"
@@ -65,7 +68,10 @@ def on_prefixes_all_get(app: "RSSTagApplication", user: dict, prefix_len: int) -
         mimetype="text/html",
     )
 
-def on_prefixes_words_get(app: "RSSTagApplication", user: dict, prefix: str) -> Response:
+
+def on_prefixes_words_get(
+    app: "RSSTagApplication", user: dict, prefix: str
+) -> Response:
     if user["sid"] not in prefixes_builders:
         cleaner = HTMLCleaner()
         prefix_builder = PrefixTreeBuilder()
@@ -105,7 +111,7 @@ def on_prefixes_words_get(app: "RSSTagApplication", user: dict, prefix: str) -> 
             sort_by_title="tags",
             sort_by_link=app.routes.get_url_by_endpoint(
                 endpoint="on_group_by_tags_get",
-                params={"page_number":1},
+                params={"page_number": 1},
             ),
             group_by_link=app.routes.get_url_by_endpoint(
                 endpoint="on_group_by_category_get"
@@ -119,7 +125,10 @@ def on_prefixes_words_get(app: "RSSTagApplication", user: dict, prefix: str) -> 
         mimetype="text/html",
     )
 
-def on_prefixes_prefix_get(app: "RSSTagApplication", user: dict, prefix: str) -> Response:
+
+def on_prefixes_prefix_get(
+    app: "RSSTagApplication", user: dict, prefix: str
+) -> Response:
     if user["sid"] not in prefixes_builders:
         cleaner = HTMLCleaner()
         prefix_builder = PrefixTreeBuilder()
@@ -138,7 +147,7 @@ def on_prefixes_prefix_get(app: "RSSTagApplication", user: dict, prefix: str) ->
     else:
         prefix_builder = prefixes_builders[user["sid"]]
 
-    #root = prefix_builder.get_tree(prefix)
+    # root = prefix_builder.get_tree(prefix)
     root = prefix_builder.get_compact_tree(prefix)
     if root is None:
         root = {"name": prefix, "children": []}

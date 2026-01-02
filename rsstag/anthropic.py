@@ -3,12 +3,13 @@ import logging
 
 import anthropic
 
+
 class Anthropic:
     def __init__(self, token: str):
         self.__token = token
-        '''"claude-3-opus-20240229",
+        """"claude-3-opus-20240229",
         "claude-3-sonnet-20240229",
-        "claude-3-haiku-20240307",'''
+        "claude-3-haiku-20240307","""
         self.__model = "claude-3-5-haiku-20241022"
         self.__client = anthropic.Anthropic(
             api_key=token,
@@ -36,21 +37,25 @@ class Anthropic:
     def call_citation(self, user_prompt: str, docs: list[str]) -> str:
         messages = []
         for i, msg in enumerate(docs):
-            messages.append({
-                "type": "document",
-                "source": {
-                    "type": "text",
-                    "media_type": "text/plain",
-                    "data": msg,
-                },
-                "title": f"Document {i}",
-                "context": msg,
-                "citations": {"enabled": True},
-            })
-        messages.append({
-            "type": "text",
-            "text": user_prompt,
-        })
+            messages.append(
+                {
+                    "type": "document",
+                    "source": {
+                        "type": "text",
+                        "media_type": "text/plain",
+                        "data": msg,
+                    },
+                    "title": f"Document {i}",
+                    "context": msg,
+                    "citations": {"enabled": True},
+                }
+            )
+        messages.append(
+            {
+                "type": "text",
+                "text": user_prompt,
+            }
+        )
 
         try:
             resp = self.__client.messages.create(
@@ -63,7 +68,7 @@ class Anthropic:
             return f"OpenAI error {e}"
 
         logging.info("OpenAI response: %s", resp)
-        '''
+        """
 {
     "content": [
         {
@@ -100,7 +105,7 @@ class Anthropic:
         }
     ]
 }
-        '''
+        """
 
         response = []
         for item in resp.content:
@@ -108,6 +113,8 @@ class Anthropic:
                 response.append(item.text)
                 if item.citations:
                     for citation in item.citations:
-                        response.append("<citation>" + citation.cited_text + "</citation>")
+                        response.append(
+                            "<citation>" + citation.cited_text + "</citation>"
+                        )
 
         return "\n".join(response)

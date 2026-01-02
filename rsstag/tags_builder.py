@@ -1,4 +1,5 @@
 """Build tags from text. Support languages: english, russian"""
+
 import re
 import logging
 from collections import defaultdict
@@ -21,7 +22,7 @@ class TagsBuilder:
         self.text_clearing = re.compile(text_clean_re)
         self.only_cyrillic = re.compile(r"^[а-яА-ЯёЁ]*$")
         self.only_latin = re.compile(r"^[a-zA-Z]*$")
-        #self.clear_html_esc = re.compile(r"&[#a-zA-Z0-9]*?;")
+        # self.clear_html_esc = re.compile(r"&[#a-zA-Z0-9]*?;")
         self.latin = SnowballStemmer("english")
         self.cyrillic = SnowballStemmer("russian")
         self._stopwords = None
@@ -39,7 +40,7 @@ class TagsBuilder:
 
     def text2words(self, text: str) -> List[str]:
         """Make words list from text"""
-        #text = self.clear_html_esc.sub(" ", text)
+        # text = self.clear_html_esc.sub(" ", text)
         text = self.text_clearing.sub(" ", text)
         text = text.strip().casefold()
         words = text.split()

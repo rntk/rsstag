@@ -9,6 +9,7 @@ from rsstag.web.routes import RSSTagRoutes
 
 NOT_CATEGORIZED = "NotCategorized"
 
+
 class TextFileProvider:
     def __init__(self, config: dict):
         self._config = config
@@ -50,9 +51,7 @@ class TextFileProvider:
                     {
                         "content": {
                             "title": "",
-                            "content": gzip.compress(
-                                line.encode("utf-8", "replace")
-                            ),
+                            "content": gzip.compress(line.encode("utf-8", "replace")),
                         },
                         "feed_id": stream_id,
                         "category_id": self.no_category_name,

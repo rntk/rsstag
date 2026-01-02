@@ -39,7 +39,11 @@ class RssTagBiGrams:
         else:
             sort_data.append(("posts_count", DESCENDING))
 
-        return self.db.bi_grams.find(query, projection=projection).allow_disk_use(True).sort(sort_data)
+        return (
+            self.db.bi_grams.find(query, projection=projection)
+            .allow_disk_use(True)
+            .sort(sort_data)
+        )
 
     def change_unread(self, owner: str, tags: dict, readed: bool) -> bool:
         updates = []
@@ -108,7 +112,9 @@ class RssTagBiGrams:
         if projection:
             params["projection"] = projection
 
-        return self.db.bi_grams.find(query, **params).allow_disk_use(True).sort(sort_data)
+        return (
+            self.db.bi_grams.find(query, **params).allow_disk_use(True).sort(sort_data)
+        )
 
     def set_temperature(self, owner: str, bi_gram: str, temperature: float) -> bool:
         self.db.bi_grams.update_one(
