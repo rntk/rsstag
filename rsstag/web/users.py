@@ -346,7 +346,6 @@ def on_refresh_get_post(
                     updated = app.users.update_by_sid(
                         user["sid"],
                         {
-                            "ready": False,
                             "in_queue": True,
                             "message": "Downloading data, please wait",
                         },

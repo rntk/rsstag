@@ -130,14 +130,6 @@ class RSSTagApplication(object):
             "on_login_google_auth_get",
             "on_oauth2callback_get",
         )
-        self.allow_not_ready = {
-            "on_telegram_auth_post",
-            "on_settings_post",
-            "on_tasks_get",
-            "on_tasks_post",
-            "on_tasks_remove_post"
-        }
-
         self.openai = ROpenAI(self.config["openai"]["token"])
         self.anthropic = Anthropic(self.config["anthropic"]["token"])
         self.llamacpp = LLamaCPP(self.config["llamacpp"]["host"])
@@ -214,7 +206,7 @@ class RSSTagApplication(object):
         try:
             handler, values = adapter.match()
             logging.info("%s", handler)
-            if user and (user["ready"] or handler in self.allow_not_ready):
+            if user:
                 response = self.endpoints[handler](user, request, **values)
             else:
                 if handler in self.allow_not_logged:
