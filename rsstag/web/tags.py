@@ -8,7 +8,6 @@ import logging
 from collections import Counter, defaultdict
 from urllib.parse import unquote_plus, quote
 from typing import Optional
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from typing import TYPE_CHECKING
 
@@ -18,7 +17,6 @@ from rsstag.tags_builder import TagsBuilder
 from rsstag.html_cleaner import HTMLCleaner
 from rsstag.lda import LDA
 from rsstag.llamacpp import LLamaCPP
-from rsstag.openai import OpenAI
 from rsstag.charts import create_svg_histogram
 
 from gensim.models.word2vec import Word2Vec

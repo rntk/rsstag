@@ -1,5 +1,4 @@
 import unittest
-from rsstag.wordnet import WordNetLabinform
 
 class TestWordNetLabinform(unittest.TestCase):
 

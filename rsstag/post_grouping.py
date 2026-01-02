@@ -2,7 +2,6 @@
 import logging
 from typing import Optional, List, Dict, Any
 from pymongo import MongoClient
-import gzip
 import re
 import hashlib
 from rsstag.html_cleaner import HTMLCleaner

@@ -1,15 +1,11 @@
 import base64
-import email
-from email.header import decode_header
 import asyncio
-import json
 import logging
 import re
 from typing import Tuple, List, Optional, Iterator
 from datetime import datetime
 from hashlib import md5
 import gzip
-import time
 
 import aiohttp
 

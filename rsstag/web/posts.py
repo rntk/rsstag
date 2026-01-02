@@ -5,8 +5,6 @@ import logging
 from collections import defaultdict
 from urllib.parse import unquote_plus, unquote
 import requests # Add requests import
-import re
-from rsstag.html_cleaner import HTMLCleaner
 
 from typing import TYPE_CHECKING, Optional
 

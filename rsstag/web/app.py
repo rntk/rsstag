@@ -46,7 +46,7 @@ from jinja2 import Environment, PackageLoader
 
 from pymongo import MongoClient
 
-from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import DBSCAN
 
 

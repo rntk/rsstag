@@ -13,7 +13,7 @@ class TestHTMLCleaner(unittest.TestCase):
         html = '<body><span>{}<a href="#">{}</a></span></body>'.format(txt, txt1)
         cleaner.feed(html)
         self.assertEqual(cleaner.get_content(), [txt, txt, txt1])
-        cleaner.purge();
+        cleaner.purge()
         self.assertEqual(cleaner.get_content(), [])
         self.assertNotEqual(cleaner.get_content(), [txt, txt, txt1])
 

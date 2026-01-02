@@ -229,7 +229,7 @@ def on_get_tag_bi_grams_graph(app: "RSSTagApplication", user: dict, tag: str) ->
                             "target": other_tag,
                             "weight": bi_gram_freq
                         })
-            except Exception as e:
+            except Exception:
                 # Skip problematic bi-grams but continue processing
                 continue
         

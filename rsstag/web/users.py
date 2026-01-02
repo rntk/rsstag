@@ -4,7 +4,7 @@ import os
 from typing import Optional, List
 import asyncio
 import aiohttp
-from urllib.parse import urlencode, quote
+from urllib.parse import urlencode
 
 from typing import TYPE_CHECKING
 
