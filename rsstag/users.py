@@ -51,7 +51,6 @@ class RssTagUsers:
             "token": token,
             "provider": provider,
             "settings": self._settings,
-            "ready": False,
             "message": 'Click on "Refresh posts" to start downloading data',
             "in_queue": False,
             "created": created,
