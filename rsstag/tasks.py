@@ -579,6 +579,53 @@ class RssTagTasks:
 
         return result
 
+    def get_tasks_status(self, user_id: str) -> List[dict]:
+        status = []
+        try:
+            curr = self._db.tasks.find({"user": user_id})
+            task_types = set()
+            for task in curr:
+                if task["type"] in task_types:
+                    continue
+                task_types.add(task["type"])
+
+                info = {
+                    "type": task["type"],
+                    "title": self.get_task_title(task["type"]),
+                    "count": -1,
+                }
+
+                if task["type"] == TASK_TAGS:
+                    info["count"] = self._db.posts.count_documents(
+                        {"owner": user_id, "tags": []}
+                    )
+                elif task["type"] == TASK_BIGRAMS_RANK:
+                    info["count"] = self._db.bi_grams.count_documents(
+                        {"owner": user_id, "temperature": 0}
+                    )
+                elif task["type"] == TASK_TAGS_RANK:
+                    info["count"] = self._db.tags.count_documents(
+                        {"owner": user_id, "temperature": 0}
+                    )
+                elif task["type"] == TASK_NER:
+                    info["count"] = self._db.posts.count_documents(
+                        {"owner": user_id, "ner": {"$exists": False}}
+                    )
+                elif task["type"] == TASK_POST_GROUPING:
+                    info["count"] = self._db.posts.count_documents(
+                        {"owner": user_id, "grouping": {"$exists": False}}
+                    )
+                elif task["type"] == TASK_TAG_CLASSIFICATION:
+                    info["count"] = self._db.tags.count_documents(
+                        {"owner": user_id, "classifications": {"$exists": False}}
+                    )
+
+                status.append(info)
+        except Exception as e:
+            self._log.error("Can`t get user tasks status %s. Info: %s", user_id, e)
+
+        return status
+
     def get_task_title(self, task_type: int) -> str:
         task_titles = {
             TASK_DOWNLOAD: "Downloading posts from provider",
