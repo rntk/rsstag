@@ -1131,6 +1131,17 @@ def on_post_grouped_get(
         light = 0.7
         return _hsl_to_hex(hue, sat, light)
 
+    import re
+
+    def _linkify_angle_bracket_urls(text: str) -> str:
+        """Convert angle-bracketed URLs to clickable links.
+
+        Converts <https://example.com> to <a href="https://example.com" target="_blank">https://example.com</a>
+        """
+        # Match URLs inside angle brackets: <http://...> or <https://...>
+        pattern = r"<(https?://[^>]+)>"
+        return re.sub(pattern, r'<a href="\1" target="_blank">\1</a>', text)
+
     projection = {"content": True, "feed_id": True, "url": True}
     post_ids = [int(pid) for pid in pids.split("_") if pid]
     if not post_ids:
@@ -1152,6 +1163,9 @@ def on_post_grouped_get(
             )
             if post["content"]["title"]:
                 content = post["content"]["title"] + ". " + content
+
+            # Linkify angle-bracketed URLs
+            content = _linkify_angle_bracket_urls(content)
 
             all_posts.append(
                 {
@@ -1181,9 +1195,11 @@ def on_post_grouped_get(
             has_grouped_data = True
             # Add sentences with adjusted indices and post_id reference
             for sentence in post_grouped_data["sentences"]:
+                # Linkify the sentence text the same way as content
+                escaped_text = _linkify_angle_bracket_urls(sentence["text"])
                 all_sentences.append(
                     {
-                        "text": sentence["text"],
+                        "text": escaped_text,
                         "number": sentence_offset + sentence["number"],
                         "post_id": post["post_id"],
                     }
