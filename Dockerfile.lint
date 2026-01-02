@@ -1,0 +1,10 @@
+FROM python:3.11-slim
+
+WORKDIR /work
+
+RUN pip install --no-cache-dir ruff==0.6.9
+
+RUN printf '%s\n' '#!/usr/bin/env sh' 'set -e' 'ruff check .' 'ruff format --check .' > /usr/local/bin/ruff-lint-format \
+  && chmod +x /usr/local/bin/ruff-lint-format
+
+ENTRYPOINT ["/usr/local/bin/ruff-lint-format"]

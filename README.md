@@ -20,6 +20,24 @@ At the root of the project run:
 
 ```docker build -t rsstag```
 
+### 3a. Lint/format with Docker
+
+Build the lint container:
+
+```docker build -t rsstag-lint -f Dockerfile.lint .```
+
+Run lint + format checks:
+
+```docker run --rm -v "$PWD":/work -w /work rsstag-lint```
+
+Apply formatting (optional):
+
+```docker run --rm -v "$PWD":/work -w /work --entrypoint ruff rsstag-lint format .```
+
+Apply lint fixes (optional):
+
+```docker run --rm -v "$PWD":/work -w /work --entrypoint ruff rsstag-lint check --fix .```
+
 ### 4. Run
 At the root of the project run:
 

@@ -1,0 +1,17 @@
+name: Lint container
+
+on:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build lint container
+        run: docker build -t rsstag-lint -f Dockerfile.lint .
+
+      - name: Run lint/format checks
+        run: docker run --rm -v "${{ github.workspace }}":/work -w /work rsstag-lint
