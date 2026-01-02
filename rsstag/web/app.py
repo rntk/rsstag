@@ -862,8 +862,8 @@ class RSSTagApplication(object):
         by_feed = {}
         sentences = []
         html_c = HTMLCleaner()
-        w_cond = "|".join(words)
-        w_reg = re.compile(".*({}).*".format(w_cond), re.I|re.S)
+        w_cond = "|".join(re.escape(word) for word in words)
+        re_words = re.compile(r"(\b({})\b)".format(w_cond), re.IGNORECASE | re.UNICODE)
         for post in db_posts:
             txt = gzip.decompress(post["content"]["content"]).decode("utf-8", "replace")
             if post["content"]["title"]:
@@ -876,7 +876,12 @@ class RSSTagApplication(object):
                 if feed:
                     by_feed[post["feed_id"]] = feed
             sents = []
-            #t = t.replace(mtch.group(1), "<b>{}</b>".format(mtch.group(1)))
+            raw_sents = re.split(r'(?<=[.!?])\s+', txt)
+            for s in raw_sents:
+                if re_words.search(s):
+                    highlighted = re_words.sub(r"<b>\1</b>", s)
+                    sents.append(highlighted)
+
             if not sents:
                 continue
             sentences.append(

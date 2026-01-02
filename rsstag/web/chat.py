@@ -24,7 +24,6 @@ def on_chat_post(app: "RSSTagApplication", user: dict, rqst: Request):
         return Response(json.dumps({"error": "No post IDs provided"}), mimetype="application/json", status=400)
     
     db_posts_c = app.posts.get_by_pids(user["sid"], pids)
-    text = ""
     cleaner = HTMLCleaner()
     user_msgs = ""
     if "user" in data and data["user"]:
@@ -33,8 +32,6 @@ def on_chat_post(app: "RSSTagApplication", user: dict, rqst: Request):
         result = {"error": "No user messages"}
         return Response(json.dumps(result), mimetype="application/json", status=400)
     
-    responses = []
-
     # Process posts and clean content
     post_contents = []
     for post in db_posts_c:

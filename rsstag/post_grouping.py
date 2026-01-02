@@ -327,7 +327,6 @@ Output:"""
 
         self._log.info(f"Starting gap resolution for {len(topic_boundaries)} boundaries.")
 
-        resolved_boundaries = []
         # Add initial boundary if needed, but usually we just process gaps between existing ones
         # For simplicity, we process:
         # 1. Gap before first topic (if first topic start > 1)
@@ -343,7 +342,6 @@ Output:"""
             # We strictly only care about "unassigned" sentences. 
             # If there is a gap at start, it has no "previous" topic.
             # We can ask if it belongs to "Next" (first topic) or is "Unassigned".
-            gap_start_marker = 1
             gap_end_marker = first_start - 1
             self._log.info(f"Found initial gap: 1-{gap_end_marker}")
             # ... Logic for initial gap could be similar, but let's focus on inter-topic gaps first as requested.
@@ -365,8 +363,6 @@ Output:"""
                 # Previous topic last sentence
                 prev_text_end = marker_positions.get(prev_end, len(text_plain))
                 # To get last sentence, we might need to look back a bit. 
-                # Let's approximate by taking the text of the last marker interval of previous chapter
-                prev_last_marker_start = marker_positions.get(prev_end - 1, 0) # This might be too small
                 # Better: Get the full previous chapter text and extract last sentence? 
                 # Or just take a chunk ending at prev_end.
                 prev_chunk_start = marker_positions.get(max(prev_start, prev_end - 5), 0) # Last 5 markers range?

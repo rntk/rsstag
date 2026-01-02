@@ -1,5 +1,6 @@
 import json
 import gzip
+import logging
 from typing import TYPE_CHECKING
 from collections import Counter
 from urllib.parse import quote
@@ -387,14 +388,14 @@ def on_group_by_bigrams_dyn_get(
                 pos = i - j
                 bgrms = []
                 if pos >= 0 and words[pos] not in stopw:
-                    l = [w, words[pos]]
-                    l.sort()
-                    bgrms.append(" ".join(l))
+                    pair_list = [w, words[pos]]
+                    pair_list.sort()
+                    bgrms.append(" ".join(pair_list))
                 pos = i + j
                 if pos < lnw and words[pos] not in stopw:
-                    l = [w, words[pos]]
-                    l.sort()
-                    bgrms.append(" ".join(l))
+                    pair_list = [w, words[pos]]
+                    pair_list.sort()
+                    bgrms.append(" ".join(pair_list))
                 if len(bgrms) > 0:
                     post_bis.update(bgrms)
         if len(post_bis) > 0:

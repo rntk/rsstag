@@ -5,7 +5,6 @@ from rsstag.tasks import (
     TASK_DOWNLOAD,
     TASK_MARK,
     TASK_TAGS,
-    TASK_WORDS,
     TASK_LETTERS,
     TASK_NER,
     TASK_CLUSTERING,

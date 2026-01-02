@@ -1062,10 +1062,10 @@ def on_cluster_get(app: "RSSTagApplication", user: dict, cluster: int) -> Respon
 def on_post_grouped_get(app: "RSSTagApplication", user: dict, request: Request, pids: str) -> Response:
     """Handler for grouped posts view with color generation"""
     
-    def _hsl_to_hex(h: float, s: float, l: float) -> str:
+    def _hsl_to_hex(h: float, s: float, lightness: float) -> str:
         """Convert HSL to HEX color"""
         import colorsys
-        r, g, b = colorsys.hls_to_rgb(h, l, s)
+        r, g, b = colorsys.hls_to_rgb(h, lightness, s)
         return '#' + ''.join(f'{int(c*255):02x}' for c in (r, g, b))
     
     def _group_color(group_id: str) -> str:
@@ -1171,10 +1171,10 @@ def on_post_grouped_get(app: "RSSTagApplication", user: dict, request: Request, 
 def on_post_grouped_snippets_get(app: "RSSTagApplication", user: dict, request: Request, pids: str) -> Response:
     """Handler for grouped snippets view"""
     
-    def _hsl_to_hex(h: float, s: float, l: float) -> str:
+    def _hsl_to_hex(h: float, s: float, lightness: float) -> str:
         """Convert HSL to HEX color"""
         import colorsys
-        r, g, b = colorsys.hls_to_rgb(h, l, s)
+        r, g, b = colorsys.hls_to_rgb(h, lightness, s)
         return '#' + ''.join(f'{int(c*255):02x}' for c in (r, g, b))
     
     def _group_color(group_id: str) -> str:
@@ -1230,11 +1230,6 @@ def on_post_grouped_snippets_get(app: "RSSTagApplication", user: dict, request: 
                         "color": _group_color(group),
                         "snippets": []
                     }
-                
-                # Get sentences for this group
-                group_sentences = []
-                current_snippet = []
-                last_idx = -100
                 
                 sorted_indices = sorted(indices)
                 for idx in sorted_indices:

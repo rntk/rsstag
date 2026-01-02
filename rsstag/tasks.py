@@ -503,7 +503,7 @@ class RssTagTasks:
                     ))
                 self._db.tags.bulk_write(updates, ordered=False)
             if remove_task:
-                removed = self.remove_task(task["_id"])
+                self.remove_task(task["_id"])
                 if not task.get("manual", False):
                     self.add_next_tasks(task["user"]["sid"], task["type"])
 
