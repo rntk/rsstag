@@ -385,7 +385,7 @@ def on_status_get(app: "RSSTagApplication", user: Optional[dict]) -> Response:
                 }
             }
         else:
-            task_titles = app.tasks.get_current_tasks_titles(user["sid"])
+            task_titles = app.tasks.get_tasks_status(user["sid"])
             result = {"data": {"is_ok": True, "msgs": task_titles}}
             if (TELEGRAM_CODE_FIELD in user) and (user[TELEGRAM_CODE_FIELD] == ""):
                 result["data"][TELEGRAM_CODE_FIELD] = True
