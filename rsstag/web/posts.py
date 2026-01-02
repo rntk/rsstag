@@ -348,6 +348,8 @@ def on_read_posts_post(
                 app.letters.change_unread(user["sid"], letters, readed)
                 changed = True
             if changed:
+                for pid in post_ids:
+                    app.post_grouping.mark_sequences_read(user["sid"], pid, readed)
                 code = 200
                 result = {"data": "ok"}
             else:
@@ -1149,6 +1151,7 @@ def on_post_grouped_get(app: "RSSTagApplication", user: dict, request: Request, 
             all_groups[group_name] = [post["post_id"]]
             all_group_colors[group_name] = _group_color(group_name)
     
+    
     page = app.template_env.get_template("post-grouped.html")
     return Response(
         page.render(
@@ -1163,6 +1166,111 @@ def on_post_grouped_get(app: "RSSTagApplication", user: dict, request: Request, 
             provider=user["provider"],
             post_to_index_map=post_to_index_map,
             has_grouped_data=has_grouped_data,
+        ),
+        mimetype="text/html",
+    )
+
+def on_post_grouped_snippets_get(app: "RSSTagApplication", user: dict, request: Request, pids: str) -> Response:
+    """Handler for grouped snippets view"""
+    
+    def _hsl_to_hex(h: float, s: float, l: float) -> str:
+        """Convert HSL to HEX color"""
+        import colorsys
+        r, g, b = colorsys.hls_to_rgb(h, l, s)
+        return '#' + ''.join(f'{int(c*255):02x}' for c in (r, g, b))
+    
+    def _group_color(group_id: str) -> str:
+        """Generate color for a group"""
+        import hashlib
+        digest = hashlib.md5(group_id.encode('utf-8')).hexdigest()
+        hue = (int(digest[:8], 16) % 360) / 360.0
+        sat = 0.6
+        light = 0.7
+        return _hsl_to_hex(hue, sat, light)
+        
+    post_ids = [int(pid) for pid in pids.split('_') if pid]
+    if not post_ids:
+        return app.on_error(user, request, NotFound())
+        
+    requested_topic = request.args.get("topic")
+    if requested_topic:
+        requested_topic = unquote(requested_topic)
+
+    projection = {"content": True, "feed_id": True, "url": True}
+    all_posts = {}
+    feed_titles = set()
+    
+    for post_id in post_ids:
+        post = app.posts.get_by_pid(user["sid"], post_id, projection)
+        if post:
+            feed = app.feeds.get_by_feed_id(user["sid"], post["feed_id"])
+            feed_title = feed["title"] if feed else f"Post {post_id}"
+            feed_titles.add(feed_title)
+            
+            all_posts[post_id] = {
+                "feed_title": feed_title,
+                "url": post.get("url"),
+                "title": post.get("content", {}).get("title", f"Post {post_id}")
+            }
+            
+    combined_feed_title = " | ".join(sorted(list(feed_titles))) if feed_titles else "Multiple Posts"
+    
+    # Collect snippets
+    topics_data = {}
+    
+    for post_id in post_ids:
+        post_grouped_data = app.post_grouping.get_grouped_posts(user["sid"], [post_id])
+        if post_grouped_data and post_grouped_data.get("groups") and post_grouped_data.get("sentences"):
+            sentences_map = {s["number"]: s for s in post_grouped_data["sentences"]}
+            
+            for group, indices in post_grouped_data["groups"].items():
+                if requested_topic and group != requested_topic:
+                    continue
+                    
+                if group not in topics_data:
+                    topics_data[group] = {
+                        "color": _group_color(group),
+                        "snippets": []
+                    }
+                
+                # Get sentences for this group
+                group_sentences = []
+                current_snippet = []
+                last_idx = -100
+                
+                sorted_indices = sorted(indices)
+                for idx in sorted_indices:
+                    # If indices are sequential (allow small gap), merge them? 
+                    # For now just list them all. Or maybe combine sequential sentences into a block.
+                    s_obj = sentences_map.get(idx)
+                    if not s_obj:
+                         continue
+                    text = s_obj.get("text", "")
+                    if not text:
+                         continue
+                         
+                    # Add context about which post this is from
+                    topics_data[group]["snippets"].append({
+                        "text": text,
+                        "post_id": post_id,
+                        "post_title": all_posts[post_id]["title"],
+                        "index": idx,
+                        "url": all_posts[post_id]["url"],
+                        "read": s_obj.get("read", False)
+                    })
+    
+    # Sort topics by name or maybe by number of snippets?
+    sorted_topics = sorted(topics_data.items(), key=lambda x: x[0])
+    
+    page = app.template_env.get_template("post-grouped-snippets.html")
+    return Response(
+        page.render(
+            topics=sorted_topics,
+            post_id=pids,
+            feed_title=combined_feed_title,
+            current_topic=requested_topic,
+            user_settings=user["settings"],
+            provider=user["provider"],
         ),
         mimetype="text/html",
     )
@@ -1400,3 +1508,72 @@ def on_post_graph_get(app: "RSSTagApplication", user: dict, request: Request, pi
         ),
         mimetype="text/html"
     )
+
+def on_read_snippet_post(
+    app: "RSSTagApplication", user: dict, request: Request
+) -> Response:
+    try:
+        data = json.loads(request.get_data(as_text=True))
+        post_id = int(data["post_id"])
+        sentence_index = int(data["sentence_index"])
+        readed = bool(data["readed"])
+    except Exception as e:
+        logging.warning("Send wrong data for read snippet. Cause: %s", e)
+        return Response(json.dumps({"error": "Bad data"}), mimetype="application/json", status=400)
+
+    # Update snippet status
+    all_read = app.post_grouping.update_snippet_read_status(user["sid"], post_id, sentence_index, readed)
+    
+    if all_read is None:
+        return Response(json.dumps({"error": "Grouping not found"}), mimetype="application/json", status=404)
+
+    # Now handle post status synchronization
+    # If we mark snippet as UNREAD, we MUST mark the whole post as UNREAD
+    # If we mark snippet as READ and all snippets are now READ, we mark the whole post as READ
+    
+    projection = {"pid": True, "read": True, "id": True, "tags": True, "bi_grams": True}
+    post = app.posts.get_by_pid(user["sid"], post_id, projection)
+    
+    if not post:
+        return Response(json.dumps({"error": "Post not found"}), mimetype="application/json", status=404)
+
+    should_change_post = False
+    if not readed:
+        if post["read"]:
+            should_change_post = True
+    else:
+        if all_read and not post["read"]:
+            should_change_post = True
+            
+    if should_change_post:
+        # Replicate logic from on_read_posts_post but for a single post
+        post_ids = [post_id]
+        tags = defaultdict(int)
+        bi_grams = defaultdict(int)
+        letters = defaultdict(int)
+        
+        for t in post["tags"]:
+            tags[t] += 1
+            if t:
+                letters[t[0]] += 1
+        for bi_g in post.get("bi_grams", []):
+            bi_grams[bi_g] += 1
+            
+        for_insert = [{
+            "user": user["sid"],
+            "id": post["id"],
+            "status": readed,
+            "processing": TASK_NOT_IN_PROCESSING,
+            "type": TASK_MARK,
+        }]
+        
+        if app.tasks.add_task({"type": TASK_MARK, "user": user["sid"], "data": for_insert}):
+            changed = app.posts.change_status(user["sid"], post_ids, readed)
+            if changed and tags:
+                app.tags.change_unread(user["sid"], tags, readed)
+            if changed and bi_grams:
+                app.bi_grams.change_unread(user["sid"], bi_grams, readed)
+            if changed and letters:
+                app.letters.change_unread(user["sid"], letters, readed)
+        
+    return Response(json.dumps({"data": "ok", "post_status_changed": should_change_post}), mimetype="application/json", status=200)

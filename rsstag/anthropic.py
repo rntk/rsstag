@@ -14,7 +14,7 @@ class Anthropic:
             api_key=token,
         )
 
-    def call(self, user_msgs: List[str]) -> str:
+    def call(self, user_msgs: List[str], max_tokens: int = 1024) -> str:
         messages = []
         for msg in user_msgs:
             messages.append({"role": "user", "content": msg})
@@ -22,7 +22,7 @@ class Anthropic:
         try:
             resp = self.__client.messages.create(
                 model=self.__model,
-                max_tokens=1024,
+                max_tokens=max_tokens,
                 messages=messages,
             )
         except Exception as e:

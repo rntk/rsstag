@@ -62,6 +62,59 @@ class RssTagPostGrouping:
             self._log.error("Can't save grouped posts data. Info: %s", e)
             return False
 
+    def update_snippet_read_status(self, owner: str, post_id: int, sentence_index: int, read_status: bool) -> Optional[bool]:
+        """Update read status for a specific sentence in a post's grouping
+        
+        Returns True if ALL sentences in the post are now read, False otherwise.
+        Returns None if post grouping not found.
+        """
+        post_ids = [post_id]
+        post_ids_hash = self._generate_post_ids_hash(post_ids)
+        
+        # We need to find the sentence by its 'number' which is 1-indexed sentence_index
+        # But wait, sentence_index passed here might be the 'number' field
+        
+        doc = self.get_grouped_posts(owner, post_ids)
+        if not doc:
+            return None
+            
+        sentences = doc.get("sentences", [])
+        all_read = True
+        found = False
+        for s in sentences:
+            if s.get("number") == sentence_index:
+                s["read"] = read_status
+                found = True
+            if not s.get("read", False):
+                all_read = False
+        
+        if found:
+            self._db.post_grouping.update_one(
+                {"owner": owner, "post_ids_hash": post_ids_hash},
+                {"$set": {"sentences": sentences}}
+            )
+            return all_read
+        return False
+
+    def mark_sequences_read(self, owner: str, post_id: int, read_status: bool) -> bool:
+        """Mark ALL sentences in a post's grouping as read/unread"""
+        post_ids = [post_id]
+        post_ids_hash = self._generate_post_ids_hash(post_ids)
+        
+        doc = self.get_grouped_posts(owner, post_ids)
+        if not doc:
+            return False
+            
+        sentences = doc.get("sentences", [])
+        for s in sentences:
+            s["read"] = read_status
+            
+        self._db.post_grouping.update_one(
+            {"owner": owner, "post_ids_hash": post_ids_hash},
+            {"$set": {"sentences": sentences}}
+        )
+        return True
+
     def _generate_post_ids_hash(self, post_ids: List[int]) -> str:
         """Generate a hash from post IDs for unique identification"""
         post_ids_sorted = sorted(post_ids)
@@ -509,10 +562,139 @@ Output:"""
         # Sort by start marker to process in reading order
         return sorted(validated_boundaries, key=lambda x: x[1])
 
+    def _build_html_mapping(self, html_text: str) -> tuple:
+        """
+        Builds a mapping between normalized plain text indices and original HTML indices.
+        Returns (plain_text, mapping_list)
+        where mapping_list[plain_index] = html_index
+        """
+        from html import unescape
+        
+        mapping = []
+        plain_accum = []
+        
+        n = len(html_text)
+        i = 0
+        in_tag = False
+        
+        # State for whitespace normalization
+        last_was_space = False
+        
+        while i < n:
+            if in_tag:
+                if html_text[i] == '>':
+                    in_tag = False
+                i += 1
+                continue
+            
+            # Start of a tag?
+            if html_text[i] == '<':
+                in_tag = True
+                i += 1
+                continue
+            
+            # Find next tag start or end of string for bulk processing text chunks
+            next_tag = html_text.find('<', i)
+            if next_tag == -1:
+                chunk_end = n
+            else:
+                chunk_end = next_tag
+            
+            # Process text chunk
+            chunk = html_text[i:chunk_end]
+            
+            # Unescape entities (careful: unescape might change length)
+            # To be 100% precise with mapping, we ideally need character-by-character or 
+            # entity-aware processing. However, standard unescape works on strings.
+            # 
+            # Complex approach: Find entities &amp; etc.
+            # Simple approach approximation:
+            # Since unescape shrinks text (mostly), we can map the *start* of the entity 
+            # to the resulting char.
+            #
+            # Let's iterate character by character to handle whitespace normalization strictly
+            # akin to the original logic: " ".join().strip() then re.sub(r'\s+', ' ')
+            
+            j = 0
+            while j < len(chunk):
+                char = chunk[j]
+                
+                # Check for entity start
+                if char == '&':
+                    # Find entity end
+                    ent_end = chunk.find(';', j)
+                    if ent_end != -1 and ent_end - j < 10: # Entities are usually short
+                        entity = chunk[j:ent_end+1]
+                        decoded_char = unescape(entity)
+                        
+                        # Add decoded char
+                        if decoded_char.isspace():
+                            if not last_was_space:
+                                plain_accum.append(' ')
+                                mapping.append(i + j) # Map to start of entity
+                                last_was_space = True
+                        else:
+                            for dc in decoded_char:
+                                plain_accum.append(dc)
+                                mapping.append(i + j) # Map to start of entity
+                                last_was_space = False
+                        
+                        j = ent_end + 1
+                        continue
+                
+                # Normal character
+                if char.isspace():
+                    if not last_was_space:
+                        plain_accum.append(' ')
+                        mapping.append(i + j)
+                        last_was_space = True
+                else:
+                    plain_accum.append(char)
+                    mapping.append(i + j)
+                    last_was_space = False
+                
+                j += 1
+                
+            i = chunk_end
+
+        # Handle leading/trailing whitespace which strict .strip() would remove
+        # The accumulated plain_text might start/end with ' ' if the HTML did.
+        # But our target is .strip()-ed text.
+        
+        # We perform post-processing to strip
+        if not plain_accum:
+            return "", []
+
+        start_offset = 0
+        while start_offset < len(plain_accum) and plain_accum[start_offset] == ' ':
+            start_offset += 1
+            
+        end_offset = len(plain_accum)
+        while end_offset > start_offset and plain_accum[end_offset-1] == ' ':
+            end_offset -= 1
+            
+        final_plain = "".join(plain_accum[start_offset:end_offset])
+        final_mapping = mapping[start_offset:end_offset]
+        
+        # Add a sentinel to the end of mapping to handle the closing slice
+        if final_mapping:
+            final_mapping.append(n) # Maps to end of HTML
+        else:
+            final_mapping = [0] # Handle empty case
+
+        return final_plain, final_mapping
+
     def _map_chapters_to_html(self, text_plain: str, text_html: str, chapter_boundaries: List[tuple], 
                               marker_positions: Dict[int, int], max_marker: int) -> List[Dict[str, Any]]:
-        """Split text into chapters and map to HTML content"""
-        # Build chapter objects from boundaries
+        """Split text into chapters and map to HTML content using optimized linear mapping"""
+        
+        # 1. Build Global Map (O(N))
+        # This gives us the "Golden Standard" plain text derived from the HTML
+        # which might differ very slightly from text_plain (from LLM context) due to 
+        # artifacts, but should be structurally identical for slicing.
+        mapped_plain, mapping = self._build_html_mapping(text_html)
+        
+        # 2. Build chapter targets
         chapters = []
         for title, start_marker, end_marker in chapter_boundaries:
             chapters.append({
@@ -521,93 +703,94 @@ Output:"""
                 "end_tag": end_marker
             })
 
-        # Add remaining text if any
+        # Add remaining
         last_tag = chapters[-1]["end_tag"] if chapters else 0
         last_pos = marker_positions.get(last_tag, 0) if last_tag else 0
-        
         if last_pos < len(text_plain):
-            self._log.info("Adding remaining content chapter")
-            next_start = min(last_tag + 1, max_marker)
-            chapters.append({"title": "Remaining Content", "start_tag": next_start, "end_tag": max_marker})
+             next_start = min(last_tag + 1, max_marker)
+             chapters.append({"title": "Remaining Content", "start_tag": next_start, "end_tag": max_marker})
 
-        chapter_texts_plain = []
-        chapter_texts_html = []
-        chapter_ranges_plain = []
-        start_html = 0
-        pending_indices = []
-
-        for i, chapter in enumerate(chapters):
-            start_tag = chapter["start_tag"]
-            end_tag = chapter["end_tag"]
-            
-            start_pos = marker_positions.get(start_tag - 1, 0)
-            end_pos = marker_positions.get(end_tag, len(text_plain))
-            
-            if start_pos >= end_pos:
-                self._log.warning(f"Chapter '{chapter['title']}' markers {start_tag}-{end_tag} resolve to empty range")
-                chapter_texts_plain.append("")
-                chapter_texts_html.append("")
-                chapter_ranges_plain.append((start_pos, end_pos))
-                continue
-            
-            chapter_plain = text_plain[start_pos:end_pos].strip()
-            self._log.info(f"Chapter {i+1} '{chapter['title']}': markers {start_tag}-{end_tag}, positions {start_pos}-{end_pos}, text length: {len(chapter_plain)}")
-            
-            if not chapter_plain:
-                self._log.warning(f"Empty chapter text for '{chapter['title']}'")
-                chapter_texts_plain.append("")
-                chapter_texts_html.append("")
-                chapter_ranges_plain.append((start_pos, end_pos))
-                continue
-                
-            chapter_texts_plain.append(chapter_plain)
-            chapter_ranges_plain.append((start_pos, end_pos))
-            
-            html_cleaner_temp = HTMLCleaner()
-            html_remaining = text_html[start_html:]
-            best_match_end = 0
-            match_found = False
-            
-            for end_pos_html in range(len(chapter_plain), len(html_remaining) + 1):
-                html_cleaner_temp.purge()
-                html_cleaner_temp.feed(html_remaining[:end_pos_html])
-                extracted_plain = " ".join(html_cleaner_temp.get_content()).strip()
-                extracted_plain = re.sub(r'\s+', ' ', extracted_plain)
-                if chapter_plain in extracted_plain or extracted_plain == chapter_plain:
-                    best_match_end = end_pos_html
-                    match_found = True
-                    break
-            
-            if match_found:
-                chapter_html = html_remaining[:best_match_end].strip()
-                start_html += best_match_end
-                
-                html_cleaner_temp.purge()
-                html_cleaner_temp.feed(chapter_html)
-                extracted_final = " ".join(html_cleaner_temp.get_content()).strip()
-                extracted_final = re.sub(r'\s+', ' ', extracted_final)
-                match_index = extracted_final.find(chapter_plain)
-                
-                if match_index > 5 and pending_indices:
-                    first_idx = pending_indices[0]
-                    chapter_texts_html[first_idx] = chapter_html
-                    for p_idx in pending_indices[1:]:
-                        chapter_texts_html[p_idx] = ""
-                    chapter_texts_html.append("")
-                    pending_indices = []
-                else:
-                    chapter_texts_html.append(chapter_html)
-                    pending_indices = []
-            else:
-                chapter_texts_html.append(chapter_plain)
-                pending_indices.append(len(chapter_texts_html) - 1)
-        
         result = []
-        for i, (plain, html) in enumerate(zip(chapter_texts_plain, chapter_texts_html)):
-            title = chapters[i]["title"] if i < len(chapters) else f"Chapter {i+1}"
-            start_pos_i, end_pos_i = chapter_ranges_plain[i] if i < len(chapter_ranges_plain) else (0, 0)
-            result.append({"title": title, "text": html, "plain_start": start_pos_i, "plain_end": end_pos_i})
         
+        # We need to map 'text_plain' ranges to 'mapped_plain' indices.
+        # Since 'text_plain' was generated from 'text_html' earlier, they should match.
+        # However, to be robust, we use the marker positions which are indices into 'text_plain'.
+        
+        # Fallback: if lengths differ significantly, we might have an issue.
+        # But assuming consistency:
+        
+        for ch in chapters:
+            start_tag = ch["start_tag"]
+            end_tag = ch["end_tag"]
+            
+            # These are indices into 'text_plain'
+            p_start = marker_positions.get(start_tag - 1, 0)
+            p_end = marker_positions.get(end_tag, len(text_plain))
+            
+            # Get the plain text snippet we want
+            target_snippet = text_plain[p_start:p_end].strip()
+            
+            if not target_snippet:
+                result.append({"title": ch["title"], "text": "", "plain_start": p_start, "plain_end": p_end})
+                continue
+            
+            # Find this snippet in our 'mapped_plain'
+            # We can use find(), or we can rely on relative positions if we track offset.
+            # Using find() is safer against minor drifts.
+            # Optimization: search from the end of the previous chapter.
+            
+            # Since chapters are ordered, we search forward.
+            search_start_idx = getattr(self, '_last_map_idx', 0) 
+            
+            # If we restarted or jumped, reset
+            if search_start_idx >= len(mapped_plain):
+                search_start_idx = 0
+
+            snippet_idx = mapped_plain.find(target_snippet, search_start_idx)
+            
+            # If not found forward, try from beginning (just in case of out of order processing?)
+            if snippet_idx == -1:
+                snippet_idx = mapped_plain.find(target_snippet)
+                
+            html_content = ""
+            if snippet_idx != -1:
+                # Calculate end index in mapped_plain
+                snippet_end_idx = snippet_idx + len(target_snippet)
+                
+                # Update last index for next iteration
+                self._last_map_idx = snippet_end_idx
+                
+                # Map back to HTML using our lookup table
+                # existing mapping list has length of plain text + 1 sentinel
+                if snippet_idx < len(mapping) and snippet_end_idx < len(mapping):
+                   h_start = mapping[snippet_idx]
+                   h_end = mapping[snippet_end_idx]
+                   
+                   # Slice HTML. 
+                   # Note: heuristic logic might be needed if heuristic cutoff split a tag 
+                   # but our mapping maps to start of char/entity so it shouldn't split inside a tag name.
+                   # It might split a parent container though (e.g. <div>text...|cut|...</div>)
+                   # The original code just sliced raw strings, so we duplicate that "dumb slice" behavior.
+                   html_content = text_html[h_start:h_end]
+                   
+                else:
+                    self._log.warning(f"Map index out of bounds for chapter '{ch['title']}'")
+            else:
+                 self._log.warning(f"Could not align chapter '{ch['title']}' to HTML using fast map")
+                 # Fallback? Or just leave empty
+                 html_content = target_snippet # fallback to plain
+
+            result.append({
+                "title": ch["title"], 
+                "text": html_content.strip(), 
+                "plain_start": p_start, 
+                "plain_end": p_end
+            })
+
+        # Cleanup temp state
+        if hasattr(self, '_last_map_idx'):
+            del self._last_map_idx
+            
         return result
 
     def _llm_split_chapters(self, text_plain: str, text_html: str) -> List[Dict[str, Any]]:
@@ -744,7 +927,8 @@ Output:"""
             if sentence and len(sentence.strip()) > 0:
                 result.append({
                     "text": sentence.strip(),
-                    "number": i + 1
+                    "number": i + 1,
+                    "read": False
                 })
         
         return result

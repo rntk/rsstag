@@ -496,6 +496,9 @@ class RSSTagApplication(object):
     def on_post_grouped_get(self, user: dict, request: Request, pids: str) -> Response:
         return posts_handlers.on_post_grouped_get(self, user, request, pids)
 
+    def on_post_grouped_snippets_get(self, user: dict, request: Request, pids: str) -> Response:
+        return posts_handlers.on_post_grouped_snippets_get(self, user, request, pids)
+
     def on_topics_list_get(self, user: dict, request: Request, page_number: int = 1) -> Response:
         return posts_handlers.on_topics_list_get(self, user, request, page_number)
 
@@ -1087,6 +1090,9 @@ class RSSTagApplication(object):
 
     def on_mark_telegram_posts_post(self, user: dict, request: Request):
         return posts_handlers.on_mark_telegram_posts_post(self, user, request)
+
+    def on_read_snippet_post(self, user: dict, request: Request) -> Response:
+        return posts_handlers.on_read_snippet_post(self, user, request)
 
     def on_gmail_sort_post(self, user: dict, request: Request):
         return posts_handlers.on_gmail_sort_post(self, user, request)

@@ -143,10 +143,27 @@ class RssTagTasks:
     def get_task(self, users: RssTagUsers) -> dict:
         task = {"type": TASK_NOOP, "user": None, "data": None, "_id": ""}
         try:
-            user_task = self._db.tasks.find_one_and_update(
-                {"processing": TASK_NOT_IN_PROCESSING},
-                {"$set": {"processing": time.time()}},
-            )
+            # Use aggregation with $sample to randomize task selection.
+            # This ensures that if multiple tasks are in the queue, all of them
+            # get a chance to be processed, preventing one large task from
+            # monopolizing the workers through its subtasks/batches.
+            pipeline = [
+                {"$match": {"processing": TASK_NOT_IN_PROCESSING}},
+                {"$sample": {"size": 5}}
+            ]
+            candidates = list(self._db.tasks.aggregate(pipeline))
+            if not candidates:
+                return task
+
+            user_task = None
+            for candidate in candidates:
+                user_task = self._db.tasks.find_one_and_update(
+                    {"_id": candidate["_id"], "processing": TASK_NOT_IN_PROCESSING},
+                    {"$set": {"processing": time.time()}},
+                )
+                if user_task:
+                    break
+
             if not user_task:
                 return task
 
