@@ -5,7 +5,19 @@ const prettier = require('eslint-config-prettier');
 
 module.exports = [
   {
-    ignores: ['node_modules/', 'bundle.js', 'bundle.js.map'],
+    ignores: [
+      'node_modules/',
+      'bundle.js',
+      'bundle.js.map',
+      'bundle.js.LICENSE.txt',
+      'Chart.min.js',
+      'd3.v6.min.js',
+      'google-charts.js',
+      '../css/*.map',
+      '../libs/cloud.min.js',
+      '../../vis-dist/**',
+      '../node_modules/',
+    ],
   },
   js.configs.recommended,
   {
