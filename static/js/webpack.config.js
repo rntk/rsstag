@@ -1,66 +1,74 @@
-var path = require('path');
-var webpack = require('webpack');
-
-var plugins = [
-    new webpack.EnvironmentPlugin(['NODE_ENV'])
-];
-
+const path = require('path');
+const webpack = require('webpack');
 const fs = require('fs');
 const sass = require('sass');
-const result = sass.compile("/css/style.scss");
-fs.writeFileSync('/css/style.css', result.css);
 
-if (process.env.NODE_ENV === 'production') {
-    plugins = plugins.concat([
-        /*new webpack.optimize.UglifyJsPlugin({
-            compress: {
-                warnings: false
-            }
-        })*/
-    ]);
+// Compile SASS to CSS
+const cssDir = path.resolve(__dirname, '..', 'css');
+const scssPath = path.join(cssDir, 'style.scss');
+const cssPath = path.join(cssDir, 'style.css');
+
+try {
+    if (fs.existsSync(scssPath)) {
+        const result = sass.compile(scssPath);
+        fs.writeFileSync(cssPath, result.css);
+        console.log('✓ SASS compiled successfully');
+    } else {
+        console.warn('⚠ SASS file not found, skipping compilation');
+    }
+} catch (error) {
+    console.error('✗ SASS compilation failed:', error.message);
 }
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 module.exports = {
-    devtool: 'cheap-module-source-map',
+    mode: isProduction ? 'production' : 'development',
+    devtool: isProduction ? 'source-map' : 'eval-source-map',
     entry: path.join(__dirname, 'apps', 'app.js'),
     module: {
         rules: [
             {
-                test: /\.js/,
-                include: path.join(__dirname, 'components'),
+                test: /\.js$/,
+                include: [
+                    path.join(__dirname, 'apps'),
+                    path.join(__dirname, 'components'),
+                    path.join(__dirname, 'storages'),
+                    path.join(__dirname, 'libs')
+                ],
                 use: {
                     loader: 'babel-loader',
                     options: {
-                        presets: ["@babel/preset-react", '@babel/preset-env']
-                    }
-                }
-            },
-            {
-                test: /\.js/,
-                include: [path.join(__dirname, 'storages'), path.join(__dirname, 'libs')],
-                use: {
-                    loader: 'babel-loader',
-                    options: {
-                        presets: ['@babel/preset-env']
-                    }
-                }
-            },
-            {
-                test: /app.js/,
-                include: path.join(__dirname, 'apps'),
-                use: {
-                    loader: 'babel-loader',
-                    options: {
-                        presets: ['@babel/preset-react', '@babel/preset-env'],
+                        presets: [
+                            '@babel/preset-react',
+                            ['@babel/preset-env', {
+                                targets: '> 0.25%, not dead',
+                                useBuiltIns: 'usage',
+                                corejs: 3
+                            }]
+                        ],
+                        cacheDirectory: true
                     }
                 }
             }
         ]
     },
-    plugins: plugins,
+    plugins: [
+        new webpack.EnvironmentPlugin({
+            NODE_ENV: 'development'
+        })
+    ],
     output: {
         path: __dirname,
         filename: 'bundle.js',
-        publicPath: '/static/js'
+        publicPath: '/static/js/'
     },
-}
+    resolve: {
+        extensions: ['.js', '.jsx']
+    },
+    performance: {
+        hints: isProduction ? 'warning' : false,
+        maxEntrypointSize: 512000,
+        maxAssetSize: 512000
+    }
+};
