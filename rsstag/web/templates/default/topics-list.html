@@ -34,7 +34,7 @@
                         {% set all_post_ids = topic_data.posts|join('_') %}
                         <a href="/post-grouped/{{ all_post_ids }}" class="topic-link" title="{{ topic_name }}">{{
                             topic_name[:60] }}{% if topic_name|length > 60 %}...{% endif %}</a>
-                        <a href="/post-grouped-snippets/{{ all_post_ids }}?topic={{ topic_name }}" class="snippet-link"
+                        <a href="/post-grouped-snippets/{{ all_post_ids }}?topic={{ topic_name|url_encode }}" class="snippet-link"
                             title="View snippets">S</a>
                         <span class="topic-count">({{ topic_data.count }})</span>
                         {% if topic_data.posts|length > 0 %}
