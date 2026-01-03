@@ -1,8 +1,34 @@
 ## Steps to run:
 ### 1. Build js bundle
+
+#### Option A: Using Docker (recommended for consistency)
 `cd static/js`
 
-```docker run -it --rm -v `pwd`/../css:/css -v `pwd`:/app -w /app node:22 ./build.sh```
+```bash
+docker run -it --rm -v `pwd`/../css:/css -v `pwd`:/app -w /app node:22 ./build.sh
+```
+
+#### Option B: Using local Node.js (faster for development)
+`cd static/js`
+
+```bash
+# Install dependencies (first time only)
+npm install
+
+# Production build
+npm run build
+
+# Development build with source maps
+npm run build:dev
+
+# Development with auto-rebuild on file changes
+npm run watch
+
+# Development with live reload server (port 8886)
+npm run dev
+```
+
+**Note:** This project uses Node.js 22. Use `nvm use` to switch to the correct version if you have nvm installed.
 
 ### 2. Prepare config files
 

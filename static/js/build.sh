@@ -1,3 +1,10 @@
 #!/bin/bash
+set -e
+
+echo "Installing dependencies..."
 npm install --production=false
-NODE_ENV=production npx webpack
+
+echo "Building production bundle..."
+npm run build
+
+echo "Build completed successfully!"
