@@ -55,6 +55,37 @@ def on_post_speech(app: "RSSTagApplication", user: dict, request: Request) -> Re
     return Response(json.dumps(result), mimetype="application/json", status=code)
 
 
+def _hsl_to_hex(h: float, s: float, lightness: float) -> str:
+    """Convert HSL to HEX color"""
+    import colorsys
+
+    r, g, b = colorsys.hls_to_rgb(h, lightness, s)
+    return "#" + "".join(f"{int(c * 255):02x}" for c in (r, g, b))
+
+
+def _group_color(group_id: str) -> str:
+    """Generate color for a group"""
+    import hashlib
+
+    digest = hashlib.md5(group_id.encode("utf-8")).hexdigest()
+    hue = (int(digest[:8], 16) % 360) / 360.0
+    sat = 0.6
+    light = 0.7
+    return _hsl_to_hex(hue, sat, light)
+
+
+def _linkify_angle_bracket_urls(text: str) -> str:
+    """Convert angle-bracketed URLs to clickable links.
+
+    Converts <https://example.com> to <a href="https://example.com" target="_blank">https://example.com</a>
+    """
+    import re
+
+    # Match URLs inside angle brackets: <http://...> or <https://...>
+    pattern = r"<(https?://[^>]+)>"
+    return re.sub(pattern, r'<a href="\1" target="_blank">\1</a>', text)
+
+
 def on_category_get(
     app: "RSSTagApplication", user: dict, request: Request, quoted_category: str
 ) -> Response:
@@ -1112,43 +1143,14 @@ def on_cluster_get(app: "RSSTagApplication", user: dict, cluster: int) -> Respon
 def on_post_grouped_get(
     app: "RSSTagApplication", user: dict, request: Request, pids: str
 ) -> Response:
-    """Handler for grouped posts view with color generation"""
-
-    def _hsl_to_hex(h: float, s: float, lightness: float) -> str:
-        """Convert HSL to HEX color"""
-        import colorsys
-
-        r, g, b = colorsys.hls_to_rgb(h, lightness, s)
-        return "#" + "".join(f"{int(c*255):02x}" for c in (r, g, b))
-
-    def _group_color(group_id: str) -> str:
-        """Generate color for a group"""
-        import hashlib
-
-        digest = hashlib.md5(group_id.encode("utf-8")).hexdigest()
-        hue = (int(digest[:8], 16) % 360) / 360.0
-        sat = 0.6
-        light = 0.7
-        return _hsl_to_hex(hue, sat, light)
-
-    import re
-
-    def _linkify_angle_bracket_urls(text: str) -> str:
-        """Convert angle-bracketed URLs to clickable links.
-
-        Converts <https://example.com> to <a href="https://example.com" target="_blank">https://example.com</a>
-        """
-        # Match URLs inside angle brackets: <http://...> or <https://...>
-        pattern = r"<(https?://[^>]+)>"
-        return re.sub(pattern, r'<a href="\1" target="_blank">\1</a>', text)
-
+    """Handler for grouped posts view with server-side highlighting"""
     projection = {"content": True, "feed_id": True, "url": True}
     post_ids = [int(pid) for pid in pids.split("_") if pid]
     if not post_ids:
         return app.on_error(user, request, NotFound())
 
-    # Get the full posts first, we'll need them regardless
-    all_posts = []
+    # 1. Fetch posts and their raw content
+    posts_info = [] 
     feed_titles = []
     for post_id in post_ids:
         post = app.posts.get_by_pid(user["sid"], post_id, projection)
@@ -1158,71 +1160,142 @@ def on_post_grouped_get(
             if feed_title not in feed_titles:
                 feed_titles.append(feed_title)
 
-            content = gzip.decompress(post["content"]["content"]).decode(
+            raw_content = gzip.decompress(post["content"]["content"]).decode(
                 "utf-8", "replace"
             )
             if post["content"]["title"]:
-                content = post["content"]["title"] + ". " + content
+                raw_content = post["content"]["title"] + ". " + raw_content
 
-            # Linkify angle-bracketed URLs
-            content = _linkify_angle_bracket_urls(content)
-
-            all_posts.append(
+            posts_info.append(
                 {
                     "post_id": post_id,
-                    "content": content,
+                    "raw_content": raw_content,
                     "feed_title": feed_title,
                     "url": post.get("url", "") or "",
                 }
             )
 
-    post_to_index_map = {post["post_id"]: idx for idx, post in enumerate(all_posts)}
     combined_feed_title = " | ".join(feed_titles) if feed_titles else "Multiple Posts"
 
-    # Collect grouped data from all posts (single or multiple)
-    all_sentences = []
+    # 2. Gather grouping data and calculate global colors
+    all_sentences_data = []
     all_groups = {}
     sentence_offset = 0
     has_grouped_data = False
 
-    for post in all_posts:
-        # Check if this individual post has grouped data
-        post_grouped_data = app.post_grouping.get_grouped_posts(
-            user["sid"], [post["post_id"]]
-        )
-
+    for post_id in post_ids:
+        post_grouped_data = app.post_grouping.get_grouped_posts(user["sid"], [post_id])
         if post_grouped_data and post_grouped_data.get("sentences"):
             has_grouped_data = True
-            # Add sentences with adjusted indices and post_id reference
             for sentence in post_grouped_data["sentences"]:
-                # Linkify the sentence text the same way as content
-                escaped_text = _linkify_angle_bracket_urls(sentence["text"])
-                all_sentences.append(
+                all_sentences_data.append(
                     {
-                        "text": escaped_text,
+                        "text": sentence["text"],
                         "number": sentence_offset + sentence["number"],
-                        "post_id": post["post_id"],
+                        "post_id": post_id,
                     }
                 )
 
-            # Add groups with adjusted sentence indices
             for group_name, sentence_indices in post_grouped_data["groups"].items():
-                # Adjust sentence indices by offset
                 adjusted_indices = [idx + sentence_offset for idx in sentence_indices]
-
                 if group_name not in all_groups:
                     all_groups[group_name] = []
                 all_groups[group_name].extend(adjusted_indices)
 
-            # Update offset for next post
             sentence_offset += len(post_grouped_data["sentences"])
 
-    # Generate colors dynamically from group keys
-    all_group_colors = {group: _group_color(group) for group in all_groups.keys()}
+    # Calculate colors
+    all_group_colors = {
+        group: _group_color(group) for group in all_groups.keys()
+    }
+    sentence_colors = {}
+    for group_name, indices in all_groups.items():
+        color = all_group_colors.get(group_name, "#4a6baf")
+        for idx in indices:
+            sentence_colors[idx] = color
 
-    # If no grouped data exists for any post, create default grouping by post
+    # 3. Process highlighting using robust mapping
+    final_posts = []
+    for p_info in posts_info:
+        post_id = p_info["post_id"]
+        raw_content = p_info["raw_content"]
+        
+        # Default if no grouping
+        content = raw_content
+
+        # Find sentences belonging to this post
+        post_sentences = [
+            s for s in all_sentences_data if s["post_id"] == post_id
+        ]
+        if has_grouped_data and post_sentences:
+            # Build a mapping between plain text indices and HTML indices
+            mapped_plain, mapping = app.post_grouping._build_html_mapping(raw_content)
+
+            # Identify ranges to replace
+            matches = []
+            for s in post_sentences:
+                text = s["text"]
+                num = s["number"]
+                color = sentence_colors.get(num, "#f0f0f0")
+
+                # Find the sentence in mapped_plain (normalized)
+                start_idx = mapped_plain.find(text)
+                if start_idx != -1:
+                    end_idx = start_idx + len(text)
+                    if start_idx < len(mapping) and end_idx < len(mapping):
+                        h_start = mapping[start_idx]
+                        h_end = mapping[end_idx]
+                        matches.append(
+                            {
+                                "start": h_start,
+                                "end": h_end,
+                                "num": num,
+                                "color": color,
+                                "text": raw_content[h_start:h_end],
+                            }
+                        )
+
+            # Sort matches and filter overlaps
+            matches.sort(key=lambda m: m["start"])
+            filtered_matches = []
+            last_end = 0
+            for m in matches:
+                if m["start"] >= last_end:
+                    filtered_matches.append(m)
+                    last_end = m["end"]
+
+            # Reconstruct content with spans
+            new_content_parts = []
+            last_pos = 0
+            for match in filtered_matches:
+                new_content_parts.append(raw_content[last_pos : match["start"]])
+                span = (
+                    '<span class="sentence-group" data-sentence="{}" '
+                    'style="background-color: {}40;">{}</span>'
+                ).format(match["num"], match["color"], match["text"])
+                new_content_parts.append(span)
+                last_pos = match["end"]
+            new_content_parts.append(raw_content[last_pos:])
+            content = "".join(new_content_parts)
+
+        # Apply linkification AFTER highlighting
+        content = _linkify_angle_bracket_urls(content)
+
+        final_posts.append(
+            {
+                "post_id": post_id,
+                "content": content,
+                "feed_title": p_info["feed_title"],
+                "url": p_info["url"],
+            }
+        )
+
+    # Helper map for template
+    post_to_index_map = {post["post_id"]: idx for idx, post in enumerate(final_posts)}
+
+    # If no grouped data exists, create default grouping by post
     if not has_grouped_data:
-        for post in all_posts:
+        for post in final_posts:
             group_name = f"Post {post['post_id']}"
             all_groups[group_name] = [post["post_id"]]
             all_group_colors[group_name] = _group_color(group_name)
@@ -1231,8 +1304,8 @@ def on_post_grouped_get(
     return Response(
         page.render(
             post_id=pids,
-            posts=all_posts,
-            sentences=all_sentences,
+            posts=final_posts,
+            sentences=all_sentences_data,
             groups=all_groups,
             group_colors=all_group_colors,
             hierarchical_segments=[],
@@ -1250,23 +1323,6 @@ def on_post_grouped_snippets_get(
     app: "RSSTagApplication", user: dict, request: Request, pids: str
 ) -> Response:
     """Handler for grouped snippets view"""
-
-    def _hsl_to_hex(h: float, s: float, lightness: float) -> str:
-        """Convert HSL to HEX color"""
-        import colorsys
-
-        r, g, b = colorsys.hls_to_rgb(h, lightness, s)
-        return "#" + "".join(f"{int(c*255):02x}" for c in (r, g, b))
-
-    def _group_color(group_id: str) -> str:
-        """Generate color for a group"""
-        import hashlib
-
-        digest = hashlib.md5(group_id.encode("utf-8")).hexdigest()
-        hue = (int(digest[:8], 16) % 360) / 360.0
-        sat = 0.6
-        light = 0.7
-        return _hsl_to_hex(hue, sat, light)
 
     post_ids = [int(pid) for pid in pids.split("_") if pid]
     if not post_ids:

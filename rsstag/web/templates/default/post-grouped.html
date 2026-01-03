@@ -346,13 +346,7 @@
                 });
             });
 
-            // If we have grouped data with sentences, wrap content in sentence spans
-            if (window.has_grouped_data && window.sentences && window.sentences.length > 0) {
-                wrapSentencesInContent();
-                isContentReady = true;
-            } else {
-                isContentReady = true;
-            }
+            isContentReady = true;
 
             // Build topics list
             const topicsList = document.getElementById('topics_list');
@@ -492,123 +486,40 @@
                 return div.innerHTML;
             }
 
-            function wrapSentencesInContent() {
-                // Group sentences by post_id
-                const sentencesByPost = {};
-                window.sentences.forEach(sentence => {
-                    const postId = sentence.post_id;
-                    if (!sentencesByPost[postId]) {
-                        sentencesByPost[postId] = [];
-                    }
-                    sentencesByPost[postId].push(sentence);
-                });
+            // Add click handlers to pre-rendered sentence spans
+            document.querySelectorAll('.sentence-group').forEach(span => {
+                span.addEventListener('click', function (ev) {
+                    ev.stopPropagation();
+                    const sentNum = parseInt(this.getAttribute('data-sentence'));
+                    if (!sentNum) return;
 
-                // For each post, wrap its content with sentence spans
-                Object.keys(sentencesByPost).forEach(postId => {
-                    const postText = document.querySelector('.post-text[data-post-id="' + postId + '"]');
-                    if (!postText) return;
+                    // Find which topic this sentence belongs to
+                    let topicName = null;
+                    let topicElement = null;
 
-                    const postSentences = sentencesByPost[postId];
-                    let content = postText.innerHTML;
-
-                    // Find colors for each sentence based on groups
-                    const sentenceColors = {};
                     Object.keys(window.groups).forEach(groupName => {
-                        const color = window.group_colors[groupName] || '#4a6baf';
-                        window.groups[groupName].forEach(sentNum => {
-                            sentenceColors[sentNum] = color;
-                        });
+                        if (window.groups[groupName].includes(sentNum)) {
+                            topicName = groupName;
+                        }
                     });
 
-                    // Sort sentences by length descending to avoid partial replacements
-                    const sortedSentences = [...postSentences].sort((a, b) => b.text.length - a.text.length);
-
-                    // Track which parts of content have been wrapped
-                    const wrappedRanges = [];
-
-                    sortedSentences.forEach(sentence => {
-                        const sentText = sentence.text;
-                        const sentNum = sentence.number;
-                        const color = sentenceColors[sentNum] || '#f0f0f0';
-
-                        // Find the sentence in content (handle HTML)
-                        // First try exact match
-                        let idx = content.indexOf(sentText);
-
-                        if (idx === -1) {
-                            // Try with normalized whitespace
-                            const normalizedSent = sentText.replace(/\s+/g, ' ').trim();
-                            const normalizedContent = content.replace(/\s+/g, ' ');
-                            idx = normalizedContent.indexOf(normalizedSent);
-                        }
-
-                        if (idx !== -1) {
-                            // Check if this range overlaps with already wrapped ranges
-                            const endIdx = idx + sentText.length;
-                            const overlaps = wrappedRanges.some(range =>
-                                (idx >= range.start && idx < range.end) ||
-                                (endIdx > range.start && endIdx <= range.end)
-                            );
-
-                            if (!overlaps) {
-                                const before = content.substring(0, idx);
-                                const after = content.substring(idx + sentText.length);
-                                const wrapped = '<span class="sentence-group" data-sentence="' + sentNum +
-                                    '" style="background-color: ' + color + '40;">' +
-                                    sentText + '</span>';
-                                content = before + wrapped + after;
-
-                                // Update wrapped ranges (accounting for added HTML)
-                                const addedLength = wrapped.length - sentText.length;
-                                wrappedRanges.forEach(range => {
-                                    if (range.start > idx) {
-                                        range.start += addedLength;
-                                        range.end += addedLength;
-                                    }
-                                });
-                                wrappedRanges.push({ start: idx, end: idx + wrapped.length });
+                    if (topicName) {
+                        // Find and trigger the topic element
+                        const topicItems = document.querySelectorAll('.topic-item');
+                        for (let item of topicItems) {
+                            const nameEl = item.querySelector('.topic-name');
+                            if (nameEl && nameEl.textContent.trim() === topicName) {
+                                topicElement = item;
+                                break;
                             }
                         }
-                    });
 
-                    postText.innerHTML = content;
+                        if (topicElement && typeof topicElement.onclick === 'function') {
+                            topicElement.onclick();
+                        }
+                    }
                 });
-
-                // Add click handlers to sentence spans
-                document.querySelectorAll('.sentence-group').forEach(span => {
-                    span.addEventListener('click', function (ev) {
-                        ev.stopPropagation();
-                        const sentNum = parseInt(this.getAttribute('data-sentence'));
-                        if (!sentNum) return;
-
-                        // Find which topic this sentence belongs to
-                        let topicName = null;
-                        let topicElement = null;
-
-                        Object.keys(window.groups).forEach(groupName => {
-                            if (window.groups[groupName].includes(sentNum)) {
-                                topicName = groupName;
-                            }
-                        });
-
-                        if (topicName) {
-                            // Find and trigger the topic element
-                            const topicItems = document.querySelectorAll('.topic-item');
-                            for (let item of topicItems) {
-                                const nameEl = item.querySelector('.topic-name');
-                                if (nameEl && nameEl.textContent.trim() === topicName) {
-                                    topicElement = item;
-                                    break;
-                                }
-                            }
-
-                            if (topicElement && typeof topicElement.onclick === 'function') {
-                                topicElement.onclick();
-                            }
-                        }
-                    });
-                });
-            }
+            });
 
             function highlightSentences(sentenceIndices, color, focusIndex) {
                 if (!sentenceIndices || sentenceIndices.length === 0) return;
