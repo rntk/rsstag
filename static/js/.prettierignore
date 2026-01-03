@@ -9,3 +9,8 @@ google-charts.js
 ../libs/cloud.min.js
 ../../vis-dist/**
 ../node_modules/
+package-lock.json
+package.json
+.prettierrc.json
+eslint.config.js
+*.md
