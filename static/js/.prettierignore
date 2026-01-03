@@ -6,8 +6,8 @@ Chart.min.js
 d3.v6.min.js
 google-charts.js
 ../css/*.map
-../libs/cloud.min.js
-../../vis-dist/**
+libs/cloud.min.js
+../vis-dist/**
 ../node_modules/
 package-lock.json
 package.json
