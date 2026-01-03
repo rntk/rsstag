@@ -1057,6 +1057,9 @@ h3.post_title {
   padding: 2px;
   vertical-align: middle;
 }
+.bigrams-table .highlighted {
+  background-color: #dde5ff !important;
+}
 
 .bigram-cell-link {
   display: flex;

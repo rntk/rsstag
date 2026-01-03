@@ -939,6 +939,10 @@ h3.post_title {
         padding: 2px;
         vertical-align: middle;
     }
+
+    .highlighted {
+        background-color: $selected_color !important;
+    }
 }
 
 .bigram-cell-link {

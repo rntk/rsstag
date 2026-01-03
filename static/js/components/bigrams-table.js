@@ -15,13 +15,31 @@ export default class BigramsTable extends React.Component {
         super(props);
         this.state = {
             tags: new Map(),
-            tag_hash: ''
+            tag_hash: '',
+            hoveredRow: null,
+            hoveredCol: null
         };
         this.updateTags = this.updateTags.bind(this);
+        this.handleCellMouseEnter = this.handleCellMouseEnter.bind(this);
+        this.handleCellMouseLeave = this.handleCellMouseLeave.bind(this);
     }
 
     updateTags(state) {
         this.setState(state);
+    }
+
+    handleCellMouseEnter(row, col) {
+        this.setState({
+            hoveredRow: row,
+            hoveredCol: col
+        });
+    }
+
+    handleCellMouseLeave() {
+        this.setState({
+            hoveredRow: null,
+            hoveredCol: null
+        });
     }
 
     componentDidMount() {
@@ -213,6 +231,7 @@ export default class BigramsTable extends React.Component {
 
     render() {
         const { firstWords, secondWords, matrix, maxCount } = this.processBigrams();
+        const { hoveredRow, hoveredCol } = this.state;
 
         if (firstWords.length === 0 || secondWords.length === 0) {
             return <p>No bigrams data available</p>;
@@ -248,7 +267,12 @@ export default class BigramsTable extends React.Component {
                             <tr>
                                 <th className="bigrams-corner-cell"></th>
                                 {secondWords.map((word) => (
-                                    <th key={`col-${word}`} className="bigrams-col-header">
+                                    <th 
+                                        key={`col-${word}`} 
+                                        className={`bigrams-col-header ${hoveredCol === word ? 'highlighted' : ''}`}
+                                        onMouseEnter={() => this.handleCellMouseEnter(null, word)}
+                                        onMouseLeave={this.handleCellMouseLeave}
+                                    >
                                         <a href={`/tag-info/${encodeURIComponent(word)}`}>{word}</a>
                                     </th>
                                 ))}
@@ -257,13 +281,23 @@ export default class BigramsTable extends React.Component {
                         <tbody>
                             {firstWords.map((firstWord) => (
                                 <tr key={`row-${firstWord}`}>
-                                    <th className="bigrams-row-header">
+                                    <th 
+                                        className={`bigrams-row-header ${hoveredRow === firstWord ? 'highlighted' : ''}`}
+                                        onMouseEnter={() => this.handleCellMouseEnter(firstWord, null)}
+                                        onMouseLeave={this.handleCellMouseLeave}
+                                    >
                                         <a href={`/tag-info/${encodeURIComponent(firstWord)}`}>{firstWord}</a>
                                     </th>
                                     {secondWords.map((secondWord) => {
                                         const cellData = matrix[firstWord]?.[secondWord];
+                                        const isHighlighted = hoveredRow === firstWord || hoveredCol === secondWord;
                                         return (
-                                            <td key={`cell-${firstWord}-${secondWord}`} className="bigrams-cell">
+                                            <td 
+                                                key={`cell-${firstWord}-${secondWord}`} 
+                                                className={`bigrams-cell ${isHighlighted ? 'highlighted' : ''}`}
+                                                onMouseEnter={() => this.handleCellMouseEnter(firstWord, secondWord)}
+                                                onMouseLeave={this.handleCellMouseLeave}
+                                            >
                                                 {this.renderCircle(cellData, maxCount)}
                                             </td>
                                         );
