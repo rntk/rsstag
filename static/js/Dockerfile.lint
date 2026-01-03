@@ -1,0 +1,11 @@
+FROM node:22
+
+WORKDIR /app
+COPY package.json package-lock.json* ./
+RUN npm install
+
+ENV NODE_PATH=/app/node_modules
+ENV PATH=/app/node_modules/.bin:$PATH
+
+WORKDIR /workspace
+CMD ["npm", "run", "lint"]
