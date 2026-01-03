@@ -1208,6 +1208,11 @@ def on_post_grouped_get(
     all_group_colors = {
         group: _group_color(group) for group in all_groups.keys()
     }
+    sentence_topics = defaultdict(list)
+    for group_name, indices in all_groups.items():
+        for idx in indices:
+            sentence_topics[idx].append(group_name)
+
     sentence_colors = {}
     for group_name, indices in all_groups.items():
         color = all_group_colors.get(group_name, "#4a6baf")
@@ -1237,6 +1242,11 @@ def on_post_grouped_get(
                 text = s["text"]
                 num = s["number"]
                 color = sentence_colors.get(num, "#f0f0f0")
+                topic_names = sentence_topics.get(num, [])
+                if topic_names:
+                    topic_label = ", ".join(topic_names)
+                else:
+                    topic_label = "Unassigned"
 
                 # Find the sentence in mapped_plain (normalized)
                 start_idx = mapped_plain.find(text)
@@ -1252,6 +1262,7 @@ def on_post_grouped_get(
                                 "num": num,
                                 "color": color,
                                 "text": raw_content[h_start:h_end],
+                                "topic": topic_label,
                             }
                         )
 
@@ -1271,8 +1282,14 @@ def on_post_grouped_get(
                 new_content_parts.append(raw_content[last_pos : match["start"]])
                 span = (
                     '<span class="sentence-group" data-sentence="{}" '
-                    'style="background-color: {}40;">{}</span>'
-                ).format(match["num"], match["color"], match["text"])
+                    'data-topic="{}" title="{}" style="background-color: {}40;">{}</span>'
+                ).format(
+                    match["num"],
+                    html.escape(match["topic"]),
+                    html.escape(match["topic"]),
+                    match["color"],
+                    match["text"],
+                )
                 new_content_parts.append(span)
                 last_pos = match["end"]
             new_content_parts.append(raw_content[last_pos:])
