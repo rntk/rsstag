@@ -30,6 +30,38 @@ npm run dev
 
 **Note:** This project uses Node.js 22. Use `nvm use` to switch to the correct version if you have nvm installed.
 
+### 1a. Lint/format frontend JS with Docker
+
+From `static/js`:
+
+```bash
+docker build -t rsstag-js-lint -f Dockerfile.lint .
+```
+
+Run linting:
+
+```bash
+docker run --rm -v "$PWD":/workspace rsstag-js-lint npm run lint
+```
+
+Apply lint fixes (optional):
+
+```bash
+docker run --rm -v "$PWD":/workspace rsstag-js-lint npm run lint:fix
+```
+
+Check formatting:
+
+```bash
+docker run --rm -v "$PWD":/workspace rsstag-js-lint npm run format:check
+```
+
+Apply formatting (optional):
+
+```bash
+docker run --rm -v "$PWD":/workspace rsstag-js-lint npm run format
+```
+
 ### 2. Prepare config files
 
 Copy default.conf to rsscloud.conf.

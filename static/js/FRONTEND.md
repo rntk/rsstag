@@ -56,6 +56,10 @@ static/js/
 | `npm run watch` | Development build with auto-rebuild on file changes |
 | `npm run dev` | Start webpack-dev-server with hot reload (port 8886) |
 | `npm run clean` | Remove generated bundle files |
+| `npm run lint` | Run ESLint on JS/JSX sources |
+| `npm run lint:fix` | Run ESLint with auto-fixes |
+| `npm run format` | Format files with Prettier |
+| `npm run format:check` | Check formatting without writing changes |
 
 ## Building
 
@@ -103,6 +107,54 @@ docker run -it --rm \
   -v `pwd`:/app \
   -w /app \
   node:22 ./build.sh
+```
+
+## Linting and Formatting
+
+Run linting and formatting locally:
+
+```bash
+npm run lint
+npm run format:check
+```
+
+Apply fixes:
+
+```bash
+npm run lint:fix
+npm run format
+```
+
+### Docker Lint/Format
+
+Build the lint/format container from `static/js`:
+
+```bash
+docker build -t rsstag-js-lint -f Dockerfile.lint .
+```
+
+Run linting:
+
+```bash
+docker run --rm -v "$PWD":/workspace rsstag-js-lint npm run lint
+```
+
+Apply lint fixes (optional):
+
+```bash
+docker run --rm -v "$PWD":/workspace rsstag-js-lint npm run lint:fix
+```
+
+Check formatting:
+
+```bash
+docker run --rm -v "$PWD":/workspace rsstag-js-lint npm run format:check
+```
+
+Apply formatting (optional):
+
+```bash
+docker run --rm -v "$PWD":/workspace rsstag-js-lint npm run format
 ```
 
 ## Output
