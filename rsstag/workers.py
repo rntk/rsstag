@@ -93,7 +93,7 @@ class Worker:
         self._anthropic = None
 
         try:
-            from rsstag.llamacpp import LLamaCPP
+            from rsstag.llm.llamacpp import LLamaCPP
 
             self._llamacpp = LLamaCPP(self._config["llamacpp"]["host"])
         except Exception as e:
@@ -110,14 +110,14 @@ class Worker:
             logging.warning("Can't initialize GroqCom: %s", e)
 
         try:
-            from rsstag.openai import ROpenAI
+            from rsstag.llm.openai import ROpenAI
 
             self._openai = ROpenAI(self._config["openai"]["token"])
         except Exception as e:
             logging.warning("Can't initialize OpenAI: %s", e)
 
         try:
-            from rsstag.anthropic import Anthropic
+            from rsstag.llm.anthropic import Anthropic
 
             self._anthropic = Anthropic(self._config["anthropic"]["token"])
         except Exception as e:
