@@ -1390,9 +1390,11 @@ def on_post_grouped_snippets_get(
                     topics_data[group] = {"color": _group_color(group), "snippets": []}
 
                 sorted_indices = sorted(indices)
+                if not sorted_indices:
+                    continue
+
+                current_snippet = None
                 for idx in sorted_indices:
-                    # If indices are sequential (allow small gap), merge them?
-                    # For now just list them all. Or maybe combine sequential sentences into a block.
                     s_obj = sentences_map.get(idx)
                     if not s_obj:
                         continue
@@ -1400,17 +1402,30 @@ def on_post_grouped_snippets_get(
                     if not text:
                         continue
 
-                    # Add context about which post this is from
-                    topics_data[group]["snippets"].append(
-                        {
+                    if current_snippet and idx == current_snippet["index"] + 1:
+                        current_snippet["text"] += " " + text
+                        current_snippet["index"] = idx
+                        current_snippet["indices"].append(idx)
+                        # If any sentence in the snippet is unread, the whole snippet is unread?
+                        # Or only if all are read? Let's say if any is unread, it's unread.
+                        if not s_obj.get("read", False):
+                            current_snippet["read"] = False
+                    else:
+                        if current_snippet:
+                            topics_data[group]["snippets"].append(current_snippet)
+
+                        current_snippet = {
                             "text": text,
                             "post_id": post_id,
                             "post_title": all_posts[post_id]["title"],
                             "index": idx,
+                            "indices": [idx],
                             "url": all_posts[post_id]["url"],
                             "read": s_obj.get("read", False),
                         }
-                    )
+
+                if current_snippet:
+                    topics_data[group]["snippets"].append(current_snippet)
 
     # Sort topics by name or maybe by number of snippets?
     sorted_topics = sorted(topics_data.items(), key=lambda x: x[0])
