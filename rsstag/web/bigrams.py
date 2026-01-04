@@ -63,13 +63,16 @@ def on_group_by_bigrams_get(
     return Response(
         page.render(
             tags=sorted_tags,
-            sort_by_title="tags",
+            sort_by_title="bi-grams",
             sort_by_link=app.routes.get_url_by_endpoint(
                 endpoint="on_group_by_bigrams_get",
                 params={"page_number": new_cookie_page_value},
             ),
             group_by_link=app.routes.get_url_by_endpoint(
                 endpoint="on_group_by_category_get"
+            ),
+            tags_categories_link=app.routes.get_url_by_endpoint(
+                endpoint="on_group_by_tags_categories_get", params={"page_number": 1}
             ),
             pages_map=pages_map,
             current_page=new_cookie_page_value,
@@ -444,6 +447,9 @@ def on_group_by_bigrams_dyn_get(
             ),
             group_by_link=app.routes.get_url_by_endpoint(
                 endpoint="on_group_by_category_get"
+            ),
+            tags_categories_link=app.routes.get_url_by_endpoint(
+                endpoint="on_group_by_tags_categories_get", params={"page_number": 1}
             ),
             pages_map=pages_map,
             current_page=1,

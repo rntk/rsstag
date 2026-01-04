@@ -64,6 +64,16 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/group/tags-categories/<int:page_number>",
+                "endpoint": "on_group_by_tags_categories_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/tags/category/<string:quoted_category>/<int:page_number>",
+                "endpoint": "on_group_by_tags_by_category_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/refresh",
                 "endpoint": "on_refresh_get_post",
                 "methods": ["GET", "POST"],

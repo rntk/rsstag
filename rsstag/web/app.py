@@ -378,6 +378,7 @@ class RSSTagApplication(object):
         sentiment="",
         group="",
         letter="",
+        quoted_category="",
     ):
         pages_map = {}
         page_count = round(page_count)
@@ -394,6 +395,8 @@ class RSSTagApplication(object):
             params["group"] = group
         if letter:
             params["letter"] = letter
+        if quoted_category:
+            params["quoted_category"] = quoted_category
         if page_count > 11:
             pages_map["middle"] = []
             for i in range(numbers_start_range, numbers_end_range):
@@ -1119,6 +1122,16 @@ class RSSTagApplication(object):
 
     def on_get_tag_similar_tags(self, user: dict, _: Request, tags: str):
         return tags_handlers.on_get_tag_similar_tags(self, user, tags)
+
+    def on_group_by_tags_categories_get(self, user: dict, _: Request, page_number: int = 1):
+        return tags_handlers.on_group_by_tags_categories_get(self, user, page_number)
+
+    def on_group_by_tags_by_category_get(
+        self, user: dict, _: Request, quoted_category: str, page_number: int = 1
+    ):
+        return tags_handlers.on_group_by_tags_by_category_get(
+            self, user, quoted_category, page_number
+        )
 
     def on_group_by_bigrams_dyn_get(self, user: dict, _: Request, page_number: int):
         return bigrams_handlers.on_group_by_bigrams_dyn_get(self, user, page_number)

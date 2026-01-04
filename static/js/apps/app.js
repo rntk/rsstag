@@ -186,7 +186,8 @@ window.onload = () => {
   } else if (path === '/group/category') {
     ReactDOM.render(<CategoriesList ES={window.EVSYS} />, document.getElementById('cats_list'));
   } else if (
-    /\/group\/(tag|hottag)\/.*/.test(path) ||
+    /\/group\/(tag|hottag|tags-categories)\/.*/.test(path) ||
+    /\/tags\/category\/.*/.test(path) ||
     /\/tags\/sentiment\/.*/.test(path) ||
     /\/tags\/group\/.*/.test(path) ||
     /\/topics\/[0-9]+/.test(path) ||

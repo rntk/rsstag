@@ -89,6 +89,9 @@ def on_group_by_tags_get(
             group_by_link=app.routes.get_url_by_endpoint(
                 endpoint="on_group_by_category_get"
             ),
+            tags_categories_link=app.routes.get_url_by_endpoint(
+                endpoint="on_group_by_tags_categories_get", params={"page_number": 1}
+            ),
             pages_map=pages_map,
             current_page=new_cookie_page_value,
             letters=letters,
@@ -296,6 +299,9 @@ def on_group_by_tags_sentiment(
             group_by_link=app.routes.get_url_by_endpoint(
                 endpoint="on_group_by_category_get"
             ),
+            tags_categories_link=app.routes.get_url_by_endpoint(
+                endpoint="on_group_by_tags_categories_get", params={"page_number": 1}
+            ),
             pages_map=pages_map,
             current_page=new_cookie_page_value,
             letters=letters,
@@ -379,6 +385,9 @@ def on_group_by_tags_startwith_get(
             group_by_link=app.routes.get_url_by_endpoint(
                 endpoint="on_group_by_category_get"
             ),
+            tags_categories_link=app.routes.get_url_by_endpoint(
+                endpoint="on_group_by_tags_categories_get", params={"page_number": 1}
+            ),
             pages_map=pages_map,
             current_page=new_cookie_page_value,
             letters=letters,
@@ -452,6 +461,9 @@ def on_group_by_tags_group(
             ),
             group_by_link=app.routes.get_url_by_endpoint(
                 endpoint="on_group_by_category_get"
+            ),
+            tags_categories_link=app.routes.get_url_by_endpoint(
+                endpoint="on_group_by_tags_categories_get", params={"page_number": 1}
             ),
             pages_map=pages_map,
             current_page=new_cookie_page_value,
@@ -1204,6 +1216,9 @@ def on_get_tfidf_tags(app: "RSSTagApplication", user: dict, rqst: Request) -> Re
             group_by_link=app.routes.get_url_by_endpoint(
                 endpoint="on_group_by_category_get"
             ),
+            tags_categories_link=app.routes.get_url_by_endpoint(
+                endpoint="on_group_by_tags_categories_get", params={"page_number": 1}
+            ),
             pages_map={},
             current_page=1,
             letters=letters,
@@ -1528,3 +1543,130 @@ def on_tag_contexts_classification_get(
     result.sort(key=lambda x: x["count"], reverse=True)
 
     return Response(json.dumps(result), mimetype="application/json")
+
+
+def on_group_by_tags_categories_get(
+    app: "RSSTagApplication", user: dict, page_number: int = 1
+) -> Response:
+    only_unread = user["settings"].get("only_unread", False)
+    categories = app.tags.get_categories(user["sid"], only_unread)
+    sorted_categories = []
+    for category, count in categories.items():
+        sorted_categories.append(
+            {
+                "tag": category,
+                "url": app.routes.get_url_by_endpoint(
+                    endpoint="on_group_by_tags_by_category_get",
+                    params={"quoted_category": category, "page_number": 1},
+                ),
+                "count": count,
+                "words": [],
+                "sentiment": [],
+            }
+        )
+    sorted_categories.sort(key=lambda x: x["tag"])
+    db_letters = app.letters.get(user["sid"], make_sort=True)
+    if db_letters:
+        letters = app.letters.to_list(db_letters, only_unread)
+    else:
+        letters = []
+    page = app.template_env.get_template("group-by-tag.html")
+
+    return Response(
+        page.render(
+            tags=sorted_categories,
+            sort_by_title="categories",
+            sort_by_link=app.routes.get_url_by_endpoint(
+                endpoint="on_group_by_tags_categories_get", params={"page_number": 1}
+            ),
+            group_by_link=app.routes.get_url_by_endpoint(
+                endpoint="on_group_by_category_get"
+            ),
+            tags_categories_link=app.routes.get_url_by_endpoint(
+                endpoint="on_group_by_tags_categories_get", params={"page_number": 1}
+            ),
+            pages_map={},
+            current_page=1,
+            letters=letters,
+            user_settings=user["settings"],
+            provider=user["provider"],
+        ),
+        mimetype="text/html",
+    )
+
+
+def on_group_by_tags_by_category_get(
+    app: "RSSTagApplication", user: dict, quoted_category: str, page_number: int = 1
+) -> Response:
+    category = quoted_category
+    only_unread = user["settings"].get("only_unread", False)
+    tags_count = app.tags.count_by_category(user["sid"], category, only_unread)
+    page_count = app.get_page_count(tags_count, user["settings"]["tags_on_page"])
+    p_number = page_number
+    if page_number <= 0:
+        p_number = 1
+    elif page_number > page_count:
+        p_number = page_count
+
+    new_cookie_page_value = p_number
+    p_number -= 1
+    if p_number < 0:
+        p_number = 1
+
+    pages_map, start_tags_range, end_tags_range = app.calc_pager_data(
+        p_number,
+        page_count,
+        user["settings"]["tags_on_page"],
+        "on_group_by_tags_by_category_get",
+        quoted_category=category,
+    )
+
+    tags = app.tags.get_by_category(
+        user["sid"],
+        category,
+        only_unread,
+        user["settings"]["hot_tags"],
+        opts={"offset": start_tags_range, "limit": user["settings"]["tags_on_page"]},
+    )
+
+    sorted_tags = []
+    for t in tags:
+        sorted_tags.append(
+            {
+                "tag": t["tag"],
+                "url": t["local_url"],
+                "words": t["words"],
+                "count": t["unread_count"] if only_unread else t["posts_count"],
+                "sentiment": t["sentiment"] if "sentiment" in t else [],
+            }
+        )
+
+    db_letters = app.letters.get(user["sid"], make_sort=True)
+    if db_letters:
+        letters = app.letters.to_list(db_letters, only_unread)
+    else:
+        letters = []
+    page = app.template_env.get_template("group-by-tag.html")
+
+    return Response(
+        page.render(
+            tags=sorted_tags,
+            sort_by_title=category,
+            sort_by_link=app.routes.get_url_by_endpoint(
+                endpoint="on_group_by_tags_by_category_get",
+                params={"quoted_category": category, "page_number": new_cookie_page_value},
+            ),
+            group_by_link=app.routes.get_url_by_endpoint(
+                endpoint="on_group_by_category_get"
+            ),
+            tags_categories_link=app.routes.get_url_by_endpoint(
+                endpoint="on_group_by_tags_categories_get", params={"page_number": 1}
+            ),
+            pages_map=pages_map,
+            current_page=new_cookie_page_value,
+            letters=letters,
+            user_settings=user["settings"],
+            provider=user["provider"],
+        ),
+        mimetype="text/html",
+    )

@@ -280,3 +280,62 @@ class RssTagTags:
         )
 
         return True
+
+    def get_categories(self, owner: str, only_unread: bool = False) -> dict:
+        query = {"owner": owner, "classifications": {"$exists": True}}
+        if only_unread:
+            query["unread_count"] = {"$gt": 0}
+
+        aggr = self._db.tags.aggregate(
+            [
+                {"$match": query},
+                {"$unwind": "$classifications"},
+                {
+                    "$group": {
+                        "_id": "$classifications.category",
+                        "counter": {"$sum": 1},
+                    }
+                },
+            ]
+        )
+        categories = defaultdict(int)
+        for agg in aggr:
+            categories[agg["_id"]] = agg["counter"]
+
+        return categories
+
+    def get_by_category(
+        self,
+        owner: str,
+        category: str,
+        only_unread: Optional[bool] = None,
+        hot_tags: bool = False,
+        opts: Optional[dict] = None,
+        projection: Optional[dict] = None,
+    ) -> Iterator[dict]:
+        query = {"owner": owner, "classifications.category": category}
+        if opts and "regexp" in opts:
+            query["tag"] = {"$regex": opts["regexp"], "$options": "i"}
+        sort_data = []
+        if hot_tags:
+            sort_data.append(("temperature", DESCENDING))
+        if only_unread:
+            sort_data.append(("unread_count", DESCENDING))
+            query["unread_count"] = {"$gt": 0}
+        else:
+            sort_data.append(("posts_count", DESCENDING))
+        params = {}
+        if opts and "offset" in opts:
+            params["skip"] = opts["offset"]
+        if opts and "limit" in opts:
+            params["limit"] = opts["limit"]
+        if projection:
+            params["projection"] = projection
+
+        return self._db.tags.find(query, **params).allow_disk_use(True).sort(sort_data)
+
+    def count_by_category(self, owner: str, category: str, only_unread: bool = False) -> int:
+        query = {"owner": owner, "classifications.category": category}
+        if only_unread:
+            query["unread_count"] = {"$gt": 0}
+        return self._db.tags.count_documents(query)
