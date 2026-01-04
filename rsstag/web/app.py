@@ -31,9 +31,9 @@ import rsstag.web.prefixes as prefixes_handlers
 import rsstag.web.chat as chat_handlers
 import rsstag.web.tasks as tasks_handlers
 
-from rsstag.openai import ROpenAI
-from rsstag.anthropic import Anthropic
-from rsstag.llamacpp import LLamaCPP
+from rsstag.llm.openai import ROpenAI
+from rsstag.llm.anthropic import Anthropic
+from rsstag.llm.llamacpp import LLamaCPP
 from rsstag.llm.groqcom import GroqCom
 
 from rsstag.stopwords import stopwords
