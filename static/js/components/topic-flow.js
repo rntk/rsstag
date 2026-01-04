@@ -4,24 +4,37 @@ export default class TopicFlow {
     constructor(data, containerSelector) {
         this.data = data;
         this.containerSelector = containerSelector;
-        // Calculation logic: Root value is sum of children values
+
+        // Configurable constraints
+        this.config = {
+            width: 1200,
+            height: 1000,
+            margin: { top: 60, right: 300, bottom: 60, left: 300 },
+            stepHeight: 80, // Reduced step height to pack them nicer
+            trunkColor: '#800040',
+            labelColor: '#333',
+            fontFamily: 'sans-serif',
+            curveRadius: 400, // Maximum curve influence
+            minCurveRadius: 50
+        };
+
+        // Recalculate values
         this.data.value = this.calculateValue(this.data);
 
-        // Sort children by value (descending) to put biggest values at top
+        // Assign sides and sort for layout
+        // We need 'left' and 'right' groups
+        // Heuristic: If side not present, alternate
         if (this.data.children) {
+            this.data.children.forEach((child, i) => {
+                if (!child.side) {
+                    child.side = i % 2 === 0 ? 'left' : 'right';
+                }
+            });
+
+            // Sort by value descending for the "Peeling Order" (Top to Bottom)
+            // Biggest items peel first -> Must be on OUTSIDE of stack
             this.data.children.sort((a, b) => b.value - a.value);
         }
-
-        this.config = {
-            width: 1200, // Intrinsic width
-            height: 800, // Intrinsic height
-            margin: { top: 60, right: 300, bottom: 60, left: 300 }, // Increased margins for labels
-            stepHeight: 120, // Vertical space between branches
-            trunkColor: '#800040', // Deep maroon/purple
-            branchColorRange: ['#A02060', '#D04080', '#E060A0', '#F080C0'],
-            labelColor: '#333',
-            fontFamily: 'sans-serif'
-        };
 
         this.init();
     }
@@ -37,12 +50,11 @@ export default class TopicFlow {
             }
             inputSum += child.value;
         });
-        return inputSum;
+        return inputSum; // Only sum of children
     }
 
     init() {
         this.render();
-        // Debounced resize handler could be added here
         window.addEventListener('resize', () => this.render());
     }
 
@@ -53,242 +65,217 @@ export default class TopicFlow {
 
         const { width, margin, stepHeight } = this.config;
 
-        // Dynamic height based on number of children to ensure everything fits verticaly
-        const requiredHeight = (this.data.children.length + 1) * stepHeight + margin.top + margin.bottom;
+        // 1. Calculate Geometry
+        // Vertical space
+        const childCount = this.data.children ? this.data.children.length : 0;
+        const requiredHeight = (childCount * stepHeight) + margin.top + margin.bottom + 200; // Extra buffer
         const height = Math.max(this.config.height, requiredHeight);
 
+        // Drawing Area
+        const drawW = width - margin.left - margin.right;
+        const centerX = margin.left + drawW / 2;
+
+        // Scale Logic
+        // Total trunk width at top
+        const maxTrunkWidth = Math.min(300, drawW * 0.6); // Max 300px wide trunk
+        const scale = this.data.value ? (maxTrunkWidth / this.data.value) : 0;
+
+        // 2. Prepare Stack Layout (X Positions at the Top)
+        // Order: Lefts(Largest..Smallest) -> Rights(Smallest..Largest)
+        // This placement ensures Large items are on the outside.
+
+        const lefts = this.data.children.filter(c => c.side === 'left');
+        const rights = this.data.children.filter(c => c.side !== 'left');
+
+        // Lefts are already sorted Descending (Large..Small). 
+        // We place them Left->Right, so Large is Leftmost (Outside). Correct.
+
+        // Rights are sorted Descending.
+        // We need them Small..Large (Inside..Outside) for Left->Right stacking on the right side.
+        const rightsStackOrder = [...rights].reverse();
+
+        const stackOrder = [...lefts, ...rightsStackOrder];
+
+        let currentStackX = centerX - (this.data.value * scale) / 2;
+
+        // Assign X and Width
+        stackOrder.forEach(child => {
+            child._width = child.value * scale;
+            child._x = currentStackX;
+            currentStackX += child._width;
+        });
+
+        // 3. Setup SVG
         const svg = d3.select(container)
             .append('svg')
             .attr('width', '100%')
-            .attr('height', '100%') // Let CSS control the container height, but SVG scales
+            .attr('height', '100%')
             .attr('viewBox', `0 0 ${width} ${height}`)
             .attr('preserveAspectRatio', 'xMidYMid meet')
-            .style('background', '#fff'); // Ensure visibility
+            .style('background', '#fff');
 
-        // Group structure: 
-        // SVG -> MainGroup (handles margin) -> Scene (handles Zoom) -> Drawing
+        const scene = svg.append('g').attr('class', 'scene');
 
-        // We want the zoom to affect the content, but starting nicely centered.
-        // We'll create a group that holds everything.
-        const scene = svg.append('g')
-            .attr('class', 'scene');
-
-        // Setup Zoom
+        // Zoom
         const zoom = d3.zoom()
             .scaleExtent([0.1, 5])
-            .on('zoom', (event) => {
-                scene.attr('transform', event.transform);
-            });
-
+            .on('zoom', (e) => scene.attr('transform', e.transform));
         svg.call(zoom);
-
-        // Store for external controls
         this.svg = svg;
         this.zoom = zoom;
 
-        // Drawing Logic
-        // We draw relative to (0,0) of the scene.
-        const drawingWidth = width - margin.left - margin.right;
-
-        // Scale for line thickness
-        // Max trunk width is 30% of total width to leave room for branches
-        const thicknessScale = d3.scaleLinear()
-            .domain([0, this.data.value])
-            .range([0, Math.min(200, drawingWidth * 0.5)]);
-
-        // Initial Trunk State
-        let currentTrunkWidth = thicknessScale(this.data.value);
-        // Center the trunk in the drawing area.
-        // Drawing Area starts at margin.left.
-        const centerX = margin.left + drawingWidth / 2;
-
-        let currentTrunkLeft = centerX - currentTrunkWidth / 2;
-        let currentTrunkRight = centerX + currentTrunkWidth / 2;
-        let currentY = margin.top;
-
-        // Draw Root Node (Top Label)
+        // 4. Draw Header
         scene.append('text')
             .attr('x', centerX)
-            .attr('y', currentY - 25)
+            .attr('y', margin.top - 30)
             .attr('text-anchor', 'middle')
             .style('font-family', this.config.fontFamily)
-            .style('font-size', '18px')
+            .style('font-size', '20px')
             .style('font-weight', 'bold')
             .style('fill', this.config.labelColor)
             .text(`${this.data.name} (${this.data.value})`);
 
-        // Process children
-        this.data.children.forEach((child, index) => {
-            const childThickness = thicknessScale(child.value);
-            const nextY = currentY + stepHeight;
+        // 5. Draw Flows
+        // We iterate in the original sorted order (Descending Value) to peel from top down.
+        let currentPeelY = margin.top;
 
-            // Determine side
-            const side = child.side || (index % 2 === 0 ? 'left' : 'right');
+        this.data.children.forEach((child, i) => {
+            const peelY = currentPeelY;
+            const flowW = child._width;
 
-            let trunkNextLeft = currentTrunkLeft;
-            let trunkNextRight = currentTrunkRight;
+            // Branch Geometry
+            const isLeft = child.side === 'left';
+            const labelX = isLeft ? 50 : (width - 50); // Target X near margins
 
-            // Branch Coordinates
-            let branchTargetX, branchTargetY;
+            // We want a nice circular arc. 
+            // The horizontal distance defines the radius.
+            // Dist from "Outermost Edge of Trunk for this flow" to "Label X".
 
-            if (side === 'left') {
-                // Branch peels from Left of Trunk
-                // Trunk narrows from Left
-                trunkNextLeft += childThickness;
+            // Coords at Top (Trunk)
+            const trunkLeft = child._x;
+            const trunkRight = child._x + flowW;
 
-                const startX_outer = currentTrunkLeft;
-                const startX_inner = currentTrunkLeft + childThickness;
+            let path = d3.path();
 
-                // Target: Left Margin Area
-                // margin.left is e.g. 300. 
-                // We want to end around x = 50 (relative to 0) to leave space.
-                branchTargetX = 50;
-                branchTargetY = currentY + stepHeight * 0.7;
+            if (isLeft) {
+                // Flowing Left
+                // Top Edge (Left side of trunk bar) moves to Left Margin
 
-                // Draw Branch Ribbon
-                const context = d3.path();
+                const startX = trunkLeft;
+                const endX = labelX;
+                const R = Math.abs(startX - endX); // Radius
 
-                // Top Edge (Outer Trunk -> Target Top)
-                context.moveTo(startX_outer, currentY);
-                context.bezierCurveTo(
-                    startX_outer, currentY + stepHeight * 0.6,
-                    branchTargetX + 100, branchTargetY,
-                    branchTargetX, branchTargetY
-                );
+                // Define the arc center point
+                // Curve is roughly a quarter circle from Vertical to Horizontal
 
-                // Bottom Edge (Target Bottom -> Inner Trunk)
-                const targetThickness = childThickness;
+                const centerX = labelX; // Center of curvature X
+                const centerY = peelY;  // Center of curvature Y
+                // Radius for inner curve (trunkRight) is distance from labelX to trunkRight
+                // radius = trunkLeft - labelX (Width of arc)
 
-                context.lineTo(branchTargetX, branchTargetY + targetThickness);
-                context.bezierCurveTo(
-                    branchTargetX + 100, branchTargetY + targetThickness,
-                    startX_inner, currentY + stepHeight * 0.6,
-                    startX_inner, currentY
-                );
-                context.closePath();
+                // Left Branch Trace (Clockwise for shape closure, or any order)
+                // 1. Move to Top Left (trunkLeft, 0)
+                path.moveTo(trunkLeft, margin.top - 10);
+                path.lineTo(trunkLeft, peelY);
 
-                scene.append('path')
-                    .attr('d', context.toString())
-                    .attr('fill', this.getColor(index))
-                    .attr('opacity', 0.85);
+                // 2. Arc Left (Inner/Top curve of the branch)
+                // radius = trunkLeft - labelX.
+                // Center = (labelX, peelY).
+                // From Angle 0 (at trunkLeft) to Angle PI/2 (at labelX, below)
+                // Wait. Canvas Arc angles: 0 is East. PI/2 is South.
+                // TrunkLeft is East of Center. 
+                // So Start Angle is 0. 
+                // We want to go to South? (labelX, peelY + R). Yes.
+                path.arc(centerX, centerY, trunkLeft - labelX, 0, Math.PI / 2);
+
+                // Now at (labelX, peelY + radius). 
+                // 3. Line to branch tip
+                path.lineTo(labelX - 10, peelY + (trunkLeft - labelX));
+
+                // 4. Line Down (width)
+                // We are at Y_top = peelY + (trunkLeft - labelX).
+                // We go to Y_bottom = Y_top + flowW.
+                // Note: trunkRight - labelX = (trunkLeft + flowW) - labelX = (trunkLeft - labelX) + flowW.
+                // So Y_bottom corresponds to radius of trunkRight!
+                path.lineTo(labelX - 10, peelY + (trunkRight - labelX));
+
+                // 5. Line Back to Arc start position (labelX)
+                path.lineTo(labelX, peelY + (trunkRight - labelX));
+
+                // 6. Arc Back Up (Outer/Bottom curve of the branch)
+                // radius = trunkRight - labelX.
+                // Counter-Clockwise from PI/2 to 0.
+                path.arc(centerX, centerY, trunkRight - labelX, Math.PI / 2, 0, true);
+
+                // 7. Line Up to Top
+                path.lineTo(trunkRight, margin.top - 10);
+                path.closePath();
 
                 // Label
                 scene.append('text')
-                    .attr('x', branchTargetX - 10)
-                    .attr('y', branchTargetY + targetThickness / 2)
+                    .attr('x', labelX - 15)
+                    .attr('y', peelY + (trunkLeft - labelX) + flowW / 2)
                     .attr('text-anchor', 'end')
-                    .attr('dominant-baseline', 'middle')
                     .style('font-family', this.config.fontFamily)
-                    .style('font-size', '14px')
-                    .style('fill', this.config.labelColor)
-                    .text(`${child.name} (${child.value})`);
+                    .attr('dominant-baseline', 'middle')
+                    .text(`${child.name} (${Math.round(child.value)})`);
 
             } else {
-                // Branch peels from Right of Trunk
-                // Trunk narrows from Right
-                trunkNextRight -= childThickness;
+                // Right Branch
+                // Mirror logic.
+                // Turn is to the RIGHT.
+                // Center (labelX, peelY).
+                // trunkRight is West of Center.
+                // Angle PI.
+                // We want to go to South (PI/2).
 
-                const startX_inner = currentTrunkRight - childThickness;
-                const startX_outer = currentTrunkRight;
+                const centerX = labelX;
+                const centerY = peelY;
 
-                // Target: Right Margin Area
-                // width (1200) - 50 = 1150
-                branchTargetX = width - 50;
-                branchTargetY = currentY + stepHeight * 0.7;
+                // 1. Move to Top Right (trunkRight, 0)
+                path.moveTo(trunkRight, margin.top - 10);
+                path.lineTo(trunkRight, peelY);
 
-                const context = d3.path();
+                // 2. Arc Right (Inner/Top curve of branch)
+                // Radius = labelX - trunkRight.
+                // Start Angle PI. End Angle PI/2.
+                // Counter-Clockwise (PI -> PI/2). True.
+                path.arc(centerX, centerY, labelX - trunkRight, Math.PI, Math.PI / 2, true);
 
-                // Top Edge (Outer Trunk -> Target Top)
-                context.moveTo(startX_outer, currentY);
-                context.bezierCurveTo(
-                    startX_outer, currentY + stepHeight * 0.6,
-                    branchTargetX - 100, branchTargetY,
-                    branchTargetX, branchTargetY
-                );
+                // 3. Tip
+                path.lineTo(labelX + 10, peelY + (labelX - trunkRight));
+                path.lineTo(labelX + 10, peelY + (labelX - trunkLeft)); // Width down
+                path.lineTo(labelX, peelY + (labelX - trunkLeft));
 
-                // Bottom Edge
-                const targetThickness = childThickness;
-                context.lineTo(branchTargetX, branchTargetY + targetThickness);
-                context.bezierCurveTo(
-                    branchTargetX - 100, branchTargetY + targetThickness,
-                    startX_inner, currentY + stepHeight * 0.6,
-                    startX_inner, currentY
-                );
-                context.closePath();
+                // 4. Arc Back (Outer/Bottom curve)
+                // Radius = labelX - trunkLeft.
+                // Clockwise (PI/2 -> PI). False.
+                path.arc(centerX, centerY, labelX - trunkLeft, Math.PI / 2, Math.PI, false);
 
-                scene.append('path')
-                    .attr('d', context.toString())
-                    .attr('fill', this.getColor(index))
-                    .attr('opacity', 0.85);
+                // 5. Up
+                path.lineTo(trunkLeft, margin.top - 10);
+                path.closePath();
 
                 // Label
                 scene.append('text')
-                    .attr('x', branchTargetX + 10)
-                    .attr('y', branchTargetY + targetThickness / 2)
+                    .attr('x', labelX + 15)
+                    .attr('y', peelY + (labelX - trunkRight) + flowW / 2)
                     .attr('text-anchor', 'start')
-                    .attr('dominant-baseline', 'middle')
                     .style('font-family', this.config.fontFamily)
-                    .style('font-size', '14px')
-                    .style('fill', this.config.labelColor)
-                    .text(`${child.name} (${child.value})`);
+                    .attr('dominant-baseline', 'middle')
+                    .text(`${child.name} (${Math.round(child.value)})`);
             }
 
-            // Draw Central Trunk Connection
-            // Draw Central Trunk Connection (only if not the last child)
-            if (index < this.data.children.length - 1) {
-                const trunkContext = d3.path();
-                trunkContext.moveTo(currentTrunkLeft, currentY);
-                trunkContext.lineTo(currentTrunkRight, currentY);
+            // Draw
+            scene.append('path')
+                .attr('d', path.toString())
+                .attr('fill', this.config.trunkColor)
+                .attr('opacity', 0.85)
+                .on('mouseenter', function () { d3.select(this).attr('opacity', 1); })
+                .on('mouseleave', function () { d3.select(this).attr('opacity', 0.85); });
 
-                // Curve sides to new width
-                trunkContext.bezierCurveTo(
-                    currentTrunkRight, currentY + stepHeight * 0.6,
-                    trunkNextRight, currentY + stepHeight * 0.6,
-                    trunkNextRight, nextY
-                );
-
-                trunkContext.lineTo(trunkNextLeft, nextY);
-
-                trunkContext.bezierCurveTo(
-                    trunkNextLeft, currentY + stepHeight * 0.6,
-                    currentTrunkLeft, currentY + stepHeight * 0.6,
-                    currentTrunkLeft, currentY
-                );
-                trunkContext.closePath();
-
-                scene.append('path')
-                    .attr('d', trunkContext.toString())
-                    .attr('fill', this.config.trunkColor)
-                    .attr('opacity', 1.0);
-            }
-
-            // Advance
-            currentTrunkLeft = trunkNextLeft;
-            currentTrunkRight = trunkNextRight;
-            currentY = nextY;
+            // Increment Y
+            currentPeelY += stepHeight;
         });
-    }
-
-    getColor(index) {
-        const colors = this.config.branchColorRange;
-        return colors[index % colors.length];
-    }
-
-    zoomIn() {
-        if (this.svg && this.zoom) {
-            this.svg.transition().duration(300).call(this.zoom.scaleBy, 1.2);
-        }
-    }
-
-    zoomOut() {
-        if (this.svg && this.zoom) {
-            this.svg.transition().duration(300).call(this.zoom.scaleBy, 0.8);
-        }
-    }
-
-    resetZoom() {
-        if (this.svg && this.zoom) {
-            this.svg.transition().duration(300).call(this.zoom.transform, d3.zoomIdentity);
-        }
     }
 }
