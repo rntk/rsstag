@@ -74,16 +74,36 @@ def _group_color(group_id: str) -> str:
     return _hsl_to_hex(hue, sat, light)
 
 
-def _linkify_angle_bracket_urls(text: str) -> str:
-    """Convert angle-bracketed URLs to clickable links.
+def _linkify_urls(text: str) -> str:
+    """Convert angle-bracketed, parenthesized and square-bracketed URLs to clickable links.
 
-    Converts <https://example.com> to <a href="https://example.com" target="_blank">https://example.com</a>
+    Converts <http://example.com> to <a href="http://example.com" target="_blank">http://example.com</a>
+    Converts (http://example.com) to (<a href="http://example.com" target="_blank">http://example.com</a>)
+    Converts [http://example.com] to [<a href="http://example.com" target="_blank">http://example.com</a>]
     """
     import re
 
     # Match URLs inside angle brackets: <http://...> or <https://...>
-    pattern = r"<(https?://[^>]+)>"
-    return re.sub(pattern, r'<a href="\1" target="_blank">\1</a>', text)
+    angle_bracket_pattern = r"<\s*(https?://[^>]+)\s*>"
+    text = re.sub(
+        angle_bracket_pattern, r'<a href="\1" target="_blank">\1</a>', text
+    )
+
+    # Match URLs inside parentheses: (http://...) or (https://...)
+    # We exclude ) from the URL content to avoid matching the closing parenthesis of the container
+    parentheses_pattern = r"\(\s*(https?://[^)]+)\s*\)"
+    text = re.sub(
+        parentheses_pattern, r'(<a href="\1" target="_blank">\1</a>)', text
+    )
+
+    # Match URLs inside square brackets: [http://...] or [https://...]
+    # We exclude ] from the URL content to avoid matching the closing bracket of the container
+    square_bracket_pattern = r"\[\s*(https?://[^\]]+)\s*\]"
+    text = re.sub(
+        square_bracket_pattern, r'[<a href="\1" target="_blank">\1</a>]', text
+    )
+
+    return text
 
 
 def on_category_get(
@@ -454,6 +474,8 @@ def on_posts_content_post(
             content = gzip.decompress(post["content"]["content"]).decode(
                 "utf-8", "replace"
             )
+            if user["provider"] == "gmail":
+                content = _linkify_urls(content)
             if attachments:
                 content += "<p>Attachments:<br />{0}<p>".format(attachments)
             posts_content.append({"pos": post["pid"], "content": content})
@@ -1060,6 +1082,19 @@ def on_posts_get(
     by_feed = {}
     pids = set()
     for post in db_posts:
+        if user["provider"] == "gmail":
+            if "content" in post:
+                if "title" in post["content"] and post["content"]["title"]:
+                    post["content"]["title"] = _linkify_urls(post["content"]["title"])
+                if "content" in post["content"] and post["content"]["content"]:
+                    # content is gzipped
+                    decompressed = gzip.decompress(post["content"]["content"]).decode(
+                        "utf-8", "replace"
+                    )
+                    linkified = _linkify_urls(decompressed)
+                    post["content"]["content"] = gzip.compress(
+                        linkified.encode("utf-8")
+                    )
         post["lemmas"] = gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
         if post["pid"] not in pids:
             pids.add(post["pid"])
@@ -1163,8 +1198,14 @@ def on_post_grouped_get(
             raw_content = gzip.decompress(post["content"]["content"]).decode(
                 "utf-8", "replace"
             )
+            if user["provider"] == "gmail":
+                raw_content = _linkify_urls(raw_content)
+
             if post["content"]["title"]:
-                raw_content = post["content"]["title"] + ". " + raw_content
+                title = post["content"]["title"]
+                if user["provider"] == "gmail":
+                    title = _linkify_urls(title)
+                raw_content = title + ". " + raw_content
 
             posts_info.append(
                 {
@@ -1296,7 +1337,7 @@ def on_post_grouped_get(
             content = "".join(new_content_parts)
 
         # Apply linkification AFTER highlighting
-        content = _linkify_angle_bracket_urls(content)
+        content = _linkify_urls(content)
 
         final_posts.append(
             {
@@ -1401,6 +1442,8 @@ def on_post_grouped_snippets_get(
                     text = s_obj.get("text", "")
                     if not text:
                         continue
+                    if user["provider"] == "gmail":
+                        text = _linkify_urls(text)
 
                     if current_snippet and idx == current_snippet["index"] + 1:
                         current_snippet["text"] += " " + text
