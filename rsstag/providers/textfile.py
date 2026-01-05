@@ -18,7 +18,9 @@ class TextFileProvider:
         else:
             self.no_category_name = NOT_CATEGORIZED
 
-    def download(self, user: dict) -> Tuple[List, List]:
+    def download(
+        self, user: dict, selection: Optional[dict] = None
+    ) -> Tuple[List, List]:
         path = user["text_file"]
         posts = []
         feeds = {}

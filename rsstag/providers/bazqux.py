@@ -80,9 +80,49 @@ class BazquxProvider:
             )
             return (posts, data["category"])
 
-    def download(self, user: dict) -> Iterator[Tuple[List, List]]:
+    def list_subscriptions(self, user: dict) -> dict:
+        connection = client.HTTPSConnection(self._config[user["provider"]]["api_host"])
+        headers = self.get_headers(user)
+        connection.request(
+            "GET", "/reader/api/0/subscription/list?output=json", "", headers
+        )
+        resp = connection.getresponse()
+        json_data = resp.read()
+        try:
+            subscriptions = json.loads(json_data.decode("utf-8"))
+        except Exception as e:
+            subscriptions = None
+            logging.error("Can`t decode subscriptions %s", e)
+        categories = set()
+        feeds = []
+        if subscriptions and "subscriptions" in subscriptions:
+            for feed in subscriptions["subscriptions"]:
+                if len(feed["categories"]) > 0:
+                    category_name = feed["categories"][0]["label"]
+                else:
+                    category_name = self.no_category_name
+                categories.add(category_name)
+                feeds.append(
+                    {
+                        "id": feed["id"],
+                        "title": feed.get("title", feed["id"]),
+                        "category": category_name,
+                    }
+                )
+        return {"categories": sorted(categories), "feeds": feeds}
+
+    def download(
+        self, user: dict, selection: Optional[dict] = None
+    ) -> Iterator[Tuple[List, List]]:
         posts = []
         feeds = {}
+        selected_categories = set()
+        selected_feeds = set()
+        selection_active = False
+        if selection:
+            selected_categories = set(selection.get("categories", []))
+            selected_feeds = set(selection.get("feeds", []))
+            selection_active = bool(selected_categories or selected_feeds)
         connection = client.HTTPSConnection(self._config[user["provider"]]["api_host"])
         headers = self.get_headers(user)
         connection.request(
@@ -98,6 +138,7 @@ class BazquxProvider:
         if subscriptions:
             routes = RSSTagRoutes(self._config["settings"]["host_name"])
             by_category = {}
+            by_feed = set()
             loop = asyncio.get_event_loop()
             futures = []
             for feed in subscriptions["subscriptions"]:
@@ -105,35 +146,78 @@ class BazquxProvider:
                     category_name = feed["categories"][0]["label"]
                 else:
                     category_name = self.no_category_name
-                    futures.append(
-                        self.fetch(
-                            {
-                                "headers": headers,
-                                "url": "https://{}/reader/api/0/stream/contents?s={}&xt=user/-/state/com.google/read&n=5000&output=json".format(
-                                    self._config[user["provider"]]["api_host"],
-                                    quote_plus(feed["id"]),
-                                ),
-                                "category": category_name,
-                            },
-                            loop,
-                        )
-                    )
-                if category_name not in by_category:
-                    by_category[category_name] = True
-                    if category_name != self.no_category_name:
-                        futures.append(
-                            self.fetch(
-                                {
-                                    "headers": headers,
-                                    "url": "https://{}/reader/api/0/stream/contents?s=user/-/label/{}&xt=user/-/state/com.google/read&n=1000&output=json".format(
-                                        self._config[user["provider"]]["api_host"],
-                                        quote_plus(category_name),
-                                    ),
-                                    "category": category_name,
-                                },
-                                loop,
+                feed_id = feed["id"]
+                is_uncategorized = category_name == self.no_category_name
+                category_selected = category_name in selected_categories
+                feed_selected = feed_id in selected_feeds
+                if selection_active:
+                    if category_selected and not is_uncategorized:
+                        if category_name not in by_category:
+                            by_category[category_name] = True
+                            futures.append(
+                                self.fetch(
+                                    {
+                                        "headers": headers,
+                                        "url": "https://{}/reader/api/0/stream/contents?s=user/-/label/{}&xt=user/-/state/com.google/read&n=1000&output=json".format(
+                                            self._config[user["provider"]]["api_host"],
+                                            quote_plus(category_name),
+                                        ),
+                                        "category": category_name,
+                                    },
+                                    loop,
+                                )
                             )
-                        )
+                    if (feed_selected and not category_selected) or (
+                        category_selected and is_uncategorized
+                    ):
+                        if feed_id not in by_feed:
+                            by_feed.add(feed_id)
+                            futures.append(
+                                self.fetch(
+                                    {
+                                        "headers": headers,
+                                        "url": "https://{}/reader/api/0/stream/contents?s={}&xt=user/-/state/com.google/read&n=5000&output=json".format(
+                                            self._config[user["provider"]]["api_host"],
+                                            quote_plus(feed_id),
+                                        ),
+                                        "category": category_name,
+                                    },
+                                    loop,
+                                )
+                            )
+                else:
+                    if is_uncategorized:
+                        if feed_id not in by_feed:
+                            by_feed.add(feed_id)
+                            futures.append(
+                                self.fetch(
+                                    {
+                                        "headers": headers,
+                                        "url": "https://{}/reader/api/0/stream/contents?s={}&xt=user/-/state/com.google/read&n=5000&output=json".format(
+                                            self._config[user["provider"]]["api_host"],
+                                            quote_plus(feed_id),
+                                        ),
+                                        "category": category_name,
+                                    },
+                                    loop,
+                                )
+                            )
+                    if category_name not in by_category:
+                        by_category[category_name] = True
+                        if category_name != self.no_category_name:
+                            futures.append(
+                                self.fetch(
+                                    {
+                                        "headers": headers,
+                                        "url": "https://{}/reader/api/0/stream/contents?s=user/-/label/{}&xt=user/-/state/com.google/read&n=1000&output=json".format(
+                                            self._config[user["provider"]]["api_host"],
+                                            quote_plus(category_name),
+                                        ),
+                                        "category": category_name,
+                                    },
+                                    loop,
+                                )
+                            )
             future = asyncio.gather(*futures)
             loop.run_until_complete(future)
             cats_data = future.result()

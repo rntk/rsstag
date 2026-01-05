@@ -30,6 +30,7 @@ import rsstag.web.openai as openai_handlers
 import rsstag.web.prefixes as prefixes_handlers
 import rsstag.web.chat as chat_handlers
 import rsstag.web.tasks as tasks_handlers
+import rsstag.web.providers as providers_handlers
 
 from rsstag.llm.openai import ROpenAI
 from rsstag.llm.anthropic import Anthropic
@@ -257,6 +258,9 @@ class RSSTagApplication(object):
 
     def on_refresh_get_post(self, user: dict, request: Request) -> Response:
         return users_handlers.on_refresh_get_post(self, user, request)
+
+    def on_provider_feeds_get_post(self, user: dict, request: Request) -> Response:
+        return providers_handlers.on_provider_feeds_get_post(self, user, request)
 
     def on_status_get(self, user: Optional[dict], _: Request) -> Response:
         return users_handlers.on_status_get(self, user)
