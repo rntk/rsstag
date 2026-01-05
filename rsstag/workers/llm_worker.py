@@ -57,7 +57,7 @@ class LLMWorker(BaseWorker):
         except Exception as e:
             logging.warning("Can't initialize Anthropic: %s", e)
 
-        if self._config.get("openai", {}).get("token"):
+        if self._config["openai"]["token"]:
             try:
                 model = self._openai.model if self._openai else "gpt-5-mini"
                 self._batch_providers["openai"] = OpenAIBatchProvider(
