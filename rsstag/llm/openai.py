@@ -7,7 +7,7 @@ from openai import OpenAI, Completion
 class ROpenAI:
     def __init__(self, token: str):
         self.token = token
-        self.model = "gpt-5-mini"
+        self.model = "gpt-5-nano"
         self.client = OpenAI(api_key=self.token)
 
     def call(

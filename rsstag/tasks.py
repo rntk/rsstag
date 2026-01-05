@@ -322,7 +322,7 @@ class RssTagTasks:
                             "grouping": {"$exists": False},
                             "processing": POST_NOT_IN_PROCESSING,
                         }
-                    ).limit(1)
+                    ).limit(10000)
                     for p in ps:
                         data.append(p)
                         ids.append(p["_id"])
@@ -448,7 +448,7 @@ class RssTagTasks:
                             "classifications": {"$exists": False},
                             "processing": TAG_NOT_IN_PROCESSING,
                         }
-                    ).limit(self._tags_bath_size)
+                    ).limit(10000)
                     for tag_dt in tags_dt:
                         data.append(tag_dt)
                         ids.append(tag_dt["_id"])
