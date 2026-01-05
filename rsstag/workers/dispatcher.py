@@ -124,8 +124,11 @@ def worker(config):
                 if tag_worker.clear_user_data(task["user"]):
                     provider = providers[task["user"]["provider"]]
                     posts_n = 0
+                    selection = None
+                    if task.get("data"):
+                        selection = task["data"].get("selection")
                     try:
-                        for posts, feeds in provider.download(task["user"]):
+                        for posts, feeds in provider.download(task["user"], selection):
                             posts_n += len(posts)
                             f_ids = [f["feed_id"] for f in feeds]
                             c = db.feeds.find(

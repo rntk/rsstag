@@ -88,6 +88,7 @@ class RssTagTasks:
                                 "processing": TASK_NOT_IN_PROCESSING,
                                 "host": data["host"],
                                 "manual": manual,
+                                "selection": data.get("selection", {}),
                             }
                         },
                         upsert=True,

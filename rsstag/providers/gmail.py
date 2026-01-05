@@ -191,7 +191,9 @@ class GmailProvider:
 
         return response
 
-    def download(self, user: dict) -> Iterator[Tuple[List, List]]:
+    def download(
+        self, user: dict, selection: Optional[dict] = None
+    ) -> Iterator[Tuple[List, List]]:
         """Fetch all unread emails"""
         posts = []
         feeds = {}

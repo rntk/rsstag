@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>RSSTag</title>
+    {% include 'head-data.html' %}
+</head>
+
+<body>
+    {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
+    <div id="global_tools">
+        {% include "logo.html" %}
+        <div class="panel right_half">
+            {{ g_status.global_status() }}
+            {{ menu.settings_menu() }}
+        </div>
+    </div>
+    <div class="page screen_middle">
+        {% if error %}
+        <p id="error">{{ error }}</p>
+        {% endif %}
+        <h2>Select channels, feeds, or categories</h2>
+        <form action="{{ selection_url }}" method="post">
+            <div class="root_item">
+                <label>
+                    <input type="checkbox" id="select_all" />
+                    Check/Uncheck all
+                </label>
+            </div>
+            {% if provider == "telegram" %}
+            <h3>Channels</h3>
+            {% if channels %}
+            <ul>
+                {% for channel in channels %}
+                <li>
+                    <label>
+                        <input class="selection-item" type="checkbox" name="channels" value="{{ channel.id }}"
+                            {% if channel.id|string in selected.channels %}checked{% endif %} />
+                        {{ channel.title }}
+                    </label>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p>No channels loaded. Click refresh to load the list.</p>
+            {% endif %}
+            {% endif %}
+
+            {% if provider == "bazqux" %}
+            <h3>Categories</h3>
+            {% if categories %}
+            <ul>
+                {% for category in categories %}
+                <li>
+                    <label>
+                        <input class="selection-item" type="checkbox" name="categories" value="{{ category }}"
+                            {% if category in selected.categories %}checked{% endif %} />
+                        {{ category }}
+                    </label>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p>No categories loaded. Click refresh to load the list.</p>
+            {% endif %}
+
+            <h3>Feeds</h3>
+            {% if feeds %}
+            <ul>
+                {% for feed in feeds %}
+                <li>
+                    <label>
+                        <input class="selection-item" type="checkbox" name="feeds" value="{{ feed.id }}"
+                            {% if feed.id in selected.feeds %}checked{% endif %} />
+                        {{ feed.title }} {% if feed.category %}<span>({{ feed.category }})</span>{% endif %}
+                    </label>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p>No feeds loaded. Click refresh to load the list.</p>
+            {% endif %}
+            {% endif %}
+
+            <div class="root_item">
+                <button type="submit" name="action" value="refresh">Refresh list</button>
+                <button type="submit" name="action" value="download">Download</button>
+                <a href="/" class="link_in_form">Cancel</a>
+            </div>
+        </form>
+    </div>
+    {% include "root-footer.html" %}
+    <div id="progressbar"></div>
+    <script>
+        const selectAll = document.getElementById("select_all");
+        if (selectAll) {
+            selectAll.addEventListener("change", function () {
+                document.querySelectorAll(".selection-item").forEach(function (item) {
+                    item.checked = selectAll.checked;
+                });
+            });
+        }
+    </script>
+</body>
+
+</html>

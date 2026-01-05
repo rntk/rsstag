@@ -349,9 +349,53 @@ class TelegramProvider:
 
             time.sleep(randint(5, 10))
 
-    def download(self, user: dict) -> Tuple[List, List]:
+    def list_channels(self, user: dict) -> List[dict]:
+        provider = user["provider"]
+        self._tlg = Telegram(
+            app_id=self._config[provider]["app_id"],
+            app_hash=self._config[provider]["app_hash"],
+            phone=user["phone"],
+            db_key=self._config[provider]["encryption_key"],
+            db_path=self._config[provider]["db_dir"],
+        )
+        tlg_code = TelegramAuthData(self._db, user["sid"])
+        if not self._tlg.login(tlg_code.get_code, tlg_code.get_password):
+            raise Exception("Telegram login failed")
+        self._tlg.run()
+        time.sleep(10)
+        channels = []
+        uniq_chat_ids = set()
+        r = self.__requests_repeater(get_chats(limit=1000))
+        ids = r.update
+        if ids and ids["chat_ids"]:
+            for c_id in ids["chat_ids"]:
+                if c_id in uniq_chat_ids:
+                    continue
+                uniq_chat_ids.add(c_id)
+                r = self.__requests_repeater(get_chat(c_id))
+                time.sleep(randint(1, 3))
+                if not r.update:
+                    continue
+                channel = r.update
+                channels.append(
+                    {"id": channel["id"], "title": channel.get("title", str(c_id))}
+                )
+        self._tlg.close()
+
+        return channels
+
+    def download(
+        self, user: dict, selection: Optional[dict] = None
+    ) -> Tuple[List, List]:
         provider = user["provider"]
         all_channels = user["telegram_channel"].lower() == "all"
+        selected_channels = []
+        if selection:
+            selected_channels = [
+                channel_id
+                for channel_id in selection.get("channels", [])
+                if channel_id
+            ]
         self._tlg: Telegram = Telegram(
             app_id=self._config[provider]["app_id"],
             app_hash=self._config[provider]["app_hash"],
@@ -365,7 +409,19 @@ class TelegramProvider:
         self._tlg.run()
         time.sleep(120)
         channels = []
-        if all_channels:
+        if selected_channels:
+            for channel_id in selected_channels:
+                try:
+                    channel_id_int = int(channel_id)
+                except (TypeError, ValueError):
+                    logging.warning("Skip invalid channel id: %s", channel_id)
+                    continue
+                r = self.__requests_repeater(get_chat(channel_id_int))
+                time.sleep(randint(1, 3))
+                if not r.update:
+                    continue
+                channels.append(r.update)
+        elif all_channels:
             uniq_chat_ids = set()
             r = self.__requests_repeater(get_chats(limit=1000))
             ids = r.update
