@@ -27,6 +27,8 @@ TASK_MARK_TELEGRAM = 17
 TASK_GMAIL_SORT = 18
 TASK_POST_GROUPING = 19
 TASK_TAG_CLASSIFICATION = 20
+TASK_POST_GROUPING_BATCH = 21
+TASK_TAG_CLASSIFICATION_BATCH = 22
 
 POST_NOT_IN_PROCESSING = 0
 BIGRAM_NOT_IN_PROCESSING = 0
@@ -181,6 +183,7 @@ class RssTagTasks:
             task["_id"] = user_task["_id"]
             task["type"] = user_task["type"]
             task["manual"] = user_task.get("manual", False)
+            task["batch"] = user_task.get("batch", {})
             if user_task["type"] == TASK_TAGS:
                 data = []
                 ps = self._db.posts.find(
@@ -297,6 +300,60 @@ class RssTagTasks:
                         {"_id": user_task["_id"]},
                         {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
                     )
+            elif user_task["type"] == TASK_POST_GROUPING_BATCH:
+                data = []
+                unlock_task = True
+                batch_state = user_task.get("batch", {})
+                batch_ids = batch_state.get("item_ids", [])
+                ids = []
+                if batch_ids:
+                    ids = [
+                        ObjectId(tag_id) if isinstance(tag_id, str) else tag_id
+                        for tag_id in batch_ids
+                    ]
+                    ps = self._db.posts.find({"_id": {"$in": ids}})
+                    for p in ps:
+                        data.append(p)
+                else:
+                    ps = self._db.posts.find(
+                        {
+                            "owner": task["user"]["sid"],
+                            "grouping": {"$exists": False},
+                            "processing": POST_NOT_IN_PROCESSING,
+                        }
+                    ).limit(1)
+                    for p in ps:
+                        data.append(p)
+                        ids.append(p["_id"])
+                    if ids:
+                        self._db.posts.update_many(
+                            {"_id": {"$in": ids}},
+                            {"$set": {"processing": time.time()}},
+                        )
+                    else:
+                        task["type"] = TASK_NOOP
+                        psc = self._db.posts.count_documents(
+                            {
+                                "owner": task["user"]["sid"],
+                                "grouping": {"$exists": False},
+                            }
+                        )
+                        if psc == 0:
+                            can_delete = False
+                            if user_task.get("manual", False):
+                                can_delete = True
+                            elif self.add_next_tasks(
+                                task["user"]["sid"], user_task["type"]
+                            ):
+                                can_delete = True
+                            if can_delete:
+                                self._db.tasks.delete_one({"_id": user_task["_id"]})
+                                unlock_task = False
+                if unlock_task:
+                    self._db.tasks.update_one(
+                        {"_id": user_task["_id"]},
+                        {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
+                    )
             elif user_task["type"] == TASK_TAGS_RANK:
                 data = []
                 tags_dt = self._db.tags.find(
@@ -364,6 +421,60 @@ class RssTagTasks:
                         if can_delete:
                             self._db.tasks.delete_one({"_id": user_task["_id"]})
                             unlock_task = False
+                if unlock_task:
+                    self._db.tasks.update_one(
+                        {"_id": user_task["_id"]},
+                        {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
+                    )
+            elif user_task["type"] == TASK_TAG_CLASSIFICATION_BATCH:
+                data = []
+                unlock_task = True
+                batch_state = user_task.get("batch", {})
+                batch_ids = batch_state.get("item_ids", [])
+                ids = []
+                if batch_ids:
+                    ids = [
+                        ObjectId(tag_id) if isinstance(tag_id, str) else tag_id
+                        for tag_id in batch_ids
+                    ]
+                    tags_dt = self._db.tags.find({"_id": {"$in": ids}})
+                    for tag_dt in tags_dt:
+                        data.append(tag_dt)
+                else:
+                    tags_dt = self._db.tags.find(
+                        {
+                            "owner": task["user"]["sid"],
+                            "classifications": {"$exists": False},
+                            "processing": TAG_NOT_IN_PROCESSING,
+                        }
+                    ).limit(self._tags_bath_size)
+                    for tag_dt in tags_dt:
+                        data.append(tag_dt)
+                        ids.append(tag_dt["_id"])
+                    if ids:
+                        self._db.tags.update_many(
+                            {"_id": {"$in": ids}},
+                            {"$set": {"processing": time.time()}},
+                        )
+                    else:
+                        task["type"] = TASK_NOOP
+                        psc = self._db.tags.count_documents(
+                            {
+                                "owner": task["user"]["sid"],
+                                "classifications": {"$exists": False},
+                            }
+                        )
+                        if psc == 0:
+                            can_delete = False
+                            if user_task.get("manual", False):
+                                can_delete = True
+                            elif self.add_next_tasks(
+                                task["user"]["sid"], user_task["type"]
+                            ):
+                                can_delete = True
+                            if can_delete:
+                                self._db.tasks.delete_one({"_id": user_task["_id"]})
+                                unlock_task = False
                 if unlock_task:
                     self._db.tasks.update_one(
                         {"_id": user_task["_id"]},
@@ -526,6 +637,35 @@ class RssTagTasks:
                         )
                     )
                 self._db.tags.bulk_write(updates, ordered=False)
+            elif task["type"] == TASK_POST_GROUPING_BATCH:
+                remove_task = False
+                updates = []
+                for post in task["data"]:
+                    updates.append(
+                        UpdateOne(
+                            {"_id": post["_id"]},
+                            {
+                                "$set": {
+                                    "processing": POST_NOT_IN_PROCESSING,
+                                    "grouping": 1,
+                                }
+                            },
+                        )
+                    )
+                if updates:
+                    self._db.posts.bulk_write(updates, ordered=False)
+            elif task["type"] == TASK_TAG_CLASSIFICATION_BATCH:
+                remove_task = False
+                updates = []
+                for tag in task["data"]:
+                    updates.append(
+                        UpdateOne(
+                            {"_id": tag["_id"]},
+                            {"$set": {"processing": TAG_NOT_IN_PROCESSING}},
+                        )
+                    )
+                if updates:
+                    self._db.tags.bulk_write(updates, ordered=False)
             if remove_task:
                 self.remove_task(task["_id"])
                 if not task.get("manual", False):
@@ -619,6 +759,14 @@ class RssTagTasks:
                     info["count"] = self._db.tags.count_documents(
                         {"owner": user_id, "classifications": {"$exists": False}}
                     )
+                elif task["type"] == TASK_POST_GROUPING_BATCH:
+                    info["count"] = self._db.posts.count_documents(
+                        {"owner": user_id, "grouping": {"$exists": False}}
+                    )
+                elif task["type"] == TASK_TAG_CLASSIFICATION_BATCH:
+                    info["count"] = self._db.tags.count_documents(
+                        {"owner": user_id, "classifications": {"$exists": False}}
+                    )
 
                 status.append(info)
         except Exception as e:
@@ -648,6 +796,8 @@ class RssTagTasks:
             TASK_CLEAN_BIGRAMS: "Clean bi-grams",
             TASK_POST_GROUPING: "Post grouping",
             TASK_TAG_CLASSIFICATION: "Tags classification",
+            TASK_POST_GROUPING_BATCH: "Post grouping (batch)",
+            TASK_TAG_CLASSIFICATION_BATCH: "Tags classification (batch)",
         }
 
         if task_type in task_titles:
