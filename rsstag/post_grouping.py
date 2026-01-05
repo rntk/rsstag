@@ -292,7 +292,17 @@ class RssTagPostGrouping:
 
     def _get_llm_topics(self, text_plain: str) -> List[str]:
         """Fetch topics from LLM"""
-        prompt = f"""You are a text analysis expert. Analyze the following article and identify the main thematic sections or chapters. Each section should represent a coherent block of related content.
+        prompt = self.build_topics_prompt(text_plain)
+        try:
+            response = self._llamacpp_handler.call([prompt], temperature=0.0).strip()
+            self._log.info("LLM topics response: %s", response)
+            return self.parse_topics_response(response)
+        except Exception as e:
+            self._log.error("LLM topics failed: %s", e)
+            return []
+
+    def build_topics_prompt(self, text_plain: str) -> str:
+        return f"""You are a text analysis expert. Analyze the following article and identify the main thematic sections or chapters. Each section should represent a coherent block of related content.
 
 Guidelines:
 - Identify BROAD thematic sections, not narrow individual points
@@ -317,32 +327,25 @@ Article:
 </content>
 
 Output:"""
-        try:
-            response = self._llamacpp_handler.call([prompt], temperature=0.0).strip()
-            self._log.info("LLM topics response: %s", response)
 
-            # Parse topics
-            lines = [ln.strip() for ln in response.strip().split("\n") if ln.strip()]
-            topics = []
-            for ln in lines:
-                ln = ln.strip()
-                if not ln:
-                    continue
-                if ln[0].isdigit() and ". " in ln:
-                    parts = ln.split(". ", 1)
-                    if len(parts) == 2:
-                        topic = parts[1].strip()
-                    else:
-                        continue
+    def parse_topics_response(self, response: str) -> List[str]:
+        lines = [ln.strip() for ln in response.strip().split("\n") if ln.strip()]
+        topics = []
+        for ln in lines:
+            ln = ln.strip()
+            if not ln:
+                continue
+            if ln[0].isdigit() and ". " in ln:
+                parts = ln.split(". ", 1)
+                if len(parts) == 2:
+                    topic = parts[1].strip()
                 else:
-                    topic = ln
-                # Clean the count
-                topic = re.sub(r"\s*\(\d+ sentences?\)", "", topic).strip()
-                topics.append(topic)
-            return topics
-        except Exception as e:
-            self._log.error("LLM topics failed: %s", e)
-            return []
+                    continue
+            else:
+                topic = ln
+            topic = re.sub(r"\s*\(\d+ sentences?\)", "", topic).strip()
+            topics.append(topic)
+        return topics
 
     def _resolve_gaps(
         self,
@@ -509,8 +512,19 @@ Response (one letter P/N/X):"""
 
     def _get_llm_topic_mapping(self, topics: List[str], tagged_text: str) -> str:
         """Fetch topic mapping from LLM"""
+        prompt = self.build_topic_mapping_prompt(topics, tagged_text)
+        try:
+            self._log.info("LLM mapping prompt sent")
+            response = self._llamacpp_handler.call([prompt], temperature=0.0).strip()
+            self._log.info("LLM mapping response: %s", response)
+            return response
+        except Exception as e:
+            self._log.error("LLM mapping failed: %s", e)
+            return ""
+
+    def build_topic_mapping_prompt(self, topics: List[str], tagged_text: str) -> str:
         numbered_topics = "\n".join(f"{i+1}. {topic}" for i, topic in enumerate(topics))
-        prompt = f"""You are a text analysis expert. Below is a numbered list of topics and the article with word split markers {{ws<number>}}.
+        return f"""You are a text analysis expert. Below is a numbered list of topics and the article with word split markers {{ws<number>}}.
 
 Assign each topic to specific section(s) of the text by providing one or more non-overlapping ranges of start and end word split marker numbers.
 
@@ -556,14 +570,9 @@ Article with markers:
 </content>
 
 Output:"""
-        try:
-            self._log.info("LLM mapping prompt sent")
-            response = self._llamacpp_handler.call([prompt], temperature=0.0).strip()
-            self._log.info("LLM mapping response: %s", response)
-            return response
-        except Exception as e:
-            self._log.error("LLM mapping failed: %s", e)
-            return ""
+
+    def parse_topic_mapping_response(self, response: str, topics: List[str]) -> List[tuple]:
+        return self._parse_llm_mapping(response, topics)
 
     def _parse_llm_mapping(self, response: str, topics: List[str]) -> List[tuple]:
         """Parse LLM mapping response into list of (title, start_marker, end_marker) tuples"""
