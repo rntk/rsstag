@@ -95,6 +95,7 @@ def on_provider_feeds_get_post(app, user: dict, request: Request) -> Response:
             selection_url=app.routes.get_url_by_endpoint(
                 endpoint="on_provider_feeds_get_post"
             ),
+            user_settings=user["settings"],
             support=app.config["settings"]["support"],
             version=app.config["settings"]["version"],
         ),
