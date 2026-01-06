@@ -5,12 +5,20 @@ import anthropic
 
 
 class Anthropic:
-    def __init__(self, token: str):
-        self.__token = token
-        """"claude-3-opus-20240229",
+    ALLOWED_MODELS = [
+        "claude-3-5-sonnet-20241022",
+        "claude-3-5-haiku-20241022",
+        "claude-3-opus-20240229",
         "claude-3-sonnet-20240229",
-        "claude-3-haiku-20240307","""
-        self.__model = "claude-3-5-haiku-20241022"
+        "claude-3-haiku-20240307",
+    ]
+
+    def __init__(self, token: str, model: str = "claude-3-5-haiku-20241022"):
+        self.__token = token
+        if model not in self.ALLOWED_MODELS:
+            self.__model = self.ALLOWED_MODELS[0]
+        else:
+            self.__model = model
         self.__client = anthropic.Anthropic(
             api_key=token,
         )

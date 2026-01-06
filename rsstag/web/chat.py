@@ -82,7 +82,8 @@ Your task is to process these messages and assist the user with the following re
 
 <messages>{batch_text}</messages>
 """
-            return app.llamacpp.call([prompt])
+            llm_handler = app.get_llm(user["settings"].get("realtime_llm", "llamacpp"))
+            return llm_handler.call([prompt])
 
         # Process in batches
         results = []
@@ -125,7 +126,8 @@ Please combine these analyses to answer the user's question: {question}
 {"".join([f"<analysis>{r}</analysis>" for r in results])}
 </analyses>
 """
-            return app.llamacpp.call([meta_prompt])
+            llm_handler = app.get_llm(user["settings"].get("realtime_llm", "llamacpp"))
+            return llm_handler.call([meta_prompt])
         elif len(results) == 1:
             return results[0]
         else:

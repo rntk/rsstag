@@ -7,8 +7,19 @@ from http.client import HTTPConnection, HTTPSConnection
 
 
 class GroqCom:
+    ALLOWED_MODELS = [
+        "llama-3.1-70b-versatile",
+        "llama3-70b-8192",
+        "mixtral-8x7b-32768",
+        "gemma-7b-it",
+    ]
+
     def __init__(
-        self, host: str, max_context_tokens: int = 11000, token: Optional[str] = None
+        self,
+        host: str,
+        max_context_tokens: int = 11000,
+        token: Optional[str] = None,
+        model: str = "llama-3.1-70b-versatile",
     ):
         u = urlparse(host)
         self.__host = u.netloc
@@ -18,6 +29,10 @@ class GroqCom:
         )
         # Token can be passed in explicitly or read from the environment variable TOKEN
         self.__token = token or os.getenv("TOKEN")
+        if model not in self.ALLOWED_MODELS:
+            self.__model = self.ALLOWED_MODELS[0]
+        else:
+            self.__model = model
 
     def estimate_tokens(self, text: str) -> int:
         """Rough estimation: ~4 characters per token on average"""
@@ -31,7 +46,7 @@ class GroqCom:
     ) -> str:
         conn = self.get_connection()
         payload = {
-            "model": "openai/gpt-oss-20b",
+            "model": self.__model,
             "messages": [{"role": "user", "content": user_msgs[0]}],
             "temperature": temperature,
         }

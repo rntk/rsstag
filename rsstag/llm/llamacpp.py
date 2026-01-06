@@ -7,10 +7,13 @@ from http.client import HTTPConnection, HTTPSConnection
 
 
 class LLamaCPP:
-    def __init__(self, host: str):
+    ALLOWED_MODELS = ["default"]
+
+    def __init__(self, host: str, model: str = "default"):
         u = urlparse(host)
         self.__host = u.netloc
         self.__is_https = u.scheme.lower() == "https"
+        self.__model = model
 
     def call(
         self,

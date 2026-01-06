@@ -9,6 +9,7 @@ export default class SettingsMenu extends React.Component {
     this.updateSettings = this.updateSettings.bind(this);
     this.changeIntSettings = this.changeIntSettings.bind(this);
     this.changeBoolSettings = this.changeBoolSettings.bind(this);
+    this.changeStringSettings = this.changeStringSettings.bind(this);
   }
 
   saveSettings() {
@@ -37,6 +38,14 @@ export default class SettingsMenu extends React.Component {
     }
   }
 
+  changeStringSettings(e) {
+    let value = e.target.value,
+      name = e.target.id;
+    this.state.settings[name] = value;
+    this.setState(this.state);
+    return true;
+  }
+
   changeBoolSettings(e) {
     let name = e.target.id;
 
@@ -58,6 +67,14 @@ export default class SettingsMenu extends React.Component {
         top: this.state.offset.top,
         right: this.state.offset.right,
       };
+
+      const llmOptions = [
+        <option key="llamacpp" value="llamacpp">LlamaCPP</option>,
+        <option key="openai" value="openai">OpenAI</option>,
+        <option key="anthropic" value="anthropic">Anthropic</option>,
+        <option key="cerebras" value="cerebras">Cerebras</option>,
+        <option key="groqcom" value="groqcom">GroqCom</option>
+      ];
 
       return (
         <div>
@@ -106,6 +123,42 @@ export default class SettingsMenu extends React.Component {
                 value={this.state.settings.telegram_limit}
                 onChange={this.changeIntSettings}
               />
+            </div>
+            <div id="batch_llm_">
+              <label htmlFor="batch_llm">Batch LLM</label>
+              <br />
+              <select
+                id="batch_llm"
+                name="batch_llm"
+                value={this.state.settings.batch_llm || "openai"}
+                onChange={this.changeStringSettings}
+              >
+                {llmOptions}
+              </select>
+            </div>
+            <div id="worker_llm_">
+              <label htmlFor="worker_llm">Worker LLM</label>
+              <br />
+              <select
+                id="worker_llm"
+                name="worker_llm"
+                value={this.state.settings.worker_llm || "llamacpp"}
+                onChange={this.changeStringSettings}
+              >
+                {llmOptions}
+              </select>
+            </div>
+            <div id="realtime_llm_">
+              <label htmlFor="realtime_llm">Realtime LLM</label>
+              <br />
+              <select
+                id="realtime_llm"
+                name="realtime_llm"
+                value={this.state.settings.realtime_llm || "llamacpp"}
+                onChange={this.changeStringSettings}
+              >
+                {llmOptions}
+              </select>
             </div>
             <div>
               <label htmlFor="only_unread">

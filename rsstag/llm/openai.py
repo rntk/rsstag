@@ -5,9 +5,14 @@ from openai import OpenAI, Completion
 
 
 class ROpenAI:
-    def __init__(self, token: str):
+    ALLOWED_MODELS = ["gpt-4o", "gpt-4o-mini", "gpt-5-nano"]
+
+    def __init__(self, token: str, model: str = "gpt-5-nano"):
         self.token = token
-        self.model = "gpt-5-nano"
+        if model not in self.ALLOWED_MODELS:
+            self.model = self.ALLOWED_MODELS[-1]
+        else:
+            self.model = model
         self.client = OpenAI(api_key=self.token)
 
     def call(

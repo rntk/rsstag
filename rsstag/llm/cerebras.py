@@ -5,9 +5,14 @@ from cerebras.cloud.sdk import Cerebras
 
 
 class RCerebras:
-    def __init__(self, token: Optional[str] = None, model: str = "llama-3.3-70b"):
+    ALLOWED_MODELS = ["gpt-oss-120b"]
+
+    def __init__(self, token: Optional[str] = None, model: str = "gpt-oss-120b"):
         self.__token = token or os.environ.get("CEREBRAS_API_KEY")
-        self.__model = model
+        if model not in self.ALLOWED_MODELS:
+            self.__model = self.ALLOWED_MODELS[-1]
+        else:
+            self.__model = model
         self.__client = Cerebras(api_key=self.__token)
 
     def call(

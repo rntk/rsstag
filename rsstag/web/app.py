@@ -142,12 +142,36 @@ class RSSTagApplication(object):
         self.groqcom = GroqCom(
             host=self.config["groqcom"]["host"], token=self.config["groqcom"]["token"]
         )
+        try:
+            from rsstag.llm.cerebras import RCerebras
+
+            self.cerebras = RCerebras(
+                token=self.config["cerebras"]["token"],
+                model=self.config["cerebras"]["model"],
+            )
+        except Exception as e:
+            self.cerebras = None
+            logging.warning("Can't initialize Cerebras: %s", e)
 
         # Initialize post grouping (after LLM handlers are available)
         from rsstag.post_grouping import RssTagPostGrouping
 
         self.post_grouping = RssTagPostGrouping(self.db, self.llamacpp)
         self.post_grouping.prepare()
+
+    def get_llm(self, name: str):
+        if name == "openai":
+            return self.openai
+        elif name == "anthropic":
+            return self.anthropic
+        elif name == "groqcom":
+            return self.groqcom
+        elif name == "cerebras":
+            return self.cerebras
+        elif name == "llamacpp":
+            return self.llamacpp
+        
+        return self.llamacpp
 
     def _find_group_for_sentence(self, sentence_num, groups):
         """Custom filter to find which group a sentence belongs to"""

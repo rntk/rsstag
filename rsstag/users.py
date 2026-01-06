@@ -27,6 +27,9 @@ class RssTagUsers:
             "similar_posts": True,
             "context_n": 5,
             "telegram_limit": 1000,
+            "batch_llm": "openai",
+            "worker_llm": "llamacpp",
+            "realtime_llm": "llamacpp",
         }
 
     def prepare(self) -> None:
@@ -115,6 +118,8 @@ class RssTagUsers:
                         new_settings[k] = float(v)
                     elif isinstance(old_value, bool):
                         new_settings[k] = bool(v)
+                    elif isinstance(old_value, str):
+                        new_settings[k] = str(v)
                     else:
                         raise ValueError("Bad settings type")
             result = new_settings
