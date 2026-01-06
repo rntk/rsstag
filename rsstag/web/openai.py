@@ -64,7 +64,7 @@ Your task is to process these messages and assist the user with the following re
 <messages>{text}</messages>
 """
         # print(whole_prompt)
-        txt = app.llamacpp.call([whole_prompt])
+        txt = app.llm.call(user["settings"], [whole_prompt], provider_key="realtime_llm")
         if txt:
             responses.append(txt)
 
@@ -84,7 +84,7 @@ Your task is to process these messages and assist the user with the following re
 <messages>{messages}</messages>
 """
     # print(whole_prompt)
-    txt = app.llamacpp.call([whole_prompt])
+    txt = app.llm.call(user["settings"], [whole_prompt], provider_key="realtime_llm")
 
     result = {"data": txt}
 
@@ -139,7 +139,9 @@ Your task is to process these messages and assist the user with the following re
 """
 
     # txt = app.llamacpp.call([user_msgs])
-    txt = app.anthropic.call_citation(system_msg, docs)
+    txt = app.llm.call_citation(
+        user["settings"], system_msg, docs, provider_key="realtime_llm"
+    )
     result = {"data": txt}
 
     return Response(json.dumps(result), mimetype="application/json", status=200)
