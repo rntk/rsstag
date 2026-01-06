@@ -50,12 +50,90 @@ import BiGramsGraphSimple from '../components/bi-grams-graph-simple.js';
 import BiGramsGraph from '../components/bi-grams-graph.js';
 
 function handleTextSelection() {
-  document.addEventListener('mouseup', () => {
-    const selectedText = window.getSelection().toString().trim();
-    if (selectedText) {
+  const menu = document.createElement('div');
+  menu.id = 'rerank-context-menu';
+  menu.style.position = 'absolute';
+  menu.style.display = 'none';
+  menu.style.zIndex = '10000';
+  menu.style.background = '#ffffff';
+  menu.style.border = '1px solid #d0d0d0';
+  menu.style.borderRadius = '6px';
+  menu.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.12)';
+  menu.style.padding = '8px 10px';
+  menu.style.fontSize = '13px';
+  menu.style.color = '#222222';
+  menu.style.maxWidth = '240px';
+
+  menu.innerHTML = `
+    <div style="margin-bottom: 8px;">Open new page with rerank?</div>
+    <div style="display: flex; gap: 6px; justify-content: flex-end;">
+      <button type="button" data-action="open" style="padding: 4px 8px;">Open</button>
+      <button type="button" data-action="cancel" style="padding: 4px 8px;">Cancel</button>
+    </div>
+  `;
+
+  document.body.appendChild(menu);
+
+  let selectedText = '';
+
+  const hideMenu = () => {
+    menu.style.display = 'none';
+    selectedText = '';
+  };
+
+  const showMenu = (text, rect) => {
+    selectedText = text;
+    const menuWidth = menu.offsetWidth || 220;
+    const left = Math.min(
+      rect.left + window.scrollX,
+      window.scrollX + window.innerWidth - menuWidth - 8
+    );
+    const top = rect.bottom + window.scrollY + 6;
+    menu.style.left = `${Math.max(left, 8)}px`;
+    menu.style.top = `${Math.max(top, 8)}px`;
+    menu.style.display = 'block';
+  };
+
+  menu.addEventListener('click', (event) => {
+    const action = event.target.getAttribute('data-action');
+    if (!action) {
+      return;
+    }
+    if (action === 'open' && selectedText) {
       const currentUrl = new URL(window.location.href);
       currentUrl.searchParams.set('rerank', selectedText);
       window.open(currentUrl.toString(), '_blank');
+    }
+    hideMenu();
+  });
+
+  document.addEventListener('mouseup', (event) => {
+    if (menu.contains(event.target)) {
+      return;
+    }
+    const selection = window.getSelection();
+    const text = selection.toString().trim();
+    if (text && selection.rangeCount > 0) {
+      const rect = selection.getRangeAt(0).getBoundingClientRect();
+      showMenu(text, rect);
+      return;
+    }
+    hideMenu();
+  });
+
+  document.addEventListener('mousedown', (event) => {
+    if (!menu.contains(event.target)) {
+      hideMenu();
+    }
+  });
+
+  document.addEventListener('scroll', () => {
+    hideMenu();
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      hideMenu();
     }
   });
 }
