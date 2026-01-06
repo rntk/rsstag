@@ -20,7 +20,6 @@ class RCerebras:
         user_msgs: List[str],
         system_msgs: Optional[List[str]] = None,
         temperature: float = 0.0,
-        max_tokens: Optional[int] = None,
     ) -> str:
         messages = []
         if system_msgs:
@@ -35,8 +34,6 @@ class RCerebras:
             "messages": messages,
             "temperature": temperature,
         }
-        if max_tokens is not None:
-            call_kwargs["max_tokens"] = max_tokens
 
         try:
             resp = self.__client.chat.completions.create(**call_kwargs)

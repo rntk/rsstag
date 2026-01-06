@@ -7,7 +7,7 @@ from openai import OpenAI, Completion
 class ROpenAI:
     ALLOWED_MODELS = ["gpt-4o", "gpt-4o-mini", "gpt-5-nano"]
 
-    def __init__(self, token: str, model: str = "gpt-5-nano"):
+    def __init__(self, token: str, model: str = "gpt-5-mini"):
         self.token = token
         if model not in self.ALLOWED_MODELS:
             self.model = self.ALLOWED_MODELS[-1]
@@ -21,7 +21,6 @@ class ROpenAI:
         system_msgs: Optional[List[str]] = None,
         temperature: float = 0.7,
         reasoning: Optional[dict] = None,
-        max_tokens: Optional[int] = None,
     ) -> str:
         messages = []
         for msg in user_msgs:
@@ -34,11 +33,9 @@ class ROpenAI:
         call_kwargs = {
             "model": self.model,
             "input": messages,
-            "temperature": temperature,
+            #"temperature": temperature,
             "reasoning": reasoning or {"effort": "low"},
         }
-        if max_tokens is not None:
-            call_kwargs["max_tokens"] = max_tokens
 
         try:
             resp: Completion = self.client.responses.create(**call_kwargs)

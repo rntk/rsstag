@@ -23,7 +23,7 @@ class Anthropic:
             api_key=token,
         )
 
-    def call(self, user_msgs: List[str], max_tokens: int = 1024) -> str:
+    def call(self, user_msgs: List[str]) -> str:
         messages = []
         for msg in user_msgs:
             messages.append({"role": "user", "content": msg})
@@ -31,14 +31,13 @@ class Anthropic:
         try:
             resp = self.__client.messages.create(
                 model=self.__model,
-                max_tokens=max_tokens,
                 messages=messages,
             )
         except Exception as e:
-            logging.error("OpenAI error: %s", e)
-            return f"OpenAI error {e}"
+            logging.error("Anthropic error: %s", e)
+            return f"Anthropic error {e}"
 
-        logging.info("OpenAI response: %s", resp)
+        logging.info("Anthropic response: %s", resp)
 
         return resp.content[0].text
 
@@ -68,12 +67,11 @@ class Anthropic:
         try:
             resp = self.__client.messages.create(
                 model=self.__model,
-                max_tokens=1024,
                 messages=[{"role": "user", "content": messages}],
             )
         except Exception as e:
-            logging.error("OpenAI error: %s", e)
-            return f"OpenAI error {e}"
+            logging.error("Anthropic error: %s", e)
+            return f"Anthropic error {e}"
 
         logging.info("OpenAI response: %s", resp)
         """

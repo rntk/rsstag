@@ -42,7 +42,6 @@ class GroqCom:
         self,
         user_msgs: List[str],
         temperature: float = 0.0,
-        max_tokens: Optional[int] = None,
     ) -> str:
         conn = self.get_connection()
         payload = {
@@ -50,8 +49,6 @@ class GroqCom:
             "messages": [{"role": "user", "content": user_msgs[0]}],
             "temperature": temperature,
         }
-        if max_tokens is not None:
-            payload["max_tokens"] = max_tokens
         body = json.dumps(payload)
         headers = {"Content-type": "application/json"}
         if self.__token:
