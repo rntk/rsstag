@@ -137,10 +137,11 @@ class RSSTagApplication(object):
         )
         self.llm = LLMRouter(self.config)
 
-        # Initialize post grouping (after LLM handlers are available)
         from rsstag.post_grouping import RssTagPostGrouping
+        from rsstag.post_splitter import PostSplitter
 
-        self.post_grouping = RssTagPostGrouping(self.db, self.llm.get_handler(None))
+        self.post_splitter = PostSplitter(self.llm.get_handler(None))
+        self.post_grouping = RssTagPostGrouping(self.db)
         self.post_grouping.prepare()
 
     def _find_group_for_sentence(self, sentence_num, groups):

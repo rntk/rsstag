@@ -1278,7 +1278,7 @@ def on_post_grouped_get(
         ]
         if has_grouped_data and post_sentences:
             # Build a mapping between plain text indices and HTML indices
-            mapped_plain, mapping = app.post_grouping._build_html_mapping(raw_content)
+            mapped_plain, mapping = app.post_splitter._build_html_mapping(raw_content)
 
             # Identify ranges to replace
             matches = []
