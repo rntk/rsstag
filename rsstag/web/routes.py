@@ -27,11 +27,6 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
-                "url": "/login/google/auth",
-                "endpoint": "on_login_google_auth_get",
-                "methods": ["GET"],
-            },
-            {
                 "url": "/provider",
                 "endpoint": "on_select_provider_get",
                 "methods": ["GET"],
