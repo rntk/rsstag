@@ -122,70 +122,126 @@ def worker(config):
             if task["type"] == TASK_DOWNLOAD:
                 logging.info("Start downloading for user")
                 if tag_worker.clear_user_data(task["user"]):
-                    provider = providers[task["user"]["provider"]]
-                    posts_n = 0
-                    selection = None
-                    if task.get("data"):
-                        selection = task["data"].get("selection")
-                    try:
-                        for posts, feeds in provider.download(task["user"], selection):
-                            posts_n += len(posts)
-                            f_ids = [f["feed_id"] for f in feeds]
-                            c = db.feeds.find(
-                                {
-                                    "owner": task["user"]["sid"],
-                                    "feed_id": {"$in": f_ids},
-                                },
-                                projection={"feed_id": True, "_id": False},
-                            )
-                            skip_ids = {fc["feed_id"] for fc in c}
-                            n_feeds = []
-                            for fee in feeds:
-                                if fee["feed_id"] in skip_ids:
-                                    continue
-                                n_feeds.append(fee)
-                            if posts:
-                                db.posts.insert_many(posts)
-                            if n_feeds:
-                                db.feeds.insert_many(n_feeds)
-                        task_done = True
-                    except Exception as e:
-                        task_done = False
-                        logging.error(
-                            "Can`t save in db for user %s. Info: %s. %s",
+                    provider_name = task["data"].get("provider") or task["user"].get(
+                        "provider"
+                    )
+                    provider_user = users.get_provider_user(task["user"], provider_name)
+                    if not provider_user:
+                        logging.warning(
+                            "No provider credentials for %s on user %s",
+                            provider_name,
                             task["user"]["sid"],
-                            e,
-                            traceback.format_exc(),
                         )
-                    logging.info("Saved posts: %s.", posts_n)
+                        task_done = True
+                    else:
+                        provider = providers[provider_name]
+                        posts_n = 0
+                        selection = None
+                        if task.get("data"):
+                            selection = task["data"].get("selection")
+                        try:
+                            for posts, feeds in provider.download(
+                                provider_user, selection
+                            ):
+                                posts_n += len(posts)
+                                f_ids = [f["feed_id"] for f in feeds]
+                                c = db.feeds.find(
+                                    {
+                                        "owner": task["user"]["sid"],
+                                        "feed_id": {"$in": f_ids},
+                                    },
+                                    projection={"feed_id": True, "_id": False},
+                                )
+                                skip_ids = {fc["feed_id"] for fc in c}
+                                n_feeds = []
+                                for fee in feeds:
+                                    if fee["feed_id"] in skip_ids:
+                                        continue
+                                    n_feeds.append(fee)
+                                if posts:
+                                    db.posts.insert_many(posts)
+                                if n_feeds:
+                                    db.feeds.insert_many(n_feeds)
+                            task_done = True
+                        except Exception as e:
+                            task_done = False
+                            logging.error(
+                                "Can`t save in db for user %s. Info: %s. %s",
+                                task["user"]["sid"],
+                                e,
+                                traceback.format_exc(),
+                            )
+                        logging.info("Saved posts: %s.", posts_n)
 
             elif task["type"] == TASK_MARK:
-                provider = providers[task["user"]["provider"]]
-                marked = provider.mark(task["data"], task["user"])
-                if marked is None:
-                    tasks.freeze_tasks(task["user"], task["type"])
-                    users.update_by_sid(task["user"]["sid"], {"retoken": True})
-                    task_done = False
+                provider_name = task["data"].get("provider") or task["user"].get(
+                    "provider"
+                )
+                provider_user = users.get_provider_user(task["user"], provider_name)
+                if not provider_user:
+                    logging.warning(
+                        "No provider credentials for %s on user %s",
+                        provider_name,
+                        task["user"]["sid"],
+                    )
+                    task_done = True
                 else:
-                    task_done = marked
+                    provider = providers[provider_name]
+                    marked = provider.mark(task["data"], provider_user)
+                    if marked is None:
+                        tasks.freeze_tasks(task["user"], task["type"])
+                        users.update_provider(
+                            task["user"]["sid"], provider_name, {"retoken": True}
+                        )
+                        task_done = False
+                    else:
+                        task_done = marked
             elif task["type"] == TASK_MARK_TELEGRAM:
                 provider = providers[data_providers.TELEGRAM]
-                marked = provider.mark_all(task["data"], task["user"])
-                if marked is None:
-                    tasks.freeze_tasks(task["user"], task["type"])
-                    users.update_by_sid(task["user"]["sid"], {"retoken": True})
-                    task_done = False
+                provider_user = users.get_provider_user(
+                    task["user"], data_providers.TELEGRAM
+                )
+                if not provider_user:
+                    logging.warning(
+                        "No provider credentials for telegram on user %s",
+                        task["user"]["sid"],
+                    )
+                    task_done = True
                 else:
-                    task_done = marked
+                    marked = provider.mark_all(task["data"], provider_user)
+                    if marked is None:
+                        tasks.freeze_tasks(task["user"], task["type"])
+                        users.update_provider(
+                            task["user"]["sid"],
+                            data_providers.TELEGRAM,
+                            {"retoken": True},
+                        )
+                        task_done = False
+                    else:
+                        task_done = marked
             elif task["type"] == TASK_GMAIL_SORT:
                 provider = providers[data_providers.GMAIL]
-                sorted_emails = provider.sort_emails_by_domain(task["user"])
-                if sorted_emails is None:
-                    tasks.freeze_tasks(task["user"], task["type"])
-                    users.update_by_sid(task["user"]["sid"], {"retoken": True})
-                    task_done = False
+                provider_user = users.get_provider_user(
+                    task["user"], data_providers.GMAIL
+                )
+                if not provider_user:
+                    logging.warning(
+                        "No provider credentials for gmail on user %s",
+                        task["user"]["sid"],
+                    )
+                    task_done = True
                 else:
-                    task_done = sorted_emails
+                    sorted_emails = provider.sort_emails_by_domain(provider_user)
+                    if sorted_emails is None:
+                        tasks.freeze_tasks(task["user"], task["type"])
+                        users.update_provider(
+                            task["user"]["sid"],
+                            data_providers.GMAIL,
+                            {"retoken": True},
+                        )
+                        task_done = False
+                    else:
+                        task_done = sorted_emails
             else:
                 task_done = registry.handle(task)
                 if task_done is None:

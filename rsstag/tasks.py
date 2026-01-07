@@ -89,6 +89,7 @@ class RssTagTasks:
                                 "host": data["host"],
                                 "manual": manual,
                                 "selection": data.get("selection", {}),
+                                "provider": data.get("provider", ""),
                             }
                         },
                         upsert=True,
@@ -107,6 +108,7 @@ class RssTagTasks:
                                 "type": data["type"],
                                 "processing": TASK_NOT_IN_PROCESSING,
                                 "manual": manual,
+                                "provider": data.get("provider", ""),
                             }
                         },
                         upsert=True,

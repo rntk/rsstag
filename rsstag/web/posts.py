@@ -380,6 +380,7 @@ def on_read_posts_post(
                         "status": readed,
                         "processing": TASK_NOT_IN_PROCESSING,
                         "type": TASK_MARK,
+                        "provider": user.get("provider", ""),
                     }
                 )
                 for t in d["tags"]:
@@ -422,6 +423,7 @@ def on_mark_telegram_posts_post(
             "id": "",
             "processing": TASK_NOT_IN_PROCESSING,
             "type": TASK_MARK_TELEGRAM,
+            "provider": user.get("provider", ""),
         }
     ]
     if not app.tasks.add_task(
@@ -439,6 +441,7 @@ def on_gmail_sort_post(app: "RSSTagApplication", user: dict, _: Request) -> Resp
             "id": "",
             "processing": TASK_NOT_IN_PROCESSING,
             "type": TASK_GMAIL_SORT,
+            "provider": user.get("provider", ""),
         }
     ]
     if not app.tasks.add_task(

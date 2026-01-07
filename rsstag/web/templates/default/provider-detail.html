@@ -1,0 +1,63 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>RSSTag - Data source</title>
+    {% include 'head-data.html' %}
+</head>
+<body>
+{% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
+<noscript>
+    <h1>Please enable javascript in your browser</h1>
+</noscript>
+<div id="global_tools">
+    {% include "logo.html" %}
+    <div class="panel right_half">
+        {{ g_status.global_status() }}
+        {{ menu.settings_menu() }}
+    </div>
+</div>
+{% import 'providers.html' as providers with context %}
+<div class="page screen_middle">
+    <h1>{{ providers.getName(provider) }}</h1>
+    {% for e in err %}
+        <p id="error">{{e}}</p>
+    {% endfor %}
+    {% if entry %}
+        <p>Status: connected{% if provider == active_provider %} (active){% endif %}</p>
+        {% if entry.login %}
+            <p>Login: {{ entry.login }}</p>
+        {% endif %}
+        {% if entry.retoken %}
+            <p>Token expired. Please relogin.</p>
+        {% endif %}
+    {% else %}
+        <p>Status: not connected</p>
+    {% endif %}
+
+    {% if provider == "gmail" %}
+        <a href="{{ google_auth_url }}" class="link_in_form">Connect Gmail</a>
+    {% else %}
+        <form action="{{ login_url }}" method="POST" id="provider_login_form">
+            <label for="login">Login</label><br /><input type="text" name="login" id="login" /><br /><br />
+            <label for="password">Password</label><br /><input type="password" name="password" id="password" /><br /><br />
+            <input type="submit" value="{% if entry %}Relogin{% else %}Connect{% endif %}" />
+        </form>
+    {% endif %}
+
+    {% if entry %}
+        <form action="{{ login_url }}" method="POST">
+            <input type="hidden" name="action" value="activate" />
+            <input type="submit" value="Make active" {% if provider == active_provider %}disabled{% endif %} />
+        </form>
+    {% endif %}
+
+    {% if provider == "telegram" or provider == "bazqux" %}
+        <div class="root_item"><a href="{{ feeds_url }}">Select channels/feeds</a></div>
+    {% endif %}
+    <div class="root_item"><a href="{{ data_sources_url }}">Back to data sources</a></div>
+</div>
+
+<div id="status"><span></span></div>
+{% include "root-footer.html" %}
+<div id="progressbar"></div></body>
+</html>

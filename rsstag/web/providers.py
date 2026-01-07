@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from werkzeug.wrappers import Request, Response
 from werkzeug.utils import redirect
@@ -22,10 +22,20 @@ def _get_selection(request: Request) -> Dict[str, List[str]]:
     }
 
 
-def on_provider_feeds_get_post(app, user: dict, request: Request) -> Response:
-    provider = user["provider"]
+def on_provider_feeds_get_post(
+    app, user: dict, request: Request, provider: Optional[str] = None
+) -> Response:
+    provider = provider or user.get("provider")
     if provider not in (data_providers.TELEGRAM, data_providers.BAZQUX):
         return redirect(app.routes.get_url_by_endpoint(endpoint="on_root_get"))
+
+    provider_user = app.users.get_provider_user(user, provider)
+    if not provider_user:
+        return redirect(
+            app.routes.get_url_by_endpoint(
+                endpoint="on_provider_detail_get", params={"provider": provider}
+            )
+        )
 
     action = request.form.get("action")
     selection = _get_selection(request) if request.method == "POST" else _empty_selection()
@@ -44,6 +54,7 @@ def on_provider_feeds_get_post(app, user: dict, request: Request) -> Response:
                         "type": TASK_DOWNLOAD,
                         "user": user["sid"],
                         "host": request.environ["HTTP_HOST"],
+                        "provider": provider,
                         "selection": selection,
                     }
                 )
@@ -73,10 +84,10 @@ def on_provider_feeds_get_post(app, user: dict, request: Request) -> Response:
         try:
             if provider == data_providers.TELEGRAM:
                 telegram = TelegramProvider(app.config, app.db)
-                channels = telegram.list_channels(user)
+                channels = telegram.list_channels(provider_user)
             elif provider == data_providers.BAZQUX:
                 bazqux = BazquxProvider(app.config)
-                data = bazqux.list_subscriptions(user)
+                data = bazqux.list_subscriptions(provider_user)
                 categories = data["categories"]
                 feeds = data["feeds"]
         except Exception as exc:
@@ -93,7 +104,11 @@ def on_provider_feeds_get_post(app, user: dict, request: Request) -> Response:
             selected=selection,
             error=error,
             selection_url=app.routes.get_url_by_endpoint(
-                endpoint="on_provider_feeds_get_post"
+                endpoint="on_provider_feeds_get_post",
+                params={"provider": provider},
+            ),
+            data_sources_url=app.routes.get_url_by_endpoint(
+                endpoint="on_data_sources_get"
             ),
             user_settings=user["settings"],
             support=app.config["settings"]["support"],

@@ -126,6 +126,8 @@ class RSSTagApplication(object):
             "on_root_get",
             "on_login_get",
             "on_login_post",
+            "on_register_get",
+            "on_register_post",
             "on_select_provider_post",
             "on_select_provider_get",
             "on_status_get",
@@ -239,26 +241,54 @@ class RSSTagApplication(object):
     ) -> Response:
         return users_handlers.on_login_get(self, request, err=err)
 
-    def on_login_google_auth_get(self, _: Optional[dict], request: Request) -> Response:
-        return users_handlers.on_login_google_auth_get(self, request)
+    def on_login_google_auth_get(
+        self, user: Optional[dict], request: Request
+    ) -> Response:
+        return users_handlers.on_login_google_auth_get(self, user, request)
 
-    def on_oauth2callback_get(self, _: Optional[dict], request: Request) -> Response:
-        return users_handlers.on_oauth2callback_get(self, request)
+    def on_oauth2callback_get(self, user: Optional[dict], request: Request) -> Response:
+        return users_handlers.on_oauth2callback_get(self, user, request)
 
     def on_login_post(self, _: Optional[dict], request: Request) -> Response:
         return users_handlers.on_login_post(self, request)
 
+    def on_register_get(self, _: Optional[dict], request: Request) -> Response:
+        return users_handlers.on_register_get(self, request)
+
+    def on_register_post(self, _: Optional[dict], request: Request) -> Response:
+        return users_handlers.on_register_post(self, request)
+
+    def on_logout_get(self, _: Optional[dict], __: Request) -> Response:
+        return users_handlers.on_logout_get(self)
+
     def on_refresh_get_post(self, user: dict, request: Request) -> Response:
         return users_handlers.on_refresh_get_post(self, user, request)
 
-    def on_provider_feeds_get_post(self, user: dict, request: Request) -> Response:
-        return providers_handlers.on_provider_feeds_get_post(self, user, request)
+    def on_provider_feeds_get_post(
+        self, user: dict, request: Request, provider: Optional[str] = None
+    ) -> Response:
+        return providers_handlers.on_provider_feeds_get_post(
+            self, user, request, provider
+        )
 
     def on_status_get(self, user: Optional[dict], _: Request) -> Response:
         return users_handlers.on_status_get(self, user)
 
     def on_settings_post(self, user: dict, request: Request) -> Response:
         return users_handlers.on_settings_post(self, user, request)
+
+    def on_data_sources_get(self, user: dict, _: Request) -> Response:
+        return users_handlers.on_data_sources_get(self, user)
+
+    def on_provider_detail_get(
+        self, user: dict, _: Request, provider: str
+    ) -> Response:
+        return users_handlers.on_provider_detail_get(self, user, provider)
+
+    def on_provider_detail_post(
+        self, user: dict, request: Request, provider: str
+    ) -> Response:
+        return users_handlers.on_provider_detail_post(self, user, provider, request)
 
     def on_tasks_get(self, user: dict, request: Request) -> Response:
         return tasks_handlers.on_tasks_get(self, user, request)

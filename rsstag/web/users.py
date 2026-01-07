@@ -22,38 +22,19 @@ from werkzeug.utils import redirect
 def on_login_get(
     app: "RSSTagApplication", request: Request, err: Optional[List[str]] = None
 ) -> Response:
-    provider = request.cookies.get("provider")
-    if provider in app.providers:
-        # if (provider == 'bazqux') or (provider == 'inoreader') or (provider == 'telegram'):
-        page = app.template_env.get_template("login.html")
-        if not err:
-            err = []
-        google_auth_url = ""
-        if provider == GMAIL:
-            google_auth_url = app.routes.get_url_by_endpoint(
-                endpoint="on_login_google_auth_get"
-            )
-        response = Response(
-            page.render(
-                err=err,
-                login_url=app.routes.get_url_by_endpoint(endpoint="on_login_get"),
-                version=app.config["settings"]["version"],
-                support=app.config["settings"]["support"],
-                provider=provider,
-                google_auth_url=google_auth_url,
-            ),
-            mimetype="text/html",
-        )
-    else:
-        page = app.template_env.get_template("error.html")
-        response = Response(
-            page.render(
-                err=["Unknown provider"],
-                version=app.config["settings"]["version"],
-                support=app.config["settings"]["support"],
-            ),
-            mimetype="text/html",
-        )
+    page = app.template_env.get_template("login.html")
+    if not err:
+        err = []
+    response = Response(
+        page.render(
+            err=err,
+            login_url=app.routes.get_url_by_endpoint(endpoint="on_login_get"),
+            register_url=app.routes.get_url_by_endpoint(endpoint="on_register_get"),
+            version=app.config["settings"]["version"],
+            support=app.config["settings"]["support"],
+        ),
+        mimetype="text/html",
+    )
 
     return response
 
@@ -133,7 +114,9 @@ async def _exchange_code_for_token(app: "RSSTagApplication", code: str):
             return token_data, None
 
 
-def on_oauth2callback_get(app: "RSSTagApplication", request: Request) -> Response:
+def on_oauth2callback_get(
+    app: "RSSTagApplication", user: Optional[dict], request: Request
+) -> Response:
     """Handle OAuth callback from Google."""
     code = request.args.get("code")
     error = request.args.get("error")
@@ -177,37 +160,44 @@ def on_oauth2callback_get(app: "RSSTagApplication", request: Request) -> Respons
 
     logging.info(f"Successfully authenticated user: {email}")
 
-    user = app.users.get_by_login(email)
+    if not user:
+        return app.on_login_get(None, request, ["Please login before linking Gmail."])
+    account_user = user
+    existing_entry = app.users.get_provider_entry(account_user, GMAIL)
     access_token = token_data["access_token"]
     refresh_token = token_data.get("refresh_token")
 
-    if not user:
-        logging.info(f"Creating new user for email: {email}")
-        # create_user returns sid (string), not user object
-        sid = app.users.create_user(
-            login=email, password="", token=access_token, provider=GMAIL
-        )
-        if refresh_token:
-            app.users.update_by_sid(sid, {"refresh_token": refresh_token})
-        # Fetch the created user object
-        user = app.users.get_by_sid(sid)
-    else:
-        logging.info(f"Updating existing user: {email}")
-        update_data = {"token": access_token}
-        if refresh_token:
-            update_data["refresh_token"] = refresh_token
-        app.users.update_by_sid(user["sid"], update_data)
-        # Refresh user object with updated data
-        user = app.users.get_by_sid(user["sid"])
+    provider_payload = {"login": email, "token": access_token, "retoken": False}
+    if refresh_token:
+        provider_payload["refresh_token"] = refresh_token
 
-    response = redirect(app.routes.get_url_by_endpoint(endpoint="on_root_get"))
-    response.set_cookie("sid", user["sid"], max_age=app.user_ttl, httponly=True)
+    set_active = not account_user.get("provider")
+    if not existing_entry:
+        logging.info("Linking Gmail provider for user: %s", account_user["sid"])
+        app.users.add_provider(
+            account_user["sid"], GMAIL, provider_payload, set_active=set_active
+        )
+    else:
+        logging.info("Updating Gmail provider for user: %s", account_user["sid"])
+        app.users.update_provider(account_user["sid"], GMAIL, provider_payload)
+        if set_active:
+            app.users.set_active_provider(account_user["sid"], GMAIL)
+
+    response = redirect(
+        app.routes.get_url_by_endpoint(
+            endpoint="on_provider_detail_get", params={"provider": GMAIL}
+        )
+    )
 
     return response
 
 
-def on_login_google_auth_get(app: "RSSTagApplication", _: Request) -> Response:
+def on_login_google_auth_get(
+    app: "RSSTagApplication", user: Optional[dict], _: Request
+) -> Response:
     """Initiate OAuth flow with Google."""
+    if not user:
+        return redirect(app.routes.get_url_by_endpoint(endpoint="on_login_get"))
     host_name = app.config["settings"]["host_name"]
     callback_path = app.routes.get_url_by_endpoint(endpoint="on_oauth2callback_get")
     redirect_uri = f"http://{host_name}{callback_path}"
@@ -254,54 +244,56 @@ def on_login_post(app: "RSSTagApplication", request: Request) -> Response:
         return app.on_login_get(None, request, ["Login or Password can`t be empty"])
 
     user = app.users.get_by_login_password(login, password)
-    err = []
-    if user and user["provider"] == BAZQUX:
-        # login as baszqux user and check token
-        err = []
-        provider = BazquxProvider(app.config)
-        is_valid = provider.is_valid_user(user)
-        if is_valid is False:
-            token = provider.get_token(login, password)
-            if token:
-                updated = app.users.update_by_sid(
-                    user["sid"], {"token": token, "retoken": False}
-                )
-                if updated:
-                    user["token"] = token
-                    app.tasks.unfreeze_tasks(user, TASK_ALL)
-                else:
-                    err.append("Can`t safe new token. Try later.")
-            else:
-                err.append("Can`t refresh token. Try later.")
-        elif is_valid is None:
-            err.append("Can`t check token status. Try later.")
-    elif not user:
-        # create new user
-        provider = request.cookies.get("provider")
-        if provider == BAZQUX:
-            provider_h = BazquxProvider(app.config)
-            token = provider_h.get_token(login, password)
-            if token:
-                user = app.create_new_session(login, password, token, provider)
-            elif token == "":
-                err.append("Wrong login or password")
-            else:
-                err.append("Cant` create session. Try later")
-        elif provider == TELEGRAM:
-            user = app.create_new_session(login, password, "", provider)
-        elif provider == TEXT_FILE:
-            if os.path.exists(login):
-                user = app.create_new_session(login, password, "", provider)
-            else:
-                err.append("File not exists")
-
-    if err:
-        return app.on_login_get(None, request, err)
+    if not user:
+        return app.on_login_get(None, request, ["Wrong login or password"])
 
     response = redirect(app.routes.get_url_by_endpoint(endpoint="on_root_get"))
-    if user:
-        response.set_cookie("sid", user["sid"], max_age=app.user_ttl, httponly=True)
+    response.set_cookie("sid", user["sid"], max_age=app.user_ttl, httponly=True)
 
+    return response
+
+
+def on_register_get(
+    app: "RSSTagApplication", _: Request, err: Optional[List[str]] = None
+) -> Response:
+    page = app.template_env.get_template("register.html")
+    return Response(
+        page.render(
+            err=err or [],
+            register_url=app.routes.get_url_by_endpoint(endpoint="on_register_post"),
+            login_url=app.routes.get_url_by_endpoint(endpoint="on_login_get"),
+            version=app.config["settings"]["version"],
+            support=app.config["settings"]["support"],
+        ),
+        mimetype="text/html",
+    )
+
+
+def on_register_post(app: "RSSTagApplication", request: Request) -> Response:
+    username = request.form.get("login")
+    password = request.form.get("password")
+    confirm = request.form.get("password_confirm")
+
+    if not username or not password:
+        return on_register_get(
+            app, request, ["Login or Password can`t be empty"]
+        )
+    if password != confirm:
+        return on_register_get(app, request, ["Passwords do not match"])
+    if app.users.get_by_username(username):
+        return on_register_get(app, request, ["User already exists"])
+
+    sid = app.users.create_account(username, password)
+    response = redirect(app.routes.get_url_by_endpoint(endpoint="on_data_sources_get"))
+    response.set_cookie("sid", sid, max_age=app.user_ttl, httponly=True)
+
+    return response
+
+
+def on_logout_get(app: "RSSTagApplication") -> Response:
+    response = redirect(app.routes.get_url_by_endpoint(endpoint="on_root_get"))
+    response.delete_cookie("sid")
+    response.delete_cookie("provider")
     return response
 
 
@@ -340,6 +332,8 @@ def on_refresh_get_post(
     app: "RSSTagApplication", user: dict, request: Request
 ) -> Response:
     if user:
+        if not user.get("provider"):
+            return redirect(app.routes.get_url_by_endpoint(endpoint="on_data_sources_get"))
         try:
             updated = False
             if not user["in_queue"]:
@@ -347,6 +341,7 @@ def on_refresh_get_post(
                     {
                         "type": TASK_DOWNLOAD,
                         "user": user["sid"],
+                        "provider": user.get("provider", ""),
                         "host": request.environ["HTTP_HOST"],
                     }
                 )
@@ -377,7 +372,16 @@ def on_refresh_get_post(
 
 def on_status_get(app: "RSSTagApplication", user: Optional[dict]) -> Response:
     if user:
-        if user["retoken"]:
+        provider = user.get("provider")
+        provider_entry = (
+            app.users.get_provider_entry(user, provider) if provider else None
+        )
+        retoken = (
+            provider_entry.get("retoken")
+            if provider_entry
+            else user.get("retoken", False)
+        )
+        if retoken:
             result = {
                 "data": {
                     "is_ok": False,
@@ -387,12 +391,13 @@ def on_status_get(app: "RSSTagApplication", user: Optional[dict]) -> Response:
         else:
             task_titles = app.tasks.get_tasks_status(user["sid"])
             result = {"data": {"is_ok": True, "msgs": task_titles}}
-            if (TELEGRAM_CODE_FIELD in user) and (user[TELEGRAM_CODE_FIELD] == ""):
-                result["data"][TELEGRAM_CODE_FIELD] = True
-            if (TELEGRAM_PASSWORD_FIELD in user) and (
-                user[TELEGRAM_PASSWORD_FIELD] == ""
-            ):
-                result["data"][TELEGRAM_PASSWORD_FIELD] = True
+            if provider == TELEGRAM:
+                if (TELEGRAM_CODE_FIELD in user) and (user[TELEGRAM_CODE_FIELD] == ""):
+                    result["data"][TELEGRAM_CODE_FIELD] = True
+                if (TELEGRAM_PASSWORD_FIELD in user) and (
+                    user[TELEGRAM_PASSWORD_FIELD] == ""
+                ):
+                    result["data"][TELEGRAM_PASSWORD_FIELD] = True
     else:
         result = {
             "data": {"is_ok": False, "msgs": ["Looks like you are not logged in"]}
@@ -404,24 +409,17 @@ def on_status_get(app: "RSSTagApplication", user: Optional[dict]) -> Response:
 
 
 def on_select_provider_get(app: "RSSTagApplication") -> Response:
-    page = app.template_env.get_template("provider.html")
-    return Response(
-        page.render(
-            select_provider_url=app.routes.get_url_by_endpoint(
-                endpoint="on_select_provider_post"
-            ),
-            version=app.config["settings"]["version"],
-            support=app.config["settings"]["support"],
-        ),
-        mimetype="text/html",
-    )
+    return redirect(app.routes.get_url_by_endpoint(endpoint="on_data_sources_get"))
 
 
 def on_select_provider_post(app: "RSSTagApplication", request: Request) -> Response:
     provider = request.form.get("provider")
     if provider:
-        response = redirect(app.routes.get_url_by_endpoint(endpoint="on_login_get"))
-        response.set_cookie("provider", provider, max_age=300, httponly=True)
+        response = redirect(
+            app.routes.get_url_by_endpoint(
+                endpoint="on_provider_detail_get", params={"provider": provider}
+            )
+        )
     else:
         page = app.template_env.get_template("error.html")
         response = Response(page.render(err=["Unknown provider"]), mimetype="text/html")
@@ -435,11 +433,16 @@ def on_root_get(
     if not err:
         err = []
     only_unread = True
-    if user and "provider" in user:
-        posts = app.posts.get_stat(user["sid"])
-        sentiments = app.tags.get_sentiments(
-            user["sid"], user["settings"]["only_unread"]
-        )
+    if user:
+        provider = user.get("provider", "")
+        if provider:
+            posts = app.posts.get_stat(user["sid"])
+            sentiments = app.tags.get_sentiments(
+                user["sid"], user["settings"]["only_unread"]
+            )
+        else:
+            posts = {"tags": 0, "unread": 0, "read": 0}
+            sentiments = []
         page = app.template_env.get_template("root-logged.html")
         response = Response(
             page.render(
@@ -447,7 +450,7 @@ def on_root_get(
                 support=app.config["settings"]["support"],
                 version=app.config["settings"]["version"],
                 user_settings=user["settings"],
-                provider=user["provider"],
+                provider=provider,
                 posts=posts,
                 sentiments=sentiments,
             ),
@@ -488,3 +491,138 @@ def on_telegram_auth_post(
             code = 200
 
     return Response(json.dumps(result), mimetype="application/json", status=code)
+
+
+def on_data_sources_get(app: "RSSTagApplication", user: dict) -> Response:
+    page = app.template_env.get_template("data-sources.html")
+    sources = []
+    for provider in app.providers:
+        entry = app.users.get_provider_entry(user, provider)
+        sources.append(
+            {
+                "id": provider,
+                "connected": entry is not None,
+                "login": entry.get("login") if entry else "",
+                "retoken": entry.get("retoken", False) if entry else False,
+                "detail_url": app.routes.get_url_by_endpoint(
+                    endpoint="on_provider_detail_get", params={"provider": provider}
+                ),
+            }
+        )
+    return Response(
+        page.render(
+            sources=sources,
+            active_provider=user.get("provider", ""),
+            version=app.config["settings"]["version"],
+            support=app.config["settings"]["support"],
+        ),
+        mimetype="text/html",
+    )
+
+
+def on_provider_detail_get(
+    app: "RSSTagApplication",
+    user: dict,
+    provider: str,
+    err: Optional[List[str]] = None,
+) -> Response:
+    if provider not in app.providers:
+        return redirect(app.routes.get_url_by_endpoint(endpoint="on_data_sources_get"))
+    page = app.template_env.get_template("provider-detail.html")
+    entry = app.users.get_provider_entry(user, provider)
+    return Response(
+        page.render(
+            err=err or [],
+            provider=provider,
+            entry=entry,
+            active_provider=user.get("provider", ""),
+            login_url=app.routes.get_url_by_endpoint(
+                endpoint="on_provider_detail_post", params={"provider": provider}
+            ),
+            google_auth_url=app.routes.get_url_by_endpoint(
+                endpoint="on_login_google_auth_get"
+            ),
+            feeds_url=app.routes.get_url_by_endpoint(
+                endpoint="on_provider_feeds_get_post", params={"provider": provider}
+            ),
+            data_sources_url=app.routes.get_url_by_endpoint(
+                endpoint="on_data_sources_get"
+            ),
+            version=app.config["settings"]["version"],
+            support=app.config["settings"]["support"],
+        ),
+        mimetype="text/html",
+    )
+
+
+def on_provider_detail_post(
+    app: "RSSTagApplication", user: dict, provider: str, request: Request
+) -> Response:
+    action = request.form.get("action")
+    if action == "activate":
+        if app.users.get_provider_entry(user, provider):
+            app.users.set_active_provider(user["sid"], provider)
+        return redirect(
+            app.routes.get_url_by_endpoint(
+                endpoint="on_provider_detail_get", params={"provider": provider}
+            )
+        )
+
+    login = request.form.get("login")
+    password = request.form.get("password")
+    err = []
+
+    if provider == BAZQUX:
+        if not login or not password:
+            err.append("Login or Password can`t be empty")
+        else:
+            provider_h = BazquxProvider(app.config)
+            token = provider_h.get_token(login, password)
+            if token:
+                app.users.add_provider(
+                    user["sid"],
+                    provider,
+                    app.users.build_provider_data(login, password, token, provider),
+                    set_active=True,
+                )
+                app.tasks.unfreeze_tasks(user, TASK_ALL)
+            elif token == "":
+                err.append("Wrong login or password")
+            else:
+                err.append("Cant` create session. Try later")
+    elif provider == TELEGRAM:
+        if not login or not password:
+            err.append("Login or Password can`t be empty")
+        else:
+            app.users.add_provider(
+                user["sid"],
+                provider,
+                app.users.build_provider_data(login, password, "", provider),
+                set_active=True,
+            )
+            app.users.update_by_sid(
+                user["sid"], {TELEGRAM_CODE_FIELD: "", TELEGRAM_PASSWORD_FIELD: ""}
+            )
+    elif provider == TEXT_FILE:
+        if not login or not password:
+            err.append("Login or Password can`t be empty")
+        elif os.path.exists(login):
+            app.users.add_provider(
+                user["sid"],
+                provider,
+                app.users.build_provider_data(login, password, "", provider),
+                set_active=True,
+            )
+        else:
+            err.append("File not exists")
+    elif provider == GMAIL:
+        return redirect(app.routes.get_url_by_endpoint(endpoint="on_login_google_auth_get"))
+
+    if err:
+        return on_provider_detail_get(app, user, provider, err)
+
+    return redirect(
+        app.routes.get_url_by_endpoint(
+            endpoint="on_provider_detail_get", params={"provider": provider}
+        )
+    )

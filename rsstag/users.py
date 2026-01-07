@@ -7,7 +7,7 @@ from typing import Optional
 from hashlib import sha256
 from pymongo import MongoClient
 
-from rsstag.providers.providers import TELEGRAM, TEXT_FILE
+from rsstag.providers.providers import TELEGRAM, TEXT_FILE, GMAIL
 
 TELEGRAM_CODE_FIELD = "telegram_code"
 TELEGRAM_PASSWORD_FIELD = "telegram_password"
@@ -44,16 +44,15 @@ class RssTagUsers:
     def hash_login_password(self, login: str, password: str) -> str:
         return sha256((login + password).encode("utf-8")).hexdigest()
 
-    def create_user(
-        self, login: str, password: str, token: str, provider: str
-    ) -> Optional[str]:
-        lp = self.hash_login_password(login, password)
+    def create_account(self, username: str, password: str) -> Optional[str]:
+        lp = self.hash_login_password(username, password)
         sid = sha256(os.urandom(randint(80, 200))).hexdigest()
         created = datetime.utcnow()
         user = {
             "sid": sid,
-            "token": token,
-            "provider": provider,
+            "username": username,
+            "provider": "",
+            "providers": {},
             "settings": self._settings,
             "message": 'Click on "Refresh posts" to start downloading data',
             "in_queue": False,
@@ -65,22 +64,54 @@ class RssTagUsers:
                 created.timestamp(), randint(0, 999999)
             ),
         }
-        if provider == TELEGRAM:
-            user["phone"] = password
-            user["telegram_channel"] = login
-
-        if provider == TEXT_FILE:
-            user["text_file"] = login
-
-        # Store login/email for OAuth providers (Gmail, etc.) to enable lookup by email
-        from rsstag.providers.providers import GMAIL
-
-        if provider == GMAIL:
-            user["login"] = login
-
         self._db.users.insert_one(user)
 
         return sid
+
+    def create_user(
+        self, login: str, password: str, token: str, provider: str
+    ) -> Optional[str]:
+        """Legacy helper to create an account and attach a provider."""
+        sid = self.create_account(login, password)
+        if sid:
+            self.add_provider(
+                sid,
+                provider,
+                self.build_provider_data(login, password, token, provider),
+                set_active=True,
+            )
+        return sid
+
+    def build_provider_data(
+        self, login: str, password: str, token: str, provider: str
+    ) -> dict:
+        data = {"login": login, "token": token, "retoken": False}
+        if provider == TELEGRAM:
+            data["phone"] = password
+            data["telegram_channel"] = login
+        if provider == TEXT_FILE:
+            data["text_file"] = login
+        if provider == GMAIL:
+            data["login"] = login
+        return data
+
+    def add_provider(
+        self, sid: str, provider: str, data: dict, set_active: bool = False
+    ) -> Optional[bool]:
+        update = {f"providers.{provider}": data}
+        if set_active:
+            update["provider"] = provider
+        self._db.users.update_one({"sid": sid}, {"$set": update})
+        return True
+
+    def update_provider(self, sid: str, provider: str, data: dict) -> Optional[bool]:
+        update = {f"providers.{provider}.{k}": v for k, v in data.items()}
+        self._db.users.update_one({"sid": sid}, {"$set": update})
+        return True
+
+    def set_active_provider(self, sid: str, provider: str) -> Optional[bool]:
+        self._db.users.update_one({"sid": sid}, {"$set": {"provider": provider}})
+        return True
 
     def update_by_sid(self, sid: str, data: dict) -> Optional[bool]:
         """
@@ -96,9 +127,41 @@ class RssTagUsers:
 
         return self._db.users.find_one({"lp": lp_hash})
 
-    def get_by_login(self, login: str) -> Optional[dict]:
-        """Get user by login/email (for OAuth providers like Gmail)"""
-        return self._db.users.find_one({"login": login})
+    def get_by_username(self, username: str) -> Optional[dict]:
+        return self._db.users.find_one({"username": username})
+
+    def get_by_provider_login(self, provider: str, login: str) -> Optional[dict]:
+        return self._db.users.find_one({f"providers.{provider}.login": login})
+
+    def get_provider_entry(self, user: dict, provider: str) -> Optional[dict]:
+        providers = user.get("providers", {})
+        entry = providers.get(provider)
+        if entry:
+            return entry
+        if user.get("provider") == provider:
+            legacy = {
+                "login": user.get("login", ""),
+                "token": user.get("token", ""),
+                "retoken": user.get("retoken", False),
+            }
+            if provider == TELEGRAM:
+                legacy["phone"] = user.get("phone", "")
+                legacy["telegram_channel"] = user.get("telegram_channel", "")
+            if provider == TEXT_FILE:
+                legacy["text_file"] = user.get("text_file", "")
+            if provider == GMAIL:
+                legacy["refresh_token"] = user.get("refresh_token", "")
+            return legacy
+        return None
+
+    def get_provider_user(self, user: dict, provider: str) -> Optional[dict]:
+        entry = self.get_provider_entry(user, provider)
+        if not entry:
+            return None
+        provider_user = dict(user)
+        provider_user.update(entry)
+        provider_user["provider"] = provider
+        return provider_user
 
     def get_by_sid(self, sid: str) -> Optional[dict]:
         return self._db.users.find_one({"sid": sid})
