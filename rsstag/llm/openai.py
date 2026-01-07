@@ -5,7 +5,7 @@ from openai import OpenAI, Completion
 
 
 class ROpenAI:
-    ALLOWED_MODELS = ["gpt-4o", "gpt-4o-mini", "gpt-5-nano"]
+    ALLOWED_MODELS = ["gpt-5-nano", "gpt-5-mini"]
 
     def __init__(self, token: str, model: str = "gpt-5-mini"):
         self.token = token
