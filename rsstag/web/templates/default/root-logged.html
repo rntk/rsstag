@@ -15,8 +15,13 @@
         {% include "logo.html" %}
         <div class="panel right_half">
             <span class="login_button global_tools_button">
-                <a href="/provider">{{provider}}: tags: {{posts['tags']}} posts: ({{posts['unread']}} /
-                    {{posts['read']}})</a>
+                <a href="/data-sources">
+                    {% if provider %}
+                        {{provider}}: tags: {{posts['tags']}} posts: ({{posts['unread']}} / {{posts['read']}})
+                    {% else %}
+                        No data source linked
+                    {% endif %}
+                </a>
             </span>
             <span class="sync_telegram_button global_tools_button">
                 {% if provider == "telegram" %}
@@ -34,12 +39,18 @@
             </span>
             {{ g_status.global_status() }}
             {{ menu.settings_menu() }}
+            <span class="login_button global_tools_button">
+                <a href="/logout">Logout</a>
+            </span>
         </div>
     </div>
     <div class="page screen_middle">
         {% for e in err %}
         <p id="error">{{e}}</p>
         {% endfor %}
+        {% if not provider %}
+        <div class="root_item"><a href="/data-sources">Connect a data source to start</a></div>
+        {% endif %}
         <div class="root_item"><a href="/group/category">Posts grouped by category</a></div>
         <div class="root_item"><a href="/group/tag/1">Posts grouped by tag</a></div>
         <div class="root_item"><a href="/group/bi-grams/1">Posts grouped by bi-grams</a></div>
@@ -54,12 +65,14 @@
         {% for sent in sentiments %}
         <div class="root_item"><a href="/tags/sentiment/{{sent|replace('/', '|')}}/1">Tags - {{sent}}</a></div>
         {% endfor %}
-        <div class="root_item"><a href="/provider">Select provider</a></div>
+        <div class="root_item"><a href="/data-sources">Data sources</a></div>
         {% if provider == "telegram" or provider == "bazqux" %}
-        <div class="root_item"><a href="/provider/feeds">Select channels/feeds</a></div>
+        <div class="root_item"><a href="/provider/{{provider}}/feeds">Select channels/feeds</a></div>
         {% endif %}
         <div class="root_item"><a href="/tasks">Tasks Queue</a></div>
+        {% if provider %}
         <div class="root_item"><a href="/refresh">Refresh posts</a></div>
+        {% endif %}
     </div>
 
     <div id="status"><span></span></div>

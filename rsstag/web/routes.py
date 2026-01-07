@@ -13,6 +13,9 @@ class RSSTagRoutes:
             {"url": "/", "endpoint": "on_root_get", "methods": ["GET"]},
             {"url": "/login", "endpoint": "on_login_get", "methods": ["GET"]},
             {"url": "/login", "endpoint": "on_login_post", "methods": ["POST"]},
+            {"url": "/register", "endpoint": "on_register_get", "methods": ["GET"]},
+            {"url": "/register", "endpoint": "on_register_post", "methods": ["POST"]},
+            {"url": "/logout", "endpoint": "on_logout_get", "methods": ["GET"]},
             {
                 "url": "/login/google/auth",
                 "endpoint": "on_login_google_auth_get",
@@ -40,6 +43,26 @@ class RSSTagRoutes:
             },
             {
                 "url": "/provider/feeds",
+                "endpoint": "on_provider_feeds_get_post",
+                "methods": ["GET", "POST"],
+            },
+            {
+                "url": "/data-sources",
+                "endpoint": "on_data_sources_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/provider/<string:provider>",
+                "endpoint": "on_provider_detail_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/provider/<string:provider>",
+                "endpoint": "on_provider_detail_post",
+                "methods": ["POST"],
+            },
+            {
+                "url": "/provider/<string:provider>/feeds",
                 "endpoint": "on_provider_feeds_get_post",
                 "methods": ["GET", "POST"],
             },

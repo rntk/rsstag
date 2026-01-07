@@ -80,6 +80,7 @@ def on_tasks_post(app, user: dict, request: Request) -> Response:
                     "host": app.config["settings"][
                         "host_name"
                     ],  # TASK_DOWNLOAD needs host
+                    "provider": user.get("provider", ""),
                 }
             )
         except ValueError:
