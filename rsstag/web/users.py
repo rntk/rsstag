@@ -515,6 +515,7 @@ def on_data_sources_get(app: "RSSTagApplication", user: dict) -> Response:
             active_provider=user.get("provider", ""),
             version=app.config["settings"]["version"],
             support=app.config["settings"]["support"],
+            user_settings=user["settings"],
         ),
         mimetype="text/html",
     )
@@ -550,6 +551,7 @@ def on_provider_detail_get(
             ),
             version=app.config["settings"]["version"],
             support=app.config["settings"]["support"],
+            user_settings=user["settings"],
         ),
         mimetype="text/html",
     )
