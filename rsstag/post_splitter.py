@@ -26,6 +26,8 @@ class PostSplitter:
 
         # Generate chapters using LLM
         chapters = self._llm_split_chapters(full_content_plain, full_content_html)
+        if chapters is None:
+            return None
 
         # Split into sentences and create groups
         sentences, groups = self._create_sentences_and_groups(
@@ -139,11 +141,14 @@ class PostSplitter:
             "text_plain": text_plain,
         }
 
-    def _get_llm_ranges(self, tagged_text: str) -> List[tuple]:
+    def _get_llm_ranges(self, tagged_text: str) -> Optional[List[tuple]]:
         """Ask LLM to identify coherent ranges in the text"""
         prompt = self.build_ranges_prompt(tagged_text)
         self._log.info("LLM ranges prompt sent")
-        response = self._llm_handler.call([prompt], temperature=0.0).strip()
+        response = self._call_llm(prompt, temperature=0.0)
+        if response is None:
+            return None
+        response = response.strip()
         self._log.info("LLM ranges response: %s", response)
         return self._parse_llm_ranges(response)
 
@@ -199,7 +204,7 @@ Output:"""
         topic_boundaries: List[tuple],
         marker_positions: Dict[int, int],
         text_plain: str,
-    ) -> List[tuple]:
+    ) -> Optional[List[tuple]]:
         """Resolve gaps between topics by asking LLM"""
         if not topic_boundaries:
             self._log.info("No topic boundaries to resolve gaps for.")
@@ -283,9 +288,10 @@ Instruction:
 Response (one letter P/N/X):"""
 
                 try:
-                    decision = self._llm_handler.call(
-                        [prompt], temperature=0.0
-                    ).strip()
+                    decision = self._call_llm(prompt, temperature=0.0)
+                    if decision is None:
+                        return None
+                    decision = decision.strip()
                     self._log.info(f"Gap resolution decision: {decision}")
 
                     if (
@@ -321,7 +327,7 @@ Response (one letter P/N/X):"""
 
     def _get_topics_for_ranges(
         self, ranges: List[tuple], text_plain: str, marker_positions: Dict[int, int]
-    ) -> List[tuple]:
+    ) -> Optional[List[tuple]]:
         """Generate titles for each range. Returns list of (title, start, end)"""
         boundaries = []
         for start, end in ranges:
@@ -333,11 +339,13 @@ Response (one letter P/N/X):"""
                 continue
 
             title = self._generate_title_for_chunk(chunk_text)
+            if title is None:
+                return None
             boundaries.append((title, start, end))
 
         return boundaries
 
-    def _generate_title_for_chunk(self, chunk_text: str) -> str:
+    def _generate_title_for_chunk(self, chunk_text: str) -> Optional[str]:
         """Generate a title for a text chunk"""
         self._log.info("Generating title for chunk, text length: %d", len(chunk_text))
         prompt_text = chunk_text[:2000]
@@ -359,15 +367,18 @@ Text section:
 """
         try:
             self._log.info("Calling LLM handler for title generation")
-            response = self._llm_handler.call([prompt], temperature=0.0).strip()
+            response = self._call_llm(prompt, temperature=0.0)
+            if response is None:
+                return None
+            response = response.strip()
             self._log.info("LLM response: %s", response)
             title = response.strip().strip('"').strip("'").strip().split("\n")[0]
             if not title:
-                title = "Section"
+                return None
             return title
         except Exception as e:
             self._log.info("Exception in title generation: %s", str(e))
-            return "Section"
+            return None
 
     def _validate_boundaries(
         self, boundaries: List[tuple], max_marker: int
@@ -562,17 +573,10 @@ Text section:
 
     def _llm_split_chapters(
         self, text_plain: str, text_html: str
-    ) -> List[Dict[str, Any]]:
+    ) -> Optional[List[Dict[str, Any]]]:
         """Split content into chapters using LLM with word splitters"""
         if not self._llm_handler:
-            return [
-                {
-                    "title": "Main Content",
-                    "text": text_html,
-                    "plain_start": 0,
-                    "plain_end": len(text_plain),
-                }
-            ]
+            return None
 
         marker_data = self.add_markers_to_text(text_plain)
         tagged_text = marker_data["tagged_text"]
@@ -580,38 +584,19 @@ Text section:
         marker_positions = marker_data["marker_positions"]
 
         if max_marker == 0:
-            return [
-                {
-                    "title": "Main Content",
-                    "text": text_html,
-                    "plain_start": 0,
-                    "plain_end": len(text_plain),
-                }
-            ]
+            return None
 
         ranges = self._get_llm_ranges(tagged_text)
+        if ranges is None:
+            return None
         if not ranges:
-            return [
-                {
-                    "title": "Main Content",
-                    "text": text_html,
-                    "plain_start": 0,
-                    "plain_end": len(text_plain),
-                }
-            ]
+            return None
 
         topic_boundaries = self._get_topics_for_ranges(
             ranges, text_plain, marker_positions
         )
         if not topic_boundaries:
-            return [
-                {
-                    "title": "Main Content",
-                    "text": text_html,
-                    "plain_start": 0,
-                    "plain_end": len(text_plain),
-                }
-            ]
+            return None
 
         validated_boundaries = self._validate_boundaries(
             topic_boundaries, max_marker
@@ -621,6 +606,8 @@ Text section:
             validated_boundaries = self._resolve_gaps(
                 validated_boundaries, marker_positions, text_plain
             )
+            if validated_boundaries is None:
+                return None
 
         return self._map_chapters_to_html(
             text_plain,
@@ -629,6 +616,20 @@ Text section:
             marker_positions,
             max_marker,
         )
+
+    def _call_llm(self, prompt: str, temperature: float = 0.0) -> Optional[str]:
+        if not self._llm_handler:
+            self._log.error("LLM handler not configured")
+            return None
+        try:
+            response = self._llm_handler.call([prompt], temperature=temperature)
+        except Exception as e:
+            self._log.error("LLM call failed: %s", e)
+            return None
+        if response is None:
+            self._log.error("Empty LLM response")
+            return None
+        return response
 
     def _create_sentences_and_groups(
         self, full_content_plain: str, chapters: List[Dict[str, Any]]
