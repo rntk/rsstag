@@ -143,7 +143,9 @@ export default class GlobalStatus extends React.Component {
 
     const promptLabel =
       this.state.promptType === 'telegram_password' ? 'Telegram password' : 'Telegram code';
-    const promptType = this.state.promptType === 'telegram_password' ? 'password' : 'text';
+    const isSensitivePrompt =
+      this.state.promptType === 'telegram_password' || this.state.promptType === 'telegram_code';
+    const promptType = isSensitivePrompt ? 'password' : 'text';
     const promptAutocomplete =
       this.state.promptType === 'telegram_password' ? 'current-password' : 'one-time-code';
 
