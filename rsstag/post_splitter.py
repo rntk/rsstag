@@ -17,39 +17,34 @@ class PostSplitter:
         self, content: str, title: str
     ) -> Optional[Dict[str, Any]]:
         """Generate grouped data from raw content and title"""
-        try:
-            # Prepare content with title
-            if title:
-                full_content_html = title + ". " + content
-            else:
-                full_content_html = content
+        # Prepare content with title
+        if title:
+            full_content_html = title + ". " + content
+        else:
+            full_content_html = content
 
-            # Clean HTML tags for LLM processing
-            html_cleaner = HTMLCleaner()
-            html_cleaner.purge()
-            html_cleaner.feed(full_content_html)
-            # Consistently normalize plain text for both chapters and sentences
-            content_v0 = " ".join(html_cleaner.get_content())
-            full_content_plain = re.sub(
-                r"\s+", " ", content_v0.replace("\n", " ").replace("\r", " ")
-            ).strip()
+        # Clean HTML tags for LLM processing
+        html_cleaner = HTMLCleaner()
+        html_cleaner.purge()
+        html_cleaner.feed(full_content_html)
+        # Consistently normalize plain text for both chapters and sentences
+        content_v0 = " ".join(html_cleaner.get_content())
+        full_content_plain = re.sub(
+            r"\s+", " ", content_v0.replace("\n", " ").replace("\r", " ")
+        ).strip()
 
-            # Generate chapters using LLM
-            chapters = self._llm_split_chapters(full_content_plain, full_content_html)
+        # Generate chapters using LLM
+        chapters = self._llm_split_chapters(full_content_plain, full_content_html)
 
-            # Split into sentences and create groups
-            sentences, groups = self._create_sentences_and_groups(
-                full_content_plain, chapters
-            )
+        # Split into sentences and create groups
+        sentences, groups = self._create_sentences_and_groups(
+            full_content_plain, chapters
+        )
 
-            return {
-                "sentences": sentences,
-                "groups": groups,
-            }
-
-        except Exception as e:
-            self._log.error("Error generating grouped data. Info: %s", e)
-            return None
+        return {
+            "sentences": sentences,
+            "groups": groups,
+        }
 
     def add_markers_to_text(self, text_plain: str) -> dict:
         """Add word split markers to the text."""
@@ -156,14 +151,10 @@ class PostSplitter:
     def _get_llm_ranges(self, tagged_text: str) -> List[tuple]:
         """Ask LLM to identify coherent ranges in the text"""
         prompt = self.build_ranges_prompt(tagged_text)
-        try:
-            self._log.info("LLM ranges prompt sent")
-            response = self._llm_handler.call([prompt], temperature=0.0).strip()
-            self._log.info("LLM ranges response: %s", response)
-            return self._parse_llm_ranges(response)
-        except Exception as e:
-            self._log.error("LLM ranges generation failed: %s", e)
-            return []
+        self._log.info("LLM ranges prompt sent")
+        response = self._llm_handler.call([prompt], temperature=0.0).strip()
+        self._log.info("LLM ranges response: %s", response)
+        return self._parse_llm_ranges(response)
 
     def build_ranges_prompt(self, tagged_text: str) -> str:
         return f"""You are a text analysis expert. Analyze the following article with word split markers {{ws<number>}} and identify the main coherent sections or chapters.
@@ -582,75 +573,7 @@ Text section:
         self, text_plain: str, text_html: str
     ) -> List[Dict[str, Any]]:
         """Split content into chapters using LLM with word splitters"""
-        try:
-            if not self._llm_handler:
-                return [
-                    {
-                        "title": "Main Content",
-                        "text": text_html,
-                        "plain_start": 0,
-                        "plain_end": len(text_plain),
-                    }
-                ]
-
-            marker_data = self.add_markers_to_text(text_plain)
-            tagged_text = marker_data["tagged_text"]
-            max_marker = marker_data["max_marker"]
-            marker_positions = marker_data["marker_positions"]
-
-            if max_marker == 0:
-                return [
-                    {
-                        "title": "Main Content",
-                        "text": text_html,
-                        "plain_start": 0,
-                        "plain_end": len(text_plain),
-                    }
-                ]
-
-            ranges = self._get_llm_ranges(tagged_text)
-            if not ranges:
-                return [
-                    {
-                        "title": "Main Content",
-                        "text": text_html,
-                        "plain_start": 0,
-                        "plain_end": len(text_plain),
-                    }
-                ]
-
-            topic_boundaries = self._get_topics_for_ranges(
-                ranges, text_plain, marker_positions
-            )
-            if not topic_boundaries:
-                return [
-                    {
-                        "title": "Main Content",
-                        "text": text_html,
-                        "plain_start": 0,
-                        "plain_end": len(text_plain),
-                    }
-                ]
-
-            validated_boundaries = self._validate_boundaries(
-                topic_boundaries, max_marker
-            )
-
-            if self._llm_handler:
-                validated_boundaries = self._resolve_gaps(
-                    validated_boundaries, marker_positions, text_plain
-                )
-
-            return self._map_chapters_to_html(
-                text_plain,
-                text_html,
-                validated_boundaries,
-                marker_positions,
-                max_marker,
-            )
-
-        except Exception as e:
-            self._log.error("LLM chapter splitting failed: %s", e)
+        if not self._llm_handler:
             return [
                 {
                     "title": "Main Content",
@@ -659,6 +582,62 @@ Text section:
                     "plain_end": len(text_plain),
                 }
             ]
+
+        marker_data = self.add_markers_to_text(text_plain)
+        tagged_text = marker_data["tagged_text"]
+        max_marker = marker_data["max_marker"]
+        marker_positions = marker_data["marker_positions"]
+
+        if max_marker == 0:
+            return [
+                {
+                    "title": "Main Content",
+                    "text": text_html,
+                    "plain_start": 0,
+                    "plain_end": len(text_plain),
+                }
+            ]
+
+        ranges = self._get_llm_ranges(tagged_text)
+        if not ranges:
+            return [
+                {
+                    "title": "Main Content",
+                    "text": text_html,
+                    "plain_start": 0,
+                    "plain_end": len(text_plain),
+                }
+            ]
+
+        topic_boundaries = self._get_topics_for_ranges(
+            ranges, text_plain, marker_positions
+        )
+        if not topic_boundaries:
+            return [
+                {
+                    "title": "Main Content",
+                    "text": text_html,
+                    "plain_start": 0,
+                    "plain_end": len(text_plain),
+                }
+            ]
+
+        validated_boundaries = self._validate_boundaries(
+            topic_boundaries, max_marker
+        )
+
+        if self._llm_handler:
+            validated_boundaries = self._resolve_gaps(
+                validated_boundaries, marker_positions, text_plain
+            )
+
+        return self._map_chapters_to_html(
+            text_plain,
+            text_html,
+            validated_boundaries,
+            marker_positions,
+            max_marker,
+        )
 
     def _create_sentences_and_groups(
         self, full_content_plain: str, chapters: List[Dict[str, Any]]
