@@ -199,131 +199,6 @@ Output:"""
                     continue
         return ranges
 
-    def _resolve_gaps(
-        self,
-        topic_boundaries: List[tuple],
-        marker_positions: Dict[int, int],
-        text_plain: str,
-    ) -> Optional[List[tuple]]:
-        """Resolve gaps between topics by asking LLM"""
-        if not topic_boundaries:
-            self._log.info("No topic boundaries to resolve gaps for.")
-            return topic_boundaries
-
-        self._log.info(
-            f"Starting gap resolution for {len(topic_boundaries)} boundaries."
-        )
-
-        sorted_boundaries = sorted(topic_boundaries, key=lambda x: x[1])
-
-        current_boundaries = sorted_boundaries
-        i = 0
-        while i < len(current_boundaries) - 1:
-            prev_title, prev_start, prev_end = current_boundaries[i]
-            next_title, next_start, next_end = current_boundaries[i + 1]
-
-            if next_start > prev_end + 1:
-                gap_start = prev_end + 1
-                gap_end = next_start - 1
-                self._log.info(
-                    f"Gap found between '{prev_title}' and '{next_title}': markers {gap_start}-{gap_end}"
-                )
-
-                prev_text_end = marker_positions.get(prev_end, len(text_plain))
-                prev_chunk_start = marker_positions.get(
-                    max(prev_start, prev_end - 5), 0
-                )
-                prev_text_chunk = text_plain[prev_chunk_start:prev_text_end].strip()
-
-                next_text_start = marker_positions.get(next_start - 1, 0)
-                next_chunk_end = marker_positions.get(
-                    min(next_end, next_start + 5), len(text_plain)
-                )
-                next_text_chunk = text_plain[next_text_start:next_chunk_end].strip()
-
-                gap_text_start = marker_positions.get(gap_start - 1, 0)
-                gap_text_end = marker_positions.get(gap_end, len(text_plain))
-                gap_text = text_plain[gap_text_start:gap_text_end].strip()
-
-                if not gap_text:
-                    self._log.info(f"Gap {gap_start}-{gap_end} has no text, skipping.")
-                    i += 1
-                    continue
-
-                self._log.info(
-                    f"Resolving gap between '{prev_title}' and '{next_title}': markers {gap_start}-{gap_end}"
-                )
-
-                prompt = f"""You are a text analysis expert.
-We have a gap of unassigned text between two topics. Your goal is to assign this text to one of the adjacent topics to create complete, coherent paragraphs.
-
-Instruction:
-- PREFER ASSIGNMENT over leaving text unassigned. Most gaps should belong to either the previous or next topic.
-- If the text in <gap> concludes, elaborates, or continues the thought of <previous_topic>, answer "P".
-- If the text in <gap> introduces, sets up, or transitions into <next_topic>, answer "N".
-- Only answer "X" if the text is truly unrelated to BOTH topics (this should be rare).
-- When the gap text is transitional (could fit either), prefer "P" to complete the previous paragraph.
-- Consider: background info, examples, elaborations, and transitions typically belong to the topic they support.
-
-<previous_topic>
-{prev_title}
-</previous_topic>
-
-<context_previous>
-...{prev_text_chunk[-200:]}
-</context_previous>
-
-<next_topic>
-{next_title}
-</next_topic>
-
-<context_next>
-{next_text_chunk[:200]}...
-</context_next>
-
-<gap>
-{gap_text}
-</gap>
-
-Response (one letter P/N/X):"""
-
-                try:
-                    decision = self._call_llm(prompt, temperature=0.0)
-                    if decision is None:
-                        return None
-                    decision = decision.strip()
-                    self._log.info(f"Gap resolution decision: {decision}")
-
-                    if (
-                        "P" in decision and "N" not in decision and "X" not in decision
-                    ):
-                        self._log.info(
-                            f"Merging gap {gap_start}-{gap_end} to previous topic: '{prev_title}'"
-                        )
-                        current_boundaries[i] = (prev_title, prev_start, gap_end)
-                    elif "N" in decision and "P" not in decision:
-                        self._log.info(
-                            f"Merging gap {gap_start}-{gap_end} to next topic: '{next_title}'"
-                        )
-                        current_boundaries[i + 1] = (next_title, gap_start, next_end)
-                    else:
-                        self._log.info(
-                            f"Assigning gap {gap_start}-{gap_end} as 'Unassigned'"
-                        )
-                        current_boundaries.insert(
-                            i + 1, ("Unassigned", gap_start, gap_end)
-                        )
-                        i += 1
-
-                except Exception as e:
-                    self._log.error(f"Gap resolution failed: {e}")
-
-            i += 1
-
-        self._log.info(
-            f"Gap resolution finished. Resulting boundaries: {len(current_boundaries)}"
-        )
-        return current_boundaries
 
     def _get_topics_for_ranges(
         self, ranges: List[tuple], text_plain: str, marker_positions: Dict[int, int]
@@ -383,21 +258,43 @@ Text section:
     def _validate_boundaries(
         self, boundaries: List[tuple], max_marker: int
     ) -> List[tuple]:
-        """Validate and clamp boundaries to valid range"""
-        validated_boundaries = []
-        for title, start_marker, end_marker in boundaries:
-            if start_marker < 1:
-                start_marker = 1
-            if start_marker > max_marker:
-                start_marker = max_marker
-            if end_marker > max_marker:
-                end_marker = max_marker
-            if start_marker > end_marker:
-                start_marker, end_marker = end_marker, start_marker
+        """Validate, clamp, and fill gaps in boundaries to ensure continuous coverage"""
+        if not boundaries:
+            return []
 
-            validated_boundaries.append((title, start_marker, end_marker))
+        # Sort by start marker to handle them in order
+        sorted_boundaries = sorted(boundaries, key=lambda x: x[1])
 
-        return sorted(validated_boundaries, key=lambda x: x[1])
+        validated = []
+        for i, (title, start, end) in enumerate(sorted_boundaries):
+            # 1. Clamp to valid range [1, max_marker]
+            start = max(1, min(start, max_marker))
+            end = max(1, min(end, max_marker))
+            if start > end:
+                start, end = end, start
+
+            # 2. Handle continuity and fill gaps
+            if not validated:
+                # First chapter MUST start at 1 to avoid a gap at the beginning
+                start = 1
+            else:
+                prev_title, prev_start, prev_end = validated[-1]
+                # Start this chapter exactly after the previous one
+                start = prev_end + 1
+
+            # 3. Ensure end is at least start
+            if start > end:
+                end = start
+
+            # 4. If this is the last chapter, it MUST end at max_marker
+            if i == len(sorted_boundaries) - 1:
+                end = max_marker
+
+            # Only add if start is still within bounds
+            if start <= max_marker:
+                validated.append((title, start, end))
+
+        return validated
 
     def _build_html_mapping(self, html_text: str) -> tuple:
         """Builds a mapping between normalized plain text indices and original HTML indices."""
@@ -601,13 +498,6 @@ Text section:
         validated_boundaries = self._validate_boundaries(
             topic_boundaries, max_marker
         )
-
-        if self._llm_handler:
-            validated_boundaries = self._resolve_gaps(
-                validated_boundaries, marker_positions, text_plain
-            )
-            if validated_boundaries is None:
-                return None
 
         return self._map_chapters_to_html(
             text_plain,
