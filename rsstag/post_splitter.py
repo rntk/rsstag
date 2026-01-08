@@ -5,6 +5,21 @@ import re
 from typing import Optional, List, Dict, Any
 
 
+class PostSplitterError(Exception):
+    """Base exception for PostSplitter errors"""
+    pass
+
+
+class LLMGenerationError(PostSplitterError):
+    """Raised when LLM call fails or returns empty/invalid response"""
+    pass
+
+
+class ParsingError(PostSplitterError):
+    """Raised when LLM response cannot be parsed correctly"""
+    pass
+
+
 class PostSplitter:
     """Handles text splitting using LLM calls and parsing responses"""
 
@@ -15,7 +30,11 @@ class PostSplitter:
     def generate_grouped_data(
         self, content: str, title: str
     ) -> Optional[Dict[str, Any]]:
-        """Generate grouped data from raw content and title"""
+        """Generate grouped data from raw content and title
+
+        Raises:
+            PostSplitterError: If splitting or grouping fails
+        """
         # Prepare content with title
         if title:
             full_content_html = title + ". " + content
@@ -26,8 +45,15 @@ class PostSplitter:
 
         # Generate chapters using LLM
         chapters = self._llm_split_chapters(full_content_plain, full_content_html)
+        # _llm_split_chapters now raises exceptions, so no need to check for None returns causing exits
+        # However, it might still return None if max_marker is 0 (empty/short text), which is not necessarily an error.
+        # But looking at implementation below, let's see.
         if chapters is None:
-            return None
+             # This happens if text is too short/empty/no markers.
+             # In that case, we probably shouldn't return a partial result, or maybe we should?
+             # The original code returned None. Let's stick to None for "nothing to do" or "invalid input" cases not related to LLM failure?
+             # Or better, if it returns None because no markers, we return None.
+             return None
 
         # Split into sentences and create groups
         sentences, groups = self._create_sentences_and_groups(
@@ -141,16 +167,26 @@ class PostSplitter:
             "text_plain": text_plain,
         }
 
-    def _get_llm_ranges(self, tagged_text: str) -> Optional[List[tuple]]:
-        """Ask LLM to identify coherent ranges in the text"""
+    def _get_llm_ranges(self, tagged_text: str) -> List[tuple]:
+        """Ask LLM to identify coherent ranges in the text
+        
+        Raises:
+            LLMGenerationError
+            ParsingError
+        """
         prompt = self.build_ranges_prompt(tagged_text)
         self._log.info("LLM ranges prompt sent")
         response = self._call_llm(prompt, temperature=0.0)
-        if response is None:
-            return None
+        # response is guaranteed to be str if no exception raised
         response = response.strip()
         self._log.info("LLM ranges response: %s", response)
-        return self._parse_llm_ranges(response)
+        ranges = self._parse_llm_ranges(response)
+        
+        # If ranges is empty, it might mean the model didn't find any sections, 
+        # or it failed to follow instructions. For now, strict empty check might be too aggressive
+        # if the text was weird. But usually it should return something.
+        # Let's trust _parse_llm_ranges for now.
+        return ranges
 
     def build_ranges_prompt(self, tagged_text: str) -> str:
         return f"""You are a text analysis expert. Analyze the following article with word split markers {{ws<number>}} and identify the main coherent sections or chapters.
@@ -202,8 +238,12 @@ Output:"""
 
     def _get_topics_for_ranges(
         self, ranges: List[tuple], text_plain: str, marker_positions: Dict[int, int]
-    ) -> Optional[List[tuple]]:
-        """Generate titles for each range. Returns list of (title, start, end)"""
+    ) -> List[tuple]:
+        """Generate titles for each range. Returns list of (title, start, end)
+        
+        Raises:
+            PostSplitterError
+        """
         boundaries = []
         for start, end in ranges:
             p_start = marker_positions.get(start - 1, 0)
@@ -214,14 +254,16 @@ Output:"""
                 continue
 
             title = self._generate_title_for_chunk(chunk_text)
-            if title is None:
-                return None
             boundaries.append((title, start, end))
 
         return boundaries
 
-    def _generate_title_for_chunk(self, chunk_text: str) -> Optional[str]:
-        """Generate a title for a text chunk"""
+    def _generate_title_for_chunk(self, chunk_text: str) -> str:
+        """Generate a title for a text chunk
+        
+        Raises:
+            LLMGenerationError
+        """
         self._log.info("Generating title for chunk, text length: %d", len(chunk_text))
         prompt_text = chunk_text[:2000]
         prompt = f"""You are a text analysis expert. Identify a short, descriptive topic title (1-4 words) for the following text section.
@@ -240,20 +282,15 @@ Text section:
 {prompt_text}
 </content>
 """
-        try:
-            self._log.info("Calling LLM handler for title generation")
-            response = self._call_llm(prompt, temperature=0.0)
-            if response is None:
-                return None
-            response = response.strip()
-            self._log.info("LLM response: %s", response)
-            title = response.strip().strip('"').strip("'").strip().split("\n")[0]
-            if not title:
-                return None
-            return title
-        except Exception as e:
-            self._log.info("Exception in title generation: %s", str(e))
-            return None
+        self._log.info("Calling LLM handler for title generation")
+        response = self._call_llm(prompt, temperature=0.0)
+        # response is guaranteed to be str
+        response = response.strip()
+        self._log.info("LLM response: %s", response)
+        title = response.strip().strip('"').strip("'").strip().split("\n")[0]
+        if not title:
+             raise LLMGenerationError("Empty title generated from LLM")
+        return title
 
     def _validate_boundaries(
         self, boundaries: List[tuple], max_marker: int
@@ -471,9 +508,13 @@ Text section:
     def _llm_split_chapters(
         self, text_plain: str, text_html: str
     ) -> Optional[List[Dict[str, Any]]]:
-        """Split content into chapters using LLM with word splitters"""
+        """Split content into chapters using LLM with word splitters
+        
+        Raises:
+            PostSplitterError
+        """
         if not self._llm_handler:
-            return None
+            raise LLMGenerationError("LLM handler not configured")
 
         marker_data = self.add_markers_to_text(text_plain)
         tagged_text = marker_data["tagged_text"]
@@ -483,12 +524,14 @@ Text section:
         if max_marker == 0:
             return None
 
+        # _get_llm_ranges now raises exception on error
         ranges = self._get_llm_ranges(tagged_text)
-        if ranges is None:
-            return None
         if not ranges:
+            # If no ranges found, it might mean the text was too short or weird.
+            # We can treat it as "no splitting possible".
             return None
 
+        # _get_topics_for_ranges now raises exception on error
         topic_boundaries = self._get_topics_for_ranges(
             ranges, text_plain, marker_positions
         )
@@ -507,18 +550,26 @@ Text section:
             max_marker,
         )
 
-    def _call_llm(self, prompt: str, temperature: float = 0.0) -> Optional[str]:
+    def _call_llm(self, prompt: str, temperature: float = 0.0) -> str:
+        """Calls the LLM handler.
+        
+        Raises:
+            LLMGenerationError: If call fails or returns empty.
+        """
         if not self._llm_handler:
             self._log.error("LLM handler not configured")
-            return None
+            raise LLMGenerationError("LLM handler not configured")
+        
         try:
             response = self._llm_handler.call([prompt], temperature=temperature)
         except Exception as e:
             self._log.error("LLM call failed: %s", e)
-            return None
-        if response is None:
+            raise LLMGenerationError(f"LLM call failed: {e}") from e
+            
+        if not response:
             self._log.error("Empty LLM response")
-            return None
+            raise LLMGenerationError("Empty LLM response")
+            
         return response
 
     def _create_sentences_and_groups(
