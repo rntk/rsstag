@@ -3,7 +3,6 @@
 import logging
 import re
 from typing import Optional, List, Dict, Any
-from rsstag.html_cleaner import HTMLCleaner
 
 
 class PostSplitter:
@@ -23,15 +22,7 @@ class PostSplitter:
         else:
             full_content_html = content
 
-        # Clean HTML tags for LLM processing
-        html_cleaner = HTMLCleaner()
-        html_cleaner.purge()
-        html_cleaner.feed(full_content_html)
-        # Consistently normalize plain text for both chapters and sentences
-        content_v0 = " ".join(html_cleaner.get_content())
-        full_content_plain = re.sub(
-            r"\s+", " ", content_v0.replace("\n", " ").replace("\r", " ")
-        ).strip()
+        full_content_plain, _ = self._build_html_mapping(full_content_html)
 
         # Generate chapters using LLM
         chapters = self._llm_split_chapters(full_content_plain, full_content_html)
@@ -650,19 +641,15 @@ Text section:
             title = chapters[0]["title"]
             groups[title] = list(range(1, len(sentences) + 1))
         else:
-            sentence_info = []
-            sentence_offset = 0
-            for i, sentence in enumerate(sentences, 1):
-                sentence_text = sentence["text"]
-                sentence_start = full_content_plain.find(sentence_text, sentence_offset)
-                if sentence_start != -1:
-                    sentence_end = sentence_start + len(sentence_text)
-                    sentence_info.append(
-                        {"id": i, "start": sentence_start, "end": sentence_end}
-                    )
-                    sentence_offset = sentence_end
-                else:
-                    self._log.warning(f"Could not find exact sentence {i} in text")
+            sentence_info = [
+                {
+                    "id": sentence["number"],
+                    "start": sentence["start"],
+                    "end": sentence["end"],
+                }
+                for sentence in sentences
+                if "start" in sentence and "end" in sentence
+            ]
 
             for chapter in chapters:
                 title = chapter["title"]
@@ -694,17 +681,47 @@ Text section:
 
     def _split_sentences(self, text: str) -> List[Dict[str, Any]]:
         """Split text into sentences"""
-        txt = re.sub(r"\s+", " ", text.strip())
-        if not txt:
+        if not text or not text.strip():
             return []
-
-        sentences = re.split(r"(?<=[.!?])\s+(?=[A-ZА-Я])", txt)
+        boundaries = list(re.finditer(r"(?<=[.!?])\s+(?=[A-ZА-Я])", text))
 
         result = []
-        for i, sentence in enumerate(sentences):
-            if sentence and len(sentence.strip()) > 0:
+        start = 0
+        sentence_number = 1
+        for match in boundaries:
+            end = match.start()
+            sentence_start = start
+            sentence_end = end
+            while sentence_start < sentence_end and text[sentence_start].isspace():
+                sentence_start += 1
+            while sentence_end > sentence_start and text[sentence_end - 1].isspace():
+                sentence_end -= 1
+            if sentence_start < sentence_end:
                 result.append(
-                    {"text": sentence.strip(), "number": i + 1, "read": False}
+                    {
+                        "number": sentence_number,
+                        "start": sentence_start,
+                        "end": sentence_end,
+                        "read": False,
+                    }
                 )
+                sentence_number += 1
+            start = match.end()
+
+        sentence_start = start
+        sentence_end = len(text)
+        while sentence_start < sentence_end and text[sentence_start].isspace():
+            sentence_start += 1
+        while sentence_end > sentence_start and text[sentence_end - 1].isspace():
+            sentence_end -= 1
+        if sentence_start < sentence_end:
+            result.append(
+                {
+                    "number": sentence_number,
+                    "start": sentence_start,
+                    "end": sentence_end,
+                    "read": False,
+                }
+            )
 
         return result

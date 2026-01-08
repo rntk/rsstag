@@ -1234,7 +1234,9 @@ def on_post_grouped_get(
             for sentence in post_grouped_data["sentences"]:
                 all_sentences_data.append(
                     {
-                        "text": sentence["text"],
+                        "text": sentence.get("text"),
+                        "start": sentence.get("start"),
+                        "end": sentence.get("end"),
                         "number": sentence_offset + sentence["number"],
                         "post_id": post_id,
                     }
@@ -1268,7 +1270,7 @@ def on_post_grouped_get(
     for p_info in posts_info:
         post_id = p_info["post_id"]
         raw_content = p_info["raw_content"]
-        
+
         # Default if no grouping
         content = raw_content
 
@@ -1283,7 +1285,6 @@ def on_post_grouped_get(
             # Identify ranges to replace
             matches = []
             for s in post_sentences:
-                text = s["text"]
                 num = s["number"]
                 color = sentence_colors.get(num, "#f0f0f0")
                 topic_names = sentence_topics.get(num, [])
@@ -1292,23 +1293,34 @@ def on_post_grouped_get(
                 else:
                     topic_label = "Unassigned"
 
-                # Find the sentence in mapped_plain (normalized)
-                start_idx = mapped_plain.find(text)
-                if start_idx != -1:
-                    end_idx = start_idx + len(text)
-                    if start_idx < len(mapping) and end_idx < len(mapping):
-                        h_start = mapping[start_idx]
-                        h_end = mapping[end_idx]
-                        matches.append(
-                            {
-                                "start": h_start,
-                                "end": h_end,
-                                "num": num,
-                                "color": color,
-                                "text": raw_content[h_start:h_end],
-                                "topic": topic_label,
-                            }
-                        )
+                start_idx = s.get("start")
+                end_idx = s.get("end")
+                if start_idx is None or end_idx is None:
+                    text = s.get("text", "")
+                    if text:
+                        start_idx = mapped_plain.find(text)
+                        if start_idx != -1:
+                            end_idx = start_idx + len(text)
+
+                if (
+                    start_idx is not None
+                    and end_idx is not None
+                    and start_idx != -1
+                    and start_idx < len(mapping)
+                    and end_idx < len(mapping)
+                ):
+                    h_start = mapping[start_idx]
+                    h_end = mapping[end_idx]
+                    matches.append(
+                        {
+                            "start": h_start,
+                            "end": h_end,
+                            "num": num,
+                            "color": color,
+                            "text": raw_content[h_start:h_end],
+                            "topic": topic_label,
+                        }
+                    )
 
             # Sort matches and filter overlaps
             matches.sort(key=lambda m: m["start"])
@@ -1404,10 +1416,17 @@ def on_post_grouped_snippets_get(
             feed_title = feed["title"] if feed else f"Post {post_id}"
             feed_titles.add(feed_title)
 
+            raw_content = gzip.decompress(post["content"]["content"]).decode(
+                "utf-8", "replace"
+            )
+            if post["content"]["title"]:
+                raw_content = post["content"]["title"] + ". " + raw_content
+
             all_posts[post_id] = {
                 "feed_title": feed_title,
                 "url": post.get("url"),
                 "title": post.get("content", {}).get("title", f"Post {post_id}"),
+                "raw_content": raw_content,
             }
 
     combined_feed_title = (
@@ -1424,6 +1443,10 @@ def on_post_grouped_snippets_get(
             and post_grouped_data.get("groups")
             and post_grouped_data.get("sentences")
         ):
+            raw_content = all_posts[post_id].get("raw_content")
+            if not raw_content:
+                continue
+            mapped_plain, _ = app.post_splitter._build_html_mapping(raw_content)
             sentences_map = {s["number"]: s for s in post_grouped_data["sentences"]}
 
             for group, indices in post_grouped_data["groups"].items():
@@ -1443,6 +1466,17 @@ def on_post_grouped_snippets_get(
                     if not s_obj:
                         continue
                     text = s_obj.get("text", "")
+                    if not text:
+                        s_start = s_obj.get("start")
+                        s_end = s_obj.get("end")
+                        if (
+                            s_start is not None
+                            and s_end is not None
+                            and s_start >= 0
+                            and s_end <= len(mapped_plain)
+                            and s_start < s_end
+                        ):
+                            text = mapped_plain[s_start:s_end]
                     if not text:
                         continue
                     if user["provider"] == "gmail":
