@@ -81,10 +81,12 @@ def on_provider_feeds_get_post(
         action = "refresh"
 
     if action == "refresh":
+        logging.info("Refreshing channel list for provider: %s, user: %s", provider, user.get("sid"))
         try:
             if provider == data_providers.TELEGRAM:
                 telegram = TelegramProvider(app.config, app.db)
                 channels = telegram.list_channels(provider_user)
+                logging.info("Successfully refreshed %d channels for telegram", len(channels))
             elif provider == data_providers.BAZQUX:
                 bazqux = BazquxProvider(app.config)
                 data = bazqux.list_subscriptions(provider_user)

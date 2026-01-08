@@ -22,7 +22,15 @@ def get_chats_(offset_order: int = 0, offset_chat_id: int = 0, limit: int = 100)
 def get_chats(limit: int = 100) -> Dict[str, Any]:
     return {
         "@type": "getChats",
-        "chat_list": None,
+        "chat_list": {"@type": "chatListMain"},
+        "limit": limit,
+    }
+
+
+def load_chats(limit: int = 100) -> Dict[str, Any]:
+    return {
+        "@type": "loadChats",
+        "chat_list": {"@type": "chatListMain"},
         "limit": limit,
     }
 
