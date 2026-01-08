@@ -336,7 +336,7 @@ Response (one letter P/N/X):"""
 
             chunk_text = text_plain[p_start:p_end]
             if not chunk_text.strip():
-                return None
+                continue
 
             title = self._generate_title_for_chunk(chunk_text)
             if title is None:
