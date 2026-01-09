@@ -1,15 +1,46 @@
 """Routes for rsstag"""
 
-from typing import List, Optional
+from typing import List, Optional, Iterable
+import itertools
+import inspect
+import functools
 from werkzeug.routing import Map, Rule
+
+
+def route(url: str, methods: List[str]):
+    """Decorator to register handler routes without editing the static list."""
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            return func(*args, **kwargs)
+
+        routes = getattr(func, "_rsstag_routes", [])
+        routes.append({"url": url, "endpoint": func.__name__, "methods": methods})
+        setattr(wrapper, "_rsstag_routes", routes)
+        return wrapper
+
+    return decorator
+
+
+def _collect_decorated_routes(handlers: object) -> List[dict]:
+    collected_routes: List[dict] = []
+    for attr_name in dir(handlers):
+        attr = getattr(handlers, attr_name)
+        if not inspect.ismethod(attr):
+            continue
+        routes = getattr(attr, "_rsstag_routes", None)
+        if routes:
+            collected_routes.extend(routes)
+    return collected_routes
 
 
 class RSSTagRoutes:
     """Routes list and mapping for rsstag"""
 
-    def __init__(self, host: str) -> None:
+    def __init__(self, host: str, handlers: Optional[object] = None) -> None:
         self._host = host
-        self._routes = [
+        self._default_routes = [
             {"url": "/", "endpoint": "on_root_get", "methods": ["GET"]},
             {"url": "/login", "endpoint": "on_login_get", "methods": ["GET"]},
             {"url": "/login", "endpoint": "on_login_post", "methods": ["POST"]},
@@ -414,12 +445,29 @@ class RSSTagRoutes:
             },
         ]
 
+        decorated_routes = (
+            _collect_decorated_routes(handlers) if handlers is not None else []
+        )
+        self._routes = self._merge_routes(decorated_routes, self._default_routes)
+
         self._rules = []
         for route in self._routes:
             self._rules.append(
                 Rule(route["url"], endpoint=route["endpoint"], methods=route["methods"])
             )
         self._werkzeug_routes = Map(self._rules)
+
+    @staticmethod
+    def _merge_routes(routes: Iterable[dict], fallback_routes: Iterable[dict]) -> List[dict]:
+        seen = set()
+        merged_routes = []
+        for route in itertools.chain(routes, fallback_routes):
+            key = (route["url"], route["endpoint"], tuple(route["methods"]))
+            if key in seen:
+                continue
+            seen.add(key)
+            merged_routes.append(route)
+        return merged_routes
 
     def get_routes(self) -> List[dict]:
         """Get routes list"""
