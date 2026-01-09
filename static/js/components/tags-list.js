@@ -24,7 +24,7 @@ export default class TagsList extends React.Component {
 
   render() {
     if (this.state && this.state.tags && this.state.tags.size) {
-      let tags = [];
+      let letterGroups = [];
 
       // Collect and sort tags alphabetically by their display text
       const sorted = Array.from(this.state.tags.values()).sort((a, b) => {
@@ -33,20 +33,34 @@ export default class TagsList extends React.Component {
         return at.localeCompare(bt, undefined, { numeric: true, sensitivity: 'base' });
       });
 
-      // Group by first letter and insert a small title before each group
+      // Group by first letter
       let currentLetter = null;
+      let currentGroupTags = [];
+
       for (let tag of sorted) {
         const first = ((tag.tag || '').trim().charAt(0) || '').toUpperCase();
+
         if (first && first !== currentLetter) {
+          // Save previous group if exists
+          if (currentLetter !== null && currentGroupTags.length > 0) {
+            letterGroups.push(
+              <div key={`group_${currentLetter}`} className="alpha_group_container">
+                <div className="alpha_group_title">
+                  <h3>{currentLetter}</h3>
+                </div>
+                <div className="alpha_group_tags">
+                  {currentGroupTags}
+                </div>
+              </div>
+            );
+          }
+
+          // Start new group
           currentLetter = first;
-          tags.push(
-            <div key={`hdr_${currentLetter}`} className="alpha_group_title">
-              <h3>{currentLetter}</h3>
-            </div>
-          );
+          currentGroupTags = [];
         }
 
-        tags.push(
+        currentGroupTags.push(
           <TagItem
             key={tag.tag}
             tag={tag}
@@ -59,7 +73,22 @@ export default class TagsList extends React.Component {
           />
         );
       }
-      return <ol className="cloud">{tags}</ol>;
+
+      // Don't forget the last group
+      if (currentLetter !== null && currentGroupTags.length > 0) {
+        letterGroups.push(
+          <div key={`group_${currentLetter}`} className="alpha_group_container">
+            <div className="alpha_group_title">
+              <h3>{currentLetter}</h3>
+            </div>
+            <div className="alpha_group_tags">
+              {currentGroupTags}
+            </div>
+          </div>
+        );
+      }
+
+      return <ol className="cloud">{letterGroups}</ol>;
     } else {
       return <p>No tags</p>;
     }

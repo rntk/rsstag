@@ -89,9 +89,20 @@ h3.post_title {
     font-size: 11pt;
 }
 
-// Small header between alphabet groups in tags list
+// Container for alphabet group (title + tags)
+.alpha_group_container {
+    display: inline-block;
+    vertical-align: top;
+    border: 1px solid $my_gray;
+    @include vendor-prefix(border-radius, 0.5em);
+    padding: 0.5em;
+    margin: 0.5em;
+    max-width: 100%;
+}
+
+// Header for alphabet groups in tags list
 .alpha_group_title {
-    margin: 0.8em 0 0.4em 0.4em;
+    margin: 0 0 0.4em 0;
     color: #9a9a9a;
 
     h3 {
@@ -99,6 +110,11 @@ h3.post_title {
         font-weight: normal;
         font-size: 14pt;
     }
+}
+
+// Container for tags within each alphabet group
+.alpha_group_tags {
+    display: inline;
 }
 .post_meta {
     font-size: 10pt;
