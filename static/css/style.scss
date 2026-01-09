@@ -349,6 +349,59 @@ h3.post_title {
 .root_item a {
     font-size: 14pt;
 }
+.root_columns {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 1em;
+    width: 100%;
+}
+.root_column {
+    display: inline-block;
+    vertical-align: top;
+    min-width: 250px;
+    max-width: 350px;
+    flex: 1;
+}
+.root_group {
+    padding: 0.5em;
+    margin: 0.5em;
+    border: 1px solid #c6c6c6;
+    border-radius: 0.5em;
+    box-shadow: 0px 0px 2px 0px gray;
+}
+.root_group_title {
+    font-weight: lighter;
+    color: #9a9a9a;
+    margin: 0 0 0.5em 0;
+    text-align: center;
+    font-size: 11pt;
+}
+.root_group_item {
+    padding: 0.3em 0.5em;
+    margin: 0.3em;
+    display: block;
+    text-align: center;
+    font-size: 10pt;
+    border: 1px solid #c6c6c6;
+    border-radius: 0.5em;
+}
+.root_group_item:hover {
+    background-color: #f1f1f1;
+}
+.root_group_item a {
+    font-size: 12pt;
+}
+@media (max-width: 800px) {
+    .root_columns {
+        flex-direction: column;
+        align-items: center;
+    }
+    .root_column {
+        width: 95%;
+        max-width: none;
+    }
+}
 #loading {
     position: fixed;
     padding: 0.5em;
