@@ -570,6 +570,36 @@ def on_provider_detail_post(
             )
         )
 
+    if action == "download":
+        if not user["in_queue"]:
+            added = app.tasks.add_task(
+                {
+                    "type": TASK_DOWNLOAD,
+                    "user": user["sid"],
+                    "host": request.environ["HTTP_HOST"],
+                    "provider": provider,
+                    "selection": {"channels": [], "feeds": [], "categories": []},
+                }
+            )
+            if added:
+                updated = app.users.update_by_sid(
+                    user["sid"],
+                    {
+                        "in_queue": True,
+                        "message": "Downloading from provider, please wait",
+                    },
+                )
+                if not updated:
+                    logging.error(
+                        "Cant update data of user %s while create download task",
+                        user["sid"],
+                    )
+        else:
+            app.users.update_by_sid(
+                user["sid"], {"message": "You already in queue, please wait"}
+            )
+        return redirect(app.routes.get_url_by_endpoint(endpoint="on_root_get"))
+
     login = request.form.get("login")
     password = request.form.get("password")
     err = []

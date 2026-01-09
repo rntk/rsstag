@@ -49,6 +49,11 @@
             <input type="hidden" name="action" value="activate" />
             <input type="submit" value="Make active" {% if provider == active_provider %}disabled{% endif %} />
         </form>
+
+        <form action="{{ login_url }}" method="POST">
+            <input type="hidden" name="action" value="download" />
+            <input type="submit" value="Download" />
+        </form>
     {% endif %}
 
     {% if provider == "telegram" or provider == "bazqux" %}
