@@ -196,9 +196,9 @@ window.onload = () => {
     // Mock the data structure expected by PostsStorage if necessary,
     // although PostsStorage mostly uses window.* variables in fetchPosts()
     window.posts_list = window.posts.map(p => ({
-        pos: p.post_id,
-        post: p,
-        showed: true
+      pos: p.post_id,
+      post: p,
+      showed: true
     }));
     window.group = 'tag';
     window.group_title = window.feed_title;
@@ -598,6 +598,21 @@ function tagWithContextInfoPage(tag) {
     document.getElementById('load_topics')
   );
   tag_topics_storage.start();
+
+  const tag_grouped_topics_evsys = new EventsSystem();
+  const tag_grouped_topics_storage = new TagsStorage(
+    tag_grouped_topics_evsys,
+    '/tag-grouped-topics'
+  );
+  ReactDOM.render(
+    <TagsList ES={tag_grouped_topics_evsys} />,
+    document.getElementById('tag_grouped_topics')
+  );
+  ReactDOM.render(
+    <TagButton ES={tag_grouped_topics_evsys} title="grouped topics" tag={tag} />,
+    document.getElementById('load_grouped_topics')
+  );
+  tag_grouped_topics_storage.start();
 
   const tag_mentions_evsys = new EventsSystem();
   const tag_mentions_chart = new TagMentionsChart('#mentions_chart', tag_mentions_evsys);

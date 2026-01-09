@@ -448,6 +448,11 @@ class RSSTagRoutes:
                 "endpoint": "on_delete_feeds_categories_post",
                 "methods": ["POST"],
             },
+            {
+                "url": "/tag-grouped-topics/<string:tag>",
+                "endpoint": "on_tag_grouped_topics_get",
+                "methods": ["GET"],
+            },
         ]
 
         decorated_routes = (

@@ -1,97 +1,107 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-<script type="text/javascript" src="/static/js/Chart.min.js"></script>
-<script type="text/javascript" src="/static/js/google-charts.js"></script>
-<script type="text/javascript" src="/static/js/d3.v6.min.js"></script>
-<link rel="stylesheet" href="/static/vis-dist/vis.min.css" />
-<title>Page of tag {{tag['tag']}}</title>
-{%  include "head-data.html" %}
+    <script type="text/javascript" src="/static/js/Chart.min.js"></script>
+    <script type="text/javascript" src="/static/js/google-charts.js"></script>
+    <script type="text/javascript" src="/static/js/d3.v6.min.js"></script>
+    <link rel="stylesheet" href="/static/vis-dist/vis.min.css" />
+    <title>Page of tag {{tag['tag']}}</title>
+    {% include "head-data.html" %}
 </head>
+
 <body>
-{% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
-<div id="global_tools">
-    <div class="left_half">
-        <div id="link_on_root" class="global_tools_button">
-            <a href="/">main</a>
+    {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
+    <div id="global_tools">
+        <div class="left_half">
+            <div id="link_on_root" class="global_tools_button">
+                <a href="/">main</a>
+            </div>
+            <div id="help_button" class="global_tools_button">
+                <a href="#">help</a>
+            </div>
+            <div id="sotr_by" class="global_tools_button">
+                <a href="{{sort_by_link}}">group by tag</a>
+            </div>
+            <div id="group_by" class="global_tools_button">
+                <a href="{{group_by_link}}">group by category</a>
+            </div>
         </div>
-        <div id="help_button" class="global_tools_button">
-            <a href="#">help</a>
-        </div>
-        <div id="sotr_by" class="global_tools_button">
-            <a href="{{sort_by_link}}">group by tag</a>
-        </div>
-        <div id="group_by" class="global_tools_button">
-            <a href="{{group_by_link}}">group by category</a>
+        <div class="right_half">
+            {{ g_status.global_status() }}
+            {{ menu.settings_menu() }}
         </div>
     </div>
-    <div class="right_half">
-        {{ g_status.global_status() }}
-        {{ menu.settings_menu() }}
+    <div class="page">
+        <div class="group_title">
+            <h3><a href="{{posts_link}}">{{tag['tag']}}</a> ({{tag['unread_count']}} / {{tag['posts_count']}})&nbsp;
+            </h3>
+            {{', '.join(tag['words'])}} <a href="/tag-net#{{tag['tag']}}">Tag net</a>&nbsp;&nbsp;<a
+                href="/sentences/with/tags/{{tag['tag']}}">Sents</a>
+        </div>
+        <h3 class="group_title tag_info_title">Word2Vec</h3><span id="load_similar_w2v"></span>
+        <div id="similar_w2v_tags" class="tag_info_block"></div>
+        <h3 class="group_title tag_info_title">FastText</h3><span id="load_similar_fasttext"></span>
+        <div id="similar_fasttext_tags" class="tag_info_block"></div>
+        <h3 class="group_title tag_info_title">Chars</h3><span id="load_similar_words"></span>
+        <div id="similar_words_tags" class="tag_info_block"></div>
+        <h3 class="group_title tag_info_title">Bi-grams</h3><span id="load_bi_grams"></span>
+        <div id="bi_grams" class="tag_info_block"></div>
+        <h3 class="group_title tag_info_title">Bi-grams Graph</h3><span id="load_bi_grams_graph"></span>
+        <div id="bi_grams_graph" class="tag_info_block"></div>
+        <h3 class="group_title tag_info_title">PMI</h3><span id="load_pmi"></span>
+        <div id="pmi" class="tag_info_block"></div>
+        <h3 class="group_title tag_info_title">Topics</h3><span id="load_topics"></span>
+        <div id="tag_topics" class="tag_info_block"></div>
+        <h3 class="group_title tag_info_title">Grouped Topics</h3><span id="load_grouped_topics"></span>
+        <div id="tag_grouped_topics" class="tag_info_block"></div>
+        <h3 class="group_title tag_info_title">Entities</h3><span id="load_entities"></span>
+        <div id="tag_entities" class="tag_info_block"></div>
+        <h3 class="group_title tag_info_title">TFIDF</h3><span id="load_tfidf"></span>
+        <div id="tag_tfidf" class="tag_info_block"></div>
+        <h3 class="group_title tag_info_title">Specific</h3><span id="load_specific"></span>
+        <div id="tag_specific" class="tag_info_block"></div>
+        <h3 class="group_title tag_info_title">Specific</h3><span id="load_specific1"></span>
+        <div id="tag_specific1" class="tag_info_block"></div>
+        <h3 class="group_title tag_info_title">Clusters</h3><span id="load_clusters"></span>
+        <div id="tag_clusters" class="tag_info_block"></div>
+        <h3 class="group_title tag_info_title">Contexts Classification</h3><span
+            id="load_contexts_classification"></span>
+        <div id="tag_contexts_classification" class="tag_info_block"></div>
+        <h3 class="group_title tag_info_title">Siblings tags</h3><span id="load_siblings"></span>
+        <div id="siblings_tags" class="tag_info_block"></div>
+        <h3 class="group_title tag_info_title">Tag Mentions chart</h3><span id="load_mentions"></span>
+        <div id="mentions_chart" class="tag_info_block"></div>
+        <h3 class="group_title tag_info_title">Bi-grams Mentions chart</h3><span id="load_bigrams_mentions"></span>
+        <div id="bigrams_mentions_chart" class="tag_info_block"></div>
+        <h3 class="group_title wordtree_title tag_info_title">WordTree</h3><span id="load_wordtree"></span>
+        <div id="wordtree_block" class="tag_info_block">
+            <div id="wordtree"></div>
+            <div id="tag_contexts"></div>
+        </div>
+        <div id="openai_block" class="openai_info_block">
+            <div id="openai_tool"></div>
+        </div>
+        <!--h3 class="topics_texts_title">Topics texts</h3-->
+        <!--div-- id="topics_texts" class="tag_info_block"></div-->
     </div>
-</div>
-<div class="page">
-    <div class="group_title">
-        <h3><a href="{{posts_link}}">{{tag['tag']}}</a> ({{tag['unread_count']}} / {{tag['posts_count']}})&nbsp;</h3>
-        {{', '.join(tag['words'])}} <a href="/tag-net#{{tag['tag']}}">Tag net</a>&nbsp;&nbsp;<a href="/sentences/with/tags/{{tag['tag']}}">Sents</a>
+    <div id="global_tools_bottom">
+        <ul id="paginator"></ul>
     </div>
-    <h3 class="group_title tag_info_title">Word2Vec</h3><span id="load_similar_w2v"></span>
-    <div id="similar_w2v_tags" class="tag_info_block"></div>
-    <h3 class="group_title tag_info_title">FastText</h3><span id="load_similar_fasttext"></span>
-    <div id="similar_fasttext_tags" class="tag_info_block"></div>
-    <h3 class="group_title tag_info_title">Chars</h3><span id="load_similar_words"></span>
-    <div id="similar_words_tags" class="tag_info_block"></div>
-    <h3 class="group_title tag_info_title">Bi-grams</h3><span id="load_bi_grams"></span>
-    <div id="bi_grams" class="tag_info_block"></div>
-    <h3 class="group_title tag_info_title">Bi-grams Graph</h3><span id="load_bi_grams_graph"></span>
-    <div id="bi_grams_graph" class="tag_info_block"></div>
-    <h3 class="group_title tag_info_title">PMI</h3><span id="load_pmi"></span>
-    <div id="pmi" class="tag_info_block"></div>
-    <h3 class="group_title tag_info_title">Topics</h3><span id="load_topics"></span>
-    <div id="tag_topics" class="tag_info_block"></div>
-    <h3 class="group_title tag_info_title">Entities</h3><span id="load_entities"></span>
-    <div id="tag_entities" class="tag_info_block"></div>
-    <h3 class="group_title tag_info_title">TFIDF</h3><span id="load_tfidf"></span>
-    <div id="tag_tfidf" class="tag_info_block"></div>
-    <h3 class="group_title tag_info_title">Specific</h3><span id="load_specific"></span>
-    <div id="tag_specific" class="tag_info_block"></div>
-    <h3 class="group_title tag_info_title">Specific</h3><span id="load_specific1"></span>
-    <div id="tag_specific1" class="tag_info_block"></div>
-    <h3 class="group_title tag_info_title">Clusters</h3><span id="load_clusters"></span>
-    <div id="tag_clusters" class="tag_info_block"></div>
-    <h3 class="group_title tag_info_title">Contexts Classification</h3><span id="load_contexts_classification"></span>
-    <div id="tag_contexts_classification" class="tag_info_block"></div>
-    <h3 class="group_title tag_info_title">Siblings tags</h3><span id="load_siblings"></span>
-    <div id="siblings_tags" class="tag_info_block"></div>
-    <h3 class="group_title tag_info_title">Tag Mentions chart</h3><span id="load_mentions"></span>
-    <div id="mentions_chart" class="tag_info_block"></div>
-    <h3 class="group_title tag_info_title">Bi-grams Mentions chart</h3><span id="load_bigrams_mentions"></span>
-    <div id="bigrams_mentions_chart" class="tag_info_block"></div>
-    <h3 class="group_title wordtree_title tag_info_title">WordTree</h3><span id="load_wordtree"></span>
-    <div id="wordtree_block" class="tag_info_block">
-        <div id="wordtree"></div>
-        <div id="tag_contexts"></div>
-    </div>
-    <div id="openai_block" class="openai_info_block">
-        <div id="openai_tool"></div>
-    </div>
-    <!--h3 class="topics_texts_title">Topics texts</h3-->
-    <!--div-- id="topics_texts" class="tag_info_block"></div-->
-</div>
-<div id="global_tools_bottom">
-    <ul id="paginator"></ul>
-</div>
-<!--script language="javascript" type="application/javascript">
+    <!--script language="javascript" type="application/javascript">
     var count = document.getElementById('cloud_items_count');
     count.innerHTML = document.getElementsByTagName('li').length;
 </script-->
-<script type="text/javascript">
-    var initial_tag = {{tag|json}};
-</script>
-<div id="help_window">
-<ul>
-    <li>Click/tap on one tag and then click/tap on other tag, will open the page with posts have selected tags</li>
-</ul>
-</div>
-<div id="progressbar"></div></body>
+    <script type="text/javascript">
+        var initial_tag = {{ tag| json}};
+    </script>
+    <div id="help_window">
+        <ul>
+            <li>Click/tap on one tag and then click/tap on other tag, will open the page with posts have selected tags
+            </li>
+        </ul>
+    </div>
+    <div id="progressbar"></div>
+</body>
+
 </html>

@@ -902,7 +902,81 @@ def on_tag_topics_get(app: "RSSTagApplication", user: dict, tags: str) -> Respon
     return Response(json.dumps(result), mimetype="application/json", status=code)
 
 
-def on_tag_dates_get(app: "RSSTagApplication", user: dict, tag: str) -> Response:
+def on_tag_grouped_topics_get(app: "RSSTagApplication", user: dict, tag: str) -> Response:
+    tag_data = app.tags.get_by_tag(user["sid"], tag)
+    if not tag_data:
+        return Response(json.dumps({"error": "Tag not found"}), status=404)
+
+    words = tag_data.get("words", [tag])
+    pattern = r"\b(" + "|".join(re.escape(w) for w in words) + r")\b"
+    word_re = re.compile(pattern, re.IGNORECASE)
+
+    only_unread = user["settings"].get("only_unread") or None
+    cursor = app.posts.get_by_tags(
+        user["sid"], [tag], only_unread=only_unread, projection={"pid": True, "content": True}
+    )
+
+    topic_counts = defaultdict(int)
+    topic_pids = defaultdict(set)
+
+    for post in cursor:
+        pid = post["pid"]
+        grouping = app.post_grouping.get_grouped_posts(user["sid"], [pid])
+        if not grouping or not grouping.get("sentences") or not grouping.get("groups"):
+            continue
+
+        content_plain = ""
+        # If sentences don't have text, we need the post content to reconstruct it
+        first_sentence = grouping["sentences"][0]
+        if "text" not in first_sentence:
+            try:
+                raw_content = gzip.decompress(post["content"]["content"]).decode(
+                    "utf-8", "replace"
+                )
+                title = post["content"].get("title", "")
+                full_content_html = f"{title}. {raw_content}" if title else raw_content
+                content_plain, _ = app.post_splitter._build_html_mapping(full_content_html)
+            except Exception as e:
+                logging.error("Failed to decompress content for post %s: %s", pid, e)
+                continue
+
+        # Find which sentences contain the tag words
+        matching_indices = set()
+        for sentence in grouping["sentences"]:
+            text = sentence.get("text")
+            if text is None and content_plain:
+                s_start = sentence.get("start")
+                s_end = sentence.get("end")
+                if s_start is not None and s_end is not None:
+                    text = content_plain[s_start:s_end]
+            
+            if text and word_re.search(text):
+                matching_indices.add(sentence["number"])
+
+        # Find topics associated with these sentences
+        for topic, indices in grouping["groups"].items():
+            if any(idx in matching_indices for idx in indices):
+                topic_counts[topic] += 1
+                topic_pids[topic].add(pid)
+
+    all_topics = []
+    for topic, count in topic_counts.items():
+        pids_str = "_".join(str(pid) for pid in sorted(topic_pids[topic]))
+        all_topics.append(
+            {
+                "tag": topic,
+                "url": app.routes.get_url_by_endpoint(
+                    endpoint="on_post_grouped_get", params={"pids": pids_str}
+                ),
+                "count": count,
+                "words": [],
+                "sentiment": [],
+            }
+        )
+
+    all_topics.sort(key=lambda t: t["count"], reverse=True)
+
+    return Response(json.dumps({"data": all_topics}), mimetype="application/json")
     if tag:
         cursor = app.posts.get_by_tags(
             user["sid"],
