@@ -114,7 +114,7 @@ class RSSTagApplication(object):
         self.bi_grams.prepare()
         self.users = RssTagUsers(self.db)
         self.users.prepare()
-        self.routes = RSSTagRoutes(self.config["settings"]["host_name"])
+        self.routes = RSSTagRoutes(self.config["settings"]["host_name"], handlers=self)
         self.endpoints = {}
         self.update_endpoints()
         self.tasks = RssTagTasks(self.db)
