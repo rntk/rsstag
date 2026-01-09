@@ -1392,33 +1392,6 @@ h3.post_title {
         margin-top: 20px;
     }
 
-    #rerank-context-menu {
-        position: absolute;
-        z-index: 10000;
-        background: #ffffff;
-        border: 1px solid #d0d0d0;
-        border-radius: 6px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
-        padding: 8px 10px;
-        font-size: 13px;
-        color: #222222;
-        max-width: 240px;
-
-        .menu-title {
-            margin-bottom: 8px;
-        }
-
-        .menu-actions {
-            display: flex;
-            gap: 6px;
-            justify-content: flex-end;
-
-            button {
-                padding: 4px 8px;
-            }
-        }
-    }
-
     .no-data-message {
         padding: 20px;
         text-align: center;
@@ -1979,5 +1952,32 @@ h3.post_title {
         border: 1px solid #ccc;
         background: white;
         cursor: pointer;
+    }
+}
+
+#rerank-context-menu {
+    position: absolute;
+    z-index: 10000;
+    background: #ffffff;
+    border: 1px solid #d0d0d0;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    padding: 8px 10px;
+    font-size: 13px;
+    color: #222222;
+    max-width: 240px;
+
+    .menu-title {
+        margin-bottom: 8px;
+    }
+
+    .menu-actions {
+        display: flex;
+        gap: 6px;
+        justify-content: flex-end;
+
+        button {
+            padding: 4px 8px;
+        }
     }
 }
