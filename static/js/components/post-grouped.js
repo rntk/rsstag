@@ -17,9 +17,93 @@ export default class PostGroupedPage {
         this.buildTopicsList();
         this.buildPostsList();
         this.attachSentenceGroupHandlers();
+        this.attachReadButtonHandlers();
         this.initTabs();
         this.initZoomControls();
         this.handleHighlightSentenceFromUrl();
+        this.setInitialReadStatus();
+        this.bindGlobalEvents();
+    }
+
+    bindGlobalEvents() {
+        if (window.EVSYS) {
+            window.EVSYS.bind(window.EVSYS.POSTS_UPDATED, (state) => {
+                state.posts.forEach((item, pos) => {
+                    const btn = document.querySelector(`.post-read-status[data-post-id="${pos}"]`);
+                    if (btn) {
+                        const isRead = item.post.read;
+                        if (isRead) {
+                            btn.classList.remove('unread');
+                            btn.classList.add('read');
+                            btn.textContent = 'read';
+                        } else {
+                            btn.classList.remove('read');
+                            btn.classList.add('unread');
+                            btn.textContent = 'unread';
+                        }
+                        
+                        const section = btn.closest('.post-section');
+                        if (section) {
+                            section.style.opacity = isRead ? '0.6' : '1.0';
+                        }
+                    }
+                });
+            });
+        }
+    }
+
+    setInitialReadStatus() {
+        document.querySelectorAll('.post-read-status.read').forEach(btn => {
+            const section = btn.closest('.post-section');
+            if (section) {
+                section.style.opacity = '0.6';
+            }
+        });
+    }
+
+    attachReadButtonHandlers() {
+        document.querySelectorAll('.post-read-status').forEach(btn => {
+            btn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                const postId = btn.getAttribute('data-post-id');
+                const isRead = btn.classList.contains('read');
+                this.changePostStatus(postId, !isRead, btn);
+            });
+        });
+    }
+
+    changePostStatus(postId, newStatus, btn) {
+        fetch('/read/posts', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `ids[]=${postId}&readed=${newStatus ? 'true' : 'false'}`
+        })
+        .then(response => {
+            if (response.ok) {
+                if (newStatus) {
+                    btn.classList.remove('unread');
+                    btn.classList.add('read');
+                    btn.textContent = 'read';
+                    
+                    const section = btn.closest('.post-section');
+                    if (section) {
+                        section.style.opacity = '0.6';
+                    }
+                } else {
+                    btn.classList.remove('read');
+                    btn.classList.add('unread');
+                    btn.textContent = 'unread';
+                    
+                    const section = btn.closest('.post-section');
+                    if (section) {
+                        section.style.opacity = '1.0';
+                    }
+                }
+            }
+        })
+        .catch(err => console.error('Failed to update post status', err));
     }
 
     setupPostSections() {

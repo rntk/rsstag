@@ -192,6 +192,22 @@ window.onload = () => {
 
   ReactDOM.render(<GlobalStatus ES={window.EVSYS} />, document.getElementById('global_status'));
   if (path === '/') {
+  } else if (/^\/post-grouped\//.test(path)) {
+    const posts_storage = new PostsStorage(window.EVSYS);
+    // Mock the data structure expected by PostsStorage if necessary,
+    // although PostsStorage mostly uses window.* variables in fetchPosts()
+    window.posts_list = window.posts.map(p => ({
+        pos: p.post_id,
+        post: p,
+        showed: true
+    }));
+    window.group = 'tag';
+    window.group_title = window.feed_title;
+    window.words = [];
+
+    ReactDOM.render(<ReadAllButton ES={window.EVSYS} />, document.getElementById('read_all'));
+    ReactDOM.render(<ShowAllButton ES={window.EVSYS} />, document.getElementById('show_all'));
+    posts_storage.start();
   } else if (/^\/s-tree\//.test(path)) {
     // Ensure s_tree_data is available globally for the SentenceTree component
     // This might be set by a script tag in the HTML template

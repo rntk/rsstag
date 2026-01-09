@@ -71,7 +71,8 @@ class RSSTagApplication(object):
                 os.path.join("templates", self.config["settings"]["templates"]),
             )
         )
-        self.template_env.filters["json"] = json.dumps
+        self.template_env.filters["json"] = lambda d: json.dumps(d, default=str)
+        self.template_env.filters["tojson"] = lambda d: json.dumps(d, default=str)
         self.template_env.filters["url_encode"] = quote_plus
         self.template_env.filters["find_group"] = self._find_group_for_sentence
 

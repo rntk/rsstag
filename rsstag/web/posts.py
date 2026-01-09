@@ -26,7 +26,7 @@ from werkzeug.utils import redirect
 
 def on_post_speech(app: "RSSTagApplication", user: dict, request: Request) -> Response:
     try:
-        post_id = int(request.form.get("post_id"))
+        post_id = request.form.get("post_id")
     except Exception as e:
         logging.warning("Wrong post_id: %s. %s", request.form.get("post_id"), e)
         post_id = None
@@ -494,7 +494,7 @@ def on_posts_content_post(
     return Response(json.dumps(result), mimetype="application/json", status=code)
 
 
-def on_post_links_get(app: "RSSTagApplication", user: dict, post_id: int) -> Response:
+def on_post_links_get(app: "RSSTagApplication", user: dict, post_id: str) -> Response:
     projection = {"tags": True, "feed_id": True, "url": True, "clusters": True}
     current_post = app.posts.get_by_pid(user["sid"], post_id, projection)
     if current_post:
@@ -1190,7 +1190,7 @@ def on_post_grouped_get(
     app: "RSSTagApplication", user: dict, request: Request, pids: str
 ) -> Response:
     """Handler for grouped posts view with server-side highlighting"""
-    projection = {"content": True, "feed_id": True, "url": True}
+    projection = {"content": True, "feed_id": True, "url": True, "read": True}
     post_ids = [pid for pid in pids.split("_") if pid]
     if not post_ids:
         return app.on_error(user, request, NotFound())
@@ -1224,6 +1224,7 @@ def on_post_grouped_get(
                     "raw_content": raw_content,
                     "feed_title": feed_title,
                     "url": post.get("url", "") or "",
+                    "read": post.get("read", False),
                 }
             )
 
@@ -1431,6 +1432,7 @@ def on_post_grouped_get(
                 "content": content,
                 "feed_title": p_info["feed_title"],
                 "url": p_info["url"],
+                "read": p_info["read"],
                 "river_data": {
                     "topics": river_topics,
                     "articleLength": len(post_sentences) if post_sentences else 0

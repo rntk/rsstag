@@ -65,6 +65,10 @@
                         <div class="post-section" id="post_{{ post.post_id }}" data-post-id="{{ post.post_id }}">
                             <div class="post-header">
                                 <span class="post-label">Post {{ post.post_id }}</span>
+                                <span class="post-read-status read-button {{ 'read' if post.read else 'unread' }}" 
+                                      data-post-id="{{ post.post_id }}">
+                                    {{ 'read' if post.read else 'unread' }}
+                                </span>
                                 {% if post.feed_title %}
                                 <span class="post-feed" style="margin-left: 10px; font-weight: normal; color: #666;">
                                     from {{ post.feed_title }}
@@ -127,16 +131,16 @@
     </div>
 
     <script type="text/javascript">
-        window.post_id = "{{post_id|default('')|string}}";
-        window.feed_title = '{{feed_title|default('')|string}}';
-        window.groups = {{ groups |default ({}) | tojson }};
-        window.group_colors = {{ group_colors |default ({}) | tojson }};
-        window.posts = {{ posts |default ([]) | tojson }};
-        window.sentences = {{ sentences |default ([]) | tojson }};
-        window.rss_settings = {{ user_settings |default ({}) | tojson }};
-        window.hierarchical_segments = {{ hierarchical_segments |default ([]) | tojson }};
-        window.post_to_index_map = {{ post_to_index_map |default ({}) | tojson }};
-        window.has_grouped_data = {{ has_grouped_data |default (false) | tojson }};
+        window.post_id = {{ post_id | tojson | safe }};
+        window.feed_title = {{ feed_title | tojson | safe }};
+        window.groups = {{ groups |default ({}) | tojson | safe }};
+        window.group_colors = {{ group_colors |default ({}) | tojson | safe }};
+        window.posts = {{ posts |default ([]) | tojson | safe }};
+        window.sentences = {{ sentences |default ([]) | tojson | safe }};
+        window.rss_settings = {{ user_settings |default ({}) | tojson | safe }};
+        window.hierarchical_segments = {{ hierarchical_segments |default ([]) | tojson | safe }};
+        window.post_to_index_map = {{ post_to_index_map |default ({}) | tojson | safe }};
+        window.has_grouped_data = {{ has_grouped_data |default (false) | tojson | safe }};
     </script>
     <div id="progressbar"></div>
     <script type="module">

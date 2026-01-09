@@ -163,7 +163,7 @@ class RSSTagRoutes:
                 "methods": ["POST"],
             },
             {
-                "url": "/post-links/<int:post_id>",
+                "url": "/post-links/<string:post_id>",
                 "endpoint": "on_post_links_get",
                 "methods": ["GET"],
             },
