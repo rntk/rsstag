@@ -966,7 +966,8 @@ def on_tag_grouped_topics_get(app: "RSSTagApplication", user: dict, tag: str) ->
             {
                 "tag": topic,
                 "url": app.routes.get_url_by_endpoint(
-                    endpoint="on_post_grouped_get", params={"pids": pids_str}
+                    endpoint="on_post_grouped_snippets_get",
+                    params={"pids": pids_str, "topic": topic},
                 ),
                 "count": count,
                 "words": [],
