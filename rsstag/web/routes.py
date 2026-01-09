@@ -436,7 +436,9 @@ class RSSTagRoutes:
             },
         ]
 
-        decorated_routes = _collect_decorated_routes(handlers) if handlers else []
+        decorated_routes = (
+            _collect_decorated_routes(handlers) if handlers is not None else []
+        )
         self._routes = self._merge_routes(decorated_routes, self._default_routes)
 
         self._rules = []
