@@ -30,7 +30,7 @@
                 <div class="post-header">
                     <span class="post-label">{{ post.label }}</span>
                     {% if post.feed_title %}
-                        <span class="post-feed" style="margin-left: 10px; font-weight: normal; color: #666;">
+                        <span class="post-feed">
                             from {{ post.feed_title }}
                         </span>
                     {% endif %}
@@ -47,9 +47,9 @@
                         {% if post.graph_data %}
                             <div id="graph_{{ post.post_id }}" class="graph-container"></div>
                         {% else %}
-                            <div style="padding: 20px; text-align: center; color: #666;">
-                                No sunburst data available for this post.
-                            </div>
+                                    <div class="no-data-message">
+                                        No graph data available.
+                                    </div>
                         {% endif %}
                     </div>
                     

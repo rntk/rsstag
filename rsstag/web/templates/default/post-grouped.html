@@ -33,17 +33,16 @@
     <div class="page post-grouped-page">
         <h2>Posts {{post_id}} - {{feed_title}}</h2>
 
-        <div style="margin-bottom: 20px;">
-            <a href="/post-graph/{{post_id}}" class="topic-btn"
-                style="text-decoration: none; padding: 6px 12px; font-size: 14px;">View Topics Graph</a>
+        <div class="graph-link">
+            <a href="/post-graph/{{post_id}}" class="topic-btn">View Topics Graph</a>
         </div>
 
         {% if feed_title and feed_title != "Processing..." %}
-        <div style="padding: 15px; background-color: #e8f5e9; border-radius: 5px; margin-bottom: 20px;">
-            <p style="margin: 0; color: #2e7d32;">
+        <div class="combined-view-info">
+            <p>
                 <strong>Combined view:</strong> {{ feed_title }}
                 {% if sentences|length > 0 %}
-                <span style="margin-left: 10px; font-weight: normal;">
+                <span class="stats">
                     ({{ sentences|length }} sentences from {{ groups|length }} topics)
                 </span>
                 {% endif %}
@@ -51,8 +50,8 @@
         </div>
         {% endif %}
 
-        <div style="display:flex; gap:20px; flex-wrap:wrap;">
-            <div style="flex:2 1 600px; min-width:400px;">
+        <div class="main-content-wrapper">
+            <div class="posts-column">
                 <div class="tab-header">
                     <div class="tab-btn active" data-tab="posts">Posts</div>
                     <div class="tab-btn" data-tab="topic-chart">Topic Chart</div>
@@ -70,7 +69,7 @@
                                     {{ 'read' if post.read else 'unread' }}
                                 </span>
                                 {% if post.feed_title %}
-                                <span class="post-feed" style="margin-left: 10px; font-weight: normal; color: #666;">
+                                <span class="post-feed">
                                     from {{ post.feed_title }}
                                 </span>
                                 {% endif %}
@@ -101,28 +100,28 @@
                         </div>
                         {% endfor %}
                         {% else %}
-                        <div class="no-posts-message" style="padding: 20px; text-align: center; color: #666;">
+                        <div class="no-posts-message">
                             No posts found or posts are still being processed.
                         </div>
                         {% endif %}
                     </div>
                 </div>
                 <div id="tab-topic-chart" class="tab-content">
-                    <div id="zoom-controls" style="margin-bottom: 10px; text-align: center;">
-                        <button id="zoom-in" style="margin-right: 5px; padding: 5px 10px;">Zoom In</button>
-                        <button id="zoom-out" style="margin-right: 5px; padding: 5px 10px;">Zoom Out</button>
-                        <button id="reset-zoom" style="padding: 5px 10px;">Reset Zoom</button>
+                    <div id="zoom-controls" class="zoom-controls">
+                        <button id="zoom-in">Zoom In</button>
+                        <button id="zoom-out">Zoom Out</button>
+                        <button id="reset-zoom">Reset Zoom</button>
                     </div>
                     <div id="topic_flow_chart"></div>
                 </div>
             </div>
-            <div style="flex:1 1 320px; min-width:280px;">
+            <div class="sidebar-column">
                 <div class="sticky-sidebar">
                     <div class="section-header">Topics/Chapters</div>
                     <div id="topics_list"></div>
 
                     {% if posts|length > 1 %}
-                    <div class="section-header" style="margin-top: 20px;">Posts</div>
+                    <div class="section-header posts-header">Posts</div>
                     <div id="posts_list"></div>
                     {% endif %}
                 </div>

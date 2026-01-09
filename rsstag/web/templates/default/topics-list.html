@@ -43,7 +43,7 @@
                         {% endif %}
                     </div>
                     {% if topic_data.posts|length > 0 %}
-                    <div class="topic-posts" id="posts_{{ loop.index }}" style="display: none;">
+                    <div class="topic-posts" id="posts_{{ loop.index }}">
                         {% for post_id in topic_data.posts %}
                         {% set post_info = post_topic_mapping[post_id] %}
                         <div class="post-info">
