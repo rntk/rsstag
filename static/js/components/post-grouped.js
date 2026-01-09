@@ -1,4 +1,5 @@
 import TopicFlow from './topic-flow.js';
+import TopicsRiverChart from './topics-river-chart.js';
 
 export default class PostGroupedPage {
     constructor() {
@@ -6,6 +7,7 @@ export default class PostGroupedPage {
         this.isContentReady = false;
         this.chartInitialized = false;
         this.topicFlowChart = null;
+        this.riverCharts = {};
     }
 
     init() {
@@ -335,8 +337,28 @@ export default class PostGroupedPage {
                         this.topicFlowChart = this.initChart();
                         this.chartInitialized = true;
                     }
+                } else if (target.startsWith('river-chart-')) {
+                    const postId = target.replace('river-chart-', '');
+                    document.getElementById('tab-' + target).classList.add('active');
+                    this.initRiverChart(postId);
                 }
             });
+        });
+    }
+
+    initRiverChart(postId) {
+        if (this.riverCharts[postId]) {
+            this.riverCharts[postId].render();
+            return;
+        }
+
+        const post = window.posts.find(p => String(p.post_id) === String(postId));
+        if (!post || !post.river_data) return;
+
+        const containerId = 'river_chart_' + postId;
+        this.riverCharts[postId] = new TopicsRiverChart('#' + containerId, {
+            topics: post.river_data.topics,
+            articleLength: post.river_data.articleLength
         });
     }
 

@@ -56,33 +56,36 @@
                 <div class="tab-header">
                     <div class="tab-btn active" data-tab="posts">Posts</div>
                     <div class="tab-btn" data-tab="topic-chart">Topic Chart</div>
+                    {% for post in posts %}
+                    <div class="tab-btn" data-tab="river-chart-{{ post.post_id }}">River Post {{ post.post_id }}</div>
+                    {% endfor %}
                 </div>
 
                 <div id="tab-posts" class="tab-content active">
                     <div id="grouped_posts">
-                    {% if posts|length > 0 %}
-                    {% for post in posts %}
-                    <div class="post-section" id="post_{{ post.post_id }}" data-post-id="{{ post.post_id }}">
-                        <div class="post-header">
-                            <span class="post-label">Post {{ post.post_id }}</span>
-                            {% if post.feed_title %}
-                            <span class="post-feed" style="margin-left: 10px; font-weight: normal; color: #666;">
-                                from {{ post.feed_title }}
-                            </span>
-                            {% endif %}
-                            <div class="post-divider"></div>
+                        {% if posts|length > 0 %}
+                        {% for post in posts %}
+                        <div class="post-section" id="post_{{ post.post_id }}" data-post-id="{{ post.post_id }}">
+                            <div class="post-header">
+                                <span class="post-label">Post {{ post.post_id }}</span>
+                                {% if post.feed_title %}
+                                <span class="post-feed" style="margin-left: 10px; font-weight: normal; color: #666;">
+                                    from {{ post.feed_title }}
+                                </span>
+                                {% endif %}
+                                <div class="post-divider"></div>
+                            </div>
+                            <div class="post-content">
+                                <div class="post-text" data-post-id="{{ post.post_id }}">{{ post.content|safe }}</div>
+                            </div>
                         </div>
-                        <div class="post-content">
-                            <div class="post-text" data-post-id="{{ post.post_id }}">{{ post.content|safe }}</div>
+                        {% endfor %}
+                        {% else %}
+                        <div class="no-posts-message" style="padding: 20px; text-align: center; color: #666;">
+                            No posts found or posts are still being processed.
                         </div>
+                        {% endif %}
                     </div>
-                    {% endfor %}
-                    {% else %}
-                    <div class="no-posts-message" style="padding: 20px; text-align: center; color: #666;">
-                        No posts found or posts are still being processed.
-                    </div>
-                    {% endif %}
-                </div>
                 </div>
                 <div id="tab-topic-chart" class="tab-content">
                     <div id="zoom-controls" style="margin-bottom: 10px; text-align: center;">
@@ -92,6 +95,11 @@
                     </div>
                     <div id="topic_flow_chart"></div>
                 </div>
+                {% for post in posts %}
+                <div id="tab-river-chart-{{ post.post_id }}" class="tab-content">
+                    <div id="river_chart_{{ post.post_id }}"></div>
+                </div>
+                {% endfor %}
             </div>
             <div style="flex:1 1 320px; min-width:280px;">
                 <div class="sticky-sidebar">

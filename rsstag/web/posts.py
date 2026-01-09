@@ -1274,11 +1274,22 @@ def on_post_grouped_get(
 
         # Default if no grouping
         content = raw_content
+        river_topics = []
 
         # Find sentences belonging to this post
         post_sentences = [
             s for s in all_sentences_data if s["post_id"] == post_id
         ]
+        
+        # Get per-post grouping data for river chart
+        post_grouped_data = app.post_grouping.get_grouped_posts(user["sid"], [post_id])
+        if post_grouped_data and post_grouped_data.get("groups"):
+            for group_name, indices in post_grouped_data["groups"].items():
+                river_topics.append({
+                    "name": group_name,
+                    "sentences": indices
+                })
+
         if has_grouped_data and post_sentences:
             # Build a mapping between plain text indices and HTML indices
             mapped_plain, mapping = app.post_splitter._build_html_mapping(raw_content)
@@ -1413,6 +1424,10 @@ def on_post_grouped_get(
                 "content": content,
                 "feed_title": p_info["feed_title"],
                 "url": p_info["url"],
+                "river_data": {
+                    "topics": river_topics,
+                    "articleLength": len(post_sentences) if post_sentences else 0
+                }
             }
         )
 
