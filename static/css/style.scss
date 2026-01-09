@@ -1302,6 +1302,47 @@ h3.post_title {
         }
     }
 
+    .post-local-tabs {
+        margin-top: 15px;
+        border: 1px solid #eee;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .local-tab-header {
+        display: flex;
+        background-color: #f8f9fa;
+        border-bottom: 1px solid #eee;
+    }
+
+    .local-tab-btn {
+        padding: 8px 16px;
+        cursor: pointer;
+        font-size: 13px;
+        color: #666;
+        border-right: 1px solid #eee;
+        transition: all 0.2s;
+
+        &.active {
+            background-color: #fff;
+            color: #4285f4;
+            font-weight: Bold;
+        }
+
+        &:hover:not(.active) {
+            background-color: #f0f0f0;
+        }
+    }
+
+    .local-tab-content {
+        display: none;
+        padding: 15px;
+
+        &.active {
+            display: block;
+        }
+    }
+
     #topic_flow_chart {
         width: 100%;
         overflow: visible;

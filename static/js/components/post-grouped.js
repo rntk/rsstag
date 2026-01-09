@@ -315,7 +315,7 @@ export default class PostGroupedPage {
     }
 
     initTabs() {
-        const tabs = document.querySelectorAll('.tab-btn');
+        const tabs = document.querySelectorAll('.tab-header > .tab-btn');
         const contents = document.querySelectorAll('.tab-content');
         if (!tabs.length || !contents.length) {
             return;
@@ -324,6 +324,7 @@ export default class PostGroupedPage {
         tabs.forEach(tab => {
             tab.addEventListener('click', () => {
                 const target = tab.getAttribute('data-tab');
+                if (!target) return;
 
                 tabs.forEach(t => t.classList.remove('active'));
                 contents.forEach(c => c.classList.remove('active'));
@@ -337,10 +338,36 @@ export default class PostGroupedPage {
                         this.topicFlowChart = this.initChart();
                         this.chartInitialized = true;
                     }
-                } else if (target.startsWith('river-chart-')) {
-                    const postId = target.replace('river-chart-', '');
-                    document.getElementById('tab-' + target).classList.add('active');
-                    this.initRiverChart(postId);
+                }
+            });
+        });
+
+        this.initLocalTabs();
+    }
+
+    initLocalTabs() {
+        const localTabs = document.querySelectorAll('.local-tab-btn');
+        localTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                const postId = tab.getAttribute('data-post-id');
+                const target = tab.getAttribute('data-local-tab');
+                const postSection = document.getElementById('post_' + postId);
+                if (!postSection) return;
+
+                // Toggle tabs
+                postSection.querySelectorAll('.local-tab-btn').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+
+                // Toggle contents
+                postSection.querySelectorAll('.local-tab-content').forEach(c => c.classList.remove('active'));
+                const targetContent = postSection.querySelector(`.local-tab-content[data-local-content="${target}"]`);
+                if (targetContent) {
+                    targetContent.classList.add('active');
+                }
+
+                if (target === 'river') {
+                    // Small delay to ensure container is visible and has dimensions
+                    setTimeout(() => this.initRiverChart(postId), 10);
                 }
             });
         });

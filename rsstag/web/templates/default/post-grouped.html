@@ -56,9 +56,6 @@
                 <div class="tab-header">
                     <div class="tab-btn active" data-tab="posts">Posts</div>
                     <div class="tab-btn" data-tab="topic-chart">Topic Chart</div>
-                    {% for post in posts %}
-                    <div class="tab-btn" data-tab="river-chart-{{ post.post_id }}">River Post {{ post.post_id }}</div>
-                    {% endfor %}
                 </div>
 
                 <div id="tab-posts" class="tab-content active">
@@ -75,8 +72,27 @@
                                 {% endif %}
                                 <div class="post-divider"></div>
                             </div>
-                            <div class="post-content">
-                                <div class="post-text" data-post-id="{{ post.post_id }}">{{ post.content|safe }}</div>
+
+                            <div class="post-local-tabs">
+                                <div class="local-tab-header">
+                                    <div class="local-tab-btn active" data-post-id="{{ post.post_id }}"
+                                        data-local-tab="content">Content</div>
+                                    <div class="local-tab-btn" data-post-id="{{ post.post_id }}" data-local-tab="river">
+                                        River Chart</div>
+                                </div>
+
+                                <div class="local-tab-content active" data-post-id="{{ post.post_id }}"
+                                    data-local-content="content">
+                                    <div class="post-content">
+                                        <div class="post-text" data-post-id="{{ post.post_id }}">{{ post.content|safe }}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="local-tab-content" data-post-id="{{ post.post_id }}"
+                                    data-local-content="river">
+                                    <div id="river_chart_{{ post.post_id }}" class="river-chart-container"></div>
+                                </div>
                             </div>
                         </div>
                         {% endfor %}
@@ -95,11 +111,6 @@
                     </div>
                     <div id="topic_flow_chart"></div>
                 </div>
-                {% for post in posts %}
-                <div id="tab-river-chart-{{ post.post_id }}" class="tab-content">
-                    <div id="river_chart_{{ post.post_id }}"></div>
-                </div>
-                {% endfor %}
             </div>
             <div style="flex:1 1 320px; min-width:280px;">
                 <div class="sticky-sidebar">
