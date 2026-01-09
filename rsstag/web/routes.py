@@ -3,6 +3,7 @@
 from typing import List, Optional, Iterable
 import itertools
 import inspect
+import functools
 from werkzeug.routing import Map, Rule
 
 
@@ -10,10 +11,14 @@ def route(url: str, methods: List[str]):
     """Decorator to register handler routes without editing the static list."""
 
     def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            return func(*args, **kwargs)
+
         routes = getattr(func, "_rsstag_routes", [])
         routes.append({"url": url, "endpoint": func.__name__, "methods": methods})
-        setattr(func, "_rsstag_routes", routes)
-        return func
+        setattr(wrapper, "_rsstag_routes", routes)
+        return wrapper
 
     return decorator
 
