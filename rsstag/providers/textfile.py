@@ -51,7 +51,7 @@ class TextFileProvider:
             for line in f:
                 pu_date = time.time()
                 p_date = date.fromtimestamp(int(pu_date)).strftime("%x")
-                pid = generate_post_pid(TEXT_FILE, stream_id, line_id)
+                pid = generate_post_pid(TEXT_FILE, stream_id, str(line_id))
                 posts.append(
                     {
                         "content": {

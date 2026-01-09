@@ -59,7 +59,7 @@ class JSONSFileProvider:
                     continue
                 pu_date = time.time()
                 p_date = date.fromtimestamp(int(pu_date)).strftime("%x")
-                pid = generate_post_pid(JSONS_FILE, stream_id, line_id)
+                pid = generate_post_pid(JSONS_FILE, stream_id, str(line_id))
                 posts.append(
                     {
                         "content": {
