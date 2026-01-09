@@ -334,36 +334,66 @@ Text section:
         return validated
 
     def _build_html_mapping(self, html_text: str) -> tuple:
-        """Builds a mapping between normalized plain text indices and original HTML indices."""
+        """Builds a mapping between normalized plain text indices and original HTML indices.
+        
+        Adds synthetic newlines for block-level tags to ensure correct sentence splitting.
+        """
         from html import unescape
+        import re
+
+        BLOCK_TAGS = {
+            "p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "li", "ul", "ol", 
+            "blockquote", "pre", "hr", "br", "td", "tr", "table", "header", 
+            "footer", "section", "article", "aside"
+        }
 
         mapping = []
         plain_accum = []
 
         n = len(html_text)
         i = 0
-        in_tag = False
-        last_was_space = False
+        last_was_space = True # Start with True to trim leading spaces
+
+        tag_pattern = re.compile(r"<(/?)([a-zA-Z0-9]+)([^>]*)>")
 
         while i < n:
-            if in_tag:
-                if html_text[i] == ">":
-                    in_tag = False
-                i += 1
-                continue
-
             if html_text[i] == "<":
-                in_tag = True
-                i += 1
-                continue
+                match = tag_pattern.match(html_text, i)
+                if match:
+                    tag_name = match.group(2).lower()
+                    is_block = tag_name in BLOCK_TAGS
+                    
+                    if is_block:
+                        if plain_accum and plain_accum[-1] != "\n":
+                            if plain_accum[-1] == " ":
+                                plain_accum[-1] = "\n"
+                            else:
+                                plain_accum.append("\n")
+                                mapping.append(i)
+                        last_was_space = True
+                    
+                    i = match.end()
+                    continue
+                else:
+                    # Not a valid tag match, treat as text
+                    char = html_text[i]
+                    if char.isspace():
+                        if not last_was_space:
+                            plain_accum.append(" ")
+                            mapping.append(i)
+                            last_was_space = True
+                    else:
+                        plain_accum.append(char)
+                        mapping.append(i)
+                        last_was_space = False
+                    i += 1
+                    continue
 
+            # Text content
             next_tag = html_text.find("<", i)
-            if next_tag == -1:
-                chunk_end = n
-            else:
-                chunk_end = next_tag
-
+            chunk_end = next_tag if next_tag != -1 else n
             chunk = html_text[i:chunk_end]
+            
             j = 0
             while j < len(chunk):
                 char = chunk[j]
@@ -397,19 +427,13 @@ Text section:
                 j += 1
             i = chunk_end
 
-        if not plain_accum:
-            return "", []
+        # Trim trailing space/newline
+        while plain_accum and plain_accum[-1] in (" ", "\n"):
+            plain_accum.pop()
+            mapping.pop()
 
-        start_offset = 0
-        while start_offset < len(plain_accum) and plain_accum[start_offset] == " ":
-            start_offset += 1
-
-        end_offset = len(plain_accum)
-        while end_offset > start_offset and plain_accum[end_offset - 1] == " ":
-            end_offset -= 1
-
-        final_plain = "".join(plain_accum[start_offset:end_offset])
-        final_mapping = mapping[start_offset:end_offset]
+        final_plain = "".join(plain_accum)
+        final_mapping = mapping
 
         if final_mapping:
             final_mapping.append(n)
@@ -625,7 +649,10 @@ Text section:
         """Split text into sentences"""
         if not text or not text.strip():
             return []
-        boundaries = list(re.finditer(r"(?<=[.!?])\s+(?=[A-ZА-Я])", text))
+        # Split on:
+        # 1. Punctuation ([.!?]) followed by whitespace and an uppercase letter
+        # 2. One or more newlines (representing block boundaries)
+        boundaries = list(re.finditer(r"((?<=[.!?])\s+(?=[A-ZА-Я]))|(\n+)", text))
 
         result = []
         start = 0

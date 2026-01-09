@@ -213,11 +213,11 @@ export default class PostGroupedPage {
 
         const highlightedElements = [];
         sentenceIndices.forEach(sentNum => {
-            const span = document.querySelector('.sentence-group[data-sentence="' + sentNum + '"]');
-            if (span) {
+            const spans = document.querySelectorAll('.sentence-group[data-sentence="' + sentNum + '"]');
+            spans.forEach(span => {
                 span.classList.add('highlighted');
                 highlightedElements.push(span);
-            }
+            });
         });
 
         if (highlightedElements.length > 0) {

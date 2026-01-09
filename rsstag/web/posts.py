@@ -1,5 +1,6 @@
 import json
 import html
+import re
 import gzip
 import logging
 from collections import defaultdict
@@ -1334,19 +1335,73 @@ def on_post_grouped_get(
             # Reconstruct content with spans
             new_content_parts = []
             last_pos = 0
+
+            # Find all block tag positions to avoid crossing them
+            block_pattern = re.compile(
+                r"<(/?)(p|div|h1|h2|h3|h4|h5|h6|li|ul|ol|blockquote|pre|hr|br|td|tr|table)[^>]*>",
+                re.IGNORECASE
+            )
+
             for match in filtered_matches:
+                # Add text before the match
                 new_content_parts.append(raw_content[last_pos : match["start"]])
-                span = (
-                    '<span class="sentence-group" data-sentence="{}" '
-                    'data-topic="{}" title="{}" style="background-color: {}40;">{}</span>'
-                ).format(
-                    match["num"],
-                    html.escape(match["topic"]),
-                    html.escape(match["topic"]),
-                    match["color"],
-                    match["text"],
-                )
-                new_content_parts.append(span)
+                
+                match_text = match["text"]
+                
+                # Check if this match crosses any block boundaries
+                # If it does, we must split the span to keep HTML valid
+                internal_blocks = list(block_pattern.finditer(match_text))
+                if not internal_blocks:
+                    # Simple case: no internal blocks
+                    span = (
+                        '<span class="sentence-group" data-sentence="{}" '
+                        'data-topic="{}" title="{}" style="background-color: {}40;">{}</span>'
+                    ).format(
+                        match["num"],
+                        html.escape(match["topic"]),
+                        html.escape(match["topic"]),
+                        match["color"],
+                        match_text,
+                    )
+                    new_content_parts.append(span)
+                else:
+                    # Complex case: sentence crosses block tags
+                    # Split the span at each block tag
+                    curr_internal_pos = 0
+                    for ib in internal_blocks:
+                        # Text before the tag
+                        pre_tag_text = match_text[curr_internal_pos : ib.start()]
+                        if pre_tag_text:
+                            new_content_parts.append(
+                                '<span class="sentence-group" data-sentence="{}" '
+                                'data-topic="{}" title="{}" style="background-color: {}40;">{}</span>'
+                                .format(
+                                    match["num"],
+                                    html.escape(match["topic"]),
+                                    html.escape(match["topic"]),
+                                    match["color"],
+                                    pre_tag_text,
+                                )
+                            )
+                        # The tag itself (outside the span)
+                        new_content_parts.append(match_text[ib.start() : ib.end()])
+                        curr_internal_pos = ib.end()
+                    
+                    # Remaining text after last tag
+                    post_tag_text = match_text[curr_internal_pos:]
+                    if post_tag_text:
+                        new_content_parts.append(
+                            '<span class="sentence-group" data-sentence="{}" '
+                            'data-topic="{}" title="{}" style="background-color: {}40;">{}</span>'
+                            .format(
+                                match["num"],
+                                html.escape(match["topic"]),
+                                html.escape(match["topic"]),
+                                match["color"],
+                                post_tag_text,
+                            )
+                        )
+                
                 last_pos = match["end"]
             new_content_parts.append(raw_content[last_pos:])
             content = "".join(new_content_parts)
