@@ -10,10 +10,30 @@ export default class SettingsMenu extends React.Component {
     this.changeIntSettings = this.changeIntSettings.bind(this);
     this.changeBoolSettings = this.changeBoolSettings.bind(this);
     this.changeStringSettings = this.changeStringSettings.bind(this);
+    this.hideMenu = this.hideMenu.bind(this);
+    this.handleKeyDown = this.handleKeyDown.bind(this);
+    this.handleClickOutside = this.handleClickOutside.bind(this);
+    this.menuRef = React.createRef();
   }
 
   saveSettings() {
     this.props.ES.trigger(this.props.ES.UPDATE_SETTINGS, Object.assign({}, this.state.settings));
+  }
+
+  hideMenu() {
+    this.props.ES.trigger(this.props.ES.CHANGE_SETTINGS_WINDOW_STATE);
+  }
+
+  handleKeyDown(e) {
+    if (e.key === 'Escape') {
+      this.hideMenu();
+    }
+  }
+
+  handleClickOutside(e) {
+    if (this.menuRef.current && !this.menuRef.current.contains(e.target)) {
+      this.hideMenu();
+    }
   }
 
   updateSettings(state) {
@@ -23,6 +43,18 @@ export default class SettingsMenu extends React.Component {
   componentDidMount() {
     this.props.ES.bind(this.props.ES.SETTINGS_UPDATED, this.updateSettings);
     //subscribe
+  }
+
+  componentDidUpdate(prevProps, prevState) {
+    if (this.state && this.state.showed && (!prevState || !prevState.showed)) {
+      // Menu is now shown, add listeners
+      document.addEventListener('keydown', this.handleKeyDown);
+      document.addEventListener('mousedown', this.handleClickOutside);
+    } else if (prevState && prevState.showed && (!this.state || !this.state.showed)) {
+      // Menu is now hidden, remove listeners
+      document.removeEventListener('keydown', this.handleKeyDown);
+      document.removeEventListener('mousedown', this.handleClickOutside);
+    }
   }
 
   changeIntSettings(e) {
@@ -58,6 +90,8 @@ export default class SettingsMenu extends React.Component {
   componentWillUnmount() {
     this.props.ES.unbind(this.props.ES.SETTINGS_UPDATED, this.updateSettings);
     //unsubscribe
+    document.removeEventListener('keydown', this.handleKeyDown);
+    document.removeEventListener('mousedown', this.handleClickOutside);
   }
 
   render() {
@@ -79,7 +113,7 @@ export default class SettingsMenu extends React.Component {
       return (
         <div>
           {button}
-          <div className="main_menu_window" style={style}>
+          <div className="main_menu_window" style={style} ref={this.menuRef}>
             <div>
               <label htmlFor="posts_on_page">posts per page</label>
               <br />
