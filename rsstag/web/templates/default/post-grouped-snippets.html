@@ -4,122 +4,6 @@
 <head>
     <title>Grouped Snippets | {{feed_title}}</title>
     {% include "head-data.html" %}
-    <style>
-        .topic-card {
-            margin-bottom: 25px;
-            padding: 15px;
-            background-color: #fafafa;
-            border-radius: 8px;
-            border: 1px solid #e0e0e0;
-            border-left-width: 5px;
-        }
-
-        .topic-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #eee;
-        }
-
-        .topic-title {
-            font-size: 1.2em;
-            font-weight: bold;
-            color: #333;
-        }
-
-        .topic-count {
-            font-size: 0.9em;
-            color: #888;
-            background: #eee;
-            padding: 2px 8px;
-            border-radius: 12px;
-        }
-
-        .snippet-item {
-            margin-bottom: 12px;
-            padding: 10px;
-            background: white;
-            border-radius: 6px;
-            border: 1px solid #eee;
-            transition: all 0.2s;
-        }
-
-        .snippet-item:hover {
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-        }
-
-        .snippet-meta {
-            font-size: 11px;
-            color: #999;
-            margin-bottom: 4px;
-            display: flex;
-            justify-content: space-between;
-        }
-
-        .snippet-text {
-            font-size: 14px;
-            line-height: 1.5;
-            color: #444;
-        }
-
-        .back-nav {
-            margin-bottom: 20px;
-        }
-
-        .back-btn {
-            display: inline-block;
-            padding: 6px 12px;
-            background: #f0f0f0;
-            border-radius: 4px;
-            color: #555;
-            text-decoration: none;
-            border: 1px solid #ddd;
-        }
-
-        .back-btn:hover {
-            background: #e0e0e0;
-        }
-
-        .source-tag {
-            display: inline-block;
-            padding: 2px 6px;
-            background: #e3f2fd;
-            color: #1976d2;
-            border-radius: 4px;
-            text-decoration: none;
-        }
-
-        .snippet-actions {
-            display: flex;
-            gap: 8px;
-        }
-
-        .snippet-actions .source-tag {
-            font-size: 10px;
-            font-weight: bold;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .snippet-actions .source-tag:hover {
-            filter: brightness(0.9);
-        }
-
-        .snippet-item.read {
-            opacity: 0.6;
-        }
-
-        .snippet-item.read .snippet-text {
-            text-decoration: none;
-        }
-
-        .toggle-read-btn {
-            cursor: pointer;
-            user-select: none;
-        }
-    </style>
 </head>
 
 <body>
@@ -144,7 +28,7 @@
         </div>
     </div>
 
-    <div class="page">
+    <div class="page post-grouped-snippets-page">
         <div class="back-nav">
             <a href="/post-grouped/{{post_id}}" class="back-btn">&larr; Back to Full Posts Grouped View</a>
             {% if current_topic %}
@@ -210,61 +94,7 @@
     </div>
 
     <div id="progressbar"></div>
-
-    <script>
-        function toggleRead(postId, sentenceIndices, currentlyRead) {
-            const newState = !currentlyRead;
-            const indicesStr = Array.isArray(sentenceIndices) ? sentenceIndices.join('_') : sentenceIndices;
-            
-            // We need to mark each sentence as read. 
-            // The current API /read/snippet only supports one sentence at a time (presumably)
-            // Let's check on_read_snippet_post in posts.py
-            
-            const promises = (Array.isArray(sentenceIndices) ? sentenceIndices : [sentenceIndices]).map(idx => {
-                const data = {
-                    post_id: postId,
-                    sentence_index: idx,
-                    readed: newState
-                };
-                return fetch('/read/snippet', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(data)
-                }).then(response => response.json());
-            });
-
-            Promise.all(promises)
-                .then(results => {
-                    const allOk = results.every(result => result.data === 'ok');
-                    if (allOk) {
-                        const snippetEl = document.getElementById(`snippet_${postId}_${indicesStr}`);
-                        if (snippetEl) {
-                            if (newState) {
-                                snippetEl.classList.add('read');
-                            } else {
-                                snippetEl.classList.remove('read');
-                            }
-
-                            // Update btn
-                            const btn = snippetEl.querySelector('.toggle-read-btn');
-                            if (btn) {
-                                btn.textContent = newState ? 'Mark Unread' : 'Mark Read';
-                                btn.style.background = newState ? '#eee' : '#c8e6c9';
-                                btn.style.color = newState ? '#666' : '#2e7d32';
-                                btn.title = newState ? 'Mark as unread' : 'Mark as read';
-                                btn.onclick = () => toggleRead(postId, sentenceIndices, newState);
-                            }
-                        }
-                    } else {
-                        alert('Error updating status for some sentences');
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    alert('Failed to update snippet status');
-                });
-        }
-    </script>
+    <script src="/static/js/post-grouped-snippets.js"></script>
 </body>
 
 </html>

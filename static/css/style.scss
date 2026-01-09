@@ -1005,3 +1005,656 @@ h3.post_title {
         }
     }
 }
+
+/* ============================================================================
+   Post Grouped Page Styles (post-grouped.html)
+   ============================================================================ */
+
+.post-grouped-page {
+    .sentence-group {
+        display: inline;
+        margin: 0 1px;
+        padding: 2px 4px;
+        border-radius: 3px;
+        transition: background-color 0.2s ease;
+        cursor: pointer;
+
+        &:hover {
+            filter: brightness(0.9);
+        }
+
+        &.highlighted {
+            outline: 2px solid #ff9800;
+            box-shadow: 0 0 5px rgba(255, 152, 0, 0.8);
+            font-weight: bold;
+        }
+    }
+
+    .post-section {
+        margin-bottom: 25px;
+        padding: 15px;
+        background-color: #fafafa;
+        border-radius: 8px;
+        border: 1px solid #e0e0e0;
+    }
+
+    .post-header {
+        margin-bottom: 12px;
+    }
+
+    .post-content {
+        margin-top: 8px;
+    }
+
+    .post-text {
+        max-width: 100%;
+        overflow-x: auto;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+
+        img {
+            max-width: 100%;
+            height: auto;
+        }
+    }
+
+    .post-label {
+        display: inline-block;
+        padding: 4px 12px;
+        background-color: #4285f4;
+        color: white;
+        border-radius: 16px;
+        font-size: 12px;
+        font-weight: bold;
+        margin-bottom: 8px;
+    }
+
+    .post-divider {
+        height: 2px;
+        background: linear-gradient(90deg, transparent, #4285f4, transparent);
+        margin: 6px 0;
+    }
+
+    .sentence {
+        display: inline;
+    }
+
+    #segments_tree {
+        font-family: monospace;
+        font-size: 13px;
+        line-height: 1.25em;
+        padding: 8px;
+        color: #000;
+        border-radius: 6px;
+        max-height: 400px;
+        overflow: auto;
+    }
+
+    .seg-node {
+        cursor: pointer;
+        white-space: nowrap;
+
+        .label {
+            padding: 2px 4px;
+            border-radius: 4px;
+        }
+    }
+
+    .seg-meta {
+        opacity: 0.7;
+        font-size: 11px;
+        margin-left: 4px;
+    }
+
+    .legend {
+        margin: 10px 0;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 12px;
+    }
+
+    .legend-color {
+        width: 14px;
+        height: 14px;
+        border-radius: 3px;
+        border: 1px solid #999;
+    }
+
+    .depth-0 .label {
+        font-weight: bold;
+        font-size: 14px;
+    }
+
+    .collapsed>.children {
+        display: none;
+    }
+
+    .children {
+        margin-left: 18px;
+        border-left: 1px dashed #555;
+        padding-left: 6px;
+    }
+
+    .toggle {
+        color: #6cf;
+        margin-right: 4px;
+    }
+
+    .range-highlight {
+        outline: 2px solid #ff9800;
+        box-shadow: 0 0 3px 2px rgba(255, 152, 0, 0.6);
+    }
+
+    .pulse {
+        animation: pulse-bg 1.5s ease-in-out 1;
+    }
+
+    @keyframes pulse-bg {
+        0% {
+            outline-color: #ff9800;
+        }
+
+        50% {
+            outline-color: #ffc107;
+        }
+
+        100% {
+            outline-color: #ff9800;
+        }
+    }
+
+    .sticky-sidebar {
+        position: sticky;
+        top: 20px;
+        max-height: calc(100vh - 40px);
+        overflow-y: auto;
+        z-index: 10;
+        background: rgba(255, 255, 255, 0.95);
+        padding: 10px;
+        border-radius: 6px;
+        backdrop-filter: blur(5px);
+    }
+
+    .topic-item {
+        margin: 4px 0;
+        padding: 8px;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+
+        &:hover {
+            filter: brightness(0.9);
+            transform: translateX(2px);
+        }
+
+        &.active {
+            outline: 2px solid #333;
+        }
+    }
+
+    .topic-count {
+        font-size: 11px;
+        opacity: 0.7;
+        margin-left: 4px;
+    }
+
+    .section-header {
+        font-weight: bold;
+        margin: 15px 0 8px 0;
+        padding-bottom: 5px;
+        border-bottom: 1px solid #ddd;
+    }
+
+    .topic-line {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+    }
+
+    .topic-controls {
+        display: flex;
+        gap: 4px;
+    }
+
+    .topic-btn {
+        border: 1px solid #999;
+        background: #fff;
+        color: #333;
+        padding: 2px 6px;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 11px;
+
+        &:hover {
+            background: #f0f0f0;
+        }
+    }
+
+    .tab-header {
+        display: flex;
+        border-bottom: 2px solid #e0e0e0;
+        margin-bottom: 20px;
+    }
+
+    .tab-btn {
+        padding: 10px 20px;
+        cursor: pointer;
+        font-weight: bold;
+        color: #666;
+        border-bottom: 3px solid transparent;
+        margin-bottom: -2px;
+
+        &.active {
+            color: #4285f4;
+            border-bottom: 3px solid #4285f4;
+        }
+
+        &:hover:not(.active) {
+            background-color: #f5f5f5;
+        }
+    }
+
+    .tab-content {
+        display: none;
+
+        &.active {
+            display: block;
+        }
+    }
+
+    #topic_flow_chart {
+        width: 100%;
+        overflow: visible;
+        min-height: 600px;
+
+        svg {
+            display: block;
+            margin: 0 auto;
+        }
+    }
+}
+
+/* ============================================================================
+   Post Grouped Snippets Page Styles (post-grouped-snippets.html)
+   ============================================================================ */
+
+.post-grouped-snippets-page {
+    .topic-card {
+        margin-bottom: 25px;
+        padding: 15px;
+        background-color: #fafafa;
+        border-radius: 8px;
+        border: 1px solid #e0e0e0;
+        border-left-width: 5px;
+    }
+
+    .topic-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .topic-title {
+        font-size: 1.2em;
+        font-weight: bold;
+        color: #333;
+    }
+
+    .snippet-item {
+        margin-bottom: 12px;
+        padding: 10px;
+        background: white;
+        border-radius: 6px;
+        border: 1px solid #eee;
+        transition: all 0.2s;
+
+        &:hover {
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+
+        &.read {
+            opacity: 0.6;
+
+            .snippet-text {
+                text-decoration: none;
+            }
+        }
+    }
+
+    .snippet-meta {
+        font-size: 11px;
+        color: #999;
+        margin-bottom: 4px;
+        display: flex;
+        justify-content: space-between;
+    }
+
+    .snippet-text {
+        font-size: 14px;
+        line-height: 1.5;
+        color: #444;
+    }
+
+    .back-nav {
+        margin-bottom: 20px;
+    }
+
+    .back-btn {
+        display: inline-block;
+        padding: 6px 12px;
+        background: #f0f0f0;
+        border-radius: 4px;
+        color: #555;
+        text-decoration: none;
+        border: 1px solid #ddd;
+
+        &:hover {
+            background: #e0e0e0;
+        }
+    }
+
+    .source-tag {
+        display: inline-block;
+        padding: 2px 6px;
+        background: #e3f2fd;
+        color: #1976d2;
+        border-radius: 4px;
+        text-decoration: none;
+    }
+
+    .snippet-actions {
+        display: flex;
+        gap: 8px;
+
+        .source-tag {
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+
+            &:hover {
+                filter: brightness(0.9);
+            }
+        }
+    }
+
+    .toggle-read-btn {
+        cursor: pointer;
+        user-select: none;
+    }
+}
+
+/* ============================================================================
+   Topics List Page Styles (topics-list.html)
+   ============================================================================ */
+
+.topics-list-page {
+    .topics-cloud {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+    }
+
+    .topic-item {
+        background-color: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 4px;
+        padding: 8px 12px;
+        margin-bottom: 8px;
+        font-size: 14px;
+        flex: 1 1 calc(33% - 16px);
+        min-width: 250px;
+        max-width: 100%;
+        box-sizing: border-box;
+
+        &:hover {
+            background-color: #f1f3f5;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+    }
+
+    .topic-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+        flex-wrap: wrap;
+    }
+
+    .topic-link {
+        color: #2c3e50;
+        text-decoration: none;
+        font-weight: 500;
+        flex: 1;
+        min-width: 150px;
+
+        &:hover {
+            text-decoration: underline;
+        }
+    }
+
+    .topic-count {
+        color: #666;
+        font-size: 13px;
+        white-space: nowrap;
+    }
+
+    .snippet-link {
+        display: inline-block;
+        padding: 2px 6px;
+        background: #e3f2fd;
+        color: #1976d2;
+        border-radius: 4px;
+        text-decoration: none;
+        font-size: 11px;
+        margin-right: 6px;
+        font-weight: bold;
+
+        &:hover {
+            background: #bbdefb;
+        }
+    }
+
+    .toggle-posts {
+        background: none;
+        border: none;
+        color: #666;
+        font-size: 12px;
+        cursor: pointer;
+        padding: 2px 6px;
+        border-radius: 3px;
+        white-space: nowrap;
+
+        &:hover {
+            background-color: #e9ecef;
+        }
+    }
+
+    .topic-posts {
+        margin-top: 6px;
+        padding-top: 6px;
+        border-top: 1px dashed #e9ecef;
+        font-size: 13px;
+    }
+
+    .post-info {
+        margin-bottom: 4px;
+
+        a {
+            color: #495057;
+            text-decoration: none;
+            font-size: 12px;
+            display: block;
+
+            &:hover {
+                text-decoration: underline;
+            }
+        }
+    }
+
+    @media (max-width: 768px) {
+        .topic-item {
+            flex: 1 1 100%;
+        }
+    }
+}
+
+/* ============================================================================
+   Tag Feeds Page Styles (tag-feeds.html)
+   ============================================================================ */
+
+.tag-feeds-page {
+    .table-container {
+        overflow: auto;
+        max-height: 80vh;
+    }
+
+    .table-bordered {
+        border-collapse: collapse;
+        width: 100%;
+
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+        }
+
+        td {
+            cursor: help;
+
+            a {
+                color: #337ab7;
+                text-decoration: none;
+
+                &:hover {
+                    color: #23527c;
+                    text-decoration: underline;
+                }
+            }
+        }
+
+        thead th {
+            position: sticky;
+            top: 0;
+            background-color: #f2f2f2;
+            z-index: 1;
+
+            &:first-child {
+                left: 0;
+                z-index: 2;
+            }
+        }
+
+        tbody {
+            td:first-child {
+                position: sticky;
+                left: 0;
+                background-color: #f2f2f2;
+            }
+
+            tr:hover td {
+                background-color: #f5f5f5;
+            }
+        }
+
+        .hover-column {
+            background-color: #e8e8e8;
+        }
+    }
+}
+
+/* ============================================================================
+   Post Graph Page Styles (post-graph.html)
+   ============================================================================ */
+
+.post-graph-page {
+    .graph-container {
+        width: 100%;
+        min-height: 800px;
+        overflow: auto;
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+    }
+
+    .tabs-container {
+        margin-top: 10px;
+    }
+
+    .tab-buttons {
+        display: flex;
+        border-bottom: 1px solid #ddd;
+        margin-bottom: 10px;
+    }
+
+    .tab-button {
+        padding: 8px 16px;
+        cursor: pointer;
+        border: 1px solid transparent;
+        border-bottom: none;
+        background: #f0f0f0;
+        margin-right: 4px;
+        border-radius: 4px 4px 0 0;
+
+        &.active {
+            background: #fff;
+            border-color: #ddd;
+            border-bottom: 1px solid #fff;
+            margin-bottom: -1px;
+            font-weight: bold;
+        }
+    }
+}
+
+/* ============================================================================
+   Tag Sunburst Page Styles (tag-sunburst.html)
+   ============================================================================ */
+
+.tag-sunburst-page {
+    .node circle {
+        fill: #999;
+    }
+
+    .node text {
+        font: 10px sans-serif;
+    }
+
+    .node--internal circle {
+        fill: #555;
+    }
+
+    .node--internal text {
+        text-shadow: 0 1px 0 #fff, 0 -1px 0 #fff, 1px 0 0 #fff, -1px 0 0 #fff;
+    }
+
+    .link {
+        fill: none;
+        stroke: #555;
+        stroke-opacity: 0.4;
+        stroke-width: 1.5px;
+    }
+
+    form {
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+        position: absolute;
+        left: 10px;
+        top: 10px;
+    }
+
+    label {
+        display: block;
+    }
+}

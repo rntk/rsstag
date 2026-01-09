@@ -3,52 +3,6 @@
 
 <title>Tags per feed</title>
 {%  include "head-data.html" %}
-<style>
-    .table-container {
-        overflow: auto;
-        max-height: 80vh;
-    }
-    .table-bordered th, .table-bordered td {
-        border: 1px solid #ddd;
-        padding: 8px;
-    }
-    .table-bordered {
-        border-collapse: collapse;
-        width: 100%;
-    }
-    .table-bordered td a {
-        color: #337ab7;
-        text-decoration: none;
-    }
-    .table-bordered td a:hover {
-        color: #23527c;
-        text-decoration: underline;
-    }
-    .table-bordered td {
-        cursor: help;
-    }
-    .table-bordered thead th {
-        position: sticky;
-        top: 0;
-        background-color: #f2f2f2;
-        z-index: 1;
-    }
-    .table-bordered tbody td:first-child {
-        position: sticky;
-        left: 0;
-        background-color: #f2f2f2;
-    }
-    .table-bordered tbody tr:hover td {
-        background-color: #f5f5f5;
-    }
-    .table-bordered .hover-column {
-        background-color: #e8e8e8;
-    }
-    .table-bordered thead th:first-child {
-        left: 0;
-        z-index: 2;
-    }
-</style>
 </head>
 <body>
 
@@ -67,7 +21,7 @@
         {{ menu.settings_menu() }}
     </div>
 </div>
-<div class="page">
+<div class="page tag-feeds-page">
     <h1>Tags per feed</h1>
     <div class="table-container">
     <table class="table-bordered">
@@ -108,38 +62,6 @@
 </ul>
 </div>
 <div id="progressbar"></div>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const table = document.querySelector('.table-bordered');
-    if (!table) return;
-
-    table.addEventListener('mouseover', e => {
-        if (e.target.matches('td, th')) {
-            const colIndex = e.target.cellIndex;
-            // Don't highlight the first column which contains row headers
-            if (colIndex > 0) {
-                for (const row of table.rows) {
-                    if (row.cells[colIndex]) {
-                        row.cells[colIndex].classList.add('hover-column');
-                    }
-                }
-            }
-        }
-    });
-
-    table.addEventListener('mouseout', e => {
-        if (e.target.matches('td, th')) {
-            const colIndex = e.target.cellIndex;
-            if (colIndex > 0) {
-                for (const row of table.rows) {
-                     if (row.cells[colIndex]) {
-                        row.cells[colIndex].classList.remove('hover-column');
-                    }
-                }
-            }
-        }
-    });
-});
-</script>
+<script src="/static/js/tag-feeds.js"></script>
 </body>
 </html>

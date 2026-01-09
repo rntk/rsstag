@@ -5,42 +5,8 @@
 {%  include "head-data.html" %}
 </head>
 <body>
-    <style>
-        .node circle {
-            fill: #999;
-        }
-        
-        .node text {
-            font: 10px sans-serif;
-        }
-        
-        .node--internal circle {
-            fill: #555;
-        }
-        
-        .node--internal text {
-            text-shadow: 0 1px 0 #fff, 0 -1px 0 #fff, 1px 0 0 #fff, -1px 0 0 #fff;
-        }
-        
-        .link {
-            fill: none;
-            stroke: #555;
-            stroke-opacity: 0.4;
-            stroke-width: 1.5px;
-        }
-        
-        form {
-            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-            position: absolute;
-            left: 10px;
-            top: 10px;
-        }
-        
-        label {
-            display: block;
-        }
-        </style>
 {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
+<div class="tag-sunburst-page">
 <div id="global_tools">
     <div class="left_half">
         <div id="link_on_root" class="global_tools_button">
@@ -74,5 +40,6 @@
     <li>Click/tap on one tag and then click/tap on other tag, will open the page with posts have selected tags</li>
 </ul>
 </div>
-<div id="progressbar"></div></body>
+<div id="progressbar"></div>
+</div></body>
 </html>

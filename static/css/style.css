@@ -1124,3 +1124,541 @@ h3.post_title {
 .bigram-circle-svg:hover .bigram-circle {
   stroke-width: 3;
 }
+
+/* ============================================================================
+   Post Grouped Page Styles (post-grouped.html)
+   ============================================================================ */
+.post-grouped-page .sentence-group {
+  display: inline;
+  margin: 0 1px;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: background-color 0.2s ease;
+  cursor: pointer;
+}
+.post-grouped-page .sentence-group:hover {
+  filter: brightness(0.9);
+}
+.post-grouped-page .sentence-group.highlighted {
+  outline: 2px solid #ff9800;
+  box-shadow: 0 0 5px rgba(255, 152, 0, 0.8);
+  font-weight: bold;
+}
+.post-grouped-page .post-section {
+  margin-bottom: 25px;
+  padding: 15px;
+  background-color: #fafafa;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+.post-grouped-page .post-header {
+  margin-bottom: 12px;
+}
+.post-grouped-page .post-content {
+  margin-top: 8px;
+}
+.post-grouped-page .post-text {
+  max-width: 100%;
+  overflow-x: auto;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+.post-grouped-page .post-text img {
+  max-width: 100%;
+  height: auto;
+}
+.post-grouped-page .post-label {
+  display: inline-block;
+  padding: 4px 12px;
+  background-color: #4285f4;
+  color: white;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+.post-grouped-page .post-divider {
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #4285f4, transparent);
+  margin: 6px 0;
+}
+.post-grouped-page .sentence {
+  display: inline;
+}
+.post-grouped-page #segments_tree {
+  font-family: monospace;
+  font-size: 13px;
+  line-height: 1.25em;
+  padding: 8px;
+  color: #000;
+  border-radius: 6px;
+  max-height: 400px;
+  overflow: auto;
+}
+.post-grouped-page .seg-node {
+  cursor: pointer;
+  white-space: nowrap;
+}
+.post-grouped-page .seg-node .label {
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+.post-grouped-page .seg-meta {
+  opacity: 0.7;
+  font-size: 11px;
+  margin-left: 4px;
+}
+.post-grouped-page .legend {
+  margin: 10px 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.post-grouped-page .legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.post-grouped-page .legend-color {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  border: 1px solid #999;
+}
+.post-grouped-page .depth-0 .label {
+  font-weight: bold;
+  font-size: 14px;
+}
+.post-grouped-page .collapsed > .children {
+  display: none;
+}
+.post-grouped-page .children {
+  margin-left: 18px;
+  border-left: 1px dashed #555;
+  padding-left: 6px;
+}
+.post-grouped-page .toggle {
+  color: #6cf;
+  margin-right: 4px;
+}
+.post-grouped-page .range-highlight {
+  outline: 2px solid #ff9800;
+  box-shadow: 0 0 3px 2px rgba(255, 152, 0, 0.6);
+}
+.post-grouped-page .pulse {
+  animation: pulse-bg 1.5s ease-in-out 1;
+}
+@keyframes pulse-bg {
+  0% {
+    outline-color: #ff9800;
+  }
+  50% {
+    outline-color: #ffc107;
+  }
+  100% {
+    outline-color: #ff9800;
+  }
+}
+.post-grouped-page .sticky-sidebar {
+  position: sticky;
+  top: 20px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 10px;
+  border-radius: 6px;
+  backdrop-filter: blur(5px);
+}
+.post-grouped-page .topic-item {
+  margin: 4px 0;
+  padding: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.post-grouped-page .topic-item:hover {
+  filter: brightness(0.9);
+  transform: translateX(2px);
+}
+.post-grouped-page .topic-item.active {
+  outline: 2px solid #333;
+}
+.post-grouped-page .topic-count {
+  font-size: 11px;
+  opacity: 0.7;
+  margin-left: 4px;
+}
+.post-grouped-page .section-header {
+  font-weight: bold;
+  margin: 15px 0 8px 0;
+  padding-bottom: 5px;
+  border-bottom: 1px solid #ddd;
+}
+.post-grouped-page .topic-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+.post-grouped-page .topic-controls {
+  display: flex;
+  gap: 4px;
+}
+.post-grouped-page .topic-btn {
+  border: 1px solid #999;
+  background: #fff;
+  color: #333;
+  padding: 2px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+}
+.post-grouped-page .topic-btn:hover {
+  background: #f0f0f0;
+}
+.post-grouped-page .tab-header {
+  display: flex;
+  border-bottom: 2px solid #e0e0e0;
+  margin-bottom: 20px;
+}
+.post-grouped-page .tab-btn {
+  padding: 10px 20px;
+  cursor: pointer;
+  font-weight: bold;
+  color: #666;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+}
+.post-grouped-page .tab-btn.active {
+  color: #4285f4;
+  border-bottom: 3px solid #4285f4;
+}
+.post-grouped-page .tab-btn:hover:not(.active) {
+  background-color: #f5f5f5;
+}
+.post-grouped-page .tab-content {
+  display: none;
+}
+.post-grouped-page .tab-content.active {
+  display: block;
+}
+.post-grouped-page #topic_flow_chart {
+  width: 100%;
+  overflow: visible;
+  min-height: 600px;
+}
+.post-grouped-page #topic_flow_chart svg {
+  display: block;
+  margin: 0 auto;
+}
+
+/* ============================================================================
+   Post Grouped Snippets Page Styles (post-grouped-snippets.html)
+   ============================================================================ */
+.post-grouped-snippets-page .topic-card {
+  margin-bottom: 25px;
+  padding: 15px;
+  background-color: #fafafa;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+  border-left-width: 5px;
+}
+.post-grouped-snippets-page .topic-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eee;
+}
+.post-grouped-snippets-page .topic-title {
+  font-size: 1.2em;
+  font-weight: bold;
+  color: #333;
+}
+.post-grouped-snippets-page .snippet-item {
+  margin-bottom: 12px;
+  padding: 10px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #eee;
+  transition: all 0.2s;
+}
+.post-grouped-snippets-page .snippet-item:hover {
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+.post-grouped-snippets-page .snippet-item.read {
+  opacity: 0.6;
+}
+.post-grouped-snippets-page .snippet-item.read .snippet-text {
+  text-decoration: none;
+}
+.post-grouped-snippets-page .snippet-meta {
+  font-size: 11px;
+  color: #999;
+  margin-bottom: 4px;
+  display: flex;
+  justify-content: space-between;
+}
+.post-grouped-snippets-page .snippet-text {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #444;
+}
+.post-grouped-snippets-page .back-nav {
+  margin-bottom: 20px;
+}
+.post-grouped-snippets-page .back-btn {
+  display: inline-block;
+  padding: 6px 12px;
+  background: #f0f0f0;
+  border-radius: 4px;
+  color: #555;
+  text-decoration: none;
+  border: 1px solid #ddd;
+}
+.post-grouped-snippets-page .back-btn:hover {
+  background: #e0e0e0;
+}
+.post-grouped-snippets-page .source-tag {
+  display: inline-block;
+  padding: 2px 6px;
+  background: #e3f2fd;
+  color: #1976d2;
+  border-radius: 4px;
+  text-decoration: none;
+}
+.post-grouped-snippets-page .snippet-actions {
+  display: flex;
+  gap: 8px;
+}
+.post-grouped-snippets-page .snippet-actions .source-tag {
+  font-size: 10px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.post-grouped-snippets-page .snippet-actions .source-tag:hover {
+  filter: brightness(0.9);
+}
+.post-grouped-snippets-page .toggle-read-btn {
+  cursor: pointer;
+  user-select: none;
+}
+
+/* ============================================================================
+   Topics List Page Styles (topics-list.html)
+   ============================================================================ */
+.topics-list-page .topics-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.topics-list-page .topic-item {
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  flex: 1 1 calc(33% - 16px);
+  min-width: 250px;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.topics-list-page .topic-item:hover {
+  background-color: #f1f3f5;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+.topics-list-page .topic-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.topics-list-page .topic-link {
+  color: #2c3e50;
+  text-decoration: none;
+  font-weight: 500;
+  flex: 1;
+  min-width: 150px;
+}
+.topics-list-page .topic-link:hover {
+  text-decoration: underline;
+}
+.topics-list-page .topic-count {
+  color: #666;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.topics-list-page .snippet-link {
+  display: inline-block;
+  padding: 2px 6px;
+  background: #e3f2fd;
+  color: #1976d2;
+  border-radius: 4px;
+  text-decoration: none;
+  font-size: 11px;
+  margin-right: 6px;
+  font-weight: bold;
+}
+.topics-list-page .snippet-link:hover {
+  background: #bbdefb;
+}
+.topics-list-page .toggle-posts {
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.topics-list-page .toggle-posts:hover {
+  background-color: #e9ecef;
+}
+.topics-list-page .topic-posts {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed #e9ecef;
+  font-size: 13px;
+}
+.topics-list-page .post-info {
+  margin-bottom: 4px;
+}
+.topics-list-page .post-info a {
+  color: #495057;
+  text-decoration: none;
+  font-size: 12px;
+  display: block;
+}
+.topics-list-page .post-info a:hover {
+  text-decoration: underline;
+}
+@media (max-width: 768px) {
+  .topics-list-page .topic-item {
+    flex: 1 1 100%;
+  }
+}
+
+/* ============================================================================
+   Tag Feeds Page Styles (tag-feeds.html)
+   ============================================================================ */
+.tag-feeds-page .table-container {
+  overflow: auto;
+  max-height: 80vh;
+}
+.tag-feeds-page .table-bordered {
+  border-collapse: collapse;
+  width: 100%;
+}
+.tag-feeds-page .table-bordered th, .tag-feeds-page .table-bordered td {
+  border: 1px solid #ddd;
+  padding: 8px;
+}
+.tag-feeds-page .table-bordered td {
+  cursor: help;
+}
+.tag-feeds-page .table-bordered td a {
+  color: #337ab7;
+  text-decoration: none;
+}
+.tag-feeds-page .table-bordered td a:hover {
+  color: #23527c;
+  text-decoration: underline;
+}
+.tag-feeds-page .table-bordered thead th {
+  position: sticky;
+  top: 0;
+  background-color: #f2f2f2;
+  z-index: 1;
+}
+.tag-feeds-page .table-bordered thead th:first-child {
+  left: 0;
+  z-index: 2;
+}
+.tag-feeds-page .table-bordered tbody td:first-child {
+  position: sticky;
+  left: 0;
+  background-color: #f2f2f2;
+}
+.tag-feeds-page .table-bordered tbody tr:hover td {
+  background-color: #f5f5f5;
+}
+.tag-feeds-page .table-bordered .hover-column {
+  background-color: #e8e8e8;
+}
+
+/* ============================================================================
+   Post Graph Page Styles (post-graph.html)
+   ============================================================================ */
+.post-graph-page .graph-container {
+  width: 100%;
+  min-height: 800px;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+.post-graph-page .tabs-container {
+  margin-top: 10px;
+}
+.post-graph-page .tab-buttons {
+  display: flex;
+  border-bottom: 1px solid #ddd;
+  margin-bottom: 10px;
+}
+.post-graph-page .tab-button {
+  padding: 8px 16px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-bottom: none;
+  background: #f0f0f0;
+  margin-right: 4px;
+  border-radius: 4px 4px 0 0;
+}
+.post-graph-page .tab-button.active {
+  background: #fff;
+  border-color: #ddd;
+  border-bottom: 1px solid #fff;
+  margin-bottom: -1px;
+  font-weight: bold;
+}
+
+/* ============================================================================
+   Tag Sunburst Page Styles (tag-sunburst.html)
+   ============================================================================ */
+.tag-sunburst-page .node circle {
+  fill: #999;
+}
+.tag-sunburst-page .node text {
+  font: 10px sans-serif;
+}
+.tag-sunburst-page .node--internal circle {
+  fill: #555;
+}
+.tag-sunburst-page .node--internal text {
+  text-shadow: 0 1px 0 #fff, 0 -1px 0 #fff, 1px 0 0 #fff, -1px 0 0 #fff;
+}
+.tag-sunburst-page .link {
+  fill: none;
+  stroke: #555;
+  stroke-opacity: 0.4;
+  stroke-width: 1.5px;
+}
+.tag-sunburst-page form {
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  position: absolute;
+  left: 10px;
+  top: 10px;
+}
+.tag-sunburst-page label {
+  display: block;
+}

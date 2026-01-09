@@ -23,7 +23,7 @@
         </div>
     </div>
 
-    <div class="page">
+    <div class="page topics-list-page">
         <h1>Topics/Chapters List</h1>
 
         <div id="topics_list_container">
@@ -96,132 +96,7 @@
         </ul>
     </div>
 
-    <style>
-        .topics-cloud {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-top: 10px;
-        }
-
-        .topic-item {
-            background-color: #f8f9fa;
-            border: 1px solid #e9ecef;
-            border-radius: 4px;
-            padding: 8px 12px;
-            margin-bottom: 8px;
-            font-size: 14px;
-            flex: 1 1 calc(33% - 16px);
-            min-width: 250px;
-            max-width: 100%;
-            box-sizing: border-box;
-        }
-
-        .topic-header {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 6px;
-            flex-wrap: wrap;
-        }
-
-        .topic-link {
-            color: #2c3e50;
-            text-decoration: none;
-            font-weight: 500;
-            flex: 1;
-            min-width: 150px;
-        }
-
-        .topic-link:hover {
-            text-decoration: underline;
-        }
-
-        .snippet-link {
-            display: inline-block;
-            padding: 2px 6px;
-            background: #e3f2fd;
-            color: #1976d2;
-            border-radius: 4px;
-            text-decoration: none;
-            font-size: 11px;
-            margin-right: 6px;
-            font-weight: bold;
-        }
-
-        .snippet-link:hover {
-            background: #bbdefb;
-        }
-
-        .topic-count {
-            color: #666;
-            font-size: 13px;
-            white-space: nowrap;
-        }
-
-        .toggle-posts {
-            background: none;
-            border: none;
-            color: #666;
-            font-size: 12px;
-            cursor: pointer;
-            padding: 2px 6px;
-            border-radius: 3px;
-            white-space: nowrap;
-        }
-
-        .toggle-posts:hover {
-            background-color: #e9ecef;
-        }
-
-        .topic-posts {
-            margin-top: 6px;
-            padding-top: 6px;
-            border-top: 1px dashed #e9ecef;
-            font-size: 13px;
-        }
-
-        .post-info {
-            margin-bottom: 4px;
-        }
-
-        .post-info a {
-            color: #495057;
-            text-decoration: none;
-            font-size: 12px;
-            display: block;
-        }
-
-        .post-info a:hover {
-            text-decoration: underline;
-        }
-
-        .topic-item:hover {
-            background-color: #f1f3f5;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
-
-        @media (max-width: 768px) {
-            .topic-item {
-                flex: 1 1 100%;
-            }
-        }
-    </style>
-
-    <script>
-        function togglePosts(index) {
-            const postsElement = document.getElementById('posts_' + index);
-            const button = event.target;
-
-            if (postsElement.style.display === 'none') {
-                postsElement.style.display = 'block';
-                button.textContent = button.textContent.replace('[', '[-');
-            } else {
-                postsElement.style.display = 'none';
-                button.textContent = button.textContent.replace('[-', '[');
-            }
-        }
-    </script>
+    <script src="/static/js/topics-list.js"></script>
 
 </body>
 

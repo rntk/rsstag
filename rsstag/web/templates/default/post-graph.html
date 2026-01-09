@@ -3,20 +3,6 @@
 <head>
 <title>Post Graph | {{feed_title}}</title>
 {% include "head-data.html" %}
-    <style>
-    .post-section { margin-bottom: 25px; padding: 15px; background-color: #fafafa; border-radius: 8px; border: 1px solid #e0e0e0; }
-    .post-header { margin-bottom: 12px; }
-    .post-label { display: inline-block; padding: 4px 12px; background-color: #4285f4; color: white; border-radius: 16px; font-size: 12px; font-weight: bold; margin-bottom: 8px; }
-    .post-divider { height: 2px; background: linear-gradient(90deg, transparent, #4285f4, transparent); margin: 6px 0; }
-    .graph-container { width: 100%; min-height: 800px; overflow: auto; background: #fff; border: 1px solid #ddd; border-radius: 4px; }
-    
-    .tabs-container { margin-top: 10px; }
-    .tab-buttons { display: flex; border-bottom: 1px solid #ddd; margin-bottom: 10px; }
-    .tab-button { padding: 8px 16px; cursor: pointer; border: 1px solid transparent; border-bottom: none; background: #f0f0f0; margin-right: 4px; border-radius: 4px 4px 0 0; }
-    .tab-button.active { background: #fff; border-color: #ddd; border-bottom: 1px solid #fff; margin-bottom: -1px; font-weight: bold; }
-    .tab-content { display: none; }
-    .tab-content.active { display: block; }
-    </style>
 </head>
 <body>
 {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
@@ -35,7 +21,7 @@
     </div>
 </div>
 
-<div class="page">
+<div class="page post-graph-page">
     <h2>Posts Graph {{pids}} - {{feed_title}}</h2>
     
     <div id="posts_graphs">
