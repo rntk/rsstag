@@ -29,6 +29,7 @@ TASK_POST_GROUPING = 19
 TASK_TAG_CLASSIFICATION = 20
 TASK_POST_GROUPING_BATCH = 21
 TASK_TAG_CLASSIFICATION_BATCH = 22
+TASK_DELETE_FEEDS = 23
 
 POST_NOT_IN_PROCESSING = 0
 BIGRAM_NOT_IN_PROCESSING = 0
@@ -100,17 +101,19 @@ class RssTagTasks:
                     else:
                         result = False
                 else:
+                    update_data = {
+                        "user": data["user"],
+                        "type": data["type"],
+                        "processing": TASK_NOT_IN_PROCESSING,
+                        "manual": manual,
+                        "provider": data.get("provider", ""),
+                    }
+                    for key in data:
+                        if key not in update_data:
+                            update_data[key] = data[key]
                     self._db.tasks.update_one(
                         {"user": data["user"], "type": data["type"]},
-                        {
-                            "$set": {
-                                "user": data["user"],
-                                "type": data["type"],
-                                "processing": TASK_NOT_IN_PROCESSING,
-                                "manual": manual,
-                                "provider": data.get("provider", ""),
-                            }
-                        },
+                        {"$set": update_data},
                         upsert=True,
                     )
             except Exception as e:
@@ -181,12 +184,13 @@ class RssTagTasks:
             if not user:
                 return task
 
-            data = user_task
+            task.update(user_task)
             task["user"] = user
             task["_id"] = user_task["_id"]
             task["type"] = user_task["type"]
             task["manual"] = user_task.get("manual", False)
             task["batch"] = user_task.get("batch", {})
+            data = user_task
             if user_task["type"] == TASK_TAGS:
                 data = []
                 ps = self._db.posts.find(
@@ -801,6 +805,7 @@ class RssTagTasks:
             TASK_TAG_CLASSIFICATION: "Tags classification",
             TASK_POST_GROUPING_BATCH: "Post grouping (batch)",
             TASK_TAG_CLASSIFICATION_BATCH: "Tags classification (batch)",
+            TASK_DELETE_FEEDS: "Delete feeds",
         }
 
         if task_type in task_titles:

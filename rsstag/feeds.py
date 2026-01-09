@@ -38,3 +38,9 @@ class RssTagFeeds:
         query = {"owner": owner, "feed_id": feed_id}
 
         return self.db.feeds.find_one(query)
+
+    def get_by_categories(
+        self, owner: str, categories: list, projection: Optional[dict] = None
+    ) -> Iterator[dict]:
+        query = {"owner": owner, "category_id": {"$in": categories}}
+        return self.db.feeds.find(query, projection=projection)

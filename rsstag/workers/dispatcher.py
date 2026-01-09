@@ -17,6 +17,7 @@ from rsstag.tasks import (
     TASK_BIGRAMS_RANK,
     TASK_CLEAN_BIGRAMS,
     TASK_CLUSTERING,
+    TASK_DELETE_FEEDS,
     TASK_DOWNLOAD,
     TASK_FASTTEXT,
     TASK_GMAIL_SORT,
@@ -84,6 +85,7 @@ def _build_registry(tag_worker: TagWorker, llm_worker: LLMWorker) -> WorkerRegis
     registry.register(
         TASK_TAG_CLASSIFICATION_BATCH, llm_worker.make_tags_classification_batch
     )
+    registry.register(TASK_DELETE_FEEDS, tag_worker.handle_delete_feeds)
     return registry
 
 

@@ -581,3 +581,119 @@ class TagWorker(BaseWorker):
     def make_clean_bigrams(self, task: dict) -> bool:
         bi_grams = RssTagBiGrams(self._db)
         return bi_grams.remove_by_count(task["user"]["sid"], 1)
+
+    def handle_delete_feeds(self, task: dict) -> bool:
+        user_sid = task["user"]["sid"]
+        feed_ids = task.get("feed_ids", [])
+        if not feed_ids:
+            logging.info("Delete feeds task for user %s skipped: no feed_ids", user_sid)
+            return True
+
+        logging.info("Starting delete feeds for user %s: %s", user_sid, feed_ids)
+
+        try:
+            # 2. Query all posts with those feed_ids
+            posts_cursor = self._db.posts.find(
+                {"owner": user_sid, "feed_id": {"$in": feed_ids}},
+                projection={
+                    "tags": True,
+                    "bi_grams": True,
+                    "read": True,
+                    "_id": True,
+                    "pid": True,
+                },
+            )
+
+            tag_stats = defaultdict(lambda: {"posts_count": 0, "unread_count": 0})
+            bi_gram_stats = defaultdict(lambda: {"posts_count": 0, "unread_count": 0})
+            post_ids = []
+            pids = []
+
+            for post in posts_cursor:
+                post_ids.append(post["_id"])
+                if "pid" in post:
+                    pids.append(post["pid"])
+                is_unread = not post.get("read", False)
+                for tag in post.get("tags", []):
+                    if not tag:
+                        continue
+                    tag_stats[tag]["posts_count"] += 1
+                    if is_unread:
+                        tag_stats[tag]["unread_count"] += 1
+                for bg in post.get("bi_grams", []):
+                    if not bg:
+                        continue
+                    bi_gram_stats[bg]["posts_count"] += 1
+                    if is_unread:
+                        bi_gram_stats[bg]["unread_count"] += 1
+
+            logging.info("Collected %s posts and %s pids for deletion", len(post_ids), len(pids))
+
+            # 4. Delete posts in batches (500)
+            batch_size = 500
+            for i in range(0, len(post_ids), batch_size):
+                batch = post_ids[i : i + batch_size]
+                self._db.posts.delete_many({"_id": {"$in": batch}})
+                logging.info("Deleted batch of %s posts", len(batch))
+
+            # 6. Delete post_grouping entries
+            if pids:
+                # Delete any grouping that contains at least one of the pids
+                res = self._db.post_grouping.delete_many(
+                    {"owner": user_sid, "post_ids": {"$in": pids}}
+                )
+                logging.info("Deleted %s post_grouping entries", res.deleted_count)
+
+            # 5. Update counters
+            tag_updates = []
+            for tag, stats in tag_stats.items():
+                tag_updates.append(
+                    UpdateOne(
+                        {"owner": user_sid, "tag": tag},
+                        {
+                            "$inc": {
+                                "posts_count": -stats["posts_count"],
+                                "unread_count": -stats["unread_count"],
+                            }
+                        },
+                    )
+                )
+
+            if tag_updates:
+                self._db.tags.bulk_write(tag_updates, ordered=False)
+                logging.info("Updated counters for %s tags", len(tag_updates))
+
+            bi_gram_updates = []
+            for bg, stats in bi_gram_stats.items():
+                bi_gram_updates.append(
+                    UpdateOne(
+                        {"owner": user_sid, "tag": bg},
+                        {
+                            "$inc": {
+                                "posts_count": -stats["posts_count"],
+                                "unread_count": -stats["unread_count"],
+                            }
+                        },
+                    )
+                )
+            if bi_gram_updates:
+                self._db.bi_grams.bulk_write(bi_gram_updates, ordered=False)
+                logging.info("Updated counters for %s bi-grams", len(bi_gram_updates))
+
+            # 7. Delete feed documents
+            res = self._db.feeds.delete_many({"owner": user_sid, "feed_id": {"$in": feed_ids}})
+            logging.info("Deleted %s feed documents", res.deleted_count)
+
+            # 8. Cleanup orphans
+            res_tags = self._db.tags.delete_many({"owner": user_sid, "posts_count": {"$lte": 0}})
+            res_bis = self._db.bi_grams.delete_many({"owner": user_sid, "posts_count": {"$lte": 0}})
+            logging.info("Orphan cleanup: deleted %s tags and %s bi-grams", res_tags.deleted_count, res_bis.deleted_count)
+
+            # Sync letters
+            self.make_letters(user_sid)
+            logging.info("Refreshed letters for user %s", user_sid)
+
+            return True
+        except Exception as e:
+            logging.error("Failed to delete feeds for user %s: %s", user_sid, e)
+            return False

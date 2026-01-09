@@ -31,6 +31,13 @@ export default class CategoriesList extends React.Component {
             feeds = cat.feeds.map((feed, i) => {
               return (
                 <li key={i}>
+                  <input
+                    type="checkbox"
+                    className="feed-checkbox"
+                    data-type="feed"
+                    data-id={feed.feed_id}
+                    onChange={window.handleCheckboxChange}
+                  />
                   <a href={feed.url}>{feed.title}</a>({feed.unread_count})
                 </li>
               );
@@ -38,6 +45,17 @@ export default class CategoriesList extends React.Component {
           }
           cats.push(
             <li className="category" key={cat_name}>
+              {cat_name !== 'All' ? (
+                <input
+                  type="checkbox"
+                  className="category-checkbox"
+                  data-type="category"
+                  data-id={cat.category_id}
+                  onChange={window.handleCheckboxChange}
+                />
+              ) : (
+                ''
+              )}
               <a href={cat.url}>{cat.title}</a>({cat.unread_count})
               {cat_name !== 'All' ? (
                 <span

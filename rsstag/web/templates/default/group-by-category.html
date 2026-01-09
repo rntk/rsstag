@@ -1,30 +1,129 @@
 ﻿<html>
+
 <head>
-<title>Group by category</title>
-{%  include "head-data.html" %}
+    <title>Group by category</title>
+    {% include "head-data.html" %}
 </head>
+
 <body>
-{% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
-<div id="global_tools">
-    <div class="left_half">
-        <div id="link_on_root" class="global_tools_button">
-            <a href="/">main</a>
+    {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
+    <div id="global_tools">
+        <div class="left_half">
+            <div id="link_on_root" class="global_tools_button">
+                <a href="/">main</a>
+            </div>
+            <div id="group_by" class="global_tools_button">
+                <a href="{{group_by_link}}">group by tag</a>
+            </div>
         </div>
-        <div id="group_by" class="global_tools_button">
-            <a href="{{group_by_link}}">group by tag</a>
+        <div class="right_half">
+            {{ g_status.global_status() }}
+            {{ menu.settings_menu() }}
         </div>
     </div>
-    <div class="right_half">
-        {{ g_status.global_status() }}
-        {{ menu.settings_menu() }}
+
+    <div id="delete_controls" style="display: none;">
+        <button class="select-all-btn" onclick="toggleSelectAll()">Select All</button>
+        <button id="delete_btn" onclick="confirmDelete()" disabled>Delete Selected (<span
+                id="selected_count">0</span>)</button>
     </div>
-</div>
-<div class="page">
-    <div class="post" id="cats_list"></div>
-</div>
-<script type="text/javascript">
-    var initial_cats_list = {{data|json}}
-</script>
-<div id="progressbar"></div>
+    <div class="page">
+        <div class="post" id="cats_list"></div>
+    </div>
+    <script type="text/javascript">
+        var initial_cats_list = {{ data| json}};
+
+        function toggleSelectAll() {
+            var cbs = document.querySelectorAll('.category-checkbox, .feed-checkbox');
+            var anyUnchecked = false;
+            for (var i = 0; i < cbs.length; i++) {
+                if (!cbs[i].checked) {
+                    anyUnchecked = true;
+                    break;
+                }
+            }
+            for (var j = 0; j < cbs.length; j++) {
+                cbs[j].checked = anyUnchecked;
+            }
+            updateDeleteButton();
+        }
+
+        function handleCheckboxChange() {
+            updateDeleteButton();
+        }
+
+        function updateDeleteButton() {
+            var selected = document.querySelectorAll('.category-checkbox:checked, .feed-checkbox:checked');
+            var btn = document.getElementById('delete_btn');
+            var count = document.getElementById('selected_count');
+            var controls = document.getElementById('delete_controls');
+
+            if (count) count.innerText = selected.length;
+            if (btn) btn.disabled = selected.length === 0;
+
+            var anyCheckbox = document.querySelectorAll('.category-checkbox, .feed-checkbox').length > 0;
+            if (controls) controls.style.display = anyCheckbox ? 'flex' : 'none';
+        }
+
+        function confirmDelete() {
+            if (confirm("Are you sure you want to delete selected feeds and categories? This will delete all posts and related data.")) {
+                performDelete();
+            }
+        }
+
+        function performDelete() {
+            var feeds = [];
+            var cats = [];
+            document.querySelectorAll('.feed-checkbox:checked').forEach(function (cb) {
+                feeds.push(cb.getAttribute('data-id'));
+            });
+            document.querySelectorAll('.category-checkbox:checked').forEach(function (cb) {
+                cats.push(cb.getAttribute('data-id'));
+            });
+
+            console.log('Sending delete request:', { feed_ids: feeds, category_ids: cats });
+
+            var btn = document.getElementById('delete_btn');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerText = "Deleting...";
+            }
+
+            fetch('/delete-feeds-categories', {
+                method: 'POST',
+                body: JSON.stringify({ feed_ids: feeds, category_ids: cats }),
+                headers: { 'Content-Type': 'application/json' }
+            })
+                .then(function (response) {
+                    console.log('Response status:', response.status);
+                    return response.json();
+                })
+                .then(function (data) {
+                    console.log('Response data:', data);
+                    if (data.status === 'success') {
+                        alert(data.message);
+                        window.location.reload();
+                    } else {
+                        alert("Error: " + data.message);
+                        updateDeleteButton();
+                    }
+                })
+                .catch(function (err) {
+                    console.error('Fetch error:', err);
+                    alert("Error: " + err);
+                    updateDeleteButton();
+                });
+        }
+
+        window.handleCheckboxChange = handleCheckboxChange;
+        // Poll for checkboxes since they are rendered by React
+        var pollInterval = setInterval(function () {
+            if (document.querySelectorAll('.category-checkbox, .feed-checkbox').length > 0) {
+                updateDeleteButton();
+            }
+        }, 1000);
+    </script>
+    <div id="progressbar"></div>
 </body>
+
 </html>

@@ -1729,3 +1729,37 @@ h3.post_title {
         display: block;
     }
 }
+
+#delete_controls {
+    padding: 10px;
+    background: #f8f8f8;
+    border-bottom: 1px solid #ddd;
+    position: sticky;
+    top: 40px;
+    z-index: 10;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+
+    #delete_btn {
+        background: #ff4444;
+        color: white;
+        border: none;
+        padding: 5px 15px;
+        border-radius: 4px;
+        cursor: pointer;
+
+        &:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+    }
+
+    .select-all-btn {
+        padding: 5px 15px;
+        border-radius: 4px;
+        border: 1px solid #ccc;
+        background: white;
+        cursor: pointer;
+    }
+}

@@ -31,6 +31,7 @@ import rsstag.web.prefixes as prefixes_handlers
 import rsstag.web.chat as chat_handlers
 import rsstag.web.tasks as tasks_handlers
 import rsstag.web.providers as providers_handlers
+import rsstag.web.feeds as feeds_handlers
 
 from rsstag.llm.router import LLMRouter
 
@@ -272,6 +273,9 @@ class RSSTagApplication(object):
             self, user, request, provider
         )
 
+    def on_delete_feeds_categories_post(self, user: dict, request: Request) -> Response:
+        return feeds_handlers.on_delete_feeds_categories_post(self, user, request)
+
     def on_status_get(self, user: Optional[dict], _: Request) -> Response:
         return users_handlers.on_status_get(self, user)
 
@@ -346,6 +350,7 @@ class RSSTagApplication(object):
                 if g["category_id"] not in by_category:
                     by_category[g["category_id"]] = {
                         "unread_count": 0,
+                        "category_id": g["category_id"],
                         "title": by_feed[g["_id"]]["category_title"],
                         "url": by_feed[g["_id"]]["category_local_url"],
                         "feeds": [],
@@ -355,6 +360,7 @@ class RSSTagApplication(object):
                 by_category[g["category_id"]]["feeds"].append(
                     {
                         "unread_count": g["count"],
+                        "feed_id": g["_id"],
                         "url": by_feed[g["_id"]]["local_url"],
                         "title": by_feed[g["_id"]]["title"],
                     }
