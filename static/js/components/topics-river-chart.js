@@ -243,7 +243,7 @@ export default class TopicsRiverChart {
             if (series.length === 0 || maxThickness < 0.1) return null;
             return {
                 key: series.key,
-                x: x(data[maxIndex].x),
+                x: x((data[maxIndex].rangeStart + data[maxIndex].rangeEnd) / 2),
                 y: y((series[maxIndex][0] + series[maxIndex][1]) / 2),
                 thickness: maxThickness
             };
