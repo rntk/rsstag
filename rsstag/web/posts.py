@@ -1336,11 +1336,9 @@ def on_post_grouped_get(
             new_content_parts = []
             last_pos = 0
 
-            # Find all block tag positions to avoid crossing them
-            block_pattern = re.compile(
-                r"<(/?)(p|div|h1|h2|h3|h4|h5|h6|li|ul|ol|blockquote|pre|hr|br|td|tr|table)[^>]*>",
-                re.IGNORECASE
-            )
+            # Find all tag positions to avoid crossing them and breaking HTML structure
+            # (especially closing tags that might close our highlighting span prematurely)
+            block_pattern = re.compile(r"<[^>]+>", re.IGNORECASE)
 
             for match in filtered_matches:
                 # Add text before the match
