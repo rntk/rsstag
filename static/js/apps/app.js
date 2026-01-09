@@ -458,6 +458,17 @@ function tagWithContextInfoPage(tag) {
   const bi_grams_graph_evsys = new EventsSystem();
   let bi_grams_graph;
 
+  // Add placeholder message to the graph container and make it small
+  const biGramsGraphContainer = document.getElementById('bi_grams_graph');
+  const loadGraphSpan = document.getElementById('load_bi_grams_graph');
+
+  if (biGramsGraphContainer) {
+    biGramsGraphContainer.innerHTML = '<div style="padding: 10px; color: #888;">No graph loaded</div>';
+    // Make the container small initially
+    biGramsGraphContainer.style.height = 'auto';
+    biGramsGraphContainer.style.minHeight = '0';
+  }
+
   try {
     // Try to use the D3.js visualization first
     bi_grams_graph = new BiGramsGraph('#bi_grams_graph', tag.tag, bi_grams_graph_evsys);
@@ -468,15 +479,56 @@ function tagWithContextInfoPage(tag) {
   }
 
   // Create a simple load button for the graph
+  let isGraphLoaded = false;
+  let isGraphVisible = false;
+
   const loadGraphButton = document.createElement('button');
   loadGraphButton.textContent = 'Load bi-grams graph';
   loadGraphButton.addEventListener('click', () => {
-    loadGraphButton.disabled = true;
-    loadGraphButton.textContent = 'Loading...';
-    bi_grams_graph.start();
+    if (!isGraphLoaded) {
+      // Loading the graph for the first time
+      loadGraphButton.disabled = true;
+      loadGraphButton.textContent = 'Loading...';
+
+      // Clear the placeholder and restore full size before loading the graph
+      if (biGramsGraphContainer) {
+        biGramsGraphContainer.innerHTML = '';
+        biGramsGraphContainer.style.height = '750px';
+      }
+
+      bi_grams_graph.start();
+
+      // After a short delay, enable the button and change to "Hide"
+      setTimeout(() => {
+        isGraphLoaded = true;
+        isGraphVisible = true;
+        loadGraphButton.disabled = false;
+        loadGraphButton.textContent = 'Hide bi-grams graph';
+      }, 500);
+    } else {
+      // Toggle visibility
+      if (isGraphVisible) {
+        // Hide the graph - restore placeholder and small height
+        if (biGramsGraphContainer) {
+          biGramsGraphContainer.innerHTML = '<div style="padding: 10px; color: #888;">Graph hidden</div>';
+          biGramsGraphContainer.style.height = 'auto';
+          biGramsGraphContainer.style.minHeight = '0';
+        }
+        loadGraphButton.textContent = 'Show bi-grams graph';
+        isGraphVisible = false;
+      } else {
+        // Show the graph - restore full size and re-render
+        if (biGramsGraphContainer) {
+          biGramsGraphContainer.innerHTML = '';
+          biGramsGraphContainer.style.height = '750px';
+        }
+        bi_grams_graph.start();
+        loadGraphButton.textContent = 'Hide bi-grams graph';
+        isGraphVisible = true;
+      }
+    }
   });
 
-  const loadGraphSpan = document.getElementById('load_bi_grams_graph');
   if (loadGraphSpan) {
     loadGraphSpan.appendChild(loadGraphButton);
   }
