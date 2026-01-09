@@ -1,6 +1,7 @@
 """Routes for rsstag"""
 
 from typing import List, Optional, Iterable
+import itertools
 from werkzeug.routing import Map, Rule
 
 
@@ -452,7 +453,7 @@ class RSSTagRoutes:
     def _merge_routes(routes: Iterable[dict], fallback_routes: Iterable[dict]) -> List[dict]:
         seen = set()
         merged_routes = []
-        for route in list(routes) + list(fallback_routes):
+        for route in itertools.chain(routes, fallback_routes):
             key = (route["url"], route["endpoint"], tuple(route["methods"]))
             if key in seen:
                 continue
