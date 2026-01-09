@@ -2,6 +2,7 @@
 
 from typing import List, Optional, Iterable
 import itertools
+import inspect
 from werkzeug.routing import Map, Rule
 
 
@@ -21,6 +22,8 @@ def _collect_decorated_routes(handlers: object) -> List[dict]:
     collected_routes: List[dict] = []
     for attr_name in dir(handlers):
         attr = getattr(handlers, attr_name)
+        if not inspect.ismethod(attr):
+            continue
         routes = getattr(attr, "_rsstag_routes", None)
         if routes:
             collected_routes.extend(routes)
