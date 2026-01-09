@@ -21,6 +21,7 @@ from rsstag.users import TelegramAuthData
 from rsstag.feeds import RssTagFeeds
 from rsstag.posts import RssTagPosts
 from rsstag.providers.providers import TELEGRAM
+from rsstag.providers.pid import generate_post_pid
 
 from pymongo import MongoClient
 
@@ -534,7 +535,6 @@ class TelegramProvider:
             workers.append(t)
 
         posts = []
-        pid = 0
         while True:
             try:
                 data = results_q.get(timeout=1)
@@ -604,12 +604,11 @@ class TelegramProvider:
                         "attachments": attachments_list,
                         "tags": [],
                         "bi_grams": [],
-                        "pid": pid,
+                        "pid": generate_post_pid(TELEGRAM, str(stream_id), post["id"]),
                         "owner": user["sid"],
                         "processing": POST_NOT_IN_PROCESSING,
                     }
                 )
-                pid += 1
             if len(posts) > 5000:
                 yield (posts, list(feeds.values()))
                 posts = []

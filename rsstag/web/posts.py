@@ -1059,19 +1059,26 @@ def on_posts_get(
         only_unread = user["settings"]["only_unread"]
     else:
         only_unread = None
-    pids_i = [int(p) for p in pids.split("_")]
+    pids_i = [p for p in pids.split("_") if p]
     c_pids = set()
     if context_n > 0:
         only_unread = None
-        for pid_i in pids_i:
-            for i in range(context_n):
-                i += 1
-                pd = pid_i - i
-                if pd >= 0:
-                    c_pids.add(pd)
-                c_pids.add(pid_i + i)
+        base_posts = list(
+            app.posts.get_by_pids(
+                user["sid"], pids_i, projection={"pid": True, "unix_date": True}
+            )
+        )
+        for post in base_posts:
+            neighbors = app.posts.get_neighbors_by_unix_date(
+                user["sid"],
+                post["unix_date"],
+                context_n,
+                projection={"pid": True},
+            )
+            for neighbor in neighbors:
+                c_pids.add(neighbor["pid"])
     if c_pids:
-        pids_i.extend(c_pids)
+        pids_i.extend(pid for pid in c_pids if pid not in pids_i)
 
     db_posts_c = app.posts.get_by_pids(user["sid"], pids_i, projection)
     db_posts = list(db_posts_c)
@@ -1184,7 +1191,7 @@ def on_post_grouped_get(
 ) -> Response:
     """Handler for grouped posts view with server-side highlighting"""
     projection = {"content": True, "feed_id": True, "url": True}
-    post_ids = [int(pid) for pid in pids.split("_") if pid]
+    post_ids = [pid for pid in pids.split("_") if pid]
     if not post_ids:
         return app.on_error(user, request, NotFound())
 
@@ -1465,7 +1472,7 @@ def on_post_grouped_snippets_get(
 ) -> Response:
     """Handler for grouped snippets view"""
 
-    post_ids = [int(pid) for pid in pids.split("_") if pid]
+    post_ids = [pid for pid in pids.split("_") if pid]
     if not post_ids:
         return app.on_error(user, request, NotFound())
 
@@ -1700,7 +1707,7 @@ def on_topics_list_get(
 def on_post_graph_get(
     app: "RSSTagApplication", user: dict, request: Request, pids: str
 ) -> Response:
-    post_ids = [int(pid) for pid in pids.split("_") if pid]
+    post_ids = [pid for pid in pids.split("_") if pid]
     if not post_ids:
         return app.on_error(user, request, NotFound())
 

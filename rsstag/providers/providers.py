@@ -1,4 +1,5 @@
 BAZQUX = "bazqux"
 TELEGRAM = "telegram"
 TEXT_FILE = "textfile"
+JSONS_FILE = "jsonsfile"
 GMAIL = "gmail"
