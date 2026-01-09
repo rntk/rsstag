@@ -2,7 +2,7 @@ import logging
 from typing import Optional, List, Iterator
 import gzip
 
-from pymongo import MongoClient, DESCENDING, UpdateMany
+from pymongo import MongoClient, DESCENDING, ASCENDING, UpdateMany
 
 
 class RssTagPosts:
@@ -136,27 +136,27 @@ class RssTagPosts:
         )
 
     def get_by_pid(
-        self, owner: str, pid: int, projection: Optional[dict] = None
+        self, owner: str, pid: str, projection: Optional[dict] = None
     ) -> Optional[dict]:
         query = {"owner": owner, "pid": pid}
 
         return self._db.posts.find_one(query, projection=projection)
 
     def get_by_id(
-        self, owner: str, pid: int, projection: Optional[dict] = None
+        self, owner: str, pid: str, projection: Optional[dict] = None
     ) -> Optional[dict]:
         query = {"owner": owner, "id": pid}
 
         return self._db.posts.find_one(query, projection=projection)
 
     def get_by_pids(
-        self, owner: str, pids: List[int], projection: Optional[dict] = None
+        self, owner: str, pids: List[str], projection: Optional[dict] = None
     ) -> Iterator[dict]:
         query = {"owner": owner, "pid": {"$in": pids}}
 
         return self._db.posts.find(query, projection=projection)
 
-    def change_status(self, owner: str, pids: List[int], readed: bool) -> bool:
+    def change_status(self, owner: str, pids: List[str], readed: bool) -> bool:
         query = {"owner": owner, "pid": {"$in": pids}}
         self._db.posts.update_many(query, {"$set": {"read": readed}})
 
@@ -192,6 +192,31 @@ class RssTagPosts:
             self._db.posts.bulk_write(updates)
 
         return True
+
+    def get_neighbors_by_unix_date(
+        self,
+        owner: str,
+        unix_date: float,
+        count: int,
+        projection: Optional[dict] = None,
+    ) -> List[dict]:
+        before = list(
+            self._db.posts.find(
+                {"owner": owner, "unix_date": {"$lt": unix_date}},
+                projection=projection,
+            )
+            .sort("unix_date", DESCENDING)
+            .limit(count)
+        )
+        after = list(
+            self._db.posts.find(
+                {"owner": owner, "unix_date": {"$gt": unix_date}},
+                projection=projection,
+            )
+            .sort("unix_date", ASCENDING)
+            .limit(count)
+        )
+        return before + after
 
     def get_by_clusters(
         self,

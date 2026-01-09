@@ -13,6 +13,7 @@ import logging
 from rsstag.tasks import POST_NOT_IN_PROCESSING
 from rsstag.web.routes import RSSTagRoutes
 from rsstag.providers.providers import BAZQUX
+from rsstag.providers.pid import generate_post_pid
 
 import aiohttp
 
@@ -222,7 +223,6 @@ class BazquxProvider:
             loop.run_until_complete(future)
             cats_data = future.result()
             loop.close()
-            pid = 0
             logging.info("Was loaded %s categories", len(cats_data))
             for cat_data in cats_data:
                 cat_posts, category = cat_data
@@ -288,12 +288,11 @@ class BazquxProvider:
                             "attachments": attachments_list,
                             "tags": [],
                             "bi_grams": [],
-                            "pid": pid,
+                            "pid": generate_post_pid(BAZQUX, stream_id, post["id"]),
                             "owner": user["sid"],
                             "processing": POST_NOT_IN_PROCESSING,
                         }
                     )
-                    pid += 1
 
         yield (posts, list(feeds.values()))
 

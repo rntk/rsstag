@@ -11,6 +11,8 @@ import aiohttp
 
 from rsstag.tasks import POST_NOT_IN_PROCESSING
 from rsstag.web.routes import RSSTagRoutes
+from rsstag.providers.providers import GMAIL
+from rsstag.providers.pid import generate_post_pid
 
 
 class GmailProvider:
@@ -262,7 +264,6 @@ class GmailProvider:
                         await asyncio.sleep(batch_delay)
 
                 routes = RSSTagRoutes(self._config["settings"]["host_name"])
-                pid = 0
                 for mail_data in emails:
                     if not mail_data:
                         continue
@@ -318,12 +319,11 @@ class GmailProvider:
                             "attachments": [],
                             "tags": [],
                             "bi_grams": [],
-                            "pid": pid,
+                            "pid": generate_post_pid(GMAIL, stream_id, mail_data["id"]),
                             "owner": user["sid"],
                             "processing": POST_NOT_IN_PROCESSING,
                         }
                     )
-                    pid += 1
 
         loop = asyncio.get_event_loop()
         loop.run_until_complete(main())

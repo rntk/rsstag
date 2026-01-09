@@ -7,6 +7,8 @@ import json
 
 from rsstag.tasks import POST_NOT_IN_PROCESSING
 from rsstag.web.routes import RSSTagRoutes
+from rsstag.providers.providers import JSONS_FILE
+from rsstag.providers.pid import generate_post_pid
 
 NOT_CATEGORIZED = "NotCategorized"
 
@@ -25,7 +27,6 @@ class JSONSFileProvider:
         path = user["text_file"]
         posts = []
         feeds = {}
-        pid = 0
         stream_id = "textfile"
         routes = RSSTagRoutes(self._config["settings"]["host_name"])
         if stream_id not in feeds:
@@ -46,6 +47,7 @@ class JSONSFileProvider:
                 ),
                 "favicon": "",
             }
+        line_id = 0
         with open(path, "rb") as f:
             for line in f:
                 try:
@@ -57,6 +59,7 @@ class JSONSFileProvider:
                     continue
                 pu_date = time.time()
                 p_date = date.fromtimestamp(int(pu_date)).strftime("%x")
+                pid = generate_post_pid(JSONS_FILE, stream_id, str(line_id))
                 posts.append(
                     {
                         "content": {
@@ -67,7 +70,7 @@ class JSONSFileProvider:
                         },
                         "feed_id": stream_id,
                         "category_id": self.no_category_name,
-                        "id": pid,
+                        "id": line_id,
                         "url": "#",
                         "date": p_date,
                         "unix_date": pu_date,
@@ -81,11 +84,11 @@ class JSONSFileProvider:
                         "processing": POST_NOT_IN_PROCESSING,
                     }
                 )
-                pid += 1
-                if pid % 5000 == 0:
+                line_id += 1
+                if line_id % 5000 == 0:
                     yield (posts, list(feeds.values()))
                     posts = []
-        logging.info("Loaded: %s", pid)
+        logging.info("Loaded: %s", line_id)
 
         yield (posts, list(feeds.values()))
 
