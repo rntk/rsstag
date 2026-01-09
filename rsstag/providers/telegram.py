@@ -604,7 +604,9 @@ class TelegramProvider:
                         "attachments": attachments_list,
                         "tags": [],
                         "bi_grams": [],
-                        "pid": generate_post_pid(TELEGRAM, str(stream_id), post["id"]),
+                        "pid": generate_post_pid(
+                            TELEGRAM, str(stream_id), str(post["id"])
+                        ),
                         "owner": user["sid"],
                         "processing": POST_NOT_IN_PROCESSING,
                     }
