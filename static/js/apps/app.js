@@ -48,6 +48,7 @@ import TagContextsClassificationStorage from '../storages/tag-contexts-classific
 import BigramsTable from '../components/bigrams-table.js';
 import BiGramsGraphSimple from '../components/bi-grams-graph-simple.js';
 import BiGramsGraph from '../components/bi-grams-graph.js';
+import { BiGramsTabs } from '../components/bigrams-tabs.js';
 
 function handleTextSelection() {
   const menu = document.createElement('div');
@@ -280,11 +281,17 @@ window.onload = () => {
     tags_storage.start();
   } else if (/\/group\/(bi-grams|bi-grams-dyn)\/.*/.test(path)) {
     const bi_grams_storage = new BiGramsStorage(window.EVSYS);
+    // Render the tabs controller
+    ReactDOM.render(
+      <BiGramsTabs ES={window.EVSYS} />,
+      document.getElementById('bigrams_tabs_page')
+    );
+    // Render the cloud view
     ReactDOM.render(
       <TagsList ES={window.EVSYS} is_bigram={true} />,
       document.getElementById('tags_page')
     );
-    // Render the bigrams table visualization
+    // Render the table view
     const bigramsTableContainer = document.getElementById('bigrams_table_page');
     if (bigramsTableContainer) {
       ReactDOM.render(<BigramsTable ES={window.EVSYS} />, bigramsTableContainer);

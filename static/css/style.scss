@@ -116,9 +116,9 @@ h3.post_title {
 .hide {
     display: none;
 }
-.page, .geomap {
+.page, .geomap, #bigrams_table_page, #tags_page {
     width: 80%;
-    margin: 1.5em auto 3em auto;
+    margin: 0.5em auto 3em auto;
 }
 .geomap, #map {
     width: 90%;
@@ -628,9 +628,13 @@ h3.post_title {
     .tag_title, .group_title {
         margin-top: 3em;
     }
-    .page, .geomap {
+    .page, .geomap, #bigrams_table_page, #tags_page {
         margin-bottom: 3em;
         width: 98%;
+    }
+    .bigrams_tabs_container {
+        width: 98%;
+        margin-top: 5em;
     }
     .global_tools_button {
         margin-top: 1em;
@@ -677,6 +681,16 @@ h3.post_title {
 .post_tab_active {
     font-weight: bold;
     text-decoration: none;
+}
+
+.bigrams_tabs_container {
+    width: 80%;
+    margin: 4em auto 0 auto;
+
+    .post_tabs_list {
+        padding: 0;
+        margin: 0;
+    }
 }
 
 .tag_sentences_link, .get_tag_sunburst {
