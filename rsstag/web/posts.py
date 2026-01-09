@@ -1190,14 +1190,14 @@ def on_post_grouped_get(
     app: "RSSTagApplication", user: dict, request: Request, pids: str
 ) -> Response:
     """Handler for grouped posts view with server-side highlighting"""
-    projection = {"content": True, "feed_id": True, "url": True, "read": True}
-    post_ids = [pid for pid in pids.split("_") if pid]
+    projection: dict[str, bool] = {"content": True, "feed_id": True, "url": True, "read": True}
+    post_ids: list[str] = [pid for pid in pids.split("_") if pid]
     if not post_ids:
         return app.on_error(user, request, NotFound())
 
     # 1. Fetch posts and their raw content
-    posts_info = [] 
-    feed_titles = []
+    posts_info: list[dict] = [] 
+    feed_titles: list[str] = []
     for post_id in post_ids:
         post = app.posts.get_by_pid(user["sid"], post_id, projection)
         if post:
@@ -1474,17 +1474,17 @@ def on_post_grouped_snippets_get(
 ) -> Response:
     """Handler for grouped snippets view"""
 
-    post_ids = [pid for pid in pids.split("_") if pid]
+    post_ids: list[str] = [pid for pid in pids.split("_") if pid]
     if not post_ids:
         return app.on_error(user, request, NotFound())
 
-    requested_topic = request.args.get("topic")
+    requested_topic: Optional[str] = request.args.get("topic")
     if requested_topic:
         requested_topic = unquote(requested_topic)
 
-    projection = {"content": True, "feed_id": True, "url": True}
-    all_posts = {}
-    feed_titles = set()
+    projection: dict[str, bool] = {"content": True, "feed_id": True, "url": True}
+    all_posts: dict = {}
+    feed_titles: set[str] = set()
 
     for post_id in post_ids:
         post = app.posts.get_by_pid(user["sid"], post_id, projection)
@@ -1856,7 +1856,7 @@ def on_read_snippet_post(
 ) -> Response:
     try:
         data = json.loads(request.get_data(as_text=True))
-        post_id = int(data["post_id"])
+        post_id = str(data["post_id"])
         sentence_index = int(data["sentence_index"])
         readed = bool(data["readed"])
     except Exception as e:

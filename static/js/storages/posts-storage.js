@@ -28,7 +28,7 @@ export default class PostsStorage {
       posts[0].current = true;
     }
     for (let i = 0; i < posts.length; i++) {
-      posts_map.set(+posts[i].pos, posts[i]);
+      posts_map.set(posts[i].pos, posts[i]);
     }
 
     return posts_map;
@@ -88,16 +88,16 @@ export default class PostsStorage {
 
   setCurrentPost(post_id) {
     let state = this.getState(),
-      id = +post_id,
+      id = String(post_id),
       changed = false;
 
     if (state.posts.has(id)) {
       for (let post of state.posts) {
-        if (post[1].current && +post[1].pos === id) {
+        if (post[1].current && String(post[1].pos) === id) {
           break;
         } else if (post[1].current) {
           post[1].current = false;
-          state.posts.set(+post[0], post[1]);
+          state.posts.set(post[0], post[1]);
           changed = true;
         } else if (post[0] === id) {
           post[1].current = true;
@@ -118,7 +118,7 @@ export default class PostsStorage {
 
     if (data.showed) {
       data.ids.forEach((post_id) => {
-        let id = +post_id;
+        let id = String(post_id);
 
         if (state.posts.has(id)) {
           let post = state.posts.get(id);
@@ -133,7 +133,7 @@ export default class PostsStorage {
       });
     } else {
       data.ids.forEach((post_id) => {
-        let id = +post_id;
+        let id = String(post_id);
 
         if (state.posts.has(id)) {
           let post = state.posts.get(id);
@@ -168,7 +168,7 @@ export default class PostsStorage {
               content = data.data.slice(0);
 
             content.forEach((content) => {
-              let id = +content.pos;
+              let id = String(content.pos);
 
               if (state.posts.has(id)) {
                 let post = state.posts.get(id);
@@ -221,7 +221,7 @@ export default class PostsStorage {
               changed = false;
 
             data.ids.forEach((post_id) => {
-              let id = +post_id;
+              let id = String(post_id);
 
               if (state.posts.has(id)) {
                 let post = state.posts.get(id);
@@ -252,7 +252,7 @@ export default class PostsStorage {
 
   fetchPostLinks(id) {
     let promise,
-      post_id = +id;
+      post_id = String(id);
 
     promise = rsstag_utils.fetchJSON(`${this.urls.fetch_links}/${post_id}`, {
       method: 'GET',

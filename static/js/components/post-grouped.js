@@ -76,9 +76,12 @@ export default class PostGroupedPage {
         fetch('/read/posts', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
+                'Content-Type': 'application/json',
             },
-            body: `ids[]=${postId}&readed=${newStatus ? 'true' : 'false'}`
+            body: JSON.stringify({
+                ids: [postId],
+                readed: newStatus
+            })
         })
         .then(response => {
             if (response.ok) {

@@ -53,23 +53,13 @@ import { BiGramsTabs } from '../components/bigrams-tabs.js';
 function handleTextSelection() {
   const menu = document.createElement('div');
   menu.id = 'rerank-context-menu';
-  menu.style.position = 'absolute';
   menu.style.display = 'none';
-  menu.style.zIndex = '10000';
-  menu.style.background = '#ffffff';
-  menu.style.border = '1px solid #d0d0d0';
-  menu.style.borderRadius = '6px';
-  menu.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.12)';
-  menu.style.padding = '8px 10px';
-  menu.style.fontSize = '13px';
-  menu.style.color = '#222222';
-  menu.style.maxWidth = '240px';
 
   menu.innerHTML = `
-    <div style="margin-bottom: 8px;">Open new page with rerank?</div>
-    <div style="display: flex; gap: 6px; justify-content: flex-end;">
-      <button type="button" data-action="open" style="padding: 4px 8px;">Open</button>
-      <button type="button" data-action="cancel" style="padding: 4px 8px;">Cancel</button>
+    <div class="menu-title">Open new page with rerank?</div>
+    <div class="menu-actions">
+      <button type="button" data-action="open">Open</button>
+      <button type="button" data-action="cancel">Cancel</button>
     </div>
   `;
 
@@ -271,7 +261,7 @@ window.onload = () => {
                 treeGraphs[postId].render(selector, containerWidth, 800);
               } else {
                 container.querySelector(`#tree_graph_${postId}`).innerHTML =
-                  '<div style="padding: 20px; text-align: center; color: #666;">No tree data available.</div>';
+                  '<div class="no-data-message">No tree data available.</div>';
               }
             }
           }
@@ -479,7 +469,7 @@ function tagWithContextInfoPage(tag) {
   const loadGraphSpan = document.getElementById('load_bi_grams_graph');
 
   if (biGramsGraphContainer) {
-    biGramsGraphContainer.innerHTML = '<div style="padding: 10px; color: #888;">No graph loaded</div>';
+    biGramsGraphContainer.innerHTML = '<div class="placeholder-message">No graph loaded</div>';
     // Make the container small initially
     biGramsGraphContainer.style.height = 'auto';
     biGramsGraphContainer.style.minHeight = '0';
@@ -526,7 +516,7 @@ function tagWithContextInfoPage(tag) {
       if (isGraphVisible) {
         // Hide the graph - restore placeholder and small height
         if (biGramsGraphContainer) {
-          biGramsGraphContainer.innerHTML = '<div style="padding: 10px; color: #888;">Graph hidden</div>';
+          biGramsGraphContainer.innerHTML = '<div class="placeholder-message">Graph hidden</div>';
           biGramsGraphContainer.style.height = 'auto';
           biGramsGraphContainer.style.minHeight = '0';
         }
