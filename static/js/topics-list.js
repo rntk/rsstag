@@ -1,14 +1,20 @@
 // Topics List functionality
 
-function togglePosts(index) {
+function togglePosts(index, event) {
     const postsElement = document.getElementById('posts_' + index);
-    const button = event.target;
+    const button = event ? event.currentTarget : (window.event ? window.event.target : null);
+
+    if (!postsElement) return;
 
     if (postsElement.style.display === 'none') {
         postsElement.style.display = 'block';
-        button.textContent = button.textContent.replace('[', '[-');
+        if (button) {
+            button.textContent = button.textContent.replace('[', '[-');
+        }
     } else {
         postsElement.style.display = 'none';
-        button.textContent = button.textContent.replace('[-', '[');
+        if (button) {
+            button.textContent = button.textContent.replace('[-', '[');
+        }
     }
 }

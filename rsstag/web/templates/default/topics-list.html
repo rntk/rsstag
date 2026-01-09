@@ -38,12 +38,12 @@
                             title="View snippets">S</a>
                         <span class="topic-count">({{ topic_data.count }})</span>
                         {% if topic_data.posts|length > 0 %}
-                        <button class="toggle-posts" onclick="togglePosts('{{ loop.index }}')">[{{
+                        <button class="toggle-posts" onclick="togglePosts('{{ loop.index }}', event)">[{{
                             topic_data.posts|length }} posts]</button>
                         {% endif %}
                     </div>
                     {% if topic_data.posts|length > 0 %}
-                    <div class="topic-posts" id="posts_{{ loop.index }}">
+                    <div class="topic-posts" id="posts_{{ loop.index }}" style="display: none">
                         {% for post_id in topic_data.posts %}
                         {% set post_info = post_topic_mapping[post_id] %}
                         <div class="post-info">

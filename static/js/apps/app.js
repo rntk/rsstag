@@ -170,17 +170,26 @@ window.onload = () => {
   }
   handleScroll();
   handleTextSelection(); // Add this line to initialize the text selection listener
-  ReactDOM.render(<SettingsMenu ES={window.EVSYS} />, document.getElementById('settings_menu'));
+  const settings_menu_container = document.getElementById('settings_menu');
+  if (settings_menu_container) {
+    ReactDOM.render(<SettingsMenu ES={window.EVSYS} />, settings_menu_container);
+  }
   const settings_storage = new SettingsStorage(window.EVSYS);
   settings_storage.start();
 
-  ReactDOM.render(<ProgressBar ES={window.EVSYS} />, document.getElementById('progressbar'));
+  const progressbar_container = document.getElementById('progressbar');
+  if (progressbar_container) {
+    ReactDOM.render(<ProgressBar ES={window.EVSYS} />, progressbar_container);
+  }
   const progressbar_storage = new ProgressBarStorage(window.EVSYS);
   progressbar_storage.start();
 
   let path = document.location.pathname;
 
-  ReactDOM.render(<GlobalStatus ES={window.EVSYS} />, document.getElementById('global_status'));
+  const global_status_container = document.getElementById('global_status');
+  if (global_status_container) {
+    ReactDOM.render(<GlobalStatus ES={window.EVSYS} />, global_status_container);
+  }
   if (path === '/') {
   } else if (/^\/post-grouped\//.test(path)) {
     const posts_storage = new PostsStorage(window.EVSYS);
@@ -195,16 +204,25 @@ window.onload = () => {
     window.group_title = window.feed_title;
     window.words = [];
 
-    ReactDOM.render(<ReadAllButton ES={window.EVSYS} />, document.getElementById('read_all'));
-    ReactDOM.render(<ShowAllButton ES={window.EVSYS} />, document.getElementById('show_all'));
+    const read_all_container = document.getElementById('read_all');
+    if (read_all_container) {
+      ReactDOM.render(<ReadAllButton ES={window.EVSYS} />, read_all_container);
+    }
+    const show_all_container = document.getElementById('show_all');
+    if (show_all_container) {
+      ReactDOM.render(<ShowAllButton ES={window.EVSYS} />, show_all_container);
+    }
     posts_storage.start();
   } else if (/^\/s-tree\//.test(path)) {
     // Ensure s_tree_data is available globally for the SentenceTree component
     // This might be set by a script tag in the HTML template
-    ReactDOM.render(
-      <SentenceTree />,
-      document.getElementById('s_tree_page') // Ensure this div exists in your HTML
-    );
+    const s_tree_page_container = document.getElementById('s_tree_page');
+    if (s_tree_page_container) {
+      ReactDOM.render(
+        <SentenceTree />,
+        s_tree_page_container // Ensure this div exists in your HTML
+      );
+    }
   } else if (/^\/sunburst\//.test(path)) {
     let sunburst = new TagSunburst(window.tag_sunburst_initial_root);
     sunburst.render('.page');
@@ -269,7 +287,10 @@ window.onload = () => {
       });
     }
   } else if (path === '/group/category') {
-    ReactDOM.render(<CategoriesList ES={window.EVSYS} />, document.getElementById('cats_list'));
+    const cats_list_container = document.getElementById('cats_list');
+    if (cats_list_container) {
+      ReactDOM.render(<CategoriesList ES={window.EVSYS} />, cats_list_container);
+    }
   } else if (
     /\/group\/(tag|hottag|tags-categories)\/.*/.test(path) ||
     /\/tags\/category\/.*/.test(path) ||
@@ -281,9 +302,18 @@ window.onload = () => {
     /\/prefixes\/words\/.*/.test(path)
   ) {
     const tags_storage = new TagsStorage(window.EVSYS);
-    ReactDOM.render(<TagsList ES={window.EVSYS} />, document.getElementById('tags_page'));
-    ReactDOM.render(<LettersList ES={window.EVSYS} />, document.getElementById('letters_list'));
-    ReactDOM.render(<SearchInput ES={window.EVSYS} />, document.getElementById('search_tools'));
+    const tags_page_container = document.getElementById('tags_page');
+    if (tags_page_container) {
+      ReactDOM.render(<TagsList ES={window.EVSYS} />, tags_page_container);
+    }
+    const letters_list_container = document.getElementById('letters_list');
+    if (letters_list_container) {
+      ReactDOM.render(<LettersList ES={window.EVSYS} />, letters_list_container);
+    }
+    const search_tools_container = document.getElementById('search_tools');
+    if (search_tools_container) {
+      ReactDOM.render(<SearchInput ES={window.EVSYS} />, search_tools_container);
+    }
     tags_storage.start();
   } else if (/\/group\/(bi-grams|bi-grams-dyn)\/.*/.test(path)) {
     const bi_grams_storage = new BiGramsStorage(window.EVSYS);
@@ -314,13 +344,25 @@ window.onload = () => {
   ) {
     const posts_storage = new PostsStorage(window.EVSYS);
     const hash = window.location.hash;
-    ReactDOM.render(
-      <PostTabs ES={window.EVSYS} words_from_hash={hash} />,
-      document.getElementById('posts_page')
-    );
-    ReactDOM.render(<ReadAllButton ES={window.EVSYS} />, document.getElementById('read_all'));
-    ReactDOM.render(<ShowAllButton ES={window.EVSYS} />, document.getElementById('show_all'));
-    ReactDOM.render(<PostsNumbers ES={window.EVSYS} />, document.getElementById('posts_stat'));
+    const posts_page_container = document.getElementById('posts_page');
+    if (posts_page_container) {
+      ReactDOM.render(
+        <PostTabs ES={window.EVSYS} words_from_hash={hash} />,
+        posts_page_container
+      );
+    }
+    const read_all_container = document.getElementById('read_all');
+    if (read_all_container) {
+      ReactDOM.render(<ReadAllButton ES={window.EVSYS} />, read_all_container);
+    }
+    const show_all_container = document.getElementById('show_all');
+    if (show_all_container) {
+      ReactDOM.render(<ShowAllButton ES={window.EVSYS} />, show_all_container);
+    }
+    const posts_stat_container = document.getElementById('posts_stat');
+    if (posts_stat_container) {
+      ReactDOM.render(<PostsNumbers ES={window.EVSYS} />, posts_stat_container);
+    }
     posts_storage.start();
   } else if (/\/tag-info\/.*/.test(path)) {
     let tag = window.initial_tag;
