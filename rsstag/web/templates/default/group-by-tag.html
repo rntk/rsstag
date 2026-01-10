@@ -1,86 +1,93 @@
 ﻿<html>
+
 <head>
-<title>Group by tag| Sort by {{sort_by_title}}</title>
-{%  include "head-data.html" %}
+    <title>Group by tag| Sort by {{sort_by_title}}</title>
+    {% include "head-data.html" %}
 </head>
+
 <body>
-{% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
-<div id="global_tools">
-    <div class="left_half">
-        <div id="link_on_root" class="global_tools_button">
-            <a href="/">main</a>
+    {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}{% from
+    'context-filter-bar.html' import context_filter_bar with context %}
+    <div id="global_tools">
+        <div class="left_half">
+            <div id="link_on_root" class="global_tools_button">
+                <a href="/">main</a>
+            </div>
+            <div id="help_button" class="global_tools_button">
+                <a href="#">help</a>
+            </div>
+            <div id="sotr_by" class="global_tools_button">
+                <a href="{{sort_by_link}}">group by tag</a>
+            </div>
+            <div id="group_by" class="global_tools_button">
+                <a href="{{group_by_link}}">group by category</a>
+            </div>
+            <div id="tags_group_by" class="global_tools_button">
+                <a href="{{tags_categories_link}}">group by tags categories</a>
+            </div>
         </div>
-        <div id="help_button" class="global_tools_button">
-            <a href="#">help</a>
-        </div>
-        <div id="sotr_by" class="global_tools_button">
-            <a href="{{sort_by_link}}">group by tag</a>
-        </div>
-        <div id="group_by" class="global_tools_button">
-            <a href="{{group_by_link}}">group by category</a>
-        </div>
-        <div id="tags_group_by" class="global_tools_button">
-            <a href="{{tags_categories_link}}">group by tags categories</a>
+        <div class="right_half">
+            {{ g_status.global_status() }}
+            {{ menu.settings_menu() }}
         </div>
     </div>
-    <div class="right_half">
-        {{ g_status.global_status() }}
-        {{ menu.settings_menu() }}
-    </div>
-</div>
-<div id="letters_list"></div>
-<div id="search_tools"></div>
-{{ menu.settings_menu() }}
-<div id="bigrams_tabs_page"></div>
-<div id="bigrams_table_page"></div>
-<div class="page" id="tags_page"></div>
-<div id="global_tools_bottom">
-    <ul id="paginator">
-        {% if pages_map['start'] %}
+    {{ context_filter_bar() }}
+    <div id="letters_list"></div>
+    <div id="search_tools"></div>
+    {{ menu.settings_menu() }}
+    <div id="bigrams_tabs_page"></div>
+    <div id="bigrams_table_page"></div>
+    <div class="page" id="tags_page"></div>
+    <div id="global_tools_bottom">
+        <ul id="paginator">
+            {% if pages_map['start'] %}
             {% for number in pages_map['start'] %}
-                {% if number['p'] == current_page %}
-                    <li class="current_page">{{number['p']}}</li>
-                {% else %}
-                    <li><a href="{{number['url']}}">{{number['p']}}</a></li>
-                {% endif %}
+            {% if number['p'] == current_page %}
+            <li class="current_page">{{number['p']}}</li>
+            {% else %}
+            <li><a href="{{number['url']}}">{{number['p']}}</a></li>
+            {% endif %}
             {% endfor %}
             {% if pages_map['middle'] %}
-                <li>....</li>
+            <li>....</li>
             {% endif %}
-        {% endif %}
-        {% if pages_map['middle'] %}
+            {% endif %}
+            {% if pages_map['middle'] %}
             {% for number in pages_map['middle'] %}
-                {% if number['p'] == current_page %}
-                    <li class="current_page">{{number['p']}}</li>
-                {% else %}
-                    <li><a href="{{number['url']}}">{{number['p']}}</a></li>
-                {% endif %}
+            {% if number['p'] == current_page %}
+            <li class="current_page">{{number['p']}}</li>
+            {% else %}
+            <li><a href="{{number['url']}}">{{number['p']}}</a></li>
+            {% endif %}
             {% endfor %}
-        {% endif %}
-        {% if pages_map['end'] %}
+            {% endif %}
+            {% if pages_map['end'] %}
             <li>....</li>
             {% for number in pages_map['end'] %}
-                {% if number['p'] == current_page %}
-                    <li class="current_page">{{number['p']}}</li>
-                {% else %}
-                    <li><a href="{{number['url']}}">{{number['p']}}</a></li>
-                {% endif %}
+            {% if number['p'] == current_page %}
+            <li class="current_page">{{number['p']}}</li>
+            {% else %}
+            <li><a href="{{number['url']}}">{{number['p']}}</a></li>
+            {% endif %}
             {% endfor %}
-        {% endif %}
-    </ul>
-</div>
-<!--script language="javascript" type="application/javascript">
+            {% endif %}
+        </ul>
+    </div>
+    <!--script language="javascript" type="application/javascript">
     var count = document.getElementById('cloud_items_count');
     count.innerHTML = document.getElementsByTagName('li').length;
 </script-->
-<script type="text/javascript">
-    var initial_tags_list = {{tags|json}};
-    var initial_letters_list = {{letters|json}};
-</script>
-<div id="help_window">
-<ul>
-    <li>Click/tap on one tag and then click/tap on other tag, will open the page with posts have selected tags</li>
-</ul>
-</div>
-<div id="progressbar"></div></body>
+    <script type="text/javascript">
+        var initial_tags_list = {{ tags| json}};
+        var initial_letters_list = {{ letters| json}};
+    </script>
+    <div id="help_window">
+        <ul>
+            <li>Click/tap on one tag and then click/tap on other tag, will open the page with posts have selected tags
+            </li>
+        </ul>
+    </div>
+    <div id="progressbar"></div>
+</body>
+
 </html>

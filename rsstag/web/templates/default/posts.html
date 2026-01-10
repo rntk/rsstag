@@ -1,56 +1,64 @@
-﻿<!DOCTYPE html/>
+﻿<!DOCTYPE html />
 <html>
+
 <head>
-<title>{{group}} | {{tag}}</title>
-{% include "head-data.html" %}
+    <title>{{group}} | {{tag}}</title>
+    {% include "head-data.html" %}
     <script type="text/javascript" src="/static/js/google-charts.js"></script>
     <script type="text/javascript" src="/static/js/d3.v6.min.js"></script>
 </head>
-<body>
-{% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
 
-<div id="global_tools">
-    <div class="left_half">
-        <div id="link_on_root" class="global_tools_button">
-            <a href="/">main</a>
+<body>
+    {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}{% from
+    'context-filter-bar.html' import context_filter_bar with context %}
+
+    <div id="global_tools">
+        <div class="left_half">
+            <div id="link_on_root" class="global_tools_button">
+                <a href="/">main</a>
+            </div>
+            <div id="help_button" class="global_tools_button">
+                <a href="#">help</a>
+            </div>
         </div>
-        <div id="help_button" class="global_tools_button">
-            <a href="#">help</a>
+        <div class="right_half">
+            <div id="player_block" class="global_tools_button"></div>
+            <div id="posts_stat" class="global_tools_button"></div>
+            <div id="read_all" class="global_tools_button"></div>
+            <div id="show_all" class="global_tools_button"></div>
+            {{ g_status.global_status() }}
+            {{ menu.settings_menu() }}
         </div>
     </div>
-    <div class="right_half">
-        <div id="player_block" class="global_tools_button"></div>
-        <div id="posts_stat" class="global_tools_button"></div>
-        <div id="read_all" class="global_tools_button"></div>
-        <div id="show_all" class="global_tools_button"></div>
-        {{ g_status.global_status() }}
-        {{ menu.settings_menu() }}
+    {{ context_filter_bar() }}
+    <div id="help_window">
+        <ul>
+            <li><b>Shift+A</b> - mark all posts as read/unread</li>
+            <li><b>Shift+S</b> - show/hide content of all posts</li>
+            <li><b>Ctrl+Up</b> - go on level up (page: group by category or group by tag)</li>
+            <li><b>Ctrl+Down</b> - load and show page "level up" (page: group by category or group by tag) in current
+                page</li>
+            <li><b>N</b> - next post</li>
+            <li><b>B</b> - previous post</li>
+            <li><b>S</b> (or <b>click\tap</b> on <b>Show post</b>, or <b>horizontal swipe</b> on post body) - show/hide
+                content of current post</li>
+            <li><b>M</b> (or <b>click\tap</b> on read/unread label) - mark current post as read/unread</li>
+            <li><b>H</b> - show\hide this window</li>
+        </ul>
     </div>
-</div>
-<div id="help_window">
-<ul>
-    <li><b>Shift+A</b> - mark all posts as read/unread</li>
-    <li><b>Shift+S</b> - show/hide content of all posts</li>
-    <li><b>Ctrl+Up</b> - go on level up (page: group by category or group by tag)</li>
-    <li><b>Ctrl+Down</b> - load and show page "level up" (page: group by category or group by tag) in current page</li>
-    <li><b>N</b> - next post</li>
-    <li><b>B</b> - previous post</li>
-    <li><b>S</b> (or <b>click\tap</b> on <b>Show post</b>, or <b>horizontal swipe</b> on post body) - show/hide content of current post</li>
-    <li><b>M</b> (or <b>click\tap</b> on read/unread label) - mark current post as read/unread</li>
-    <li><b>H</b> - show\hide this window</li>
-</ul>
-</div>
-<div class="page">
-    <div id="posts_page"></div>
-    <div id="posts_page1"></div>
-</div>
-<!--div id="show_tags"><a href="#tags">Show "level up"</a><a name="tags"></div-->
-<script type="text/javascript">
-    window.posts_list = {{posts|json}};
-    window.group = '{{group}}';
-    window.group_title = '{{tag}}';
-    window.words = {{words|json}};
-    window.rss_settings = {{ user_settings|json }};
-</script>
-<div id="progressbar"></div></body>
+    <div class="page">
+        <div id="posts_page"></div>
+        <div id="posts_page1"></div>
+    </div>
+    <!--div id="show_tags"><a href="#tags">Show "level up"</a><a name="tags"></div-->
+    <script type="text/javascript">
+        window.posts_list = {{ posts | json }};
+        window.group = '{{group}}';
+        window.group_title = '{{tag}}';
+        window.words = {{ words | json }};
+        window.rss_settings = {{ user_settings | json }};
+    </script>
+    <div id="progressbar"></div>
+</body>
+
 </html>

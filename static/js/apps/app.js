@@ -49,6 +49,8 @@ import BigramsTable from '../components/bigrams-table.js';
 import BiGramsGraphSimple from '../components/bi-grams-graph-simple.js';
 import BiGramsGraph from '../components/bi-grams-graph.js';
 import { BiGramsTabs } from '../components/bigrams-tabs.js';
+import ContextFilterStorage from '../storages/context-filter-storage.js';
+import ContextFilterBar from '../components/context-filter-bar.js';
 
 function handleTextSelection() {
   const menu = document.createElement('div');
@@ -183,6 +185,12 @@ window.onload = () => {
   }
   const progressbar_storage = new ProgressBarStorage(window.EVSYS);
   progressbar_storage.start();
+
+  // Initialize context filter (available on all pages with the bar)
+  const context_filter_bar = new ContextFilterBar('context_filter_bar', window.EVSYS);
+  const context_filter_storage = new ContextFilterStorage(window.EVSYS);
+  context_filter_bar.start();
+  context_filter_storage.start();
 
   let path = document.location.pathname;
 

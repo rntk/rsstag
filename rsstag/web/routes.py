@@ -283,6 +283,26 @@ class RSSTagRoutes:
             },
             {"url": "/tag-net", "endpoint": "on_get_tag_net_page", "methods": ["GET"]},
             {
+                "url": "/api/context-filter",
+                "endpoint": "on_context_filter_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/api/context-filter/tag",
+                "endpoint": "on_context_filter_add_tag",
+                "methods": ["POST"],
+            },
+            {
+                "url": "/api/context-filter/tag",
+                "endpoint": "on_context_filter_remove_tag",
+                "methods": ["DELETE"],
+            },
+            {
+                "url": "/api/context-filter/clear",
+                "endpoint": "on_context_filter_clear",
+                "methods": ["POST"],
+            },
+            {
                 "url": "/tags/sentiment/<string:sentiment>/<int:page_number>",
                 "endpoint": "on_group_by_tags_sentiment",
                 "methods": ["GET"],

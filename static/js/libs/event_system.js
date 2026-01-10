@@ -57,6 +57,11 @@ export default class EventsSystem {
 
     this.LOAD_MORE_POSTS = 'load_more_posts';
 
+    this.CONTEXT_FILTER_UPDATED = 'context_filter_updated';
+    this.CONTEXT_FILTER_ADD_TAG = 'context_filter_add_tag';
+    this.CONTEXT_FILTER_REMOVE_TAG = 'context_filter_remove_tag';
+    this.CONTEXT_FILTER_CLEAR = 'context_filter_clear';
+
     this._events = {};
   }
 

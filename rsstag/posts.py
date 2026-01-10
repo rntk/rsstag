@@ -27,6 +27,7 @@ class RssTagPosts:
         only_unread: Optional[bool] = None,
         category: str = "",
         projection: Optional[dict] = None,
+        context_tags: Optional[list] = None,
     ) -> Iterator[dict]:
         query = {"owner": owner}
         if category:
@@ -34,6 +35,9 @@ class RssTagPosts:
 
         if only_unread is not None:
             query["read"] = not only_unread
+        if context_tags:
+            query["tags"] = {"$all": context_tags}
+        if only_unread is not None:
             sort = [("feed_id", DESCENDING), ("unix_date", DESCENDING)]
         else:
             sort = [("unix_date", DESCENDING)]
@@ -82,11 +86,25 @@ class RssTagPosts:
         tags: list,
         only_unread: Optional[bool] = None,
         projection: Optional[dict] = None,
+        context_tags: Optional[list] = None,
     ) -> Iterator[dict]:
         """
+        Get posts matching tags.
+
+        Args:
+            context_tags: Additional tags to require (from context filter).
+                         These are merged with `tags` using AND logic.
+
         TODO: may be need change condition from 'tags': {'$all': tags} to 'tags': {'$elemMAtch': {'$in': tags}}
         """
-        query = {"owner": owner, "tags": {"$all": tags}}
+        # Combine main tags with context tags
+        all_tags = list(tags)
+        if context_tags:
+            for ct in context_tags:
+                if ct not in all_tags:
+                    all_tags.append(ct)
+
+        query = {"owner": owner, "tags": {"$all": all_tags}}
         if only_unread is not None:
             query["read"] = not only_unread
         sort_data = [("feed_id", DESCENDING), ("unix_date", DESCENDING)]
@@ -103,10 +121,13 @@ class RssTagPosts:
         tags: list,
         only_unread: Optional[bool] = None,
         projection: Optional[dict] = None,
+        context_tags: Optional[list] = None,
     ) -> Iterator[dict]:
         query = {"owner": owner, "bi_grams": {"$all": tags}}
         if only_unread is not None:
             query["read"] = not only_unread
+        if context_tags:
+            query["tags"] = {"$all": context_tags}
         sort_data = [("feed_id", DESCENDING), ("unix_date", DESCENDING)]
 
         return (
@@ -121,10 +142,14 @@ class RssTagPosts:
         feed_id: str,
         only_unread: Optional[bool] = None,
         projection: Optional[dict] = None,
+        context_tags: Optional[list] = None,
     ) -> Iterator[dict]:
         query = {"owner": owner, "feed_id": feed_id}
         if only_unread is not None:
             query["read"] = not only_unread
+        if context_tags:
+            query["tags"] = {"$all": context_tags}
+        if only_unread is not None:
             sort = [("feed_id", DESCENDING), ("unix_date", DESCENDING)]
         else:
             sort = [("unix_date", DESCENDING)]
@@ -224,6 +249,7 @@ class RssTagPosts:
         clusters: list,
         only_unread: Optional[bool] = None,
         projection: Optional[dict] = None,
+        context_tags: Optional[list] = None,
     ) -> Iterator[dict]:
         query = {
             "owner": owner,
@@ -231,6 +257,8 @@ class RssTagPosts:
         }
         if only_unread is not None:
             query["read"] = not only_unread
+        if context_tags:
+            query["tags"] = {"$all": context_tags}
         sort_data = [("feed_id", DESCENDING), ("unix_date", DESCENDING)]
 
         return (

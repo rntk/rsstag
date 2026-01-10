@@ -11,7 +11,8 @@
 </head>
 
 <body>
-    {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
+    {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}{% from
+    'context-filter-bar.html' import context_filter_bar with context %}
     <div id="global_tools">
         <div class="left_half">
             <div id="link_on_root" class="global_tools_button">
@@ -32,6 +33,7 @@
             {{ menu.settings_menu() }}
         </div>
     </div>
+    {{ context_filter_bar() }}
     <div class="page">
         <div class="group_title">
             <h3><a href="{{posts_link}}">{{tag['tag']}}</a> ({{tag['unread_count']}} / {{tag['posts_count']}})&nbsp;

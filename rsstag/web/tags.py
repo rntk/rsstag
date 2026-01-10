@@ -18,6 +18,7 @@ from rsstag.html_cleaner import HTMLCleaner
 from rsstag.lda import LDA
 from rsstag.llm.llamacpp import LLamaCPP
 from rsstag.charts import create_svg_histogram
+from rsstag.web.context_filter_handlers import get_context_filter_manager
 
 from gensim.models.word2vec import Word2Vec
 from gensim.models.fasttext import FastText
@@ -1521,6 +1522,17 @@ The phrase:
 
 def on_get_chain(app: "RSSTagApplication", user: dict, tags: str) -> Response:
     tags_l = tags.split()
+
+    # Apply context filter
+    manager = get_context_filter_manager(user)
+    tag_filter = manager.get_filter("tags")
+    context_tags = None
+    if tag_filter and tag_filter.is_active():
+        context_tags = tag_filter.tags
+        for ct in context_tags:
+            if ct not in tags_l:
+                tags_l.append(ct)
+
     cursor = app.posts.get_by_tags(
         user["sid"], tags_l, user["settings"]["only_unread"], projection={"_id": False}
     )

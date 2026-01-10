@@ -32,6 +32,7 @@ import rsstag.web.chat as chat_handlers
 import rsstag.web.tasks as tasks_handlers
 import rsstag.web.providers as providers_handlers
 import rsstag.web.feeds as feeds_handlers
+import rsstag.web.context_filter_handlers as context_filter_handlers
 
 from rsstag.llm.router import LLMRouter
 
@@ -1207,3 +1208,15 @@ class RSSTagApplication(object):
 
     def on_prefixes_prefix_get(self, user: dict, _: Request, prefix: str):
         return prefixes_handlers.on_prefixes_prefix_get(self, user, prefix)
+
+    def on_context_filter_get(self, user: dict, request: Request) -> Response:
+        return context_filter_handlers.on_context_filter_get(self, user, request)
+
+    def on_context_filter_add_tag(self, user: dict, request: Request) -> Response:
+        return context_filter_handlers.on_context_filter_add_tag(self, user, request)
+
+    def on_context_filter_remove_tag(self, user: dict, request: Request) -> Response:
+        return context_filter_handlers.on_context_filter_remove_tag(self, user, request)
+
+    def on_context_filter_clear(self, user: dict, request: Request) -> Response:
+        return context_filter_handlers.on_context_filter_clear(self, user, request)

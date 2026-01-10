@@ -6,7 +6,8 @@
 </head>
 
 <body>
-    {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
+    {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}{% from
+    'context-filter-bar.html' import context_filter_bar with context %}
     <div id="global_tools">
         <div class="left_half">
             <div id="link_on_root" class="global_tools_button">
@@ -21,6 +22,7 @@
             {{ menu.settings_menu() }}
         </div>
     </div>
+    {{ context_filter_bar() }}
 
     <div id="delete_controls">
         <button class="select-all-btn" onclick="toggleSelectAll()">Select All</button>

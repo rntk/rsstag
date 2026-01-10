@@ -30,6 +30,7 @@ class RssTagUsers:
             "batch_llm": "openai",
             "worker_llm": "llamacpp",
             "realtime_llm": "llamacpp",
+            "context_filter": {},
         }
 
     def prepare(self) -> None:

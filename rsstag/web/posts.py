@@ -18,10 +18,20 @@ from rsstag.tasks import (
     TASK_NOT_IN_PROCESSING,
 )
 from rsstag.utils import text_to_speech
+from rsstag.web.context_filter_handlers import get_context_filter_manager
 
 from werkzeug.wrappers import Request, Response
 from werkzeug.exceptions import NotFound
 from werkzeug.utils import redirect
+
+
+def _get_context_tags(user: dict) -> Optional[list]:
+    """Extract context filter tags from user settings."""
+    manager = get_context_filter_manager(user)
+    tag_filter = manager.get_filter("tags")
+    if tag_filter and tag_filter.is_active():
+        return tag_filter.tags
+    return None
 
 
 def on_post_speech(app: "RSSTagApplication", user: dict, request: Request) -> Response:
@@ -188,13 +198,18 @@ def on_tag_get(
         only_unread = user["settings"]["only_unread"]
     else:
         only_unread = None
-    db_posts_c = app.posts.get_by_tags(user["sid"], [tag], only_unread, projection)
+
+    context_tags = _get_context_tags(user)
+
+    db_posts_c = app.posts.get_by_tags(
+        user["sid"], [tag], only_unread, projection, context_tags=context_tags
+    )
     db_posts = list(db_posts_c)
 
     if user["settings"]["similar_posts"]:
         clusters = app.posts.get_clusters(db_posts)
         cl_posts = app.posts.get_by_clusters(
-            user["sid"], list(clusters), only_unread, projection
+            user["sid"], list(clusters), only_unread, projection, context_tags=context_tags
         )
         db_posts.extend(cl_posts)
     posts = []
@@ -305,8 +320,11 @@ def on_feed_get(
         only_unread = user["settings"]["only_unread"]
     else:
         only_unread = None
+
+    context_tags = _get_context_tags(user)
+
     db_posts_c = app.posts.get_by_feed_id(
-        user["sid"], current_feed["feed_id"], only_unread, projection
+        user["sid"], current_feed["feed_id"], only_unread, projection, context_tags=context_tags
     )
     db_posts = list(db_posts_c)
 
@@ -314,7 +332,7 @@ def on_feed_get(
     if user["settings"]["similar_posts"]:
         clusters = app.posts.get_clusters(db_posts)
         cl_posts = app.posts.get_by_clusters(
-            user["sid"], list(clusters), only_unread, projection
+            user["sid"], list(clusters), only_unread, projection, context_tags=context_tags
         )
         db_posts.extend(cl_posts)
     pids = set()
@@ -618,13 +636,18 @@ def on_entity_get(
         only_unread = user["settings"]["only_unread"]
     else:
         only_unread = None
-    db_posts_c = app.posts.get_by_tags(user["sid"], tag_words, only_unread, projection)
+
+    context_tags = _get_context_tags(user)
+
+    db_posts_c = app.posts.get_by_tags(
+        user["sid"], tag_words, only_unread, projection, context_tags=context_tags
+    )
     db_posts = list(db_posts_c)
 
     if user["settings"]["similar_posts"]:
         clusters = app.posts.get_clusters(db_posts)
         cl_posts = app.posts.get_by_clusters(
-            user["sid"], list(clusters), only_unread, projection
+            user["sid"], list(clusters), only_unread, projection, context_tags=context_tags
         )
         db_posts.extend(cl_posts)
     posts = []

@@ -1,0 +1,6 @@
+{% macro context_filter_bar() -%}
+<div id="context_filter_bar"></div>
+<script type="text/javascript">
+    window.context_filter_data = {{ user_settings.get('context_filter', {})|tojson }};
+</script>
+{%- endmacro %}
