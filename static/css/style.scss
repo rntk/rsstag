@@ -2129,6 +2129,16 @@ h3.post_title {
     &:last-child {
         border-bottom: none;
     }
+
+    &.is-active {
+        background-color: #e3f2fd;
+        border-left: 3px solid #1976d2;
+        padding-left: 9px;
+    }
+}
+
+.context-tag-label {
+    flex: 1;
 }
 
 .tag-counts {
