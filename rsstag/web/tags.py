@@ -496,6 +496,9 @@ def on_get_tag_page(
             group_by_link=app.routes.get_url_by_endpoint(
                 endpoint="on_group_by_category_get"
             ),
+            chain_link=app.routes.get_url_by_endpoint(
+                endpoint="on_chain_get", params={"tags": tag_data["tag"]}
+            ),
             user_settings=user["settings"],
             provider=user["provider"],
         ),

@@ -37,7 +37,7 @@
             <h3><a href="{{posts_link}}">{{tag['tag']}}</a> ({{tag['unread_count']}} / {{tag['posts_count']}})&nbsp;
             </h3>
             {{', '.join(tag['words'])}} <a href="/tag-net#{{tag['tag']}}">Tag net</a>&nbsp;&nbsp;<a
-                href="/sentences/with/tags/{{tag['tag']}}">Sents</a>
+                href="/sentences/with/tags/{{tag['tag']}}">Sents</a>&nbsp;&nbsp;<a href="{{chain_link}}">Chain</a>
         </div>
         <h3 class="group_title tag_info_title">Word2Vec</h3><span id="load_similar_w2v"></span>
         <div id="similar_w2v_tags" class="tag_info_block"></div>
