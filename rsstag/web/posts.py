@@ -1803,11 +1803,16 @@ def on_topics_list_get(
     paginated_topics: list[tuple[str, dict]] = sorted_topics[
         start_topics_range:end_topics_range
     ]
+    topics_chart_data: list[dict[str, int | str]] = [
+        {"topic": topic_name, "count": topic_data["count"]}
+        for topic_name, topic_data in paginated_topics
+    ]
 
     page: Template = app.template_env.get_template("topics-list.html")
     return Response(
         page.render(
             topics=paginated_topics,
+            topics_chart_data=topics_chart_data,
             post_topic_mapping=post_topic_mapping,
             pages_map=pages_map,
             current_page=new_cookie_page_value,
