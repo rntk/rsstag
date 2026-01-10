@@ -66,6 +66,7 @@ class RssTagBiGrams:
         regexp: str = "",
         sentiments: List[str] = None,
         groups: List[str] = None,
+        context_tags: Optional[List[str]] = None,
     ) -> int:
         query = {"owner": owner}
         if regexp:
@@ -82,6 +83,8 @@ class RssTagBiGrams:
                 {"groups": {"$exists": True}},
                 {"groups": {"$all": groups}},
             ]
+        if context_tags:
+            query["tags"] = {"$all": context_tags}
 
         return self.db.bi_grams.count_documents(query)
 
@@ -92,10 +95,13 @@ class RssTagBiGrams:
         hot_tags: bool = False,
         opts: dict = None,
         projection: dict = None,
+        context_tags: Optional[List[str]] = None,
     ) -> Iterator[dict]:
         query = {"owner": owner}
         if opts and "regexp" in opts:
             query["tag"] = {"$regex": opts["regexp"], "$options": "i"}
+        if context_tags:
+            query["tags"] = {"$all": context_tags}
         sort_data = []
         if hot_tags:
             sort_data.append(("temperature", DESCENDING))

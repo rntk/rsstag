@@ -1,7 +1,7 @@
 import json
 import gzip
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 from collections import Counter
 from urllib.parse import quote
 
@@ -12,13 +12,22 @@ from werkzeug.wrappers import Response
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from rsstag.stopwords import stopwords
+from rsstag.context_filter import ContextFilterManager, TagContextFilter
+from rsstag.web.context_filter_handlers import get_context_filter_manager
 
 
 def on_group_by_bigrams_get(
     app: "RSSTagApplication", user: dict, page_number: int = 1
 ) -> Response:
+    manager: ContextFilterManager = get_context_filter_manager(user)
+    tag_filter: Optional[TagContextFilter] = manager.get_filter("tags")
+    context_tags: Optional[list[str]] = None
+    if tag_filter and tag_filter.is_active():
+        context_tags = tag_filter.tags
     tags_count = app.bi_grams.count(
-        user["sid"], only_unread=user["settings"]["only_unread"]
+        user["sid"],
+        only_unread=user["settings"]["only_unread"],
+        context_tags=context_tags,
     )
     page_count = app.get_page_count(tags_count, user["settings"]["tags_on_page"])
     p_number = page_number
@@ -43,6 +52,7 @@ def on_group_by_bigrams_get(
         user["settings"]["only_unread"],
         user["settings"]["hot_tags"],
         opts={"offset": start_tags_range, "limit": user["settings"]["tags_on_page"]},
+        context_tags=context_tags,
     )
 
     for t in tags:
