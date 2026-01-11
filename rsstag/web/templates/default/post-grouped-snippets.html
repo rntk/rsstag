@@ -61,7 +61,9 @@
                             </span>
                             <span class="snippet-actions">
                                 <span class="source-tag toggle-read-btn {{ 'snippet-tag-read' if snippet.read else 'snippet-tag-unread' }}"
-                                    onclick="toggleRead({{ snippet.post_id }}, {{ snippet.indices | tojson }}, {{ 'true' if snippet.read else 'false' }})"
+                                    data-post-id="{{ snippet.post_id }}"
+                                    data-indices="{{ snippet.indices | join(',') }}"
+                                    data-read="{{ 1 if snippet.read else 0 }}"
                                     title="Mark as {{ 'unread' if snippet.read else 'read' }}">
                                     {{ 'Mark Unread' if snippet.read else 'Mark Read' }}
                                 </span>

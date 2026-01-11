@@ -1,5 +1,20 @@
 // Post Grouped Snippets functionality
 
+document.addEventListener('click', (event) => {
+    const btn = event.target.closest('.toggle-read-btn');
+    if (!btn) {
+        return;
+    }
+
+    const postId = btn.dataset.postId;
+    const indices = btn.dataset.indices
+        ? btn.dataset.indices.split(',').filter(Boolean).map(Number)
+        : [];
+    const currentlyRead = btn.dataset.read === '1';
+
+    toggleRead(postId, indices, currentlyRead);
+});
+
 function toggleRead(postId, sentenceIndices, currentlyRead) {
     const newState = !currentlyRead;
     const indicesStr = Array.isArray(sentenceIndices) ? sentenceIndices.join('_') : sentenceIndices;
@@ -40,7 +55,7 @@ function toggleRead(postId, sentenceIndices, currentlyRead) {
                         btn.style.background = newState ? '#eee' : '#c8e6c9';
                         btn.style.color = newState ? '#666' : '#2e7d32';
                         btn.title = newState ? 'Mark as unread' : 'Mark as read';
-                        btn.onclick = () => toggleRead(postId, sentenceIndices, newState);
+                        btn.dataset.read = newState ? '1' : '0';
                     }
                 }
             } else {
