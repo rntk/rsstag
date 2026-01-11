@@ -61,6 +61,9 @@ export default class EventsSystem {
     this.CONTEXT_FILTER_ADD_TAG = 'context_filter_add_tag';
     this.CONTEXT_FILTER_REMOVE_TAG = 'context_filter_remove_tag';
     this.CONTEXT_FILTER_CLEAR = 'context_filter_clear';
+    this.CLUSTERS_TOPICS_UPDATED = 'clusters_topics_updated';
+    this.FETCH_CLUSTERS_TOPICS_SENTENCES = 'fetch_clusters_topics_sentences';
+    this.CLUSTERS_TOPICS_CHANGE_STATUS = 'clusters_topics_change_status';
 
     this._events = {};
   }

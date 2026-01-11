@@ -51,6 +51,8 @@ import BiGramsGraph from '../components/bi-grams-graph.js';
 import { BiGramsTabs } from '../components/bigrams-tabs.js';
 import ContextFilterStorage from '../storages/context-filter-storage.js';
 import ContextFilterBar from '../components/context-filter-bar.js';
+import ClustersTopicsStorage from '../storages/clusters-topics-storage.js';
+import ClustersTopics from '../components/ClustersTopics.js';
 
 function handleTextSelection() {
   const menu = document.createElement('div');
@@ -399,6 +401,13 @@ window.onload = () => {
     ReactDOM.render(<TagNetTools ES={ES} />, document.getElementById('tags_net_tools'));
     tags_net.start();
     tags_net_storage.start();
+  } else if (path === '/clusters-topics-dyn') {
+    const context = document.getElementById('clusters_topics_page_container');
+    if (context) {
+      const storage = new ClustersTopicsStorage(window.EVSYS);
+      ReactDOM.render(<ClustersTopics ES={window.EVSYS} />, context);
+      storage.start();
+    }
   }
 };
 
