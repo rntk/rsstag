@@ -1,144 +1,150 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Clusters Topics dynamic</title>
     {% include "head-data.html" %}
 </head>
+
 <body>
-{% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
+    {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
 
-<div id="global_tools">
-    <div class="left_half">
-        <div id="link_on_root" class="global_tools_button">
-            <a href="/">main</a>
+    <div id="global_tools">
+        <div class="left_half">
+            <div id="link_on_root" class="global_tools_button">
+                <a href="/">main</a>
+            </div>
+            <div id="help_button" class="global_tools_button">
+                <a href="#">help</a>
+            </div>
         </div>
-        <div id="help_button" class="global_tools_button">
-            <a href="#">help</a>
+        <div class="right_half">
+            {{ g_status.global_status() }}
+            {{ menu.settings_menu() }}
         </div>
     </div>
-    <div class="right_half">
-        {{ g_status.global_status() }}
-        {{ menu.settings_menu() }}
-    </div>
-</div>
 
-<div class="page">
-    <div class="clusters-topics-page">
-        {% if clusters %}
+    <div class="page">
+        <div class="clusters-topics-page">
+            {% if clusters %}
             <div class="clusters-topics-list">
                 {% for cluster in clusters %}
-                    <button class="clusters-topic-item" data-cluster="{{ cluster.id }}" type="button">
-                        <span class="clusters-topic-title">{{ cluster.title }}</span>
-                        <span class="clusters-topic-count">{{ cluster.count }}</span>
-                    </button>
+                <button class="clusters-topic-item" data-cluster="{{ cluster.id }}" type="button">
+                    <span class="clusters-topic-title">{{ cluster.title }}</span>
+                    <span class="clusters-topic-count">{{ cluster.count }}</span>
+                </button>
                 {% endfor %}
             </div>
             <div class="clusters-topic-sentences" id="clusters-topic-sentences">
                 <div class="clusters-topic-placeholder">Select a cluster to load sentences.</div>
             </div>
-        {% else %}
+            {% else %}
             <p>No clusters</p>
-        {% endif %}
+            {% endif %}
+        </div>
     </div>
-</div>
 
-<script id="clusters-topics-data" type="application/json">{{ clusters_data|tojson }}</script>
-<script>
-(function () {
-    var dataEl = document.getElementById("clusters-topics-data");
-    if (!dataEl) {
-        return;
-    }
-    var clusterData = {};
-    try {
-        clusterData = JSON.parse(dataEl.textContent || "{}");
-    } catch (err) {
-        clusterData = {};
-    }
+    <script id="clusters-topics-data" type="application/json">{{ clusters_data|tojson }}</script>
+    <script>
+        (function () {
+            var dataEl = document.getElementById("clusters-topics-data");
+            if (!dataEl) {
+                return;
+            }
+            var clusterData = {};
+            try {
+                clusterData = JSON.parse(dataEl.textContent || "{}");
+            } catch (err) {
+                clusterData = {};
+            }
 
-    var items = document.querySelectorAll(".clusters-topic-item");
-    var sentencesEl = document.getElementById("clusters-topic-sentences");
-    if (!items.length || !sentencesEl) {
-        return;
-    }
+            var items = document.querySelectorAll(".clusters-topic-item");
+            var sentencesEl = document.getElementById("clusters-topic-sentences");
+            if (!items.length || !sentencesEl) {
+                return;
+            }
 
-    function escapeHtml(value) {
-        return String(value)
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;")
-            .replace(/\"/g, "&quot;")
-            .replace(/'/g, "&#39;");
-    }
+            function escapeHtml(value) {
+                return String(value)
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/\"/g, "&quot;")
+                    .replace(/'/g, "&#39;");
+            }
 
-    function renderSentences(sentences, title) {
-        var html = [];
-        html.push('<div class="clusters-topic-header">' + escapeHtml(title) + '</div>');
-        if (!sentences.length) {
-            html.push('<div class="clusters-topic-placeholder">No sentences found.</div>');
-            sentencesEl.innerHTML = html.join("");
-            return;
-        }
-        html.push('<div class="clusters-topic-sentences-list">');
-        for (var i = 0; i < sentences.length; i += 1) {
-            var sentence = sentences[i];
-            var meta = 'Post ' + sentence.post_id;
-            html.push(
-                '<div class="clusters-topic-sentence">' +
-                    '<div class="clusters-topic-sentence-meta">' + escapeHtml(meta) + '</div>' +
-                    '<div class="clusters-topic-sentence-text">' + escapeHtml(sentence.text) + '</div>' +
-                '</div>'
-            );
-        }
-        html.push('</div>');
-        sentencesEl.innerHTML = html.join("");
-    }
+            function renderSentences(sentences, title) {
+                var html = [];
+                html.push('<div class="clusters-topic-header">' + escapeHtml(title) + '</div>');
+                if (!sentences.length) {
+                    html.push('<div class="clusters-topic-placeholder">No sentences found.</div>');
+                    sentencesEl.innerHTML = html.join("");
+                    return;
+                }
+                html.push('<div class="clusters-topic-sentences-list">');
+                for (var i = 0; i < sentences.length; i += 1) {
+                    var sentence = sentences[i];
+                    var meta = 'Post ' + sentence.post_id;
+                    if (sentence.topic_title) {
+                        meta += ' | ' + sentence.topic_title;
+                    }
+                    html.push(
+                        '<div class="clusters-topic-sentence">' +
+                        '<div class="clusters-topic-sentence-meta">' + escapeHtml(meta) + '</div>' +
+                        '<div class="clusters-topic-sentence-text">' + escapeHtml(sentence.text) + '</div>' +
+                        '</div>'
+                    );
+                }
+                html.push('</div>');
+                sentencesEl.innerHTML = html.join("");
+            }
 
-    function setActive(el) {
-        for (var i = 0; i < items.length; i += 1) {
-            items[i].classList.remove("is-active");
-        }
-        el.classList.add("is-active");
-    }
+            function setActive(el) {
+                for (var i = 0; i < items.length; i += 1) {
+                    items[i].classList.remove("is-active");
+                }
+                el.classList.add("is-active");
+            }
 
-    function requestSentences(clusterId) {
-        var cluster = clusterData[String(clusterId)];
-        if (!cluster || !cluster.sentences) {
-            renderSentences([], "Cluster");
-            return;
-        }
-        sentencesEl.classList.add("is-loading");
-        sentencesEl.innerHTML = '<div class="clusters-topic-placeholder">Loading...</div>';
-        fetch("/clusters-topics-dyn-sentences", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                sentences: cluster.sentences
-            })
-        }).then(function (response) {
-            return response.json();
-        }).then(function (payload) {
-            var items = payload && payload.sentences ? payload.sentences : [];
-            renderSentences(items, cluster.title || "Cluster");
-        }).catch(function () {
-            renderSentences([], "Cluster");
-        }).finally(function () {
-            sentencesEl.classList.remove("is-loading");
-        });
-    }
+            function requestSentences(clusterId) {
+                var cluster = clusterData[String(clusterId)];
+                if (!cluster || !cluster.sentences) {
+                    renderSentences([], "Cluster");
+                    return;
+                }
+                sentencesEl.classList.add("is-loading");
+                sentencesEl.innerHTML = '<div class="clusters-topic-placeholder">Loading...</div>';
+                fetch("/clusters-topics-dyn-sentences", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        sentences: cluster.sentences
+                    })
+                }).then(function (response) {
+                    return response.json();
+                }).then(function (payload) {
+                    var items = payload && payload.sentences ? payload.sentences : [];
+                    renderSentences(items, cluster.title || "Cluster");
+                }).catch(function () {
+                    renderSentences([], "Cluster");
+                }).finally(function () {
+                    sentencesEl.classList.remove("is-loading");
+                });
+            }
 
-    for (var i = 0; i < items.length; i += 1) {
-        items[i].addEventListener("click", function (evt) {
-            var clusterId = evt.currentTarget.getAttribute("data-cluster");
-            setActive(evt.currentTarget);
-            requestSentences(clusterId);
-        });
-    }
-})();
-</script>
+            for (var i = 0; i < items.length; i += 1) {
+                items[i].addEventListener("click", function (evt) {
+                    var clusterId = evt.currentTarget.getAttribute("data-cluster");
+                    setActive(evt.currentTarget);
+                    requestSentences(clusterId);
+                });
+            }
+        })();
+    </script>
 
-<div id="progressbar"></div>
+    <div id="progressbar"></div>
 </body>
+
 </html>

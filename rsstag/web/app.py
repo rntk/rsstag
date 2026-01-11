@@ -1152,7 +1152,7 @@ class RSSTagApplication(object):
         grouped_posts: List[Dict[str, Any]] = list(
             self.db.post_grouping.find(
                 {"owner": user["sid"]},
-                {"_id": 0, "post_ids": 1, "sentences": 1},
+                {"_id": 0, "post_ids": 1, "sentences": 1, "groups": 1},
             )
         )
 
@@ -1207,7 +1207,7 @@ class RSSTagApplication(object):
             plain_text_cache[post_id] = plain_text
             return plain_text
 
-        sentences: List[Dict[str, Any]] = []
+        ranges: List[List[Dict[str, Any]]] = []
         texts: List[str] = []
         for post_data in grouped_posts:
             post_ids_list: List[int] = post_data.get("post_ids", [])
@@ -1217,30 +1217,46 @@ class RSSTagApplication(object):
             plain_text: str = _get_plain_text(post_id)
             if not plain_text:
                 continue
-            for sentence in post_data.get("sentences", []):
-                start: Optional[int] = sentence.get("start")
-                end: Optional[int] = sentence.get("end")
-                if (
-                    start is None
-                    or end is None
-                    or not isinstance(start, int)
-                    or not isinstance(end, int)
-                ):
-                    continue
-                if start < 0 or end > len(plain_text) or start >= end:
-                    continue
-                text: str = plain_text[start:end].strip()
-                if not text:
-                    continue
-                sentences.append(
-                    {
+
+            sent_map = {s.get("number"): s for s in post_data.get("sentences", [])}
+            groups = post_data.get("groups", {})
+
+            if not groups:
+                continue
+
+            for topic_title, sentence_nums in groups.items():
+                topic_sentences = []
+                topic_text_parts = []
+                for num in sentence_nums:
+                    sentence = sent_map.get(num)
+                    if not sentence:
+                        continue
+                    start = sentence.get("start")
+                    end = sentence.get("end")
+                    if (
+                        start is None
+                        or end is None
+                        or not isinstance(start, int)
+                        or not isinstance(end, int)
+                    ):
+                        continue
+                    if start < 0 or end > len(plain_text) or start >= end:
+                        continue
+                    text_part = plain_text[start:end].strip()
+                    if not text_part:
+                        continue
+                    topic_text_parts.append(text_part)
+                    topic_sentences.append({
                         "post_id": post_id,
                         "start": start,
                         "end": end,
-                        "number": sentence.get("number"),
-                    }
-                )
-                texts.append(text)
+                        "number": num,
+                        "topic_title": topic_title
+                    })
+
+                if topic_text_parts:
+                    texts.append(" ".join(topic_text_parts))
+                    ranges.append(topic_sentences)
 
         clusters: List[Dict[str, Any]] = []
         clusters_data: Dict[str, Dict[str, Any]] = {}
@@ -1257,15 +1273,15 @@ class RSSTagApplication(object):
             except ValueError:
                 labels = []
 
-            label_sentences: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
+            label_ranges: Dict[int, List[List[Dict[str, Any]]]] = defaultdict(list)
             label_texts: Dict[int, List[str]] = defaultdict(list)
             for idx, label in enumerate(labels):
                 if label < 0:
                     continue
-                label_sentences[label].append(sentences[idx])
+                label_ranges[label].append(ranges[idx])
                 label_texts[label].append(texts[idx])
 
-            for label, sentence_refs in label_sentences.items():
+            for label, topic_lists in label_ranges.items():
                 top_tags: str = f"Cluster {label}"
                 texts_for_cluster: List[str] = label_texts.get(label, [])
                 if texts_for_cluster:
@@ -1283,17 +1299,22 @@ class RSSTagApplication(object):
                         top_tags = ", ".join(top_words)
                     except ValueError:
                         top_tags = f"Cluster {label}"
+
+                all_sentences = []
+                for topic_sentences in topic_lists:
+                    all_sentences.extend(topic_sentences)
+
                 cluster_entry: Dict[str, Any] = {
                     "id": label,
                     "title": top_tags,
-                    "count": len(sentence_refs),
-                    "sentences": sentence_refs,
+                    "count": len(topic_lists),
+                    "sentences": all_sentences,
                 }
                 clusters.append(cluster_entry)
                 clusters_data[str(label)] = {
                     "title": top_tags,
-                    "count": len(sentence_refs),
-                    "sentences": sentence_refs,
+                    "count": len(topic_lists),
+                    "sentences": all_sentences,
                 }
 
         clusters.sort(key=lambda item: item["count"], reverse=True)
@@ -1410,6 +1431,7 @@ class RSSTagApplication(object):
                     "end": end_val,
                     "number": item.get("number"),
                     "text": text,
+                    "topic_title": item.get("topic_title"),
                 }
             )
 
