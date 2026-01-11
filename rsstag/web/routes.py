@@ -379,6 +379,16 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/clusters-topics-dyn",
+                "endpoint": "on_clusters_topics_dyn_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/clusters-topics-dyn-sentences",
+                "endpoint": "on_clusters_topics_dyn_sentences_post",
+                "methods": ["POST"],
+            },
+            {
                 "url": "/telegram-auth",
                 "endpoint": "on_telegram_auth_post",
                 "methods": ["POST"],

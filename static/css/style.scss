@@ -199,6 +199,94 @@ h3.post_title {
     flex-direction: column;
     gap: 0.8em;
 }
+
+.clusters-topics-page {
+    display: flex;
+    flex-direction: column;
+    gap: 1em;
+}
+
+.clusters-topics-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6em;
+}
+
+.clusters-topic-item {
+    border: 1px solid $my_gray;
+    background: #ffffff;
+    padding: 0.4em 0.7em;
+    cursor: pointer;
+    font-size: 11pt;
+    text-align: left;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6em;
+    @include vendor-prefix(border-radius, 0.4em);
+}
+
+.clusters-topic-item.is-active {
+    background: #fff6d6;
+    border-color: #e0c57e;
+}
+
+.clusters-topic-title {
+    font-weight: bold;
+}
+
+.clusters-topic-count {
+    color: $meta_color;
+    font-size: 10pt;
+}
+
+.clusters-topic-sentences {
+    background: #ffffff;
+    border: 1px solid $my_gray;
+    padding: 0.8em;
+    @include vendor-prefix(border-radius, 0.4em);
+}
+
+.clusters-topic-sentences.is-loading {
+    opacity: 0.7;
+}
+
+.clusters-topic-header {
+    font-size: 13pt;
+    margin-bottom: 0.6em;
+    color: #6b6b6b;
+}
+
+.clusters-topic-sentences-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7em;
+}
+
+.clusters-topic-sentence {
+    border-bottom: 1px solid $my_gray;
+    padding-bottom: 0.6em;
+}
+
+.clusters-topic-sentence:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.clusters-topic-sentence-meta {
+    font-size: 9pt;
+    color: $meta_color;
+    margin-bottom: 0.3em;
+}
+
+.clusters-topic-sentence-text {
+    font-size: 11pt;
+    line-height: 1.4;
+}
+
+.clusters-topic-placeholder {
+    font-size: 11pt;
+    color: $meta_color;
+}
 .telegram-auth-label {
     font-size: 12pt;
     color: #333333;

@@ -6,7 +6,7 @@ import time
 import gzip
 import logging
 from collections import OrderedDict, defaultdict
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 import traceback
 import random
 
@@ -1146,6 +1146,277 @@ class RSSTagApplication(object):
                 links=lnks, user_settings=user["settings"], provider=user["provider"]
             ),
             mimetype="text/html",
+        )
+
+    def on_clusters_topics_dyn_get(self, user: dict, request: Request) -> Response:
+        grouped_posts: List[Dict[str, Any]] = list(
+            self.db.post_grouping.find(
+                {"owner": user["sid"]},
+                {"_id": 0, "post_ids": 1, "sentences": 1},
+            )
+        )
+
+        post_ids: set[Any] = set()
+        for post_data in grouped_posts:
+            post_ids.update(post_data.get("post_ids", []))
+
+        posts_data: Dict[Any, Dict[str, Any]] = {}
+        if post_ids:
+            posts_projection: Dict[str, int] = {
+                "_id": 0,
+                "pid": 1,
+                "id": 1,
+                "content": 1,
+            }
+            posts_list: List[Dict[str, Any]] = list(
+                self.db.posts.find(
+                    {
+                        "owner": user["sid"],
+                        "$or": [
+                            {"pid": {"$in": list(post_ids)}},
+                            {"id": {"$in": list(post_ids)}},
+                        ],
+                    },
+                    posts_projection,
+                )
+            )
+            for post in posts_list:
+                pid_value = post.get("pid")
+                if pid_value is not None:
+                    posts_data[pid_value] = post
+                post_id_value = post.get("id")
+                if post_id_value is not None:
+                    posts_data[post_id_value] = post
+
+        plain_text_cache: Dict[Any, str] = {}
+
+        def _get_plain_text(post_id: Any) -> str:
+            if post_id in plain_text_cache:
+                return plain_text_cache[post_id]
+            post_obj: Optional[Dict[str, Any]] = posts_data.get(post_id)
+            if not post_obj or not post_obj.get("content"):
+                plain_text_cache[post_id] = ""
+                return ""
+            raw_content: str = gzip.decompress(post_obj["content"]["content"]).decode(
+                "utf-8", "replace"
+            )
+            title: str = post_obj["content"].get("title", "")
+            if title:
+                raw_content = f"{title}. {raw_content}"
+            plain_text, _ = self.post_splitter._build_html_mapping(raw_content)
+            plain_text_cache[post_id] = plain_text
+            return plain_text
+
+        sentences: List[Dict[str, Any]] = []
+        texts: List[str] = []
+        for post_data in grouped_posts:
+            post_ids_list: List[int] = post_data.get("post_ids", [])
+            if not post_ids_list:
+                continue
+            post_id: Any = post_ids_list[0]
+            plain_text: str = _get_plain_text(post_id)
+            if not plain_text:
+                continue
+            for sentence in post_data.get("sentences", []):
+                start: Optional[int] = sentence.get("start")
+                end: Optional[int] = sentence.get("end")
+                if (
+                    start is None
+                    or end is None
+                    or not isinstance(start, int)
+                    or not isinstance(end, int)
+                ):
+                    continue
+                if start < 0 or end > len(plain_text) or start >= end:
+                    continue
+                text: str = plain_text[start:end].strip()
+                if not text:
+                    continue
+                sentences.append(
+                    {
+                        "post_id": post_id,
+                        "start": start,
+                        "end": end,
+                        "number": sentence.get("number"),
+                    }
+                )
+                texts.append(text)
+
+        clusters: List[Dict[str, Any]] = []
+        clusters_data: Dict[str, Dict[str, Any]] = {}
+
+        if texts:
+            stopw = set(stopwords.words("english") + stopwords.words("russian"))
+            try:
+                vectorizer = TfidfVectorizer(stop_words=list(stopw))
+                vectors = vectorizer.fit_transform(texts)
+                if vectors.shape[1] == 0:
+                    raise ValueError("empty vocabulary")
+                dbs = DBSCAN(eps=0.7, min_samples=2, metric="cosine")
+                labels: List[int] = dbs.fit_predict(vectors).tolist()
+            except ValueError:
+                labels = []
+
+            label_sentences: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
+            label_texts: Dict[int, List[str]] = defaultdict(list)
+            for idx, label in enumerate(labels):
+                if label < 0:
+                    continue
+                label_sentences[label].append(sentences[idx])
+                label_texts[label].append(texts[idx])
+
+            for label, sentence_refs in label_sentences.items():
+                top_tags: str = f"Cluster {label}"
+                texts_for_cluster: List[str] = label_texts.get(label, [])
+                if texts_for_cluster:
+                    try:
+                        cluster_vectorizer = TfidfVectorizer(stop_words=list(stopw))
+                        cluster_vectors = cluster_vectorizer.fit_transform(
+                            texts_for_cluster
+                        )
+                        if cluster_vectors.shape[1] == 0:
+                            raise ValueError("empty vocabulary")
+                        centroid = cluster_vectors.mean(axis=0).A1
+                        feature_names = cluster_vectorizer.get_feature_names_out()
+                        top_indices = centroid.argsort()[-3:][::-1]
+                        top_words = [feature_names[i] for i in top_indices]
+                        top_tags = ", ".join(top_words)
+                    except ValueError:
+                        top_tags = f"Cluster {label}"
+                cluster_entry: Dict[str, Any] = {
+                    "id": label,
+                    "title": top_tags,
+                    "count": len(sentence_refs),
+                    "sentences": sentence_refs,
+                }
+                clusters.append(cluster_entry)
+                clusters_data[str(label)] = {
+                    "title": top_tags,
+                    "count": len(sentence_refs),
+                    "sentences": sentence_refs,
+                }
+
+        clusters.sort(key=lambda item: item["count"], reverse=True)
+        page = self.template_env.get_template("clusters-topics-dyn.html")
+        return Response(
+            page.render(
+                clusters=clusters,
+                clusters_data=clusters_data,
+                user_settings=user["settings"],
+                provider=user["provider"],
+            ),
+            mimetype="text/html",
+        )
+
+    def on_clusters_topics_dyn_sentences_post(
+        self, user: dict, request: Request
+    ) -> Response:
+        data: Optional[Dict[str, Any]] = request.get_json(silent=True)
+        if not data or "sentences" not in data:
+            return Response(
+                json.dumps({"error": "Bad data"}),
+                mimetype="application/json",
+                status=400,
+            )
+
+        items: Any = data.get("sentences", [])
+        if not isinstance(items, list):
+            return Response(
+                json.dumps({"error": "Bad data"}),
+                mimetype="application/json",
+                status=400,
+            )
+
+        post_ids: set[Any] = set()
+        for item in items:
+            post_id_val = item.get("post_id")
+            if post_id_val is None:
+                continue
+            post_ids.add(post_id_val)
+
+        posts_data: Dict[Any, Dict[str, Any]] = {}
+        if post_ids:
+            posts_projection: Dict[str, int] = {
+                "_id": 0,
+                "pid": 1,
+                "id": 1,
+                "content": 1,
+            }
+            posts_list: List[Dict[str, Any]] = list(
+                self.db.posts.find(
+                    {
+                        "owner": user["sid"],
+                        "$or": [
+                            {"pid": {"$in": list(post_ids)}},
+                            {"id": {"$in": list(post_ids)}},
+                        ],
+                    },
+                    posts_projection,
+                )
+            )
+            for post in posts_list:
+                pid_value = post.get("pid")
+                if pid_value is not None:
+                    posts_data[pid_value] = post
+                post_id_value = post.get("id")
+                if post_id_value is not None:
+                    posts_data[post_id_value] = post
+
+        plain_text_cache: Dict[Any, str] = {}
+
+        def _get_plain_text(post_id: Any) -> str:
+            if post_id in plain_text_cache:
+                return plain_text_cache[post_id]
+            post_obj: Optional[Dict[str, Any]] = posts_data.get(post_id)
+            if not post_obj or not post_obj.get("content"):
+                plain_text_cache[post_id] = ""
+                return ""
+            raw_content: str = gzip.decompress(post_obj["content"]["content"]).decode(
+                "utf-8", "replace"
+            )
+            title: str = post_obj["content"].get("title", "")
+            if title:
+                raw_content = f"{title}. {raw_content}"
+            plain_text, _ = self.post_splitter._build_html_mapping(raw_content)
+            plain_text_cache[post_id] = plain_text
+            return plain_text
+
+        result_sentences: List[Dict[str, Any]] = []
+        for item in items:
+            post_id_val = item.get("post_id")
+            if post_id_val is None:
+                continue
+            try:
+                start_val = int(item.get("start"))
+                end_val = int(item.get("end"))
+            except (TypeError, ValueError):
+                continue
+            plain_text = _get_plain_text(post_id_val)
+            if not plain_text:
+                continue
+            if (
+                start_val < 0
+                or end_val > len(plain_text)
+                or start_val >= end_val
+            ):
+                continue
+            text = plain_text[start_val:end_val].strip()
+            if not text:
+                continue
+            result_sentences.append(
+                {
+                    "post_id": post_id_val,
+                    "start": start_val,
+                    "end": end_val,
+                    "number": item.get("number"),
+                    "text": text,
+                }
+            )
+
+        return Response(
+            json.dumps({"sentences": result_sentences}),
+            mimetype="application/json",
+            status=200,
         )
 
     def on_telegram_auth_post(self, user: dict, request: Request) -> Response:
