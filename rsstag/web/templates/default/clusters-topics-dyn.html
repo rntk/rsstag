@@ -60,6 +60,7 @@
 
             var items = document.querySelectorAll(".clusters-topic-item");
             var sentencesEl = document.getElementById("clusters-topic-sentences");
+            var currentRanges = [];
             if (!items.length || !sentencesEl) {
                 return;
             }
@@ -73,36 +74,87 @@
                     .replace(/'/g, "&#39;");
             }
 
+            function buildRangeKey(postId, sentenceIndices) {
+                var base = String(postId);
+                if (!sentenceIndices || !sentenceIndices.length) {
+                    return base;
+                }
+                return base + "_" + sentenceIndices.join("_");
+            }
+
+            function parseSentenceIndices(value) {
+                if (!value) {
+                    return [];
+                }
+                var parts = String(value).split(",");
+                var result = [];
+                for (var i = 0; i < parts.length; i += 1) {
+                    var num = Number(parts[i]);
+                    if (!isNaN(num)) {
+                        result.push(num);
+                    }
+                }
+                return result;
+            }
+
             function renderRanges(ranges, title) {
                 var html = [];
+                currentRanges = Array.isArray(ranges) ? ranges : [];
                 html.push('<div class="clusters-topic-header">' + escapeHtml(title) + '</div>');
-                if (!ranges.length) {
+                if (!currentRanges.length) {
                     html.push('<div class="clusters-topic-placeholder">No ranges found.</div>');
                     sentencesEl.innerHTML = html.join("");
+                    updateReadControlsState();
                     return;
                 }
+                html.push(
+                    '<div class="clusters-topic-toolbar">' +
+                    '<button class="clusters-read-btn" data-action="read-all" type="button">Read all</button>' +
+                    '<button class="clusters-read-btn" data-action="unread-all" type="button">Unread all</button>' +
+                    '</div>'
+                );
                 html.push('<div class="clusters-topic-sentences-list">');
-                for (var i = 0; i < ranges.length; i += 1) {
-                    var range = ranges[i];
+                for (var i = 0; i < currentRanges.length; i += 1) {
+                    var range = currentRanges[i];
                     var meta = 'Post ' + range.post_id;
                     if (range.topic_title) {
                         meta += ' | ' + range.topic_title;
                     }
+                    var sentenceIndices = Array.isArray(range.sentence_indices)
+                        ? range.sentence_indices
+                        : [];
+                    var isRead = !!range.read;
+                    var readClass = isRead ? 'is-read' : 'is-unread';
+                    var readLabel = isRead ? 'Mark Unread' : 'Mark Read';
+                    var readTitle = isRead ? 'Mark as unread' : 'Mark as read';
+                    var rangeKey = buildRangeKey(range.post_id, sentenceIndices);
+                    var readBtn = '<button class="clusters-topic-toggle-read" data-post-id="' +
+                        escapeHtml(range.post_id) + '" data-sentence-indices="' +
+                        escapeHtml(sentenceIndices.join(",")) + '" data-range-key="' +
+                        escapeHtml(rangeKey) + '" data-read="' + (isRead ? '1' : '0') +
+                        '" type="button" title="' + readTitle + '">' + readLabel + '</button>';
                     var postLink = "";
                     if (range.post_id !== undefined && range.post_id !== null) {
                         postLink = '<a class="clusters-topic-sentence-link" href="/posts/' +
                             encodeURIComponent(range.post_id) + '">Open post</a>';
                     }
                     html.push(
-                        '<div class="clusters-topic-sentence">' +
+                        '<div class="clusters-topic-sentence ' + readClass + '" data-post-id="' +
+                        escapeHtml(range.post_id) + '" data-sentence-indices="' +
+                        escapeHtml(sentenceIndices.join(",")) + '" data-range-key="' +
+                        escapeHtml(rangeKey) + '">' +
                         '<div class="clusters-topic-sentence-meta">' + escapeHtml(meta) + '</div>' +
                         '<div class="clusters-topic-sentence-text">' + escapeHtml(range.text) + '</div>' +
+                        '<div class="clusters-topic-sentence-actions">' +
+                        readBtn +
                         postLink +
+                        '</div>' +
                         '</div>'
                     );
                 }
                 html.push('</div>');
                 sentencesEl.innerHTML = html.join("");
+                updateReadControlsState();
             }
 
             function setActive(el) {
@@ -139,6 +191,151 @@
                     sentencesEl.classList.remove("is-loading");
                 });
             }
+
+            function updateReadControlsState() {
+                var disabled = !currentRanges.length;
+                var buttons = sentencesEl.querySelectorAll('.clusters-read-btn');
+                for (var i = 0; i < buttons.length; i += 1) {
+                    buttons[i].disabled = disabled;
+                }
+            }
+
+            function updateRangeReadState(rangeKey, isRead) {
+                for (var i = 0; i < currentRanges.length; i += 1) {
+                    var currentRange = currentRanges[i];
+                    var currentKey = buildRangeKey(
+                        currentRange.post_id,
+                        currentRange.sentence_indices || []
+                    );
+                    if (String(currentKey) === String(rangeKey)) {
+                        currentRanges[i].read = isRead;
+                    }
+                }
+                var nodes = sentencesEl.querySelectorAll(
+                    '.clusters-topic-sentence[data-range-key="' + String(rangeKey) + '"]'
+                );
+                for (var j = 0; j < nodes.length; j += 1) {
+                    var node = nodes[j];
+                    node.classList.toggle('is-read', isRead);
+                    node.classList.toggle('is-unread', !isRead);
+                    var btn = node.querySelector('.clusters-topic-toggle-read');
+                    if (btn) {
+                        btn.textContent = isRead ? 'Mark Unread' : 'Mark Read';
+                        btn.title = isRead ? 'Mark as unread' : 'Mark as read';
+                        btn.setAttribute('data-read', isRead ? '1' : '0');
+                    }
+                }
+            }
+
+            function changeSnippetsStatus(selections, readed) {
+                var requests = [];
+                for (var i = 0; i < selections.length; i += 1) {
+                    var selection = selections[i];
+                    var sentenceIndices = selection.sentenceIndices || [];
+                    for (var j = 0; j < sentenceIndices.length; j += 1) {
+                        requests.push(
+                            fetch('/read/snippet', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    post_id: selection.postId,
+                                    sentence_index: sentenceIndices[j],
+                                    readed: readed
+                                })
+                            }).then(function (response) {
+                                return response.json();
+                            })
+                        );
+                    }
+                }
+                return Promise.all(requests);
+            }
+
+            function normalizePostId(value) {
+                var numeric = Number(value);
+                if (!isNaN(numeric)) {
+                    return numeric;
+                }
+                return value;
+            }
+
+            function getRangeSelections() {
+                var selections = [];
+                for (var i = 0; i < currentRanges.length; i += 1) {
+                    var range = currentRanges[i];
+                    var pid = range.post_id;
+                    var sentenceIndices = Array.isArray(range.sentence_indices)
+                        ? range.sentence_indices
+                        : [];
+                    if (pid === undefined || pid === null || !sentenceIndices.length) {
+                        continue;
+                    }
+                    selections.push({
+                        postId: pid,
+                        sentenceIndices: sentenceIndices,
+                        rangeKey: buildRangeKey(pid, sentenceIndices)
+                    });
+                }
+                return selections;
+            }
+
+            sentencesEl.addEventListener('click', function (evt) {
+                var target = evt.target;
+                if (target.classList.contains('clusters-read-btn')) {
+                    var action = target.getAttribute('data-action');
+                    var readed = action === 'read-all';
+                    var selections = getRangeSelections();
+                    if (!selections.length) {
+                        return;
+                    }
+                    changeSnippetsStatus(selections, readed).then(function (payloads) {
+                        var allOk = payloads.length && payloads.every(function (payload) {
+                            return payload && payload.data === 'ok';
+                        });
+                        if (allOk) {
+                            for (var i = 0; i < selections.length; i += 1) {
+                                updateRangeReadState(selections[i].rangeKey, readed);
+                            }
+                        } else {
+                            alert('Failed to update snippet status');
+                        }
+                    }).catch(function () {
+                        alert('Failed to update snippet status');
+                    });
+                    return;
+                }
+                if (!target.classList.contains('clusters-topic-toggle-read')) {
+                    return;
+                }
+                var postId = normalizePostId(target.getAttribute('data-post-id'));
+                var isRead = target.getAttribute('data-read') === '1';
+                var sentenceIndices = parseSentenceIndices(
+                    target.getAttribute('data-sentence-indices')
+                );
+                var rangeKey = target.getAttribute('data-range-key');
+                var nextRead = !isRead;
+                if (!postId || !sentenceIndices.length) {
+                    return;
+                }
+                changeSnippetsStatus([{
+                    postId: postId,
+                    sentenceIndices: sentenceIndices,
+                    rangeKey: rangeKey
+                }], nextRead).then(function (payloads) {
+                    var allOk = payloads.length && payloads.every(function (payload) {
+                        return payload && payload.data === 'ok';
+                    });
+                    if (allOk) {
+                        updateRangeReadState(rangeKey, nextRead);
+                    } else {
+                        alert('Failed to update snippet status');
+                    }
+                }).catch(function () {
+                    alert('Failed to update snippet status');
+                });
+            });
 
             for (var i = 0; i < items.length; i += 1) {
                 items[i].addEventListener("click", function (evt) {

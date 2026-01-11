@@ -1214,6 +1214,7 @@ class RSSTagApplication(object):
                 "pid": 1,
                 "id": 1,
                 "content": 1,
+                "read": 1,
             }
             posts_list: List[Dict[str, Any]] = list(
                 self.db.posts.find(
@@ -1299,7 +1300,8 @@ class RSSTagApplication(object):
                         "start": start,
                         "end": end,
                         "number": num,
-                        "topic_title": topic_title
+                        "topic_title": topic_title,
+                        "read": bool(sentence.get("read", False)),
                     })
 
                 if topic_text_parts:
@@ -1561,6 +1563,8 @@ class RSSTagApplication(object):
 
             # Process all sentences in this range
             range_texts: List[str] = []
+            sentence_indices: List[int] = []
+            sentence_reads: List[bool] = []
             first_post_id = None
             range_start = None
             range_end = None
@@ -1574,8 +1578,9 @@ class RSSTagApplication(object):
                     continue
 
                 try:
-                    start_val = int(sentence.get("start"))
-                    end_val = int(sentence.get("end"))
+                    start_val: int = int(sentence.get("start"))
+                    end_val: int = int(sentence.get("end"))
+                    number_val: int = int(sentence.get("number"))
                 except (TypeError, ValueError):
                     continue
 
@@ -1597,6 +1602,8 @@ class RSSTagApplication(object):
                 text = _linkify_urls(text)
 
                 range_texts.append(text)
+                sentence_indices.append(number_val)
+                sentence_reads.append(bool(sentence.get("read", False)))
 
                 # Track the post_id and boundaries for the range
                 if first_post_id is None:
@@ -1606,13 +1613,18 @@ class RSSTagApplication(object):
 
             # Combine all sentence texts into one range text
             if range_texts and first_post_id is not None:
-                result_ranges.append({
-                    "topic_title": _linkify_urls(topic_title),
-                    "text": " ".join(range_texts),
-                    "post_id": first_post_id,
-                    "start": range_start,
-                    "end": range_end,
-                })
+                read_status: bool = bool(sentence_reads) and all(sentence_reads)
+                result_ranges.append(
+                    {
+                        "topic_title": _linkify_urls(topic_title),
+                        "text": " ".join(range_texts),
+                        "post_id": first_post_id,
+                        "start": range_start,
+                        "end": range_end,
+                        "sentence_indices": sentence_indices,
+                        "read": read_status,
+                    }
+                )
 
         return Response(
             json.dumps({"ranges": result_ranges}),
