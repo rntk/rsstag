@@ -21,7 +21,14 @@
         <div class="right_half">
             <div id="player_block" class="global_tools_button"></div>
             <div id="posts_stat" class="global_tools_button"></div>
-            <div id="read_all" class="global_tools_button"></div>
+            <div id="read_all" class="global_tools_button">
+                <button class="batch-read-btn" data-action="read-all" type="button"
+                    title="Mark all displayed snippets as read">Read all</button>
+            </div>
+            <div id="unread_all" class="global_tools_button">
+                <button class="batch-read-btn" data-action="unread-all" type="button"
+                    title="Mark all displayed snippets as unread">Unread all</button>
+            </div>
             <div id="show_all" class="global_tools_button"></div>
             {{ g_status.global_status() }}
             {{ menu.settings_menu() }}
@@ -60,7 +67,8 @@
                                     snippet.post_title }}</span>
                             </span>
                             <span class="snippet-actions">
-                                <span class="source-tag toggle-read-btn {{ 'snippet-tag-read' if snippet.read else 'snippet-tag-unread' }}"
+                                <span
+                                    class="source-tag toggle-read-btn {{ 'snippet-tag-read' if snippet.read else 'snippet-tag-unread' }}"
                                     data-post-id="{{ snippet.post_id }}"
                                     data-indices="{{ snippet.indices | join(',') }}"
                                     data-read="{{ 1 if snippet.read else 0 }}"
@@ -73,8 +81,8 @@
                                 <a href="/posts/{{snippet.post_id}}" class="source-tag snippet-tag-context"
                                     title="Show only this post content">Show full post</a>
                                 {% if snippet.url %}
-                                <a href="{{ snippet.url }}" target="_blank" class="source-tag snippet-tag-original" 
-                                   title="Go to source article">Original &nearr;</a>
+                                <a href="{{ snippet.url }}" target="_blank" class="source-tag snippet-tag-original"
+                                    title="Go to source article">Original &nearr;</a>
                                 {% endif %}
                             </span>
                         </div>

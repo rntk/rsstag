@@ -1978,6 +1978,92 @@ def on_post_graph_get(
         ),
         mimetype="text/html",
     )
+def on_read_snippets_post(
+    app: "RSSTagApplication", user: dict, request: Request
+) -> Response:
+    try:
+        data = json.loads(request.get_data(as_text=True))
+        readed = bool(data["readed"])
+        selections = data.get("selections", [])
+        if not isinstance(selections, list):
+            raise Exception("selections must be a list")
+    except Exception as e:
+        logging.warning("Send wrong data for read snippets. Cause: %s", e)
+        return Response(
+            json.dumps({"error": "Bad data"}), mimetype="application/json", status=400
+        )
+
+    # Group by post_id for efficiency
+    by_post = defaultdict(list)
+    for selection in selections:
+        post_id = str(selection["post_id"])
+        sentence_indices = [int(i) for i in selection.get("sentence_indices", [])]
+        if sentence_indices:
+            by_post[post_id].extend(sentence_indices)
+
+    for post_id, sentence_indices in by_post.items():
+        # Update snippet status
+        all_read = app.post_grouping.update_snippets_read_status(
+            user["sid"], post_id, list(set(sentence_indices)), readed
+        )
+
+        if all_read is None:
+            continue
+
+        projection = {"pid": True, "read": True, "id": True, "tags": True, "bi_grams": True}
+        post = app.posts.get_by_pid(user["sid"], post_id, projection)
+
+        if not post:
+            continue
+
+        should_change_post = False
+        if not readed:
+            if post["read"]:
+                should_change_post = True
+        else:
+            if all_read and not post["read"]:
+                should_change_post = True
+
+        if should_change_post:
+            post_ids = [post_id]
+            tags = defaultdict(int)
+            bi_grams = defaultdict(int)
+            letters = defaultdict(int)
+
+            for t in post["tags"]:
+                tags[t] += 1
+                if t:
+                    letters[t[0]] += 1
+            for bi_g in post.get("bi_grams", []):
+                bi_grams[bi_g] += 1
+
+            for_insert = [
+                {
+                    "user": user["sid"],
+                    "id": post["id"],
+                    "status": readed,
+                    "processing": TASK_NOT_IN_PROCESSING,
+                    "type": TASK_MARK,
+                }
+            ]
+
+            if app.tasks.add_task(
+                {"type": TASK_MARK, "user": user["sid"], "data": for_insert}
+            ):
+                changed = app.posts.change_status(user["sid"], post_ids, readed)
+                if changed and tags:
+                    app.tags.change_unread(user["sid"], tags, readed)
+                if changed and bi_grams:
+                    app.bi_grams.change_unread(user["sid"], bi_grams, readed)
+                if changed and letters:
+                    app.letters.change_unread(user["sid"], letters, readed)
+
+    return Response(
+        json.dumps({"data": "ok"}),
+        mimetype="application/json",
+        status=200,
+    )
+
 
 
 def on_read_snippet_post(

@@ -1,69 +1,112 @@
 // Post Grouped Snippets functionality
 
 document.addEventListener('click', (event) => {
-    const btn = event.target.closest('.toggle-read-btn');
-    if (!btn) {
+    // Individual toggle
+    const toggleBtn = event.target.closest('.toggle-read-btn');
+    if (toggleBtn) {
+        const postId = toggleBtn.dataset.postId;
+        const indices = toggleBtn.dataset.indices
+            ? toggleBtn.dataset.indices.split(',').filter(Boolean).map(Number)
+            : [];
+        const currentlyRead = toggleBtn.dataset.read === '1';
+
+        const selections = [{
+            post_id: postId,
+            sentence_indices: indices
+        }];
+
+        changeSnippetsStatus(selections, !currentlyRead).then(payload => {
+            if (payload && payload.data === 'ok') {
+                updateUIForSelections(selections, !currentlyRead);
+            } else {
+                alert('Failed to update status');
+            }
+        }).catch(err => {
+            console.error(err);
+            alert('Failed to update status');
+        });
         return;
     }
 
-    const postId = btn.dataset.postId;
-    const indices = btn.dataset.indices
-        ? btn.dataset.indices.split(',').filter(Boolean).map(Number)
-        : [];
-    const currentlyRead = btn.dataset.read === '1';
+    // Batch tools
+    const batchBtn = event.target.closest('.batch-read-btn');
+    if (batchBtn) {
+        const action = batchBtn.dataset.action;
+        const readed = action === 'read-all';
+        const selections = getAllDisplayedSelections();
 
-    toggleRead(postId, indices, currentlyRead);
+        if (!selections.length) return;
+
+        changeSnippetsStatus(selections, readed).then(payload => {
+            if (payload && payload.data === 'ok') {
+                updateUIForSelections(selections, readed);
+            } else {
+                alert('Failed to update status');
+            }
+        }).catch(err => {
+            console.error(err);
+            alert('Failed to update status');
+        });
+    }
 });
 
-function toggleRead(postId, sentenceIndices, currentlyRead) {
-    const newState = !currentlyRead;
-    const indicesStr = Array.isArray(sentenceIndices) ? sentenceIndices.join('_') : sentenceIndices;
-
-    // We need to mark each sentence as read.
-    // The current API /read/snippet only supports one sentence at a time (presumably)
-    // Let's check on_read_snippet_post in posts.py
-
-    const promises = (Array.isArray(sentenceIndices) ? sentenceIndices : [sentenceIndices]).map(idx => {
-        const data = {
-            post_id: postId,
-            sentence_index: idx,
-            readed: newState
-        };
-        return fetch('/read/snippet', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        }).then(response => response.json());
+function getAllDisplayedSelections() {
+    const selections = [];
+    const elements = document.querySelectorAll('.toggle-read-btn');
+    elements.forEach(el => {
+        const postId = el.dataset.postId;
+        const indices = el.dataset.indices
+            ? el.dataset.indices.split(',').filter(Boolean).map(Number)
+            : [];
+        if (postId && indices.length) {
+            selections.push({
+                post_id: postId,
+                sentence_indices: indices
+            });
+        }
     });
+    return selections;
+}
 
-    Promise.all(promises)
-        .then(results => {
-            const allOk = results.every(result => result.data === 'ok');
-            if (allOk) {
-                const snippetEl = document.getElementById(`snippet_${postId}_${indicesStr}`);
-                if (snippetEl) {
-                    if (newState) {
-                        snippetEl.classList.add('read');
-                    } else {
-                        snippetEl.classList.remove('read');
-                    }
+function changeSnippetsStatus(selections, readed) {
+    if (!selections || !selections.length) {
+        return Promise.resolve();
+    }
 
-                    // Update btn
-                    const btn = snippetEl.querySelector('.toggle-read-btn');
-                    if (btn) {
-                        btn.textContent = newState ? 'Mark Unread' : 'Mark Read';
-                        btn.style.background = newState ? '#eee' : '#c8e6c9';
-                        btn.style.color = newState ? '#666' : '#2e7d32';
-                        btn.title = newState ? 'Mark as unread' : 'Mark as read';
-                        btn.dataset.read = newState ? '1' : '0';
-                    }
-                }
-            } else {
-                alert('Error updating status for some sentences');
-            }
+    return fetch('/read/snippets', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            selections: selections,
+            readed: readed
         })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Failed to update snippet status');
-        });
+    }).then(response => response.json());
+}
+
+function updateUIForSelections(selections, readed) {
+    selections.forEach(sel => {
+        const indicesStr = sel.sentence_indices.join('_');
+        const snippetEl = document.getElementById(`snippet_${sel.post_id}_${indicesStr}`);
+        if (snippetEl) {
+            if (readed) {
+                snippetEl.classList.add('read');
+            } else {
+                snippetEl.classList.remove('read');
+            }
+
+            const btn = snippetEl.querySelector('.toggle-read-btn');
+            if (btn) {
+                btn.textContent = readed ? 'Mark Unread' : 'Mark Read';
+                btn.classList.toggle('snippet-tag-read', readed);
+                btn.classList.toggle('snippet-tag-unread', !readed);
+                // Remove inline styles if they were set by old JS, otherwise rely on CSS classes
+                btn.style.background = '';
+                btn.style.color = '';
+                btn.title = readed ? 'Mark as unread' : 'Mark as read';
+                btn.dataset.read = readed ? '1' : '0';
+            }
+        }
+    });
 }

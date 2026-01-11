@@ -228,29 +228,30 @@
             }
 
             function changeSnippetsStatus(selections, readed) {
-                var requests = [];
+                if (!selections || !selections.length) {
+                    return Promise.resolve();
+                }
+                var payloadSelections = [];
                 for (var i = 0; i < selections.length; i += 1) {
                     var selection = selections[i];
-                    var sentenceIndices = selection.sentenceIndices || [];
-                    for (var j = 0; j < sentenceIndices.length; j += 1) {
-                        requests.push(
-                            fetch('/read/snippet', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify({
-                                    post_id: selection.postId,
-                                    sentence_index: sentenceIndices[j],
-                                    readed: readed
-                                })
-                            }).then(function (response) {
-                                return response.json();
-                            })
-                        );
-                    }
+                    payloadSelections.push({
+                        post_id: selection.postId,
+                        sentence_indices: selection.sentenceIndices
+                    });
                 }
-                return Promise.all(requests);
+
+                return fetch('/read/snippets', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        selections: payloadSelections,
+                        readed: readed
+                    })
+                }).then(function (response) {
+                    return response.json();
+                });
             }
 
             function normalizePostId(value) {
@@ -290,11 +291,8 @@
                     if (!selections.length) {
                         return;
                     }
-                    changeSnippetsStatus(selections, readed).then(function (payloads) {
-                        var allOk = payloads.length && payloads.every(function (payload) {
-                            return payload && payload.data === 'ok';
-                        });
-                        if (allOk) {
+                    changeSnippetsStatus(selections, readed).then(function (payload) {
+                        if (payload && payload.data === 'ok') {
                             for (var i = 0; i < selections.length; i += 1) {
                                 updateRangeReadState(selections[i].rangeKey, readed);
                             }
@@ -323,11 +321,8 @@
                     postId: postId,
                     sentenceIndices: sentenceIndices,
                     rangeKey: rangeKey
-                }], nextRead).then(function (payloads) {
-                    var allOk = payloads.length && payloads.every(function (payload) {
-                        return payload && payload.data === 'ok';
-                    });
-                    if (allOk) {
+                }], nextRead).then(function (payload) {
+                    if (payload && payload.data === 'ok') {
                         updateRangeReadState(rangeKey, nextRead);
                     } else {
                         alert('Failed to update snippet status');

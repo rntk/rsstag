@@ -63,9 +63,19 @@ class RssTagPostGrouping:
             return False
 
     def update_snippet_read_status(
-        self, owner: str, post_id: int, sentence_index: int, read_status: bool
+        self, owner: str, post_id: Any, sentence_index: int, read_status: bool
     ) -> Optional[bool]:
         """Update read status for a specific sentence in a post's grouping
+
+        Returns True if ALL sentences in the post are now read, False otherwise.
+        Returns None if post grouping not found.
+        """
+        return self.update_snippets_read_status(owner, post_id, [sentence_index], read_status)
+
+    def update_snippets_read_status(
+        self, owner: str, post_id: Any, sentence_indices: List[int], read_status: bool
+    ) -> Optional[bool]:
+        """Update read status for multiple sentences in a post's grouping
 
         Returns True if ALL sentences in the post are now read, False otherwise.
         Returns None if post grouping not found.
@@ -78,16 +88,17 @@ class RssTagPostGrouping:
             return None
 
         sentences = doc.get("sentences", [])
+        indices_set = set(sentence_indices)
         all_read = True
-        found = False
+        found_any = False
         for s in sentences:
-            if s.get("number") == sentence_index:
+            if s.get("number") in indices_set:
                 s["read"] = read_status
-                found = True
+                found_any = True
             if not s.get("read", False):
                 all_read = False
 
-        if found:
+        if found_any:
             self._db.post_grouping.update_one(
                 {"owner": owner, "post_ids_hash": post_ids_hash},
                 {"$set": {"sentences": sentences}},
