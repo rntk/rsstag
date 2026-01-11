@@ -474,11 +474,6 @@ class RSSTagRoutes:
                 "methods": ["POST"],
             },
             {
-                "url": "/read/snippet",
-                "endpoint": "on_read_snippet_post",
-                "methods": ["POST"],
-            },
-            {
                 "url": "/delete-feeds-categories",
                 "endpoint": "on_delete_feeds_categories_post",
                 "methods": ["POST"],

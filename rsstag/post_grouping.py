@@ -62,15 +62,6 @@ class RssTagPostGrouping:
             self._log.error("Can't save grouped posts data. Info: %s", e)
             return False
 
-    def update_snippet_read_status(
-        self, owner: str, post_id: Any, sentence_index: int, read_status: bool
-    ) -> Optional[bool]:
-        """Update read status for a specific sentence in a post's grouping
-
-        Returns True if ALL sentences in the post are now read, False otherwise.
-        Returns None if post grouping not found.
-        """
-        return self.update_snippets_read_status(owner, post_id, [sentence_index], read_status)
 
     def update_snippets_read_status(
         self, owner: str, post_id: Any, sentence_indices: List[int], read_status: bool
