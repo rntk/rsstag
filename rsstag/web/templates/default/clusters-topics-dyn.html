@@ -88,10 +88,16 @@
                     if (range.topic_title) {
                         meta += ' | ' + range.topic_title;
                     }
+                    var postLink = "";
+                    if (range.post_id !== undefined && range.post_id !== null) {
+                        postLink = '<a class="clusters-topic-sentence-link" href="/posts/' +
+                            encodeURIComponent(range.post_id) + '">Open post</a>';
+                    }
                     html.push(
                         '<div class="clusters-topic-sentence">' +
                         '<div class="clusters-topic-sentence-meta">' + escapeHtml(meta) + '</div>' +
                         '<div class="clusters-topic-sentence-text">' + escapeHtml(range.text) + '</div>' +
+                        postLink +
                         '</div>'
                     );
                 }
