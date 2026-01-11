@@ -73,25 +73,25 @@
                     .replace(/'/g, "&#39;");
             }
 
-            function renderSentences(sentences, title) {
+            function renderRanges(ranges, title) {
                 var html = [];
                 html.push('<div class="clusters-topic-header">' + escapeHtml(title) + '</div>');
-                if (!sentences.length) {
-                    html.push('<div class="clusters-topic-placeholder">No sentences found.</div>');
+                if (!ranges.length) {
+                    html.push('<div class="clusters-topic-placeholder">No ranges found.</div>');
                     sentencesEl.innerHTML = html.join("");
                     return;
                 }
                 html.push('<div class="clusters-topic-sentences-list">');
-                for (var i = 0; i < sentences.length; i += 1) {
-                    var sentence = sentences[i];
-                    var meta = 'Post ' + sentence.post_id;
-                    if (sentence.topic_title) {
-                        meta += ' | ' + sentence.topic_title;
+                for (var i = 0; i < ranges.length; i += 1) {
+                    var range = ranges[i];
+                    var meta = 'Post ' + range.post_id;
+                    if (range.topic_title) {
+                        meta += ' | ' + range.topic_title;
                     }
                     html.push(
                         '<div class="clusters-topic-sentence">' +
                         '<div class="clusters-topic-sentence-meta">' + escapeHtml(meta) + '</div>' +
-                        '<div class="clusters-topic-sentence-text">' + escapeHtml(sentence.text) + '</div>' +
+                        '<div class="clusters-topic-sentence-text">' + escapeHtml(range.text) + '</div>' +
                         '</div>'
                     );
                 }
@@ -108,8 +108,8 @@
 
             function requestSentences(clusterId) {
                 var cluster = clusterData[String(clusterId)];
-                if (!cluster || !cluster.sentences) {
-                    renderSentences([], "Cluster");
+                if (!cluster || !cluster.ranges) {
+                    renderRanges([], "Cluster");
                     return;
                 }
                 sentencesEl.classList.add("is-loading");
@@ -120,15 +120,15 @@
                         "Content-Type": "application/json"
                     },
                     body: JSON.stringify({
-                        sentences: cluster.sentences
+                        ranges: cluster.ranges
                     })
                 }).then(function (response) {
                     return response.json();
                 }).then(function (payload) {
-                    var items = payload && payload.sentences ? payload.sentences : [];
-                    renderSentences(items, cluster.title || "Cluster");
+                    var items = payload && payload.ranges ? payload.ranges : [];
+                    renderRanges(items, cluster.title || "Cluster");
                 }).catch(function () {
-                    renderSentences([], "Cluster");
+                    renderRanges([], "Cluster");
                 }).finally(function () {
                     sentencesEl.classList.remove("is-loading");
                 });
