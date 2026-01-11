@@ -125,30 +125,42 @@ def _group_color(group_id: str) -> str:
 def _linkify_urls(text: str) -> str:
     """Convert angle-bracketed, parenthesized and square-bracketed URLs to clickable links.
 
-    Converts <http://example.com> to <a href="http://example.com" target="_blank">http://example.com</a>
-    Converts (http://example.com) to (<a href="http://example.com" target="_blank">http://example.com</a>)
-    Converts [http://example.com] to [<a href="http://example.com" target="_blank">http://example.com</a>]
+    Converts <http://example.com/path?q=1> to <a href="http://example.com/path?q=1" target="_blank">example.com</a>
+    Converts (http://example.com/path?q=1) to (<a href="http://example.com/path?q=1" target="_blank">example.com</a>)
+    Converts [http://example.com/path?q=1] to [<a href="http://example.com/path?q=1" target="_blank">example.com</a>]
     """
     import re
+    import urllib.parse
+
+    def _make_anchor(url: str) -> str:
+        parsed: urllib.parse.ParseResult = urllib.parse.urlparse(url)
+        display_domain: str = parsed.hostname or parsed.netloc or url
+        return f'<a href="{url}" target="_blank">{display_domain}</a>'
 
     # Match URLs inside angle brackets: <http://...> or <https://...>
-    angle_bracket_pattern = r"<\s*(https?://[^>]+)\s*>"
+    angle_bracket_pattern: str = r"<\s*(https?://[^>]+)\s*>"
     text = re.sub(
-        angle_bracket_pattern, r'<a href="\1" target="_blank">\1</a>', text
+        angle_bracket_pattern,
+        lambda match: _make_anchor(match.group(1)),
+        text,
     )
 
     # Match URLs inside parentheses: (http://...) or (https://...)
     # We exclude ) from the URL content to avoid matching the closing parenthesis of the container
-    parentheses_pattern = r"\(\s*(https?://[^)]+)\s*\)"
+    parentheses_pattern: str = r"\(\s*(https?://[^)]+)\s*\)"
     text = re.sub(
-        parentheses_pattern, r'(<a href="\1" target="_blank">\1</a>)', text
+        parentheses_pattern,
+        lambda match: f"({_make_anchor(match.group(1))})",
+        text,
     )
 
     # Match URLs inside square brackets: [http://...] or [https://...]
     # We exclude ] from the URL content to avoid matching the closing bracket of the container
-    square_bracket_pattern = r"\[\s*(https?://[^\]]+)\s*\]"
+    square_bracket_pattern: str = r"\[\s*(https?://[^\]]+)\s*\]"
     text = re.sub(
-        square_bracket_pattern, r'[<a href="\1" target="_blank">\1</a>]', text
+        square_bracket_pattern,
+        lambda match: f"[{_make_anchor(match.group(1))}]",
+        text,
     )
 
     return text
