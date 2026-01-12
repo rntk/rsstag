@@ -205,7 +205,7 @@ export default class PostsItem extends React.Component {
               className="post_title_link"
               href={post.post.url}
               target="_blank"
-              dangerouslySetInnerHTML={{ __html: post_title }}
+              dangerouslySetInnerHTML={{ __html: post_title }} rel="noreferrer"
             ></a>
           </h3>
           <div className="post_meta">
