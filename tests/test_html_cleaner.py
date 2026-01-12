@@ -1,15 +1,15 @@
 import unittest
 from rsstag.html_cleaner import HTMLCleaner
 
-class TestHTMLCleaner(unittest.TestCase):
 
+class TestHTMLCleaner(unittest.TestCase):
     def test_cleaner(self):
         cleaner = HTMLCleaner()
-        txt = 'test text'
-        html = '<body><span>{}</span></body>'.format(txt)
+        txt = "test text"
+        html = "<body><span>{}</span></body>".format(txt)
         cleaner.feed(html)
         self.assertEqual(cleaner.get_content(), [txt])
-        txt1 = 'test text1'
+        txt1 = "test text1"
         html = '<body><span>{}<a href="#">{}</a></span></body>'.format(txt, txt1)
         cleaner.feed(html)
         self.assertEqual(cleaner.get_content(), [txt, txt, txt1])
@@ -18,5 +18,5 @@ class TestHTMLCleaner(unittest.TestCase):
         self.assertNotEqual(cleaner.get_content(), [txt, txt, txt1])
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

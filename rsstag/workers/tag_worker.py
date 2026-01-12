@@ -627,7 +627,9 @@ class TagWorker(BaseWorker):
                     if is_unread:
                         bi_gram_stats[bg]["unread_count"] += 1
 
-            logging.info("Collected %s posts and %s pids for deletion", len(post_ids), len(pids))
+            logging.info(
+                "Collected %s posts and %s pids for deletion", len(post_ids), len(pids)
+            )
 
             # 4. Delete posts in batches (500)
             batch_size = 500
@@ -681,13 +683,23 @@ class TagWorker(BaseWorker):
                 logging.info("Updated counters for %s bi-grams", len(bi_gram_updates))
 
             # 7. Delete feed documents
-            res = self._db.feeds.delete_many({"owner": user_sid, "feed_id": {"$in": feed_ids}})
+            res = self._db.feeds.delete_many(
+                {"owner": user_sid, "feed_id": {"$in": feed_ids}}
+            )
             logging.info("Deleted %s feed documents", res.deleted_count)
 
             # 8. Cleanup orphans
-            res_tags = self._db.tags.delete_many({"owner": user_sid, "posts_count": {"$lte": 0}})
-            res_bis = self._db.bi_grams.delete_many({"owner": user_sid, "posts_count": {"$lte": 0}})
-            logging.info("Orphan cleanup: deleted %s tags and %s bi-grams", res_tags.deleted_count, res_bis.deleted_count)
+            res_tags = self._db.tags.delete_many(
+                {"owner": user_sid, "posts_count": {"$lte": 0}}
+            )
+            res_bis = self._db.bi_grams.delete_many(
+                {"owner": user_sid, "posts_count": {"$lte": 0}}
+            )
+            logging.info(
+                "Orphan cleanup: deleted %s tags and %s bi-grams",
+                res_tags.deleted_count,
+                res_bis.deleted_count,
+            )
 
             # Sync letters
             self.make_letters(user_sid)

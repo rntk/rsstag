@@ -1,4 +1,5 @@
 """Context Filter API handlers."""
+
 import json
 import logging
 from typing import TYPE_CHECKING

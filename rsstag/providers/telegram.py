@@ -363,11 +363,17 @@ class TelegramProvider:
 
                 repeats += 1
                 if repeats > on_error_repeats:
-                    logging.warning("Max repeats reached for telegram request: %s", query)
+                    logging.warning(
+                        "Max repeats reached for telegram request: %s", query
+                    )
                     return r
 
             wait_time = randint(1, 10)
-            logging.info("Waiting %d seconds before repeating telegram request: %s", wait_time, query)
+            logging.info(
+                "Waiting %d seconds before repeating telegram request: %s",
+                wait_time,
+                query,
+            )
             time.sleep(wait_time)
 
     def list_channels(self, user: dict) -> List[dict]:
@@ -384,33 +390,35 @@ class TelegramProvider:
         if not self._tlg.login(tlg_code.get_code, tlg_code.get_password):
             logging.error("Telegram login failed for user: %s", user.get("sid"))
             raise Exception("Telegram login failed")
-        
+
         logging.info("Telegram login successful, starting TDLib client")
         self._tlg.run()
-        
+
         logging.info("Waiting 30 seconds for TDLib to initialize...")
         time.sleep(30)
-        
+
         channels = []
         # Pre-load chats into TDLib memory to avoid flood waits on getChat
         logging.info("Pre-loading chats (load_chats)...")
         self.__requests_repeater(load_chats(limit=1000))
-        
+
         uniq_chat_ids = set()
         logging.info("Fetching chat IDs (get_chats)...")
         r = self.__requests_repeater(get_chats(limit=1000))
         ids = r.update
         if ids and ids["chat_ids"]:
             total_chats = len(ids["chat_ids"])
-            logging.info("Found %d chat IDs. Fetching individual chat details...", total_chats)
+            logging.info(
+                "Found %d chat IDs. Fetching individual chat details...", total_chats
+            )
             for i, c_id in enumerate(ids["chat_ids"]):
                 if c_id in uniq_chat_ids:
                     continue
                 uniq_chat_ids.add(c_id)
-                
+
                 if i % 10 == 0:
                     logging.info("Processing chat %d/%d", i + 1, total_chats)
-                    
+
                 r = self.__requests_repeater(get_chat(c_id))
                 time.sleep(randint(1, 3))
                 if not r.update:
@@ -422,7 +430,7 @@ class TelegramProvider:
                 )
         else:
             logging.warning("No chat IDs found in get_chats response")
-            
+
         logging.info("Closing Telegram client")
         self._tlg.close()
 
@@ -436,9 +444,7 @@ class TelegramProvider:
         selected_channels = []
         if selection:
             selected_channels = [
-                channel_id
-                for channel_id in selection.get("channels", [])
-                if channel_id
+                channel_id for channel_id in selection.get("channels", []) if channel_id
             ]
         self._tlg: Telegram = Telegram(
             app_id=self._config[provider]["app_id"],

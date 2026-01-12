@@ -62,7 +62,6 @@ class RssTagPostGrouping:
             self._log.error("Can't save grouped posts data. Info: %s", e)
             return False
 
-
     def update_snippets_read_status(
         self, owner: str, post_id: Any, sentence_indices: List[int], read_status: bool
     ) -> Optional[bool]:

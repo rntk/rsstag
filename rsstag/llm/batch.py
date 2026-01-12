@@ -9,6 +9,7 @@ from openai import OpenAI
 
 class BatchTaskStatus(Enum):
     """Enum for batch task status values"""
+
     NEW = "new"
     SUBMITTED = "submitted"
     IN_PROGRESS = "in_progress"

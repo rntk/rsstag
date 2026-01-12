@@ -33,7 +33,7 @@ class ROpenAI:
         call_kwargs = {
             "model": self.model,
             "input": messages,
-            #"temperature": temperature,
+            # "temperature": temperature,
             "reasoning": reasoning or {"effort": "low"},
         }
 

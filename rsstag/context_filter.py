@@ -34,7 +34,7 @@ class ContextFilter(ABC):
 
     @classmethod
     @abstractmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'ContextFilter':
+    def from_dict(cls, data: Dict[str, Any]) -> "ContextFilter":
         """Deserialize filter from stored data"""
         pass
 
@@ -83,7 +83,7 @@ class TagContextFilter(ContextFilter):
         return {"type": self.filter_type, "tags": self._tags}
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'TagContextFilter':
+    def from_dict(cls, data: Dict[str, Any]) -> "TagContextFilter":
         return cls(tags=data.get("tags", []))
 
 
@@ -134,7 +134,7 @@ class ContextFilterManager:
         return {k: v.to_dict() for k, v in self._filters.items()}
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'ContextFilterManager':
+    def from_dict(cls, data: Dict[str, Any]) -> "ContextFilterManager":
         filters = {}
         if not data:
             return cls(filters)

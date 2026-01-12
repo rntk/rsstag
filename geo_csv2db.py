@@ -12,11 +12,11 @@ if __name__ == "__main__":
         level=getattr(logging, config["settings"]["log_level"].upper()),
     )
     cl = MongoClient(
-        config["settings"]["db_host"], 
-        int(config["settings"]["db_port"]), 
+        config["settings"]["db_host"],
+        int(config["settings"]["db_port"]),
         username=config["settings"]["db_login"],
         password=config["settings"]["db_password"],
-        authSource=config["settings"]["db_auth_source"]
+        authSource=config["settings"]["db_auth_source"],
     )
     db = cl.rss
     geo_catalog = RssTagGeoCatalog(db)

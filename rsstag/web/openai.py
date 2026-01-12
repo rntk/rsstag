@@ -64,7 +64,9 @@ Your task is to process these messages and assist the user with the following re
 <messages>{text}</messages>
 """
         # print(whole_prompt)
-        txt = app.llm.call(user["settings"], [whole_prompt], provider_key="realtime_llm")
+        txt = app.llm.call(
+            user["settings"], [whole_prompt], provider_key="realtime_llm"
+        )
         if txt:
             responses.append(txt)
 

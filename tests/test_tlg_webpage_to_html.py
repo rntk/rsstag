@@ -2,6 +2,7 @@ import unittest
 import json
 from rsstag.providers import tlg_webpage_to_html
 
+
 class TestTlgPollToHTML(unittest.TestCase):
     __post = """
     {
@@ -258,11 +259,13 @@ class TestTlgPollToHTML(unittest.TestCase):
       "tlg_msg_lnk": "https://t.me/channelname/400"
     }
     """
+
     def test_tlg_webpage_to_html(self):
         p = json.loads(self.__post)
         html = tlg_webpage_to_html(p)
         expect = '<br /><p><a href="https://example.com/example/path">Site name<br />Site title<br />Site description<br /></a></p>'
         self.assertEqual(html, expect)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

@@ -275,9 +275,7 @@ def on_register_post(app: "RSSTagApplication", request: Request) -> Response:
     confirm = request.form.get("password_confirm")
 
     if not username or not password:
-        return on_register_get(
-            app, request, ["Login or Password can`t be empty"]
-        )
+        return on_register_get(app, request, ["Login or Password can`t be empty"])
     if password != confirm:
         return on_register_get(app, request, ["Passwords do not match"])
     if app.users.get_by_username(username):
@@ -333,7 +331,9 @@ def on_refresh_get_post(
 ) -> Response:
     if user:
         if not user.get("provider"):
-            return redirect(app.routes.get_url_by_endpoint(endpoint="on_data_sources_get"))
+            return redirect(
+                app.routes.get_url_by_endpoint(endpoint="on_data_sources_get")
+            )
         try:
             updated = False
             if not user["in_queue"]:
@@ -648,7 +648,9 @@ def on_provider_detail_post(
         else:
             err.append("File not exists")
     elif provider == GMAIL:
-        return redirect(app.routes.get_url_by_endpoint(endpoint="on_login_google_auth_get"))
+        return redirect(
+            app.routes.get_url_by_endpoint(endpoint="on_login_google_auth_get")
+        )
 
     if err:
         return on_provider_detail_get(app, user, provider, err)

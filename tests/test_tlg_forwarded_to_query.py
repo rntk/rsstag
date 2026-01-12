@@ -2,6 +2,7 @@ import unittest
 import json
 from rsstag.providers import tlg_forward_to_query
 
+
 class TestTlgPollToHTML(unittest.TestCase):
     __post = """
     {
@@ -72,11 +73,13 @@ class TestTlgPollToHTML(unittest.TestCase):
       "tlg_msg_lnk": "https://t.me/channelname/400"
     }
     """
+
     def test_tlg_webpage_to_html(self):
         p = json.loads(self.__post)
         q = tlg_forward_to_query(p)
         expect = {"chat_id": -1755191332593, "message_id": 47559175}
         self.assertEqual(q, expect)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

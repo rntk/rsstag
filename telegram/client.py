@@ -17,8 +17,9 @@ from .queries import (
     check_authentication_code,
     check_authentication_password,
     set_authentication_phone_number,
-    check_database_encryption_key
+    check_database_encryption_key,
 )
+
 
 class Result:
     def __init__(self, data: Optional[dict], error: Optional[dict]):
@@ -27,6 +28,7 @@ class Result:
 
     def __str__(self) -> str:
         return "Data: {}\nError: {}".format(self.update, self.error)
+
 
 class ResponseEvent(Event):
     def __init__(self, req_id: str):
@@ -52,7 +54,15 @@ class ResponseEvent(Event):
 # TODO: refactor
 # WARNING: absolutely silly and naive implementation
 class Telegram:
-    def __init__(self, app_id: int, app_hash: str, phone: str, db_path: str, db_key: str, tdjson_path: str = ""):
+    def __init__(
+        self,
+        app_id: int,
+        app_hash: str,
+        phone: str,
+        db_path: str,
+        db_key: str,
+        tdjson_path: str = "",
+    ):
         self._app_id = app_id
         self._app_hash = app_hash
         self._phone = phone
@@ -92,7 +102,9 @@ class Telegram:
         self._td_set_log_message_callback = self._tdjson.td_set_log_message_callback
         self._td_set_log_message_callback.restype = None
         self._td_set_log_message_callback.argtypes = [c_int, log_message_callback_type]
-        self._c_on_log_message_callback = log_message_callback_type(self._on_log_message_callback)
+        self._c_on_log_message_callback = log_message_callback_type(
+            self._on_log_message_callback
+        )
         self._td_set_log_message_callback(2, self._c_on_log_message_callback)
 
         self._client_id = None
@@ -138,7 +150,9 @@ class Telegram:
         elif verbosity_level == 4:
             self._log.debug(("TDLib message: %s", message))
         else:
-            self._log.info(("TDLib message level %d. Message %s", verbosity_level, message))
+            self._log.info(
+                ("TDLib message level %d. Message %s", verbosity_level, message)
+            )
 
     def request(self, query: dict) -> Result:
         if not self._client_id:
@@ -196,7 +210,9 @@ class Telegram:
 
         self._client_id = None
 
-    def login(self, get_code: Callable[[str], str], get_password: Callable[[str], str]) -> bool:
+    def login(
+        self, get_code: Callable[[str], str], get_password: Callable[[str], str]
+    ) -> bool:
         self._client_id = self._td_create_client_id()
         self._td_execute(json.dumps(set_log_verbosity_level(2)).encode("utf-8"))
         self._get_code_fn = get_code
@@ -224,11 +240,7 @@ class Telegram:
 
             if state == "authorizationStateWaitTdlibParameters":
                 self._send(
-                    set_tdlib_parameters(
-                        self._app_id,
-                        self._app_hash,
-                        self._db_path
-                    )
+                    set_tdlib_parameters(self._app_id, self._app_hash, self._db_path)
                 )
                 continue
 
@@ -248,7 +260,9 @@ class Telegram:
                 return False
 
             if state == "authorizationStateWaitPassword":
-                self._send(check_authentication_password(self._get_password_fn(self._phone)))
+                self._send(
+                    check_authentication_password(self._get_password_fn(self._phone))
+                )
                 continue
 
             if state == "authorizationStateReady":

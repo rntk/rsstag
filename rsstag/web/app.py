@@ -334,9 +334,7 @@ class RSSTagApplication(object):
     def on_data_sources_get(self, user: dict, _: Request) -> Response:
         return users_handlers.on_data_sources_get(self, user)
 
-    def on_provider_detail_get(
-        self, user: dict, _: Request, provider: str
-    ) -> Response:
+    def on_provider_detail_get(self, user: dict, _: Request, provider: str) -> Response:
         return users_handlers.on_provider_detail_get(self, user, provider)
 
     def on_provider_detail_post(
@@ -1298,14 +1296,16 @@ class RSSTagApplication(object):
                         continue
                     text_part = _linkify_urls(text_part)
                     topic_text_parts.append(text_part)
-                    topic_sentences.append({
-                        "post_id": post_id,
-                        "start": start,
-                        "end": end,
-                        "number": num,
-                        "topic_title": topic_title,
-                        "read": bool(sentence.get("read", False)),
-                    })
+                    topic_sentences.append(
+                        {
+                            "post_id": post_id,
+                            "start": start,
+                            "end": end,
+                            "number": num,
+                            "topic_title": topic_title,
+                            "read": bool(sentence.get("read", False)),
+                        }
+                    )
 
                 if topic_text_parts:
                     texts.append(" ".join(topic_text_parts))
@@ -1327,8 +1327,7 @@ class RSSTagApplication(object):
                 if vectors.shape[0] > 10:
                     try:
                         neighbors = NearestNeighbors(
-                            n_neighbors=min(5, vectors.shape[0] // 2),
-                            metric="cosine"
+                            n_neighbors=min(5, vectors.shape[0] // 2), metric="cosine"
                         )
                         neighbors_fit = neighbors.fit(vectors)
                         distances, _ = neighbors_fit.kneighbors(vectors)
@@ -1347,16 +1346,23 @@ class RSSTagApplication(object):
                 if len(unique_labels) > 1 and -1 in unique_labels:
                     # Only positive labels for silhouette score
                     valid_mask = np.array(labels) >= 0
-                    if np.sum(valid_mask) > 1 and len(set(np.array(labels)[valid_mask])) > 1:
+                    if (
+                        np.sum(valid_mask) > 1
+                        and len(set(np.array(labels)[valid_mask])) > 1
+                    ):
                         try:
                             score = silhouette_score(
                                 vectors[valid_mask],
                                 np.array(labels)[valid_mask],
-                                metric="cosine"
+                                metric="cosine",
                             )
                             total_topics = len(texts)
                             clustered_topics = sum(1 for l in labels if l >= 0)
-                            coverage = clustered_topics / total_topics if total_topics > 0 else 0
+                            coverage = (
+                                clustered_topics / total_topics
+                                if total_topics > 0
+                                else 0
+                            )
                             logging.info(
                                 f"Clustering quality: silhouette={score:.3f}, coverage={coverage:.1%}, eps={eps:.3f}"
                             )
@@ -1383,10 +1389,12 @@ class RSSTagApplication(object):
                         if title:
                             all_titles.append(title)
                         # Store each range with its metadata
-                        all_ranges.append({
-                            "topic_title": _linkify_urls(title),
-                            "sentences": topic_sentences,
-                        })
+                        all_ranges.append(
+                            {
+                                "topic_title": _linkify_urls(title),
+                                "sentences": topic_sentences,
+                            }
+                        )
 
                 # Find most representative title from original section titles
                 top_tags: str = f"Cluster {label}"
@@ -1395,7 +1403,9 @@ class RSSTagApplication(object):
                 if all_titles and texts_for_cluster:
                     try:
                         cluster_vectorizer = TfidfVectorizer(stop_words=list(stopw))
-                        cluster_vectors = cluster_vectorizer.fit_transform(texts_for_cluster)
+                        cluster_vectors = cluster_vectorizer.fit_transform(
+                            texts_for_cluster
+                        )
                         if cluster_vectors.shape[1] > 0:
                             centroid = cluster_vectors.mean(axis=0)
 
@@ -1427,8 +1437,7 @@ class RSSTagApplication(object):
             MIN_CLUSTER_SIZE = 3
             clusters = [c for c in clusters if c["count"] >= MIN_CLUSTER_SIZE]
             clusters_data = {
-                str(c["id"]): clusters_data[str(c["id"])]
-                for c in clusters
+                str(c["id"]): clusters_data[str(c["id"])] for c in clusters
             }
 
             # Add hierarchical super-clusters if we have many clusters
@@ -1438,7 +1447,9 @@ class RSSTagApplication(object):
                     for c in clusters:
                         cluster_id = c["id"]
                         texts_in_cluster = label_texts.get(cluster_id, [])
-                        combined = c["title"] + " " + " ".join(texts_in_cluster[:5])  # Limit to first 5
+                        combined = (
+                            c["title"] + " " + " ".join(texts_in_cluster[:5])
+                        )  # Limit to first 5
                         cluster_texts.append(combined)
 
                     super_vectorizer = TfidfVectorizer(stop_words=list(stopw))
@@ -1447,18 +1458,20 @@ class RSSTagApplication(object):
                     # Create 3-8 super-clusters
                     n_super = max(3, min(8, len(clusters) // 3))
                     super_clustering = AgglomerativeClustering(
-                        n_clusters=n_super,
-                        metric="cosine",
-                        linkage="average"
+                        n_clusters=n_super, metric="cosine", linkage="average"
                     )
                     super_labels = super_clustering.fit_predict(super_vectors.toarray())
 
                     # Add super_cluster_id to each cluster
                     for idx, cluster in enumerate(clusters):
                         cluster["super_cluster_id"] = int(super_labels[idx])
-                        clusters_data[str(cluster["id"])]["super_cluster_id"] = int(super_labels[idx])
+                        clusters_data[str(cluster["id"])]["super_cluster_id"] = int(
+                            super_labels[idx]
+                        )
 
-                    logging.info(f"Created {n_super} super-clusters from {len(clusters)} clusters")
+                    logging.info(
+                        f"Created {n_super} super-clusters from {len(clusters)} clusters"
+                    )
                 except Exception as e:
                     logging.warning(f"Could not create super-clusters: {e}")
 
@@ -1591,11 +1604,7 @@ class RSSTagApplication(object):
                 if not plain_text:
                     continue
 
-                if (
-                    start_val < 0
-                    or end_val > len(plain_text)
-                    or start_val >= end_val
-                ):
+                if start_val < 0 or end_val > len(plain_text) or start_val >= end_val:
                     continue
 
                 text = plain_text[start_val:end_val].strip()
@@ -1650,7 +1659,9 @@ class RSSTagApplication(object):
     def on_get_tag_similar_tags(self, user: dict, _: Request, tags: str):
         return tags_handlers.on_get_tag_similar_tags(self, user, tags)
 
-    def on_group_by_tags_categories_get(self, user: dict, _: Request, page_number: int = 1):
+    def on_group_by_tags_categories_get(
+        self, user: dict, _: Request, page_number: int = 1
+    ):
         return tags_handlers.on_group_by_tags_categories_get(self, user, page_number)
 
     def on_group_by_tags_by_category_get(
@@ -1668,7 +1679,6 @@ class RSSTagApplication(object):
 
     def on_read_snippets_post(self, user: dict, request: Request) -> Response:
         return posts_handlers.on_read_snippets_post(self, user, request)
-
 
     def on_gmail_sort_post(self, user: dict, request: Request):
         return posts_handlers.on_gmail_sort_post(self, user, request)

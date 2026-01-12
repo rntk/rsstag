@@ -503,7 +503,9 @@ class RSSTagRoutes:
         self._werkzeug_routes = Map(self._rules)
 
     @staticmethod
-    def _merge_routes(routes: Iterable[dict], fallback_routes: Iterable[dict]) -> List[dict]:
+    def _merge_routes(
+        routes: Iterable[dict], fallback_routes: Iterable[dict]
+    ) -> List[dict]:
         seen = set()
         merged_routes = []
         for route in itertools.chain(routes, fallback_routes):

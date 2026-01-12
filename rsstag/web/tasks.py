@@ -50,7 +50,6 @@ def on_tasks_get(app, user: dict, request: Request) -> Response:
         TASK_GMAIL_SORT: "Sort Gmail emails",
         TASK_POST_GROUPING_BATCH: "Group posts (batch)",
         TASK_TAG_CLASSIFICATION_BATCH: "Classify tags (batch)",
-
     }
 
     page = app.template_env.get_template("tasks.html")

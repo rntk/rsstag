@@ -7,16 +7,19 @@ from typing import Optional, List, Dict, Any
 
 class PostSplitterError(Exception):
     """Base exception for PostSplitter errors"""
+
     pass
 
 
 class LLMGenerationError(PostSplitterError):
     """Raised when LLM call fails or returns empty/invalid response"""
+
     pass
 
 
 class ParsingError(PostSplitterError):
     """Raised when LLM response cannot be parsed correctly"""
+
     pass
 
 
@@ -49,11 +52,11 @@ class PostSplitter:
         # However, it might still return None if max_marker is 0 (empty/short text), which is not necessarily an error.
         # But looking at implementation below, let's see.
         if chapters is None:
-             # This happens if text is too short/empty/no markers.
-             # In that case, we probably shouldn't return a partial result, or maybe we should?
-             # The original code returned None. Let's stick to None for "nothing to do" or "invalid input" cases not related to LLM failure?
-             # Or better, if it returns None because no markers, we return None.
-             return None
+            # This happens if text is too short/empty/no markers.
+            # In that case, we probably shouldn't return a partial result, or maybe we should?
+            # The original code returned None. Let's stick to None for "nothing to do" or "invalid input" cases not related to LLM failure?
+            # Or better, if it returns None because no markers, we return None.
+            return None
 
         # Split into sentences and create groups
         sentences, groups = self._create_sentences_and_groups(
@@ -169,7 +172,7 @@ class PostSplitter:
 
     def _get_llm_ranges(self, tagged_text: str) -> List[tuple]:
         """Ask LLM to identify coherent ranges in the text
-        
+
         Raises:
             LLMGenerationError
             ParsingError
@@ -181,8 +184,8 @@ class PostSplitter:
         response = response.strip()
         self._log.info("LLM ranges response: %s", response)
         ranges = self._parse_llm_ranges(response)
-        
-        # If ranges is empty, it might mean the model didn't find any sections, 
+
+        # If ranges is empty, it might mean the model didn't find any sections,
         # or it failed to follow instructions. For now, strict empty check might be too aggressive
         # if the text was weird. But usually it should return something.
         # Let's trust _parse_llm_ranges for now.
@@ -239,12 +242,11 @@ Output:"""
                     continue
         return ranges
 
-
     def _get_topics_for_ranges(
         self, ranges: List[tuple], text_plain: str, marker_positions: Dict[int, int]
     ) -> List[tuple]:
         """Generate titles for each range. Returns list of (title, start, end)
-        
+
         Raises:
             PostSplitterError
         """
@@ -264,7 +266,7 @@ Output:"""
 
     def _generate_title_for_chunk(self, chunk_text: str) -> str:
         """Generate a title for a text chunk
-        
+
         Raises:
             LLMGenerationError
         """
@@ -298,7 +300,7 @@ Text section:
         self._log.info("LLM response: %s", response)
         title = response.strip().strip('"').strip("'").strip().split("\n")[0]
         if not title:
-             raise LLMGenerationError("Empty title generated from LLM")
+            raise LLMGenerationError("Empty title generated from LLM")
         return title
 
     def _validate_boundaries(
@@ -344,16 +346,36 @@ Text section:
 
     def _build_html_mapping(self, html_text: str) -> tuple:
         """Builds a mapping between normalized plain text indices and original HTML indices.
-        
+
         Adds synthetic newlines for block-level tags to ensure correct sentence splitting.
         """
         from html import unescape
         import re
 
         BLOCK_TAGS = {
-            "p", "div", "h1", "h2", "h3", "h4", "h5", "h6", "li", "ul", "ol", 
-            "blockquote", "pre", "hr", "br", "td", "tr", "table", "header", 
-            "footer", "section", "article", "aside"
+            "p",
+            "div",
+            "h1",
+            "h2",
+            "h3",
+            "h4",
+            "h5",
+            "h6",
+            "li",
+            "ul",
+            "ol",
+            "blockquote",
+            "pre",
+            "hr",
+            "br",
+            "td",
+            "tr",
+            "table",
+            "header",
+            "footer",
+            "section",
+            "article",
+            "aside",
         }
 
         mapping = []
@@ -361,7 +383,7 @@ Text section:
 
         n = len(html_text)
         i = 0
-        last_was_space = True # Start with True to trim leading spaces
+        last_was_space = True  # Start with True to trim leading spaces
 
         tag_pattern = re.compile(r"<(/?)([a-zA-Z0-9]+)([^>]*)>")
 
@@ -371,7 +393,7 @@ Text section:
                 if match:
                     tag_name = match.group(2).lower()
                     is_block = tag_name in BLOCK_TAGS
-                    
+
                     if is_block:
                         if plain_accum and plain_accum[-1] != "\n":
                             if plain_accum[-1] == " ":
@@ -380,7 +402,7 @@ Text section:
                                 plain_accum.append("\n")
                                 mapping.append(i)
                         last_was_space = True
-                    
+
                     i = match.end()
                     continue
                 else:
@@ -402,7 +424,7 @@ Text section:
             next_tag = html_text.find("<", i)
             chunk_end = next_tag if next_tag != -1 else n
             chunk = html_text[i:chunk_end]
-            
+
             j = 0
             while j < len(chunk):
                 char = chunk[j]
@@ -542,7 +564,7 @@ Text section:
         self, text_plain: str, text_html: str
     ) -> Optional[List[Dict[str, Any]]]:
         """Split content into chapters using LLM with word splitters
-        
+
         Raises:
             PostSplitterError
         """
@@ -571,9 +593,7 @@ Text section:
         if not topic_boundaries:
             return None
 
-        validated_boundaries = self._validate_boundaries(
-            topic_boundaries, max_marker
-        )
+        validated_boundaries = self._validate_boundaries(topic_boundaries, max_marker)
 
         return self._map_chapters_to_html(
             text_plain,
@@ -585,24 +605,24 @@ Text section:
 
     def _call_llm(self, prompt: str, temperature: float = 0.0) -> str:
         """Calls the LLM handler.
-        
+
         Raises:
             LLMGenerationError: If call fails or returns empty.
         """
         if not self._llm_handler:
             self._log.error("LLM handler not configured")
             raise LLMGenerationError("LLM handler not configured")
-        
+
         try:
             response = self._llm_handler.call([prompt], temperature=temperature)
         except Exception as e:
             self._log.error("LLM call failed: %s", e)
             raise LLMGenerationError(f"LLM call failed: {e}") from e
-            
+
         if not response:
             self._log.error("Empty LLM response")
             raise LLMGenerationError("Empty LLM response")
-            
+
         return response
 
     def _create_sentences_and_groups(

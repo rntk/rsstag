@@ -15,6 +15,7 @@ from pymongo import MongoClient
 def get_code() -> str:
     return input("Code: ")
 
+
 def tlg_sync(cfg: dict, phone: str, sync_ids: List[Tuple[int, int]]) -> None:
     if not tlg_ids:
         return
@@ -25,7 +26,7 @@ def tlg_sync(cfg: dict, phone: str, sync_ids: List[Tuple[int, int]]) -> None:
         app_hash=t_cfg["app_hash"],
         phone=phone,
         db_key=t_cfg["encryption_key"],
-        db_path=t_cfg["db_dir"]
+        db_path=t_cfg["db_dir"],
     )
     if not tlg.login(get_code):
         return
@@ -57,11 +58,11 @@ if __name__ == "__main__":
     cfg = load_config(config_path)
 
     cl = MongoClient(
-        cfg["settings"]["db_host"], 
-        int(cfg["settings"]["db_port"]), 
+        cfg["settings"]["db_host"],
+        int(cfg["settings"]["db_port"]),
         username=cfg["settings"]["db_login"],
         password=cfg["settings"]["db_password"],
-        authSource=cfg["settings"]["db_auth_source"]
+        authSource=cfg["settings"]["db_auth_source"],
     )
     db = cl[cfg["settings"]["db_name"]]
     feeds_h = RssTagFeeds(db)
@@ -76,11 +77,13 @@ if __name__ == "__main__":
         tlg_ids = []
         for feed in feeds:
             feed_id = int(feed["feed_id"])
-            posts = list(posts_h.get_by_feed_id(
-                user_id,
-                str(feed_id),
-                projection={"id": True, "_id": False, "read": True},
-            ))
+            posts = list(
+                posts_h.get_by_feed_id(
+                    user_id,
+                    str(feed_id),
+                    projection={"id": True, "_id": False, "read": True},
+                )
+            )
             posts.sort(key=lambda x: x["id"], reverse=False)
             p_id = 0
             n = 0

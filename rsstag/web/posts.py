@@ -82,9 +82,7 @@ def _build_topics_index(
     if normalized_context_tags:
         grouped_posts_projection["sentences"] = 1
     grouped_posts: list[dict] = list(
-        app.db.post_grouping.find(
-            {"owner": user["sid"]}, grouped_posts_projection
-        )
+        app.db.post_grouping.find({"owner": user["sid"]}, grouped_posts_projection)
     )
 
     all_post_ids: set[int] = set()
@@ -140,7 +138,9 @@ def _build_topics_index(
                             post_obj["content"]["content"]
                         ).decode("utf-8", "replace")
                         if post_obj["content"].get("title"):
-                            raw_content = f"{post_obj['content']['title']}. {raw_content}"
+                            raw_content = (
+                                f"{post_obj['content']['title']}. {raw_content}"
+                            )
                         plain_text, _ = app.post_splitter._build_html_mapping(
                             raw_content
                         )
@@ -362,7 +362,11 @@ def on_tag_get(
     if user["settings"]["similar_posts"]:
         clusters = app.posts.get_clusters(db_posts)
         cl_posts = app.posts.get_by_clusters(
-            user["sid"], list(clusters), only_unread, projection, context_tags=context_tags
+            user["sid"],
+            list(clusters),
+            only_unread,
+            projection,
+            context_tags=context_tags,
         )
         db_posts.extend(cl_posts)
     posts = []
@@ -477,7 +481,11 @@ def on_feed_get(
     context_tags = _get_context_tags(user)
 
     db_posts_c = app.posts.get_by_feed_id(
-        user["sid"], current_feed["feed_id"], only_unread, projection, context_tags=context_tags
+        user["sid"],
+        current_feed["feed_id"],
+        only_unread,
+        projection,
+        context_tags=context_tags,
     )
     db_posts = list(db_posts_c)
 
@@ -485,7 +493,11 @@ def on_feed_get(
     if user["settings"]["similar_posts"]:
         clusters = app.posts.get_clusters(db_posts)
         cl_posts = app.posts.get_by_clusters(
-            user["sid"], list(clusters), only_unread, projection, context_tags=context_tags
+            user["sid"],
+            list(clusters),
+            only_unread,
+            projection,
+            context_tags=context_tags,
         )
         db_posts.extend(cl_posts)
     pids = set()
@@ -800,7 +812,11 @@ def on_entity_get(
     if user["settings"]["similar_posts"]:
         clusters = app.posts.get_clusters(db_posts)
         cl_posts = app.posts.get_by_clusters(
-            user["sid"], list(clusters), only_unread, projection, context_tags=context_tags
+            user["sid"],
+            list(clusters),
+            only_unread,
+            projection,
+            context_tags=context_tags,
         )
         db_posts.extend(cl_posts)
     posts = []
@@ -1366,13 +1382,18 @@ def on_post_grouped_get(
     app: "RSSTagApplication", user: dict, request: Request, pids: str
 ) -> Response:
     """Handler for grouped posts view with server-side highlighting"""
-    projection: dict[str, bool] = {"content": True, "feed_id": True, "url": True, "read": True}
+    projection: dict[str, bool] = {
+        "content": True,
+        "feed_id": True,
+        "url": True,
+        "read": True,
+    }
     post_ids: list[str] = [pid for pid in pids.split("_") if pid]
     if not post_ids:
         return app.on_error(user, request, NotFound())
 
     # 1. Fetch posts and their raw content
-    posts_info: list[dict] = [] 
+    posts_info: list[dict] = []
     feed_titles: list[str] = []
     for post_id in post_ids:
         post = app.posts.get_by_pid(user["sid"], post_id, projection)
@@ -1436,9 +1457,7 @@ def on_post_grouped_get(
             sentence_offset += len(post_grouped_data["sentences"])
 
     # Calculate colors
-    all_group_colors = {
-        group: _group_color(group) for group in all_groups.keys()
-    }
+    all_group_colors = {group: _group_color(group) for group in all_groups.keys()}
     sentence_topics = defaultdict(list)
     for group_name, indices in all_groups.items():
         for idx in indices:
@@ -1461,18 +1480,13 @@ def on_post_grouped_get(
         river_topics = []
 
         # Find sentences belonging to this post
-        post_sentences = [
-            s for s in all_sentences_data if s["post_id"] == post_id
-        ]
-        
+        post_sentences = [s for s in all_sentences_data if s["post_id"] == post_id]
+
         # Get per-post grouping data for river chart
         post_grouped_data = app.post_grouping.get_grouped_posts(user["sid"], [post_id])
         if post_grouped_data and post_grouped_data.get("groups"):
             for group_name, indices in post_grouped_data["groups"].items():
-                river_topics.append({
-                    "name": group_name,
-                    "sentences": indices
-                })
+                river_topics.append({"name": group_name, "sentences": indices})
 
         if has_grouped_data and post_sentences:
             # Build a mapping between plain text indices and HTML indices
@@ -1538,9 +1552,9 @@ def on_post_grouped_get(
             for match in filtered_matches:
                 # Add text before the match
                 new_content_parts.append(raw_content[last_pos : match["start"]])
-                
+
                 match_text = match["text"]
-                
+
                 # Check if this match crosses any block boundaries
                 # If it does, we must split the span to keep HTML valid
                 internal_blocks = list(block_pattern.finditer(match_text))
@@ -1567,8 +1581,7 @@ def on_post_grouped_get(
                         if pre_tag_text:
                             new_content_parts.append(
                                 '<span class="sentence-group" data-sentence="{}" '
-                                'data-topic="{}" title="{}" style="background-color: {}40;">{}</span>'
-                                .format(
+                                'data-topic="{}" title="{}" style="background-color: {}40;">{}</span>'.format(
                                     match["num"],
                                     html.escape(match["topic"]),
                                     html.escape(match["topic"]),
@@ -1579,14 +1592,13 @@ def on_post_grouped_get(
                         # The tag itself (outside the span)
                         new_content_parts.append(match_text[ib.start() : ib.end()])
                         curr_internal_pos = ib.end()
-                    
+
                     # Remaining text after last tag
                     post_tag_text = match_text[curr_internal_pos:]
                     if post_tag_text:
                         new_content_parts.append(
                             '<span class="sentence-group" data-sentence="{}" '
-                            'data-topic="{}" title="{}" style="background-color: {}40;">{}</span>'
-                            .format(
+                            'data-topic="{}" title="{}" style="background-color: {}40;">{}</span>'.format(
                                 match["num"],
                                 html.escape(match["topic"]),
                                 html.escape(match["topic"]),
@@ -1594,7 +1606,7 @@ def on_post_grouped_get(
                                 post_tag_text,
                             )
                         )
-                
+
                 last_pos = match["end"]
             new_content_parts.append(raw_content[last_pos:])
             content = "".join(new_content_parts)
@@ -1611,8 +1623,8 @@ def on_post_grouped_get(
                 "read": p_info["read"],
                 "river_data": {
                     "topics": river_topics,
-                    "articleLength": len(post_sentences) if post_sentences else 0
-                }
+                    "articleLength": len(post_sentences) if post_sentences else 0,
+                },
             }
         )
 
@@ -2032,6 +2044,8 @@ def on_post_graph_get(
         ),
         mimetype="text/html",
     )
+
+
 def on_read_snippets_post(
     app: "RSSTagApplication", user: dict, request: Request
 ) -> Response:
@@ -2064,7 +2078,13 @@ def on_read_snippets_post(
         if all_read is None:
             continue
 
-        projection = {"pid": True, "read": True, "id": True, "tags": True, "bi_grams": True}
+        projection = {
+            "pid": True,
+            "read": True,
+            "id": True,
+            "tags": True,
+            "bi_grams": True,
+        }
         post = app.posts.get_by_pid(user["sid"], post_id, projection)
 
         if not post:

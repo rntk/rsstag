@@ -82,9 +82,7 @@ Your task is to process these messages and assist the user with the following re
 
 <messages>{batch_text}</messages>
 """
-            return app.llm.call(
-                user["settings"], [prompt], provider_key="realtime_llm"
-            )
+            return app.llm.call(user["settings"], [prompt], provider_key="realtime_llm")
 
         # Process in batches
         results = []

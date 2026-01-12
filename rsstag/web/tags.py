@@ -906,7 +906,9 @@ def on_tag_topics_get(app: "RSSTagApplication", user: dict, tags: str) -> Respon
     return Response(json.dumps(result), mimetype="application/json", status=code)
 
 
-def on_tag_grouped_topics_get(app: "RSSTagApplication", user: dict, tag: str) -> Response:
+def on_tag_grouped_topics_get(
+    app: "RSSTagApplication", user: dict, tag: str
+) -> Response:
     tag_data = app.tags.get_by_tag(user["sid"], tag)
     if not tag_data:
         return Response(json.dumps({"error": "Tag not found"}), status=404)
@@ -917,7 +919,10 @@ def on_tag_grouped_topics_get(app: "RSSTagApplication", user: dict, tag: str) ->
 
     only_unread = user["settings"].get("only_unread") or None
     cursor = app.posts.get_by_tags(
-        user["sid"], [tag], only_unread=only_unread, projection={"pid": True, "content": True}
+        user["sid"],
+        [tag],
+        only_unread=only_unread,
+        projection={"pid": True, "content": True},
     )
 
     topic_counts = defaultdict(int)
@@ -939,7 +944,9 @@ def on_tag_grouped_topics_get(app: "RSSTagApplication", user: dict, tag: str) ->
                 )
                 title = post["content"].get("title", "")
                 full_content_html = f"{title}. {raw_content}" if title else raw_content
-                content_plain, _ = app.post_splitter._build_html_mapping(full_content_html)
+                content_plain, _ = app.post_splitter._build_html_mapping(
+                    full_content_html
+                )
             except Exception as e:
                 logging.error("Failed to decompress content for post %s: %s", pid, e)
                 continue
@@ -953,7 +960,7 @@ def on_tag_grouped_topics_get(app: "RSSTagApplication", user: dict, tag: str) ->
                 s_end = sentence.get("end")
                 if s_start is not None and s_end is not None:
                     text = content_plain[s_start:s_end]
-            
+
             if text and word_re.search(text):
                 matching_indices.add(sentence["number"])
 
@@ -1744,7 +1751,10 @@ def on_group_by_tags_by_category_get(
             sort_by_title=category,
             sort_by_link=app.routes.get_url_by_endpoint(
                 endpoint="on_group_by_tags_by_category_get",
-                params={"quoted_category": category, "page_number": new_cookie_page_value},
+                params={
+                    "quoted_category": category,
+                    "page_number": new_cookie_page_value,
+                },
             ),
             group_by_link=app.routes.get_url_by_endpoint(
                 endpoint="on_group_by_category_get"

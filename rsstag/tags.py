@@ -334,7 +334,9 @@ class RssTagTags:
 
         return self._db.tags.find(query, **params).allow_disk_use(True).sort(sort_data)
 
-    def count_by_category(self, owner: str, category: str, only_unread: bool = False) -> int:
+    def count_by_category(
+        self, owner: str, category: str, only_unread: bool = False
+    ) -> int:
         query = {"owner": owner, "classifications.category": category}
         if only_unread:
             query["unread_count"] = {"$gt": 0}
