@@ -1406,13 +1406,9 @@ def on_post_grouped_get(
             raw_content = gzip.decompress(post["content"]["content"]).decode(
                 "utf-8", "replace"
             )
-            if user["provider"] == "gmail":
-                raw_content = _linkify_urls(raw_content)
 
             if post["content"]["title"]:
                 title = post["content"]["title"]
-                if user["provider"] == "gmail":
-                    title = _linkify_urls(title)
                 raw_content = title + ". " + raw_content
 
             posts_info.append(
