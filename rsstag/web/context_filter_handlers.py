@@ -1,14 +1,14 @@
 """Context Filter API handlers."""
 import json
 import logging
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from werkzeug.wrappers import Request, Response
 
 if TYPE_CHECKING:
     from rsstag.web.app import RSSTagApplication
 
-from rsstag.context_filter import ContextFilterManager, TagContextFilter
+from rsstag.context_filter import ContextFilterManager
 
 
 def get_context_filter_manager(user: dict) -> ContextFilterManager:

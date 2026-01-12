@@ -1,6 +1,5 @@
 import json
 import logging
-from typing import Optional
 from werkzeug.wrappers import Response, Request
 from rsstag.tasks import TASK_DELETE_FEEDS
 

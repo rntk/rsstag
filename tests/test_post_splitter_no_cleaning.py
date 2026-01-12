@@ -1,6 +1,5 @@
 
 import sys
-import os
 import re
 
 # Add the project directory to sys.path
