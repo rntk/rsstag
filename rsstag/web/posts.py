@@ -4,7 +4,7 @@ import re
 import gzip
 import logging
 from collections import defaultdict
-from urllib.parse import unquote_plus, unquote
+from urllib.parse import unquote_plus, unquote, quote_plus
 import requests  # Add requests import
 
 from typing import TYPE_CHECKING, Optional
@@ -69,6 +69,110 @@ def _topic_sentences_match_context(
         if len(found_tags) == len(context_tags):
             return True
     return False
+
+
+def _build_topics_index(
+    app: "RSSTagApplication",
+    user: dict,
+    normalized_context_tags: Optional[list[str]],
+) -> tuple[dict[str, dict], dict[str, dict]]:
+    """Build topics index and post mapping for topics list/search."""
+    plain_text_cache: dict[int, str] = {}
+    grouped_posts_projection: dict[str, int] = {"_id": 0, "groups": 1, "post_ids": 1}
+    if normalized_context_tags:
+        grouped_posts_projection["sentences"] = 1
+    grouped_posts: list[dict] = list(
+        app.db.post_grouping.find(
+            {"owner": user["sid"]}, grouped_posts_projection
+        )
+    )
+
+    all_post_ids: set[int] = set()
+    for post_data in grouped_posts:
+        all_post_ids.update(post_data.get("post_ids", []))
+
+    posts_projection: dict[str, int] = {"_id": 0, "pid": 1, "feed_id": 1}
+    if normalized_context_tags:
+        posts_projection["content"] = 1
+    posts_list: list[dict] = list(
+        app.db.posts.find(
+            {"owner": user["sid"], "pid": {"$in": list(all_post_ids)}},
+            posts_projection,
+        )
+    )
+    posts_data: dict[int, dict] = {post["pid"]: post for post in posts_list}
+
+    feed_ids: set[int] = {post["feed_id"] for post in posts_data.values()}
+    feeds_data: dict[int, str] = {
+        feed["feed_id"]: feed.get("title", "Unknown Feed")
+        for feed in app.db.feeds.find(
+            {"owner": user["sid"], "feed_id": {"$in": list(feed_ids)}},
+            {"_id": 0, "feed_id": 1, "title": 1},
+        )
+    }
+
+    topic_counts: dict[str, dict] = {}
+    post_topic_mapping: dict[str, dict] = {}
+
+    for post_data in grouped_posts:
+        post_ids: list[int] = post_data.get("post_ids", [])
+        post_id_str: str = "_".join(str(pid) for pid in post_ids)
+
+        first_post_id: Optional[int] = post_ids[0] if post_ids else None
+        feed_id: Optional[int] = (
+            posts_data.get(first_post_id, {}).get("feed_id")
+            if first_post_id is not None
+            else None
+        )
+        feed_title: str = (
+            feeds_data.get(feed_id, "Unknown Feed") if feed_id else "Unknown Feed"
+        )
+
+        topics_for_post: list[str] = list(post_data.get("groups", {}).keys())
+        if normalized_context_tags and first_post_id is not None:
+            sentences: list[dict] = post_data.get("sentences", [])
+            if sentences:
+                plain_text: Optional[str] = plain_text_cache.get(first_post_id)
+                if plain_text is None:
+                    post_obj: Optional[dict] = posts_data.get(first_post_id)
+                    if post_obj and post_obj.get("content"):
+                        raw_content: str = gzip.decompress(
+                            post_obj["content"]["content"]
+                        ).decode("utf-8", "replace")
+                        if post_obj["content"].get("title"):
+                            raw_content = f"{post_obj['content']['title']}. {raw_content}"
+                        plain_text, _ = app.post_splitter._build_html_mapping(
+                            raw_content
+                        )
+                        plain_text_cache[first_post_id] = plain_text
+                if plain_text:
+                    sentences_map: dict[int, dict] = {
+                        s["number"]: s for s in sentences if "number" in s
+                    }
+                    filtered_topics: list[str] = []
+                    for topic, indices in post_data.get("groups", {}).items():
+                        if _topic_sentences_match_context(
+                            indices, sentences_map, plain_text, normalized_context_tags
+                        ):
+                            filtered_topics.append(topic)
+                    topics_for_post = filtered_topics
+                else:
+                    topics_for_post = []
+            else:
+                topics_for_post = []
+
+        post_topic_mapping[post_id_str] = {
+            "feed_title": feed_title,
+            "topics": topics_for_post,
+        }
+
+        for topic in topics_for_post:
+            if topic not in topic_counts:
+                topic_counts[topic] = {"count": 0, "posts": []}
+            topic_counts[topic]["count"] += 1
+            topic_counts[topic]["posts"].append(post_id_str)
+
+    return topic_counts, post_topic_mapping
 
 
 def on_post_speech(app: "RSSTagApplication", user: dict, request: Request) -> Response:
@@ -1681,109 +1785,11 @@ def on_topics_list_get(
     topics_per_page: int = 100
     context_tags: Optional[list[str]] = _get_context_tags(user)
     normalized_context_tags: Optional[list[str]] = _normalize_context_tags(context_tags)
-    plain_text_cache: dict[int, str] = {}
-
-    # Get all grouped posts data from the database
-    grouped_posts_projection: dict[str, int] = {"_id": 0, "groups": 1, "post_ids": 1}
-    if normalized_context_tags:
-        grouped_posts_projection["sentences"] = 1
-    grouped_posts: list[dict] = list(
-        app.db.post_grouping.find(
-            {"owner": user["sid"]}, grouped_posts_projection
-        )
+    topic_counts: dict[str, dict]
+    post_topic_mapping: dict[str, dict]
+    topic_counts, post_topic_mapping = _build_topics_index(
+        app, user, normalized_context_tags
     )
-
-    # Get all unique post IDs for feed title lookups
-    all_post_ids: set[int] = set()
-    for post_data in grouped_posts:
-        all_post_ids.update(post_data["post_ids"])
-
-    # Fetch posts to get feed_ids
-    posts_projection: dict[str, int] = {"_id": 0, "pid": 1, "feed_id": 1}
-    if normalized_context_tags:
-        posts_projection["content"] = 1
-    posts_list: list[dict] = list(
-        app.db.posts.find(
-            {"owner": user["sid"], "pid": {"$in": list(all_post_ids)}},
-            posts_projection,
-        )
-    )
-    posts_data: dict[int, dict] = {post["pid"]: post for post in posts_list}
-
-    # Get unique feed IDs
-    feed_ids: set[int] = {post["feed_id"] for post in posts_data.values()}
-
-    # Fetch feeds to get titles
-    feeds_data: dict[int, str] = {
-        feed["feed_id"]: feed.get("title", "Unknown Feed")
-        for feed in app.db.feeds.find(
-            {"owner": user["sid"], "feed_id": {"$in": list(feed_ids)}},
-            {"_id": 0, "feed_id": 1, "title": 1},
-        )
-    }
-
-    # Count topics/chapters across all posts
-    topic_counts: dict[str, dict] = {}
-    post_topic_mapping: dict[str, dict] = {}
-
-    for post_data in grouped_posts:
-        post_ids: list[int] = post_data.get("post_ids", [])
-        post_id_str: str = "_".join(str(pid) for pid in post_ids)
-
-        # Derive feed_title from first post's feed
-        first_post_id: Optional[int] = post_ids[0] if post_ids else None
-        feed_id: Optional[int] = (
-            posts_data.get(first_post_id, {}).get("feed_id")
-            if first_post_id is not None
-            else None
-        )
-        feed_title = (
-            feeds_data.get(feed_id, "Unknown Feed") if feed_id else "Unknown Feed"
-        )
-
-        topics_for_post: list[str] = list(post_data.get("groups", {}).keys())
-        if normalized_context_tags and first_post_id is not None:
-            sentences: list[dict] = post_data.get("sentences", [])
-            if sentences:
-                plain_text: Optional[str] = plain_text_cache.get(first_post_id)
-                if plain_text is None:
-                    post_obj: Optional[dict] = posts_data.get(first_post_id)
-                    if post_obj and post_obj.get("content"):
-                        raw_content: str = gzip.decompress(
-                            post_obj["content"]["content"]
-                        ).decode("utf-8", "replace")
-                        if post_obj["content"].get("title"):
-                            raw_content = f"{post_obj['content']['title']}. {raw_content}"
-                        plain_text, _ = app.post_splitter._build_html_mapping(
-                            raw_content
-                        )
-                        plain_text_cache[first_post_id] = plain_text
-                if plain_text:
-                    sentences_map: dict[int, dict] = {
-                        s["number"]: s for s in sentences if "number" in s
-                    }
-                    filtered_topics: list[str] = []
-                    for topic, indices in post_data.get("groups", {}).items():
-                        if _topic_sentences_match_context(
-                            indices, sentences_map, plain_text, normalized_context_tags
-                        ):
-                            filtered_topics.append(topic)
-                    topics_for_post = filtered_topics
-                else:
-                    topics_for_post = []
-            else:
-                topics_for_post = []
-
-        post_topic_mapping[post_id_str] = {
-            "feed_title": feed_title,
-            "topics": topics_for_post,
-        }
-
-        for topic in topics_for_post:
-            if topic not in topic_counts:
-                topic_counts[topic] = {"count": 0, "posts": []}
-            topic_counts[topic]["count"] += 1
-            topic_counts[topic]["posts"].append(post_id_str)
 
     # Sort topics by count (descending)
     sorted_topics: list[tuple[str, dict]] = sorted(
@@ -1833,6 +1839,54 @@ def on_topics_list_get(
         ),
         mimetype="text/html",
     )
+
+
+def on_topics_search(
+    app: "RSSTagApplication", user: dict, request: Request
+) -> Response:
+    s_request: str = unquote_plus(request.form.get("req", "")).strip()
+    if not s_request:
+        result: dict[str, str] = {"error": "Request can`t be empty"}
+        return Response(json.dumps(result), mimetype="application/json", status=400)
+
+    normalized_request: str = s_request.casefold()
+    context_tags: Optional[list[str]] = _get_context_tags(user)
+    normalized_context_tags: Optional[list[str]] = _normalize_context_tags(context_tags)
+    topic_counts: dict[str, dict]
+    topic_counts, _ = _build_topics_index(app, user, normalized_context_tags)
+
+    matches: list[tuple[str, dict]] = []
+    for topic_name, topic_data in topic_counts.items():
+        if normalized_request in topic_name.casefold():
+            matches.append((topic_name, topic_data))
+
+    matches_sorted: list[tuple[str, dict]] = sorted(
+        matches, key=lambda x: x[1]["count"], reverse=True
+    )
+    limited_matches: list[tuple[str, dict]] = matches_sorted
+
+    data: list[dict[str, str | int]] = []
+    for topic_name, topic_data in limited_matches:
+        post_ids: list[str] = topic_data.get("posts", [])
+        all_post_ids: str = "_".join(post_ids)
+        grouped_url: str = app.routes.get_url_by_endpoint(
+            "on_post_grouped_get", {"pids": all_post_ids}
+        )
+        snippets_base_url: str = app.routes.get_url_by_endpoint(
+            "on_post_grouped_snippets_get", {"pids": all_post_ids}
+        )
+        snippets_url: str = f"{snippets_base_url}?topic={quote_plus(topic_name)}"
+        data.append(
+            {
+                "topic": topic_name,
+                "count": int(topic_data.get("count", 0)),
+                "url": grouped_url,
+                "snippets_url": snippets_url,
+            }
+        )
+
+    result: dict[str, list[dict[str, str | int]]] = {"data": data}
+    return Response(json.dumps(result), mimetype="application/json", status=200)
 
 
 def on_post_graph_get(
@@ -2063,6 +2117,3 @@ def on_read_snippets_post(
         mimetype="application/json",
         status=200,
     )
-
-
-

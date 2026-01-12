@@ -662,6 +662,9 @@ h3.post_title {
     margin: 1em 0.5em 0.5em 0.5em;
     text-align: center;
 }
+.topics-list-page .search_tools {
+    position: relative;
+}
 .search_field {
     width: 60%;
     position: relative;
@@ -678,6 +681,13 @@ h3.post_title {
     outline: 1px solid $my_gray;
     text-align: left;
     background-color: $windows_background_color;
+}
+.topics-list-page .search_result {
+    z-index: 2;
+    width: 80%;
+    left: 10%;
+    max-height: 70vh;
+    overflow-y: auto;
 }
 .search_result_item {
     margin: 0.3em;

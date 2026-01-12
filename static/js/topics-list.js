@@ -170,6 +170,89 @@ function renderTopicsPieChart() {
     });
 }
 
+function initTopicsSearch() {
+    const searchInput = document.getElementById('topics_search_field');
+    const resultsContainer = document.getElementById('topics_search_result');
+    if (!searchInput || !resultsContainer) {
+        return;
+    }
+
+    let debounceTimer = 0;
+    let lastRequest = '';
+    const debounceMs = 500;
+
+    const renderSuggestions = (items) => {
+        resultsContainer.innerHTML = '';
+        if (!Array.isArray(items) || items.length === 0) {
+            resultsContainer.style.display = 'none';
+            return;
+        }
+        resultsContainer.style.display = 'block';
+        items.forEach((item) => {
+            const row = document.createElement('p');
+            row.className = 'search_result_item';
+            const link = document.createElement('a');
+            link.href = item.url;
+            link.textContent = `${item.topic} (${item.count})`;
+            row.appendChild(link);
+            if (item.snippets_url) {
+                row.appendChild(document.createTextNode(' '));
+                const snippetsLink = document.createElement('a');
+                snippetsLink.href = item.snippets_url;
+                snippetsLink.textContent = '...';
+                row.appendChild(snippetsLink);
+            }
+            resultsContainer.appendChild(row);
+        });
+    };
+
+    const fetchSuggestions = (request) => {
+        if (!request) {
+            renderSuggestions([]);
+            return;
+        }
+        lastRequest = request;
+        const form = new FormData();
+        form.append('req', request);
+        fetch('/topics-search', {
+            method: 'POST',
+            credentials: 'include',
+            body: form,
+        })
+            .then((response) => response.json())
+            .then((data) => {
+                if (lastRequest !== request) {
+                    return;
+                }
+                if (data && data.data) {
+                    renderSuggestions(data.data);
+                } else {
+                    renderSuggestions([]);
+                }
+            })
+            .catch(() => {
+                renderSuggestions([]);
+            });
+    };
+
+    searchInput.addEventListener('input', (event) => {
+        const value = event.target.value.trim();
+        if (debounceTimer) {
+            clearTimeout(debounceTimer);
+        }
+        debounceTimer = setTimeout(() => {
+            fetchSuggestions(value);
+        }, debounceMs);
+    });
+
+    document.addEventListener('click', (event) => {
+        if (!resultsContainer.contains(event.target) && event.target !== searchInput) {
+            resultsContainer.style.display = 'none';
+        }
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     initTopicTabs();
+    initTopicsSearch();
 });

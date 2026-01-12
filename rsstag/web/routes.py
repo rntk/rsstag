@@ -259,6 +259,11 @@ class RSSTagRoutes:
                 "endpoint": "on_post_tags_search",
                 "methods": ["POST"],
             },
+            {
+                "url": "/topics-search",
+                "endpoint": "on_topics_search",
+                "methods": ["POST"],
+            },
             {"url": "/speech", "endpoint": "on_post_speech", "methods": ["POST"]},
             {
                 "url": "/bi-gram/<string:bi_gram>",
