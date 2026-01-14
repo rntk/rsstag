@@ -169,30 +169,54 @@ class PostSplitter:
         return f"""You are analyzing a text presented as a coordinate grid (Excel-like).
 X axis: Word position (0-indexed)
 Y axis: Line/Sentence number (0-indexed)
-The X-axis header at the top shows column numbers.
 
-Your task is to:
-1. Extract the MOST IMPORTANT or MAIN KEYWORDS that describe the content of the specific sentences range.
-2. Define the sentences/segments that belong to these keywords using Start and End coordinates.
-3. Avoid generic terms like 'Content' or 'Body'. Be specific (e.g., instead of 'Tech News', use 'NVIDIA GPU Launch', 'Python 3.12 Features').
+Your task: Extract specific, searchable topic keywords for each distinct section of the text.
 
-Output format (exactly one entry per line):
-Keywords: (StartY, StartX)-(EndY, EndX), (StartY, StartX)-(EndY, EndX)
+KEYWORD SELECTION HIERARCHY (prefer in order):
+1. Named entities: specific products, companies, people, technologies
+   Examples: "GPT-4", "Apple Vision Pro", "Kubernetes", "Linus Torvalds"
+2. Specific concepts/events: concrete actions, announcements, or occurrences
+   Examples: "Series B funding", "CVE-2024-1234 vulnerability", "React 19 release"
+3. Technical terms: domain-specific terminology
+   Examples: "vector embeddings", "JWT authentication", "HTTP/3 protocol"
+
+WHAT MAKES A GOOD KEYWORD:
+✓ Helps readers decide if this section is relevant to their interests
+✓ Specific enough to distinguish this section from others in the article
+✓ Something a user might search for
+✓ 1-4 words (noun phrases preferred)
+
+BAD KEYWORDS (too generic):
+✗ "Tech News", "Update", "Content", "Information", "Technology", "Discussion", "News"
+
+GOOD KEYWORDS (specific and searchable):
+✓ "Apple M4 chip" (not "Hardware Update")
+✓ "PostgreSQL indexing strategies" (not "Database Tips")
+✓ "Stripe Series C funding" (not "Company News")
+✓ "Python asyncio patterns" (not "Programming")
+
+SEMANTIC DISTINCTIVENESS:
+If multiple sections share a theme, differentiate them:
+- AI in healthcare → "AI medical imaging", "AI drug discovery"
+- NOT just "AI" for both sections
+
+OUTPUT FORMAT (exactly one entry per line):
+Specific Keywords: (StartY,StartX)-(EndY,EndX), (StartY,StartX)-(EndY,EndX)
 
 Example:
-Artificial Intelligence, Machine Learning: (0,0)-(0,15), (1,0)-(1,10)
-Neo4j, Graph Databases: (2,0)-(2,8)
+NVIDIA RTX 5090, GPU architecture: (0,0)-(0,15), (1,0)-(1,10)
+Neo4j vector search, Graph RAG: (2,0)-(2,8)
 no_topic: (2,9)-(2,15)
 
-IMPORTANT:
-- Coordinate format: (LineNumber, WordNumber). e.g., (0, 0) is the first word of the first line.
-- Covers ALL text: Every word in the grid must belong to a set of keywords or 'no_topic'.
-- Ranges are INCLUSIVE.
-- If a sentence (Row) is split between topics, use precise word coordinates.
-- Reading order is: Row Y, Word X -> Row Y, Word X+1 ... -> Row Y+1, Word 0 ...
-- Be granular: If a text lists multiple distinct stories or deals, separate them into their own keyword groups if they are distinguishable.
+COORDINATE RULES:
+- Format: (LineNumber, WordNumber) - both 0-indexed
+- (0,0) = first word of first line
+- Ranges are INCLUSIVE
+- Every word must belong to exactly one keyword group or 'no_topic'
+- Use 'no_topic' for boilerplate, disclaimers, or irrelevant content
+- Reading order: Row Y, Word X → Row Y, Word X+1 ... → Row Y+1, Word 0 ...
+- Be granular: separate distinct stories/topics into their own keyword groups
 
-Article Grid:
 <grid>
 {tagged_text}
 </grid>
