@@ -1735,6 +1735,8 @@ h3.post_title {
         border-radius: 6px;
         border: 1px solid #eee;
         transition: all 0.2s;
+        overflow: hidden;
+        max-width: 100%;
 
         &:hover {
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
@@ -1755,12 +1757,24 @@ h3.post_title {
         margin-bottom: 4px;
         display: flex;
         justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8px;
+        overflow: hidden;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
     }
 
     .snippet-text {
         font-size: 14px;
         line-height: 1.5;
         color: #444;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+        word-break: break-word;
+        max-height: 400px;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding-right: 8px;
     }
 
     .back-nav {
@@ -1788,11 +1802,18 @@ h3.post_title {
         color: #1976d2;
         border-radius: 4px;
         text-decoration: none;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
     .snippet-actions {
         display: flex;
         gap: 8px;
+        flex-wrap: wrap;
+        max-width: 100%;
+        overflow: hidden;
 
         .source-tag {
             font-size: 10px;
