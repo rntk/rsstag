@@ -176,14 +176,16 @@ class RssTagUsers:
             for k, v in settings.items():
                 if k in self._settings:
                     old_value = self._settings[k]
-                    if isinstance(old_value, int):
+                    if isinstance(old_value, bool):
+                        new_settings[k] = bool(v)
+                    elif isinstance(old_value, int):
                         new_settings[k] = int(v)
                     elif isinstance(old_value, float):
                         new_settings[k] = float(v)
-                    elif isinstance(old_value, bool):
-                        new_settings[k] = bool(v)
                     elif isinstance(old_value, str):
                         new_settings[k] = str(v)
+                    elif isinstance(old_value, dict):
+                        new_settings[k] = v
                     else:
                         raise ValueError("Bad settings type")
             result = new_settings
