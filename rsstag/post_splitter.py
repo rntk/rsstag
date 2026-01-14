@@ -278,7 +278,6 @@ Guidelines:
 - Good examples: "React Hooks: useState Pattern", "Database Indexing Strategies", "AWS Lambda Cold Starts", "SpaceX Starship Launch Update"
 - Bad examples: "Introduction", "Overview", "Discussion", "Highlights", "Updates", "Summary"
 - Prefer specific named entities (product names, company names, technical terms) over generic descriptions
-- If promotional/sponsored content, use format: "Sponsor: [Product/Company Name]"
 - Capture the main insight or subject matter, not the structure
 
 IMPORTANT:
