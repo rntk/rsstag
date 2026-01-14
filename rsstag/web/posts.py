@@ -75,12 +75,16 @@ def _build_topics_index(
     app: "RSSTagApplication",
     user: dict,
     normalized_context_tags: Optional[list[str]],
+    only_unread: bool = False,
 ) -> tuple[dict[str, dict], dict[str, dict]]:
     """Build topics index and post mapping for topics list/search."""
     plain_text_cache: dict[int, str] = {}
-    grouped_posts_projection: dict[str, int] = {"_id": 0, "groups": 1, "post_ids": 1}
-    if normalized_context_tags:
-        grouped_posts_projection["sentences"] = 1
+    grouped_posts_projection: dict[str, int] = {
+        "_id": 0,
+        "groups": 1,
+        "post_ids": 1,
+        "sentences": 1,
+    }
     grouped_posts: list[dict] = list(
         app.db.post_grouping.find({"owner": user["sid"]}, grouped_posts_projection)
     )
@@ -126,10 +130,24 @@ def _build_topics_index(
             feeds_data.get(feed_id, "Unknown Feed") if feed_id else "Unknown Feed"
         )
 
-        topics_for_post: list[str] = list(post_data.get("groups", {}).keys())
-        if normalized_context_tags and first_post_id is not None:
-            sentences: list[dict] = post_data.get("sentences", [])
-            if sentences:
+        sentences: list[dict] = post_data.get("sentences", [])
+        sentences_map: dict[int, dict] = {
+            s["number"]: s for s in sentences if "number" in s
+        }
+        topics_for_post: list[str] = []
+        for topic, indices in post_data.get("groups", {}).items():
+            topic_indices = indices
+            if only_unread:
+                topic_indices = [
+                    idx
+                    for idx in indices
+                    if idx in sentences_map and not sentences_map[idx].get("read", False)
+                ]
+
+            if not topic_indices:
+                continue
+
+            if normalized_context_tags and first_post_id is not None:
                 plain_text: Optional[str] = plain_text_cache.get(first_post_id)
                 if plain_text is None:
                     post_obj: Optional[dict] = posts_data.get(first_post_id)
@@ -145,21 +163,20 @@ def _build_topics_index(
                             raw_content
                         )
                         plain_text_cache[first_post_id] = plain_text
+
                 if plain_text:
-                    sentences_map: dict[int, dict] = {
-                        s["number"]: s for s in sentences if "number" in s
-                    }
-                    filtered_topics: list[str] = []
-                    for topic, indices in post_data.get("groups", {}).items():
-                        if _topic_sentences_match_context(
-                            indices, sentences_map, plain_text, normalized_context_tags
-                        ):
-                            filtered_topics.append(topic)
-                    topics_for_post = filtered_topics
-                else:
-                    topics_for_post = []
+                    if _topic_sentences_match_context(
+                        topic_indices,
+                        sentences_map,
+                        plain_text,
+                        normalized_context_tags,
+                    ):
+                        topics_for_post.append(topic)
             else:
-                topics_for_post = []
+                topics_for_post.append(topic)
+
+        if not topics_for_post:
+            continue
 
         post_topic_mapping[post_id_str] = {
             "feed_title": feed_title,
@@ -1795,8 +1812,9 @@ def on_topics_list_get(
     normalized_context_tags: Optional[list[str]] = _normalize_context_tags(context_tags)
     topic_counts: dict[str, dict]
     post_topic_mapping: dict[str, dict]
+    only_unread: bool = user.get("settings", {}).get("only_unread", False)
     topic_counts, post_topic_mapping = _build_topics_index(
-        app, user, normalized_context_tags
+        app, user, normalized_context_tags, only_unread=only_unread
     )
 
     # Sort topics by count (descending)
@@ -1861,7 +1879,10 @@ def on_topics_search(
     context_tags: Optional[list[str]] = _get_context_tags(user)
     normalized_context_tags: Optional[list[str]] = _normalize_context_tags(context_tags)
     topic_counts: dict[str, dict]
-    topic_counts, _ = _build_topics_index(app, user, normalized_context_tags)
+    only_unread: bool = user.get("settings", {}).get("only_unread", False)
+    topic_counts, _ = _build_topics_index(
+        app, user, normalized_context_tags, only_unread=only_unread
+    )
 
     matches: list[tuple[str, dict]] = []
     for topic_name, topic_data in topic_counts.items():
