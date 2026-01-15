@@ -165,55 +165,93 @@ class PostSplitter:
         """Backward-compatible alias for _get_llm_topic_ranges."""
         return self._get_llm_topic_ranges(tagged_text, coord_map)
 
-    def build_topic_ranges_prompt(self, tagged_text: str) -> str:
+    def build_topic_ranges_prompt(self, tagged_text: str, suggested_topics: Optional[List[str]] = None) -> str:
+        vocabulary_hint = ""
+        if suggested_topics:
+            vocabulary_hint = f"""
+PREFERRED TOPICS (use these EXACT names when applicable):
+{', '.join(suggested_topics)}
+
+Use these exact topic names when they match the content. Only introduce new topics when the content doesn't fit any preferred topic.
+"""
+
         return f"""You are analyzing a text presented as a coordinate grid (Excel-like).
 X axis: Word position (0-indexed)
 Y axis: Line/Sentence number (0-indexed)
 
 Your task: Extract specific, searchable topic keywords for each distinct section of the text.
 
+AGGREGATION REQUIREMENTS (CRITICAL):
+These keywords will be grouped across multiple articles. Use CONSISTENT, CANONICAL naming:
+
+Common entities - use these EXACT forms:
+- Languages: Python, JavaScript, TypeScript, Go, Rust, Java, C++, C#
+- Databases: PostgreSQL, MongoDB, Redis, MySQL, SQLite
+- Cloud: AWS, Google Cloud, Azure, Kubernetes, Docker, Terraform
+- AI/ML: GPT-4, Claude, Gemini, LLaMA, ChatGPT, AI, ML, Large Language Models
+- Frameworks: React, Vue, Angular, Django, FastAPI, Spring Boot, Next.js, NestJS
+- Companies: OpenAI, Anthropic, Google, Microsoft, Meta, Apple, Amazon, NVIDIA
+
+Version format: "Name X.Y" (drop patch version)
+- ✓ "Python 3.12" (not "Python 3.12.1", "Python version 3.12", "Python v3.12")
+- ✓ "React 19" (not "React v19.0", "React 19.0")
+
+When in doubt: use the official product/company name with official capitalization.
+{vocabulary_hint}
 KEYWORD SELECTION HIERARCHY (prefer in order):
 1. Named entities: specific products, companies, people, technologies
-   Examples: "GPT-4", "Apple Vision Pro", "Kubernetes", "Linus Torvalds"
+   Examples: "GPT-4", "Kubernetes", "PostgreSQL", "Linus Torvalds"
 2. Specific concepts/events: concrete actions, announcements, or occurrences
    Examples: "Series B funding", "CVE-2024-1234 vulnerability", "React 19 release"
 3. Technical terms: domain-specific terminology
    Examples: "vector embeddings", "JWT authentication", "HTTP/3 protocol"
 
+TWO-TIER STRUCTURE (use when applicable):
+For better aggregation, use: "Broad Topic: Specific Detail"
+- ✓ "PostgreSQL: indexing" → aggregates with other PostgreSQL content
+- ✓ "Python: asyncio" → aggregates with other Python content
+- ✓ "AI: medical imaging" → aggregates with other AI content
+- ✓ "Kubernetes" → just broad topic if no specific aspect
+
 WHAT MAKES A GOOD KEYWORD:
 ✓ Helps readers decide if this section is relevant to their interests
 ✓ Specific enough to distinguish this section from others in the article
+✓ Consistent with canonical naming (enables aggregation across articles)
 ✓ Something a user might search for
-✓ 1-4 words (noun phrases preferred)
+✓ 1-5 words (noun phrases preferred)
 
-BAD KEYWORDS (too generic):
-✗ "Tech News", "Update", "Content", "Information", "Technology", "Discussion", "News"
+BAD KEYWORDS (too generic or inconsistent):
+✗ "Tech News", "Update", "Information", "Technology", "Discussion", "News"
+✗ "Postgres" (use "PostgreSQL"), "JS" (use "JavaScript"), "K8s" (use "Kubernetes")
 
-GOOD KEYWORDS (specific and searchable):
-✓ "Apple M4 chip" (not "Hardware Update")
-✓ "PostgreSQL indexing strategies" (not "Database Tips")
-✓ "Stripe Series C funding" (not "Company News")
-✓ "Python asyncio patterns" (not "Programming")
+GOOD KEYWORDS (specific, searchable, and canonical):
+✓ "PostgreSQL: indexing" (not "Database Tips", "Postgres indexing")
+✓ "Python: asyncio" (not "Programming", "Python async patterns")
+✓ "React: hooks" (not "Frontend", "React.js hooks")
+✓ "GPT-4" (not "OpenAI GPT-4", "GPT-4 model")
 
 SEMANTIC DISTINCTIVENESS:
 If multiple sections share a theme, differentiate them:
-- AI in healthcare → "AI medical imaging", "AI drug discovery"
-- NOT just "AI" for both sections
+- ✓ "AI: medical imaging" and "AI: drug discovery" (not just "AI" for both)
+- ✓ "PostgreSQL: indexing" and "PostgreSQL: replication" (not just "PostgreSQL")
+
+SPECIFICITY BALANCE:
+- General topic → use canonical name: "PostgreSQL", "Python", "React"
+- Specific aspect → use qualified form: "PostgreSQL: indexing", "Python: asyncio"
+- Don't over-specify: "React: hooks" not "React hooks useState optimization patterns"
 
 OUTPUT FORMAT (exactly one entry per line):
-Specific Keywords: (StartY,StartX)-(EndY,EndX), (StartY,StartX)-(EndY,EndX)
+Topic Keywords: (StartY,StartX)-(EndY,EndX), (StartY,StartX)-(EndY,EndX)
 
 Example:
-NVIDIA RTX 5090, GPU architecture: (0,0)-(0,15), (1,0)-(1,10)
-Neo4j vector search, Graph RAG: (2,0)-(2,8)
-no_topic: (2,9)-(2,15)
+PostgreSQL: indexing, Database optimization: (0,0)-(0,15), (1,0)-(1,10)
+Kubernetes: deployment, Docker: (2,0)-(2,8)
 
 COORDINATE RULES:
 - Format: (LineNumber, WordNumber) - both 0-indexed
 - (0,0) = first word of first line
 - Ranges are INCLUSIVE
-- Every word must belong to exactly one keyword group or 'no_topic'
-- Use 'no_topic' for boilerplate, disclaimers, or irrelevant content
+- Every word must belong to exactly one keyword group
 - Reading order: Row Y, Word X → Row Y, Word X+1 ... → Row Y+1, Word 0 ...
 - Be granular: separate distinct stories/topics into their own keyword groups
 
