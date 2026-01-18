@@ -2433,3 +2433,86 @@ h3.post_title {
         background-color: #f5f5f5;
     }
 }
+
+// CSS Isolation for Post Content
+// This prevents styles/HTML from post content from affecting the main page
+.post-content-isolated {
+    // Create an isolation boundary
+    isolation: isolate;
+
+    // Prevent post content styles from affecting parent elements
+    contain: style;
+
+    // Reset to default display behavior
+    display: block;
+
+    // Basic spacing and layout
+    margin: 0;
+    padding: 0;
+
+    // Ensure content is readable
+    font-family: Arial, sans-serif;
+    font-size: 12pt;
+    line-height: 1.5;
+    color: #000;
+
+    // Prevent overflow issues
+    overflow: auto;
+    word-wrap: break-word;
+
+    // Reset any inherited text properties
+    text-align: left;
+    text-decoration: none;
+
+    // Ensure images don't break layout
+    img {
+        max-width: 100%;
+        height: auto;
+    }
+
+    // Neutralize any rogue styles that might leak out
+    // This prevents post content from overriding main page styles
+    & > * {
+        // Allow normal styling within content
+        all: revert;
+    }
+
+    // CRITICAL: Prevent style tags in content from affecting the page
+    // This removes any inline styles from post content
+    style {
+        display: none !important;
+    }
+
+    // Keep links functional but safe
+    a {
+        color: #0066cc;
+        text-decoration: underline;
+
+        &:hover {
+            color: #0052a3;
+        }
+    }
+
+    // Reset common elements that might have problematic styles
+    // Use & to properly scope these to children of .post-content-isolated
+    & body, & table, & p, & div, & span, & h1, & h2, & h3, & h4, & h5, & h6, & td, & tr {
+        margin: revert !important;
+        padding: revert !important;
+        background: revert !important;
+        background-color: transparent !important;
+        color: inherit !important;
+    }
+
+    // Ensure tables from content don't break layout
+    table {
+        max-width: 100%;
+        border-collapse: collapse;
+    }
+
+    // Handle code blocks safely
+    pre, code {
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        overflow-x: auto;
+    }
+}

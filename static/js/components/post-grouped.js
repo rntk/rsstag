@@ -11,6 +11,7 @@ export default class PostGroupedPage {
     }
 
     init() {
+        this.stripGlobalStyles();
         this.setupPostSections();
         this.addPostHoverEffects();
         this.isContentReady = true;
@@ -23,6 +24,17 @@ export default class PostGroupedPage {
         this.handleHighlightSentenceFromUrl();
         this.setInitialReadStatus();
         this.bindGlobalEvents();
+    }
+
+    stripGlobalStyles() {
+        document.querySelectorAll('.post-text').forEach((container) => {
+            container.querySelectorAll('style').forEach((styleNode) => {
+                styleNode.remove();
+            });
+            container.querySelectorAll('link[rel="stylesheet"]').forEach((linkNode) => {
+                linkNode.remove();
+            });
+        });
     }
 
     bindGlobalEvents() {

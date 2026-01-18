@@ -84,12 +84,22 @@ export default class PostsItem extends React.Component {
     return result.join('');
   }
 
+  stripGlobalStyles(content) {
+    if (!content) {
+      return content;
+    }
+    return content
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<link\b[^>]*rel=["']?stylesheet["']?[^>]*>/gi, '');
+  }
+
   dangerHTML(post) {
     let html = { __html: '' };
 
     if (post.showed) {
       //TODO: add content clearing from scripts, iframes etc.
-      html = { __html: this.highliteTag(post.post.content.content) };
+      const cleanedContent = this.stripGlobalStyles(post.post.content.content);
+      html = { __html: this.highliteTag(cleanedContent) };
     }
 
     return html;
@@ -213,10 +223,12 @@ export default class PostsItem extends React.Component {
             |{post.post.date}
             {post.post.clusters ? ' | ' + post.post.clusters.join(', ') : ''}
           </div>
-          <div
-            className={'post_content ' + (post.showed ? '' : 'hide')}
-            dangerouslySetInnerHTML={this.dangerHTML(post)}
-          ></div>
+          <div className="post-content-isolated">
+            <div
+              className={'post_content ' + (post.showed ? '' : 'hide')}
+              dangerouslySetInnerHTML={this.dangerHTML(post)}
+            ></div>
+          </div>
           <div className="post_tag_contexts">{post_tag_contexts}</div>
           <div className="post_tools">
             <span className="post_show_content" onClick={this.changePostsContentState}>

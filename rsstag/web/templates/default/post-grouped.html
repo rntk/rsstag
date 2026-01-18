@@ -87,7 +87,9 @@
                                 <div class="local-tab-content active" data-post-id="{{ post.post_id }}"
                                     data-local-content="content">
                                     <div class="post-content">
-                                        <div class="post-text" data-post-id="{{ post.post_id }}">{{ post.content|safe }}
+                                        <div class="post-content-isolated">
+                                            <div class="post-text" data-post-id="{{ post.post_id }}">{{ post.content|safe }}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
