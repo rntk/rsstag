@@ -275,7 +275,7 @@ class GmailProvider:
                     subject = headers_map.get("subject", "")
                     from_ = headers_map.get("from", "")
 
-                    body = self.get_email_body(mail_data["payload"])
+                    body, body_format = self.get_email_body(mail_data["payload"])
 
                     stream_id = md5(from_.encode("utf-8")).hexdigest()
                     if stream_id not in feeds:
@@ -305,6 +305,7 @@ class GmailProvider:
                                 "content": gzip.compress(
                                     body.encode("utf-8", "replace")
                                 ),
+                                "format": body_format,
                             },
                             "feed_id": stream_id,
                             "category_id": self.no_category_name,
@@ -347,20 +348,40 @@ class GmailProvider:
             logging.error(f"Error fetching email content: {e}")
             return None
 
-    def get_email_body(self, payload) -> str:
-        if "parts" in payload:
-            for part in payload["parts"]:
-                if part["mimeType"] == "text/plain":
-                    return base64.urlsafe_b64decode(part["body"]["data"]).decode(
-                        "utf-8"
-                    )
-                if part["mimeType"] == "text/html":
-                    return base64.urlsafe_b64decode(part["body"]["data"]).decode(
-                        "utf-8"
-                    )
-        if "body" in payload and "data" in payload["body"]:
-            return base64.urlsafe_b64decode(payload["body"]["data"]).decode("utf-8")
+    def _decode_body_data(self, data: str) -> str:
+        if not data:
+            return ""
+        padded = data + "=" * (-len(data) % 4)
+        try:
+            return base64.urlsafe_b64decode(padded).decode("utf-8", "replace")
+        except Exception as exc:
+            logging.error("Failed to decode Gmail message body: %s", exc)
+            return ""
+
+    def _find_part_body(self, payload: dict, mime_type: str) -> str:
+        if payload.get("mimeType") == mime_type:
+            if payload.get("filename"):
+                return ""
+            body_data = payload.get("body", {}).get("data")
+            if body_data:
+                return self._decode_body_data(body_data)
+        for part in payload.get("parts", []) or []:
+            found = self._find_part_body(part, mime_type)
+            if found:
+                return found
         return ""
+
+    def get_email_body(self, payload: dict) -> Tuple[str, str]:
+        html_body = self._find_part_body(payload, "text/html")
+        if html_body:
+            return html_body, "html"
+        plain_body = self._find_part_body(payload, "text/plain")
+        if plain_body:
+            return plain_body, "text"
+        body_data = payload.get("body", {}).get("data")
+        if body_data:
+            return self._decode_body_data(body_data), "text"
+        return "", "text"
 
     def mark(self, data: dict, user: dict) -> Optional[bool]:
         """Mark email by adding/removing custom label"""

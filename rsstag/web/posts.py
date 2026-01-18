@@ -243,50 +243,6 @@ def _group_color(group_id: str) -> str:
     return _hsl_to_hex(hue, sat, light)
 
 
-def _linkify_urls(text: str) -> str:
-    """Convert angle-bracketed, parenthesized and square-bracketed URLs to clickable links.
-
-    Converts <http://example.com/path?q=1> to <a href="http://example.com/path?q=1" target="_blank">example.com</a>
-    Converts (http://example.com/path?q=1) to (<a href="http://example.com/path?q=1" target="_blank">example.com</a>)
-    Converts [http://example.com/path?q=1] to [<a href="http://example.com/path?q=1" target="_blank">example.com</a>]
-    """
-    import re
-    import urllib.parse
-
-    def _make_anchor(url: str) -> str:
-        parsed: urllib.parse.ParseResult = urllib.parse.urlparse(url)
-        display_domain: str = parsed.hostname or parsed.netloc or url
-        return f'<a href="{url}" target="_blank">{display_domain}</a>'
-
-    # Match URLs inside angle brackets: <http://...> or <https://...>
-    angle_bracket_pattern: str = r"<\s*(https?://[^>]+)\s*>"
-    text = re.sub(
-        angle_bracket_pattern,
-        lambda match: _make_anchor(match.group(1)),
-        text,
-    )
-
-    # Match URLs inside parentheses: (http://...) or (https://...)
-    # We exclude ) from the URL content to avoid matching the closing parenthesis of the container
-    parentheses_pattern: str = r"\(\s*(https?://[^)]+)\s*\)"
-    text = re.sub(
-        parentheses_pattern,
-        lambda match: f"({_make_anchor(match.group(1))})",
-        text,
-    )
-
-    # Match URLs inside square brackets: [http://...] or [https://...]
-    # We exclude ] from the URL content to avoid matching the closing bracket of the container
-    square_bracket_pattern: str = r"\[\s*(https?://[^\]]+)\s*\]"
-    text = re.sub(
-        square_bracket_pattern,
-        lambda match: f"[{_make_anchor(match.group(1))}]",
-        text,
-    )
-
-    return text
-
-
 def on_category_get(
     app: "RSSTagApplication", user: dict, request: Request, quoted_category: str
 ) -> Response:
@@ -678,8 +634,6 @@ def on_posts_content_post(
             content = gzip.decompress(post["content"]["content"]).decode(
                 "utf-8", "replace"
             )
-            if user["provider"] == "gmail":
-                content = _linkify_urls(content)
             if attachments:
                 content += "<p>Attachments:<br />{0}<p>".format(attachments)
             posts_content.append({"pos": post["pid"], "content": content})
@@ -1302,19 +1256,6 @@ def on_posts_get(
     by_feed = {}
     pids = set()
     for post in db_posts:
-        if user["provider"] == "gmail":
-            if "content" in post:
-                if "title" in post["content"] and post["content"]["title"]:
-                    post["content"]["title"] = _linkify_urls(post["content"]["title"])
-                if "content" in post["content"] and post["content"]["content"]:
-                    # content is gzipped
-                    decompressed = gzip.decompress(post["content"]["content"]).decode(
-                        "utf-8", "replace"
-                    )
-                    linkified = _linkify_urls(decompressed)
-                    post["content"]["content"] = gzip.compress(
-                        linkified.encode("utf-8")
-                    )
         post["lemmas"] = gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
         if post["pid"] not in pids:
             pids.add(post["pid"])
@@ -1624,9 +1565,6 @@ def on_post_grouped_get(
             new_content_parts.append(raw_content[last_pos:])
             content = "".join(new_content_parts)
 
-        # Apply linkification AFTER highlighting
-        content = _linkify_urls(content)
-
         final_posts.append(
             {
                 "post_id": post_id,
@@ -1757,8 +1695,6 @@ def on_post_grouped_snippets_get(
                             text = mapped_plain[s_start:s_end]
                     if not text:
                         continue
-                    if user["provider"] == "gmail":
-                        text = _linkify_urls(text)
 
                     if current_snippet and idx == current_snippet["index"] + 1:
                         current_snippet["text"] += " " + text

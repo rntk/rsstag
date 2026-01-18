@@ -54,49 +54,6 @@ from sklearn.metrics.pairwise import cosine_distances
 import numpy as np
 
 
-def _linkify_urls(text: str) -> str:
-    """Convert angle-bracketed, parenthesized and square-bracketed URLs to clickable links.
-
-    Converts <http://example.com/path?q=1> to <a href="http://example.com/path?q=1" target="_blank">example.com</a>
-    Converts (http://example.com/path?q=1) to (<a href="http://example.com/path?q=1" target="_blank">example.com</a>)
-    Converts [http://example.com/path?q=1] to [<a href="http://example.com/path?q=1" target="_blank">example.com</a>]
-    """
-    import urllib.parse
-
-    def _make_anchor(url: str) -> str:
-        parsed: urllib.parse.ParseResult = urllib.parse.urlparse(url)
-        display_domain: str = parsed.hostname or parsed.netloc or url
-        return f'<a href="{url}" target="_blank">{display_domain}</a>'
-
-    # Match URLs inside angle brackets: <http://...> or <https://...>
-    angle_bracket_pattern: str = r"<\s*(https?://[^>]+)\s*>"
-    text = re.sub(
-        angle_bracket_pattern,
-        lambda match: _make_anchor(match.group(1)),
-        text,
-    )
-
-    # Match URLs inside parentheses: (http://...) or (https://...)
-    # We exclude ) from the URL content to avoid matching the closing parenthesis of the container
-    parentheses_pattern: str = r"\(\s*(https?://[^)]+)\s*\)"
-    text = re.sub(
-        parentheses_pattern,
-        lambda match: f"({_make_anchor(match.group(1))})",
-        text,
-    )
-
-    # Match URLs inside square brackets: [http://...] or [https://...]
-    # We exclude ] from the URL content to avoid matching the closing bracket of the container
-    square_bracket_pattern: str = r"\[\s*(https?://[^\]]+)\s*\]"
-    text = re.sub(
-        square_bracket_pattern,
-        lambda match: f"[{_make_anchor(match.group(1))}]",
-        text,
-    )
-
-    return text
-
-
 class RSSTagApplication(object):
     def __init__(self, config_path=None):
         self.config = load_config(config_path)
@@ -1294,7 +1251,6 @@ class RSSTagApplication(object):
                     text_part = plain_text[start:end].strip()
                     if not text_part:
                         continue
-                    text_part = _linkify_urls(text_part)
                     topic_text_parts.append(text_part)
                     topic_sentences.append(
                         {
@@ -1391,7 +1347,7 @@ class RSSTagApplication(object):
                         # Store each range with its metadata
                         all_ranges.append(
                             {
-                                "topic_title": _linkify_urls(title),
+                                "topic_title": title,
                                 "sentences": topic_sentences,
                             }
                         )
@@ -1417,8 +1373,6 @@ class RSSTagApplication(object):
                     except (ValueError, Exception):
                         # Fallback to first title if vectorization fails
                         top_tags = all_titles[0] if all_titles else f"Cluster {label}"
-
-                top_tags = _linkify_urls(top_tags)
 
                 cluster_entry: Dict[str, Any] = {
                     "id": label,
@@ -1611,8 +1565,6 @@ class RSSTagApplication(object):
                 if not text:
                     continue
 
-                text = _linkify_urls(text)
-
                 range_texts.append(text)
                 sentence_indices.append(number_val)
                 sentence_reads.append(bool(sentence.get("read", False)))
@@ -1628,7 +1580,7 @@ class RSSTagApplication(object):
                 read_status: bool = bool(sentence_reads) and all(sentence_reads)
                 result_ranges.append(
                     {
-                        "topic_title": _linkify_urls(topic_title),
+                        "topic_title": topic_title,
                         "text": " ".join(range_texts),
                         "post_id": first_post_id,
                         "start": range_start,
