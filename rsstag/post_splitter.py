@@ -69,11 +69,11 @@ class PostSplitter:
         }
 
     def add_markers_to_text(self, text_plain: str) -> Dict[str, Any]:
-        """Create coordinate grid and mapping for the text.
+        """Create sentence-based mapping for the text.
 
         Returns:
             dict containing:
-            - "tagged_text": The grid representation string (X/Y axis)
+            - "tagged_text": Numbered sentences (Y axis only)
             - "max_marker": Total number of words (linear index max)
             - "marker_positions": Dict mapping linear_index -> char_offset_end
             - "coord_map": Dict mapping (y, x) -> linear_index
@@ -82,7 +82,7 @@ class PostSplitter:
         # 1. Split into lines (sentences)
         sentences = self._split_sentences(text_plain)
 
-        rows = []
+        rows: List[Dict[str, int | str]] = []
         for s in sentences:
             rows.append(
                 {
@@ -96,24 +96,20 @@ class PostSplitter:
             rows.append({"text": text_plain, "start": 0, "end": len(text_plain)})
 
         # 2. Build Grid and Mappings
-        marker_positions = {0: 0}
-        coord_to_linear = {}
-        linear_idx = 0
+        marker_positions: Dict[int, int] = {0: 0}
+        coord_to_linear: Dict[Tuple[int, int], int] = {}
+        linear_idx: int = 0
 
-        max_words = 0
-        formatted_rows = []
+        formatted_rows: List[str] = []
 
         for y, row in enumerate(rows):
-            line_text = row["text"]
-            line_start_offset = row["start"]
+            line_text: str = str(row["text"])
+            line_start_offset: int = int(row["start"])
 
             # Split line into words
-            words = list(re.finditer(r"\S+", line_text))
-
-            row_words_str = []
+            words: List[re.Match[str]] = list(re.finditer(r"\S+", line_text))
 
             for x, match in enumerate(words):
-                word_str = match.group()
                 word_end_local = match.end()
 
                 linear_idx += 1
@@ -122,17 +118,11 @@ class PostSplitter:
                 marker_positions[linear_idx] = abs_end
                 coord_to_linear[(y, x)] = linear_idx
 
-                row_words_str.append(word_str)
+            # Row format: "SentenceNumber: Full sentence text"
+            formatted_rows.append(f"{y}: {line_text}")
 
-            if len(words) > max_words:
-                max_words = len(words)
-
-            # Row format: "Y: Word0 Word1 ..."
-            formatted_rows.append(f"{y}: {' '.join(row_words_str)}")
-
-        # 3. Build Final Grid Text with Header
-        header = "X: " + " ".join(str(i) for i in range(max_words))
-        grid_text = header + "\n" + "\n".join(formatted_rows)
+        # 3. Build Final Text (Y axis only)
+        grid_text = "\n".join(formatted_rows)
 
         return {
             "tagged_text": grid_text,
@@ -152,7 +142,7 @@ class PostSplitter:
             ParsingError
         """
         prompt: str = self.build_topic_ranges_prompt(tagged_text)
-        self._log.info("LLM topic ranges prompt sent (Grid method)")
+        self._log.info("LLM topic ranges prompt sent (Sentence method)")
         response: str = self._call_llm(prompt, temperature=0.0).strip()
         self._log.info("LLM topic ranges response: %s", response)
         _, topic_ranges = self.parse_topic_ranges_response(response, coord_map)
@@ -175,9 +165,8 @@ PREFERRED TOPICS (use these EXACT names when applicable):
 Use these exact topic names when they match the content. Only introduce new topics when the content doesn't fit any preferred topic.
 """
 
-        return f"""You are analyzing a text presented as a coordinate grid (Excel-like).
-X axis: Word position (0-indexed)
-Y axis: Line/Sentence number (0-indexed)
+        return f"""You are analyzing a text presented as numbered sentences.
+Sentence numbers are 0-indexed.
 
 Your task: Extract specific, searchable topic keywords for each distinct section of the text.
 
@@ -241,18 +230,19 @@ SPECIFICITY BALANCE:
 - Don't over-specify: "React: hooks" not "React hooks useState optimization patterns"
 
 OUTPUT FORMAT (exactly one entry per line):
-Topic Keywords: (StartY,StartX)-(EndY,EndX), (StartY,StartX)-(EndY,EndX)
+Topic Keywords: SentenceNumbers
+
+SentenceNumbers format:
+- Comma-separated list of sentence numbers
+- No ranges and no coordinates
 
 Example:
-PostgreSQL: indexing, Database optimization: (0,0)-(0,15), (1,0)-(1,10)
-Kubernetes: deployment, Docker: (2,0)-(2,8)
+PostgreSQL: indexing, Database optimization: 0, 1
+Kubernetes: deployment, Docker: 2, 3
 
-COORDINATE RULES:
-- Format: (LineNumber, WordNumber) - both 0-indexed
-- (0,0) = first word of first line
-- Ranges are INCLUSIVE
-- Every word must belong to exactly one keyword group
-- Reading order: Row Y, Word X → Row Y, Word X+1 ... → Row Y+1, Word 0 ...
+SENTENCE RULES:
+- Sentence numbers are 0-indexed
+- Every sentence must belong to exactly one keyword group
 - Be granular: separate distinct stories/topics into their own keyword groups
 
 <grid>
@@ -326,15 +316,32 @@ Output:"""
             return topic_ranges
         return [r for r in topic_ranges if r[0] in topic_set]
 
+    def _build_sentence_bounds(
+        self, coord_map: Dict[Tuple[int, int], int]
+    ) -> Dict[int, Tuple[int, int]]:
+        """Build sentence start/end word-index bounds from a coordinate map."""
+        sentence_bounds: Dict[int, Tuple[int, int]] = {}
+        for (y, _), linear_idx in coord_map.items():
+            if y not in sentence_bounds:
+                sentence_bounds[y] = (linear_idx, linear_idx)
+            else:
+                start_idx, end_idx = sentence_bounds[y]
+                sentence_bounds[y] = (
+                    min(start_idx, linear_idx),
+                    max(end_idx, linear_idx),
+                )
+        return sentence_bounds
+
     def _parse_llm_ranges(
         self, response: str, coord_map: Optional[Dict[Tuple[int, int], int]] = None
     ) -> List[Tuple[str, int, int]]:
         """Parse LLM response into list of (topic, start_index, end_index) tuples.
 
-        Supports both new coordinate format (Y, X)-(Y, X) and old linear format Start-End.
+        Supports sentence number lists, coordinate format (Y, X)-(Y, X), and old linear format Start-End.
         """
         # Pre-process coord_map to handle out-of-bounds X's by row
         y_bounds: Dict[int, Dict[str, int]] = {}
+        sentence_bounds: Dict[int, Tuple[int, int]] = {}
         if coord_map:
             for (y, x) in coord_map.keys():
                 if y not in y_bounds:
@@ -342,6 +349,7 @@ Output:"""
                 else:
                     y_bounds[y]["min_x"] = min(y_bounds[y]["min_x"], x)
                     y_bounds[y]["max_x"] = max(y_bounds[y]["max_x"], x)
+            sentence_bounds = self._build_sentence_bounds(coord_map)
 
         def get_clamped_linear(y: int, x: int) -> Optional[int]:
             if not coord_map or y not in y_bounds:
@@ -350,7 +358,9 @@ Output:"""
             clamped_x = max(y_bounds[y]["min_x"], min(x, y_bounds[y]["max_x"]))
             return coord_map.get((y, clamped_x))
 
-        lines: List[str] = [ln.strip() for ln in response.strip().split("\n") if ln.strip()]
+        lines: List[str] = [
+            ln.strip() for ln in response.strip().split("\n") if ln.strip()
+        ]
         ranges: List[Tuple[str, int, int]] = []
         for ln in lines:
             topic: str = "no_topic"
@@ -360,12 +370,12 @@ Output:"""
                 topic = topic_raw.strip().strip('"').strip("'") or "no_topic"
 
             # 1. Try new coordinate format: (Y, X)-(Y, X)
-            matches_coord = re.findall(
+            matches_coord: List[Tuple[str, str, str, str]] = re.findall(
                 r"\((\d+),\s*(\d+)\)\s*-\s*\((\d+),\s*(\d+)\)",
                 coords_raw,
             )
 
-            processed_any = False
+            processed_any: bool = False
             if matches_coord and coord_map:
                 for match in matches_coord:
                     try:
@@ -390,14 +400,33 @@ Output:"""
             # 2. Try old linear format fallback: 1-10 or [1]-[10]
             # Use this if no coordinates were successfully processed on this line
             if not processed_any and "(" not in coords_raw:
-                matches_linear = re.findall(r"\[?(\d+)\]?\s*-\s*\[?(\d+)\]?", coords_raw)
+                matches_linear: List[Tuple[str, str]] = re.findall(
+                    r"\[?(\d+)\]?\s*-\s*\[?(\d+)\]?", coords_raw
+                )
                 for start_s, end_s in matches_linear:
                     try:
                         start_idx = int(start_s)
                         end_idx = int(end_s)
                         ranges.append((topic, start_idx, end_idx))
+                        processed_any = True
                     except ValueError:
                         continue
+
+            # 3. Sentence number list format: "0, 1, 2"
+            if not processed_any and sentence_bounds:
+                sentence_numbers: List[int] = [
+                    int(num) for num in re.findall(r"\d+", coords_raw)
+                ]
+                for sentence_number in sentence_numbers:
+                    bounds = sentence_bounds.get(sentence_number)
+                    if bounds:
+                        start_idx, end_idx = bounds
+                        ranges.append((topic, start_idx, end_idx))
+                        processed_any = True
+                    else:
+                        self._log.warning(
+                            "Sentence number out of bounds: %d", sentence_number
+                        )
 
         return ranges
 
