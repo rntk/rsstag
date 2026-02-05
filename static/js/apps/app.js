@@ -52,6 +52,7 @@ import { BiGramsTabs } from '../components/bigrams-tabs.js';
 import ContextFilterStorage from '../storages/context-filter-storage.js';
 import ContextFilterBar from '../components/context-filter-bar.js';
 import ClustersTopics from '../components/ClustersTopics.js';
+import { initTopicsPage } from '../topics-list.js';
 
 function handleTextSelection() {
   const menu = document.createElement('div');
@@ -405,6 +406,8 @@ window.onload = () => {
     if (context) {
       ReactDOM.render(<ClustersTopics />, context);
     }
+  } else if (path === '/topics-list') {
+    initTopicsPage();
   }
 };
 

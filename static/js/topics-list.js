@@ -1,3 +1,7 @@
+'use strict';
+
+import TopicsSunburst from './topics-sunburst.js';
+
 // Topics List functionality
 
 function togglePosts(index, event) {
@@ -91,18 +95,13 @@ function renderTopicsSunburstChart() {
 
     container.innerHTML = '';
 
-    if (typeof window.TopicsSunburst === 'undefined') {
-        container.textContent = 'Sunburst chart is unavailable because the TopicsSunburst component is not loaded.';
-        return;
-    }
-
     if (!data || !data.children || data.children.length === 0) {
         container.textContent = 'No topics available for this page.';
         return;
     }
 
     try {
-        const sunburst = new window.TopicsSunburst(data);
+        const sunburst = new TopicsSunburst(data);
         sunburst.render('#topics_sunburst_chart');
     } catch (error) {
         console.error('Error rendering sunburst chart:', error);
@@ -216,8 +215,9 @@ function initTopicTreeControls() {
     });
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+// Initialize topics page
+export function initTopicsPage() {
     initTopicTabs();
     initTopicsSearch();
     initTopicTreeControls();
-});
+}

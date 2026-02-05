@@ -1,15 +1,13 @@
 'use strict';
 
+import Sunburst from 'sunburst-chart';
+
 /**
  * Topics Sunburst Chart Component
  * Displays hierarchical topics in a sunburst visualization
- * Requires: window.Sunburst (from sunburst-chart library)
  */
 class TopicsSunburst {
   constructor(data, options = {}) {
-    if (typeof window.Sunburst === 'undefined') {
-      throw new Error('Sunburst library is not loaded. Please include sunburst-chart.min.js');
-    }
 
     this.data = data;
     this.base_color = '#d7d7af';
@@ -33,9 +31,9 @@ class TopicsSunburst {
     // Check if we need to split the data
     if (transformedData.children && transformedData.children.length > this.maxChildrenPerChart) {
       this.splitData = this.createSplitData(transformedData);
-      this.charts = this.splitData.map(() => window.Sunburst());
+      this.charts = this.splitData.map(() => Sunburst());
     } else {
-      this.charts = [window.Sunburst()];
+      this.charts = [Sunburst()];
       this.splitData = [transformedData];
     }
   }
@@ -265,5 +263,4 @@ class TopicsSunburst {
   }
 }
 
-// Export for use in other scripts
-window.TopicsSunburst = TopicsSunburst;
+export default TopicsSunburst;
