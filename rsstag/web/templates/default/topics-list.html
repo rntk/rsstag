@@ -35,7 +35,7 @@
         <div class="topics-tabs">
             <div class="tab-header">
                 <div class="tab-btn active" data-tab="topics-list">Topics List</div>
-                <div class="tab-btn" data-tab="topics-chart">Topics Pie Chart</div>
+                <div class="tab-btn" data-tab="topics-chart">Topics Sunburst Chart</div>
             </div>
             <div id="tab-topics-list" class="tab-content active">
                 <div id="topics_list_container">
@@ -84,8 +84,7 @@
             </div>
             <div id="tab-topics-chart" class="tab-content">
                 <div class="topics-chart-wrapper">
-                    <div id="topics_pie_chart" class="topics-pie-chart"></div>
-                    <div id="topics_pie_legend" class="topics-pie-legend"></div>
+                    <div id="topics_sunburst_chart" class="topics-sunburst-chart"></div>
                 </div>
             </div>
         </div>
@@ -129,9 +128,11 @@
     </div>
 
     <script type="text/javascript" src="/static/js/d3.v6.min.js"></script>
+    <script type="text/javascript" src="/static/js/sunburst-chart.min.js"></script>
     <script type="text/javascript">
-        window.topics_chart_data = {{ topics_chart_data | tojson | safe }};
+        window.sunburst_data = {{ sunburst_data | tojson | safe }};
     </script>
+    <script type="text/javascript" src="/static/js/topics-sunburst.js"></script>
     <script src="/static/js/topics-list.js"></script>
 
 </body>

@@ -2001,6 +2001,20 @@ h3.post_title {
         box-sizing: border-box;
     }
 
+    .topics-sunburst-chart {
+        position: relative;
+        width: 100%;
+        min-height: 600px;
+        border: 1px solid #e9ecef;
+        border-radius: 6px;
+        background: #fff;
+        padding: 10px;
+        box-sizing: border-box;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
     .topics-pie-legend {
         flex: 1 1 240px;
         max-height: 420px;
@@ -2042,7 +2056,8 @@ h3.post_title {
 
     @media (max-width: 768px) {
         .topics-pie-chart,
-        .topics-pie-legend {
+        .topics-pie-legend,
+        .topics-sunburst-chart {
             flex: 1 1 100%;
             max-height: none;
         }

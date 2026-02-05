@@ -1816,6 +1816,30 @@ def on_post_grouped_snippets_get(
     )
 
 
+def _convert_topics_to_sunburst(topics: list[dict]) -> list[dict]:
+    """Convert topics tree to sunburst chart format.
+
+    The sunburst chart expects each node to have:
+    - name: display name
+    - value: size (we use count)
+    - children: array of child nodes (optional)
+    - _topicPath: full topic path for navigation
+    - _topicPosts: list of post IDs for navigation
+    """
+    sunburst_nodes: list[dict] = []
+    for topic in topics:
+        node: dict = {
+            "name": topic["name"],
+            "value": topic["count"],
+            "_topicPath": topic["path"],
+            "_topicPosts": topic["posts"]
+        }
+        if topic.get("children") and len(topic["children"]) > 0:
+            node["children"] = _convert_topics_to_sunburst(topic["children"])
+        sunburst_nodes.append(node)
+    return sunburst_nodes
+
+
 def on_topics_list_get(
     app: "RSSTagApplication", user: dict, request: Request, page_number: int = 1
 ) -> Response:
@@ -1856,16 +1880,18 @@ def on_topics_list_get(
 
     # Get top-level topics for current page
     paginated_topics: list[dict] = topics_tree[start_topics_range:end_topics_range]
-    topics_chart_data: list[dict[str, int | str]] = [
-        {"topic": topic_data["name"], "count": topic_data["count"]}
-        for topic_data in paginated_topics
-    ]
+
+    # Prepare sunburst chart data
+    sunburst_data: dict = {
+        "name": "Topics",
+        "children": _convert_topics_to_sunburst(paginated_topics)
+    }
 
     page: Template = app.template_env.get_template("topics-list.html")
     return Response(
         page.render(
             topics_tree=paginated_topics,
-            topics_chart_data=topics_chart_data,
+            sunburst_data=sunburst_data,
             post_topic_mapping=post_topic_mapping,
             pages_map=pages_map,
             current_page=new_cookie_page_value,
