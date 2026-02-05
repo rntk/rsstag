@@ -73,7 +73,7 @@ class PostSplitter:
 
         Returns:
             dict containing:
-            - "tagged_text": Numbered sentences (Y axis only)
+            - "tagged_text": Numbered sentences with {N} markers
             - "max_marker": Total number of words (linear index max)
             - "marker_positions": Dict mapping linear_index -> char_offset_end
             - "coord_map": Dict mapping (y, x) -> linear_index
@@ -118,8 +118,8 @@ class PostSplitter:
                 marker_positions[linear_idx] = abs_end
                 coord_to_linear[(y, x)] = linear_idx
 
-            # Row format: "SentenceNumber: Full sentence text"
-            formatted_rows.append(f"{y}: {line_text}")
+            # Row format: "{SentenceNumber} Full sentence text"
+            formatted_rows.append(f"{{{y}}} {line_text}")
 
         # 3. Build Final Text (Y axis only)
         grid_text = "\n".join(formatted_rows)
@@ -195,12 +195,27 @@ KEYWORD SELECTION HIERARCHY (prefer in order):
 3. Technical terms: domain-specific terminology
    Examples: "vector embeddings", "JWT authentication", "HTTP/3 protocol"
 
-TWO-TIER STRUCTURE (use when applicable):
-For better aggregation, use: "Broad Topic: Specific Detail"
-- ✓ "PostgreSQL: indexing" → aggregates with other PostgreSQL content
-- ✓ "Python: asyncio" → aggregates with other Python content
-- ✓ "AI: medical imaging" → aggregates with other AI content
-- ✓ "Kubernetes" → just broad topic if no specific aspect
+HIERARCHICAL TOPIC GRAPH (REQUIRED):
+Express each topic as a hierarchical path using ">" separator:
+- Use 2-4 levels (avoid too shallow or too deep)
+- Top level: General category (Technology, Sport, Politics, Science, Business, Health)
+- Middle levels: Sub-categories (AI, Football, Database, Cloud, Security)
+- Bottom level: Specific entity or aspect (GPT-4, England, PostgreSQL, AWS)
+
+Examples:
+✓ Technology>AI>GPT-4: 0-5
+✓ Technology>Database>PostgreSQL: 6-9, 15-17
+✓ Sport>Football>England: 10-14
+✓ Science>Climate>IPCC Report: 18-20
+
+Invalid formats:
+✗ PostgreSQL: 1-5 (too flat - missing category hierarchy)
+✗ Tech>Software>DB>SQL>PostgreSQL>Version15: 1-5 (too deep - max 4 levels)
+
+For digest posts with multiple unrelated topics, create separate hierarchies:
+Technology>AI>OpenAI: 0-5
+Sport>Football>England: 6-10
+Politics>Elections>France: 11-15
 
 WHAT MAKES A GOOD KEYWORD:
 ✓ Helps readers decide if this section is relevant to their interests
@@ -229,16 +244,18 @@ SPECIFICITY BALANCE:
 - Specific aspect → use qualified form: "PostgreSQL: indexing", "Python: asyncio"
 - Don't over-specify: "React: hooks" not "React hooks useState optimization patterns"
 
-OUTPUT FORMAT (exactly one entry per line):
-Topic Keywords: SentenceNumbers
+OUTPUT FORMAT (exactly one hierarchy per line):
+CategoryLevel1>CategoryLevel2>...>SpecificTopic: SentenceRanges
 
-SentenceNumbers format:
-- Comma-separated list of sentence numbers
-- No ranges and no coordinates
+SentenceRanges can be:
+- Single range: 0-5
+- Multiple ranges: 0-5, 10-15, 20-22
+- Individual sentences: 0, 2, 5
+- Mixed: 0-3, 7, 10-15
 
-Example:
-PostgreSQL: indexing, Database optimization: 0, 1
-Kubernetes: deployment, Docker: 2, 3
+Examples:
+Technology>Database>PostgreSQL: 0-5, 10-15
+Sport>Football>England: 2, 4, 6-9
 
 SENTENCE RULES:
 - Sentence numbers are 0-indexed
@@ -335,100 +352,92 @@ Output:"""
     def _parse_llm_ranges(
         self, response: str, coord_map: Optional[Dict[Tuple[int, int], int]] = None
     ) -> List[Tuple[str, int, int]]:
-        """Parse LLM response into list of (topic, start_index, end_index) tuples.
+        """Parse hierarchical topic paths and ranges from LLM response.
 
-        Supports sentence number lists, coordinate format (Y, X)-(Y, X), and old linear format Start-End.
+        Expected format: Technology>Database>PostgreSQL: 0-5, 10-15
+
+        Returns:
+            List of (topic_path, start_index, end_index) tuples
         """
-        # Pre-process coord_map to handle out-of-bounds X's by row
-        y_bounds: Dict[int, Dict[str, int]] = {}
         sentence_bounds: Dict[int, Tuple[int, int]] = {}
         if coord_map:
-            for (y, x) in coord_map.keys():
-                if y not in y_bounds:
-                    y_bounds[y] = {"min_x": x, "max_x": x}
-                else:
-                    y_bounds[y]["min_x"] = min(y_bounds[y]["min_x"], x)
-                    y_bounds[y]["max_x"] = max(y_bounds[y]["max_x"], x)
             sentence_bounds = self._build_sentence_bounds(coord_map)
 
-        def get_clamped_linear(y: int, x: int) -> Optional[int]:
-            if not coord_map or y not in y_bounds:
-                return None
-            # Clamp x to the bounds of the row
-            clamped_x = max(y_bounds[y]["min_x"], min(x, y_bounds[y]["max_x"]))
-            return coord_map.get((y, clamped_x))
-
-        lines: List[str] = [
-            ln.strip() for ln in response.strip().split("\n") if ln.strip()
-        ]
+        lines: List[str] = [ln.strip() for ln in response.strip().split("\n") if ln.strip()]
         ranges: List[Tuple[str, int, int]] = []
+
         for ln in lines:
-            topic: str = "no_topic"
-            coords_raw: str = ln
-            if ":" in ln:
-                topic_raw, coords_raw = ln.split(":", 1)
-                topic = topic_raw.strip().strip('"').strip("'") or "no_topic"
+            # Split on first colon
+            if ":" not in ln:
+                continue
 
-            # 1. Try new coordinate format: (Y, X)-(Y, X)
-            matches_coord: List[Tuple[str, str, str, str]] = re.findall(
-                r"\((\d+),\s*(\d+)\)\s*-\s*\((\d+),\s*(\d+)\)",
-                coords_raw,
-            )
+            topic_path, ranges_str = ln.split(":", 1)
+            topic_path = topic_path.strip()
+            ranges_str = ranges_str.strip()
 
-            processed_any: bool = False
-            if matches_coord and coord_map:
-                for match in matches_coord:
-                    try:
-                        y1, x1, y2, x2 = map(int, match)
-                        start_idx = get_clamped_linear(y1, x1)
-                        end_idx = get_clamped_linear(y2, x2)
+            # Validate hierarchical format (should contain ">")
+            if ">" not in topic_path:
+                self._log.warning(f"Non-hierarchical topic (accepting anyway): {topic_path}")
 
-                        if start_idx is not None and end_idx is not None:
-                            ranges.append((topic, start_idx, end_idx))
-                            processed_any = True
-                        else:
-                            self._log.warning(
-                                "Coordinates out of bounds: (%d, %d)-(%d, %d)",
-                                y1,
-                                x1,
-                                y2,
-                                x2,
-                            )
-                    except ValueError:
-                        continue
+            # Parse ranges: "0-5, 10-15, 20" -> list of (start, end) tuples
+            parsed_ranges = self._parse_range_string(ranges_str, sentence_bounds)
 
-            # 2. Try old linear format fallback: 1-10 or [1]-[10]
-            # Use this if no coordinates were successfully processed on this line
-            if not processed_any and "(" not in coords_raw:
-                matches_linear: List[Tuple[str, str]] = re.findall(
-                    r"\[?(\d+)\]?\s*-\s*\[?(\d+)\]?", coords_raw
-                )
-                for start_s, end_s in matches_linear:
-                    try:
-                        start_idx = int(start_s)
-                        end_idx = int(end_s)
-                        ranges.append((topic, start_idx, end_idx))
-                        processed_any = True
-                    except ValueError:
-                        continue
-
-            # 3. Sentence number list format: "0, 1, 2"
-            if not processed_any and sentence_bounds:
-                sentence_numbers: List[int] = [
-                    int(num) for num in re.findall(r"\d+", coords_raw)
-                ]
-                for sentence_number in sentence_numbers:
-                    bounds = sentence_bounds.get(sentence_number)
-                    if bounds:
-                        start_idx, end_idx = bounds
-                        ranges.append((topic, start_idx, end_idx))
-                        processed_any = True
-                    else:
-                        self._log.warning(
-                            "Sentence number out of bounds: %d", sentence_number
-                        )
+            for start_idx, end_idx in parsed_ranges:
+                ranges.append((topic_path, start_idx, end_idx))
 
         return ranges
+
+    def _parse_range_string(
+        self, ranges_str: str, sentence_bounds: Dict[int, Tuple[int, int]]
+    ) -> List[Tuple[int, int]]:
+        """Parse range string like '0-5, 10-15, 20' into list of (start, end) tuples.
+
+        Args:
+            ranges_str: Comma-separated ranges or sentence numbers
+            sentence_bounds: Mapping from sentence number to (start_word_idx, end_word_idx)
+
+        Returns:
+            List of (start_idx, end_idx) tuples (word indices if sentence_bounds provided)
+        """
+        results = []
+
+        # Split by comma
+        parts = [p.strip() for p in ranges_str.split(",")]
+
+        for part in parts:
+            # Try range format: "0-5"
+            if "-" in part and not part.startswith("-"):
+                match = re.match(r"(\d+)\s*-\s*(\d+)", part)
+                if match:
+                    start_sent = int(match.group(1))
+                    end_sent = int(match.group(2))
+
+                    # Convert sentence numbers to word indices if mapping available
+                    if sentence_bounds:
+                        for sent_num in range(start_sent, end_sent + 1):
+                            bounds = sentence_bounds.get(sent_num)
+                            if bounds:
+                                results.append(bounds)
+                            else:
+                                self._log.warning(f"Sentence {sent_num} out of bounds")
+                    else:
+                        results.append((start_sent, end_sent))
+                    continue
+
+            # Try single sentence number: "5"
+            match = re.match(r"(\d+)", part)
+            if match:
+                sent_num = int(match.group(1))
+                if sentence_bounds:
+                    bounds = sentence_bounds.get(sent_num)
+                    if bounds:
+                        results.append(bounds)
+                    else:
+                        self._log.warning(f"Sentence {sent_num} out of bounds")
+                else:
+                    results.append((sent_num, sent_num))
+
+        return results
 
     def _normalize_topic_ranges(
         self, topic_ranges: List[Tuple[str, int, int]], max_marker: int
