@@ -222,6 +222,7 @@ def _build_topics_tree(topic_counts: dict[str, dict]) -> list[dict]:
         topic_posts: set[str] = set(topic_data.get("posts", []))
         if not topic_posts:
             continue
+        topic_count: int = int(topic_data.get("count", len(topic_posts)))
 
         current_children: dict[str, dict] = raw_roots
         current_path: list[str] = []
@@ -231,10 +232,12 @@ def _build_topics_tree(topic_counts: dict[str, dict]) -> list[dict]:
                 current_children[part] = {
                     "name": part,
                     "path": " > ".join(current_path),
+                    "count": 0,
                     "posts": set(),
                     "children": {},
                 }
             node: dict = current_children[part]
+            node["count"] += topic_count
             node["posts"].update(topic_posts)
             current_children = node["children"]
 
@@ -247,7 +250,7 @@ def _build_topics_tree(topic_counts: dict[str, dict]) -> list[dict]:
                 {
                     "name": node["name"],
                     "path": node["path"],
-                    "count": len(posts),
+                    "count": node["count"],
                     "posts": posts,
                     "children": children,
                 }
