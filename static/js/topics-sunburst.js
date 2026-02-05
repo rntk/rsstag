@@ -6,7 +6,7 @@
  * Requires: window.Sunburst (from sunburst-chart library)
  */
 class TopicsSunburst {
-  constructor(data) {
+  constructor(data, options = {}) {
     if (typeof window.Sunburst === 'undefined') {
       throw new Error('Sunburst library is not loaded. Please include sunburst-chart.min.js');
     }
@@ -18,28 +18,36 @@ class TopicsSunburst {
     this.currentPage = 0;
     this.charts = [];
     this.splitData = null;
+
+    // Value transformation options
+    this.valueTransform = options.valueTransform || 'sqrt'; // 'sqrt', 'log', 'cbrt', or 'none'
+    this.minValue = options.minValue || 1; // Minimum value to ensure visibility
+
     this.initializeCharts();
   }
 
   initializeCharts() {
+    // Transform data values for better visualization
+    const transformedData = this.transformDataValues(this.data);
+
     // Check if we need to split the data
-    if (this.data.children && this.data.children.length > this.maxChildrenPerChart) {
-      this.splitData = this.createSplitData();
+    if (transformedData.children && transformedData.children.length > this.maxChildrenPerChart) {
+      this.splitData = this.createSplitData(transformedData);
       this.charts = this.splitData.map(() => window.Sunburst());
     } else {
       this.charts = [window.Sunburst()];
-      this.splitData = [this.data];
+      this.splitData = [transformedData];
     }
   }
 
-  createSplitData() {
-    const children = this.data.children;
+  createSplitData(data) {
+    const children = data.children;
     const chunks = [];
 
     for (let i = 0; i < children.length; i += this.maxChildrenPerChart) {
       const chunk = children.slice(i, i + this.maxChildrenPerChart);
       chunks.push({
-        ...this.data,
+        ...data,
         children: chunk,
         _pageInfo: {
           current: Math.floor(i / this.maxChildrenPerChart),
@@ -51,6 +59,40 @@ class TopicsSunburst {
     }
 
     return chunks;
+  }
+
+  transformDataValues(node) {
+    // Create a deep copy of the node to avoid mutating original data
+    const transformed = { ...node };
+
+    // Transform the value if it exists
+    if (typeof transformed.value === 'number') {
+      transformed.value = this.applyValueTransform(transformed.value);
+    }
+
+    // Recursively transform children
+    if (transformed.children && Array.isArray(transformed.children)) {
+      transformed.children = transformed.children.map(child => this.transformDataValues(child));
+    }
+
+    return transformed;
+  }
+
+  applyValueTransform(value) {
+    // Ensure minimum value
+    const safeValue = Math.max(value, this.minValue);
+
+    switch (this.valueTransform) {
+      case 'sqrt':
+        return Math.sqrt(safeValue);
+      case 'log':
+        return Math.log10(safeValue + 1); // +1 to handle log(0)
+      case 'cbrt':
+        return Math.cbrt(safeValue);
+      case 'none':
+      default:
+        return safeValue;
+    }
   }
 
   render(selector) {
