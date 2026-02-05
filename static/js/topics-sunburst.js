@@ -16,6 +16,8 @@ class TopicsSunburst {
     this.currentPage = 0;
     this.charts = [];
     this.splitData = null;
+    this.hostContainer = null;
+    this.chartContainer = null;
 
     // Value transformation options
     this.valueTransform = options.valueTransform || 'sqrt'; // 'sqrt', 'log', 'cbrt', or 'none'
@@ -96,14 +98,16 @@ class TopicsSunburst {
   render(selector) {
     const container = document.querySelector(selector);
     if (!container) return;
+    this.hostContainer = container;
 
     // Clear existing content
     container.innerHTML = '';
 
     // Create chart container
     const chartContainer = document.createElement('div');
-    chartContainer.id = 'topics-sunburst-chart-container';
+    chartContainer.className = 'topics-sunburst-chart-container';
     container.appendChild(chartContainer);
+    this.chartContainer = chartContainer;
 
     // Create navigation if we have multiple charts
     if (this.splitData.length > 1) {
@@ -170,13 +174,16 @@ class TopicsSunburst {
     if (pageIndex < 0 || pageIndex >= this.splitData.length) return;
 
     this.currentPage = pageIndex;
-    const chartContainer = document.querySelector('#topics-sunburst-chart-container');
+    const chartContainer = this.chartContainer;
     if (chartContainer) {
       this.renderCurrentChart(chartContainer);
     }
 
     // Update navigation
-    const container = chartContainer.parentElement;
+    const container = this.hostContainer;
+    if (!container) {
+      return;
+    }
     const nav = container.querySelector('.sunburst-navigation');
     if (nav) {
       nav.remove();
@@ -194,11 +201,18 @@ class TopicsSunburst {
     // Store reference to this for use in click handler
     const self = this;
 
+    // Calculate size
+    const MAX_SIZE = 700;
+    const parentWidth = this.hostContainer ? this.hostContainer.clientWidth : window.innerWidth;
+    const size = Math.min(parentWidth - 40, MAX_SIZE);
+
     currentChart
+      .width(size)
+      .height(size)
       .data(currentData)
       .color((d) => this.generateSimilarColor(this.base_color, this.color_range))
       .minSliceAngle(0)
-      .onClick(function(d, event) {
+      .onClick(function (d, event) {
         self.handleClick(d, event, currentData);
       })(container);
   }

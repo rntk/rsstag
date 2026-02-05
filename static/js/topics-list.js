@@ -101,12 +101,97 @@ function renderTopicsSunburstChart() {
     }
 
     try {
-        const sunburst = new TopicsSunburst(data);
-        sunburst.render('#topics_sunburst_chart');
+        const chartGroups = buildTopicsSunburstGroups(data);
+        renderTopicsSunburstGroups(container, chartGroups);
     } catch (error) {
         console.error('Error rendering sunburst chart:', error);
         container.textContent = 'Error rendering sunburst chart: ' + error.message;
     }
+}
+
+function buildTopicsSunburstGroups(data) {
+    const topLevelTopics = Array.isArray(data.children) ? data.children : [];
+    const MIN_SUBTOPICS_FOR_BIG_CHART = 8;
+    const MIN_DESCENDANTS_FOR_BIG_CHART = 20;
+
+    if (topLevelTopics.length === 0) {
+        return [];
+    }
+
+    const getDescendantsCount = (node) => {
+        if (!node || !Array.isArray(node.children) || node.children.length === 0) {
+            return 0;
+        }
+        return node.children.reduce((acc, child) => acc + 1 + getDescendantsCount(child), 0);
+    };
+
+    const bigTopics = [];
+    const tailTopics = [];
+
+    topLevelTopics.forEach((topic) => {
+        const directSubtopics = Array.isArray(topic.children) ? topic.children.length : 0;
+        const descendants = getDescendantsCount(topic);
+        const isBigTopic = directSubtopics >= MIN_SUBTOPICS_FOR_BIG_CHART ||
+            descendants >= MIN_DESCENDANTS_FOR_BIG_CHART;
+
+        if (isBigTopic) {
+            bigTopics.push(topic);
+        } else {
+            tailTopics.push(topic);
+        }
+    });
+
+    if (bigTopics.length === 0) {
+        return [{ title: 'All Topics', data }];
+    }
+
+    const groups = bigTopics.map((topic) => ({
+        title: topic.name,
+        data: topic
+    }));
+
+    if (tailTopics.length > 0) {
+        groups.push({
+            title: 'Tail Topics',
+            data: {
+                name: 'Tail Topics',
+                children: tailTopics
+            }
+        });
+    }
+
+    return groups;
+}
+
+function renderTopicsSunburstGroups(container, chartGroups) {
+    if (!Array.isArray(chartGroups) || chartGroups.length === 0) {
+        container.textContent = 'No topics available for this page.';
+        return;
+    }
+
+    const groupsContainer = document.createElement('div');
+    groupsContainer.className = 'topics-sunburst-groups';
+    container.appendChild(groupsContainer);
+
+    chartGroups.forEach((group, index) => {
+        const section = document.createElement('section');
+        section.className = 'topics-sunburst-group';
+
+        const heading = document.createElement('h3');
+        heading.className = 'topics-sunburst-group-title';
+        heading.textContent = group.title;
+        section.appendChild(heading);
+
+        const chartHost = document.createElement('div');
+        chartHost.className = 'topics-sunburst-chart';
+        chartHost.id = `topics_sunburst_chart_${index}`;
+        section.appendChild(chartHost);
+
+        groupsContainer.appendChild(section);
+
+        const sunburst = new TopicsSunburst(group.data);
+        sunburst.render(`#${chartHost.id}`);
+    });
 }
 
 function initTopicsSearch() {
