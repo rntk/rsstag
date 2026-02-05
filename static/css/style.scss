@@ -1878,6 +1878,26 @@ h3.post_title {
         margin-top: 10px;
     }
 
+    .topics-tree-controls {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 10px;
+    }
+
+    .topics-tree-btn {
+        border: 1px solid #d0d7de;
+        background: #fff;
+        color: #2c3e50;
+        border-radius: 4px;
+        padding: 5px 10px;
+        font-size: 12px;
+        cursor: pointer;
+
+        &:hover {
+            background: #f5f7f9;
+        }
+    }
+
     .topic-tree-node {
         background-color: #f8f9fa;
         border: 1px solid #e9ecef;
@@ -1915,6 +1935,7 @@ h3.post_title {
     .topic-tree-details {
         summary {
             list-style: none;
+            cursor: pointer;
         }
 
         summary::-webkit-details-marker {

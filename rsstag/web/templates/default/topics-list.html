@@ -39,11 +39,15 @@
             </div>
             <div id="tab-topics-list" class="tab-content active">
                 <div id="topics_list_container">
+                    <div class="topics-tree-controls">
+                        <button id="topics_fold_all" type="button" class="topics-tree-btn">Fold all</button>
+                        <button id="topics_unfold_all" type="button" class="topics-tree-btn">Unfold all</button>
+                    </div>
                     {% macro render_topic_node(node, level=0) -%}
                     {% set all_post_ids = node.posts|join('_') %}
                     <div class="topic-tree-node level-{{ level }}">
                         {% if node.children|length > 0 %}
-                        <details class="topic-tree-details"{% if level == 0 %} open{% endif %}>
+                        <details class="topic-tree-details">
                             <summary class="topic-header">
                                 <span class="topic-link" title="{{ node.path }}">{{ node.name }}</span>
                                 <a href="/post-grouped/{{ all_post_ids }}?topic={{ node.path|url_encode }}" class="snippet-link"

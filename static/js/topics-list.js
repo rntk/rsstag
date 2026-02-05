@@ -252,7 +252,32 @@ function initTopicsSearch() {
     });
 }
 
+function initTopicTreeControls() {
+    const container = document.getElementById('topics_list_container');
+    const foldAllButton = document.getElementById('topics_fold_all');
+    const unfoldAllButton = document.getElementById('topics_unfold_all');
+    if (!container || !foldAllButton || !unfoldAllButton) {
+        return;
+    }
+
+    const setAllDetailsState = (isOpen) => {
+        const details = container.querySelectorAll('.topic-tree-details');
+        details.forEach((node) => {
+            node.open = isOpen;
+        });
+    };
+
+    foldAllButton.addEventListener('click', () => {
+        setAllDetailsState(false);
+    });
+
+    unfoldAllButton.addEventListener('click', () => {
+        setAllDetailsState(true);
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     initTopicTabs();
     initTopicsSearch();
+    initTopicTreeControls();
 });
