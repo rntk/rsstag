@@ -39,33 +39,41 @@
             </div>
             <div id="tab-topics-list" class="tab-content active">
                 <div id="topics_list_container">
-                    <div class="topics-cloud">
-                        {% for topic_name, topic_data in topics %}
-                        <div class="topic-item">
-                            <div class="topic-header">
-                                {% set all_post_ids = topic_data.posts|join('_') %}
-                                <a href="/post-grouped/{{ all_post_ids }}" class="topic-link" title="{{ topic_name }}">{{
-                                    topic_name[:60] }}{% if topic_name|length > 60 %}...{% endif %}</a>
-                                <a href="/post-grouped-snippets/{{ all_post_ids }}?topic={{ topic_name|url_encode }}" class="snippet-link"
-                                    title="View snippets">S</a>
-                                <span class="topic-count">({{ topic_data.count }})</span>
-                                {% if topic_data.posts|length > 0 %}
-                                <button class="toggle-posts" onclick="togglePosts('{{ loop.index }}', event)">[{{
-                                    topic_data.posts|length }} posts]</button>
-                                {% endif %}
-                            </div>
-                            {% if topic_data.posts|length > 0 %}
-                            <div class="topic-posts" id="posts_{{ loop.index }}">
-                                {% for post_id in topic_data.posts %}
-                                {% set post_info = post_topic_mapping[post_id] %}
-                                <div class="post-info">
-                                    <a href="/post-grouped/{{ post_id }}" title="{{ post_info.feed_title }}">{{
-                                        post_info.feed_title[:40] }}{% if post_info.feed_title|length > 40 %}...{% endif %}</a>
-                                </div>
+                    {% macro render_topic_node(node, level=0) -%}
+                    {% set all_post_ids = node.posts|join('_') %}
+                    <div class="topic-tree-node level-{{ level }}">
+                        {% if node.children|length > 0 %}
+                        <details class="topic-tree-details"{% if level == 0 %} open{% endif %}>
+                            <summary class="topic-header">
+                                <span class="topic-link" title="{{ node.path }}">{{ node.name }}</span>
+                                <a href="/post-grouped/{{ all_post_ids }}?topic={{ node.path|url_encode }}" class="snippet-link"
+                                    title="Grouped posts">G</a>
+                                <a href="/post-grouped-snippets/{{ all_post_ids }}?topic={{ node.path|url_encode }}" class="snippet-link"
+                                    title="Grouped snippets">S</a>
+                                <span class="topic-count">({{ node.count }})</span>
+                            </summary>
+                            <div class="topic-children">
+                                {% for child in node.children %}
+                                {{ render_topic_node(child, level + 1) }}
                                 {% endfor %}
                             </div>
-                            {% endif %}
+                        </details>
+                        {% else %}
+                        <div class="topic-header">
+                            <span class="topic-link" title="{{ node.path }}">{{ node.name }}</span>
+                            <a href="/post-grouped/{{ all_post_ids }}?topic={{ node.path|url_encode }}" class="snippet-link"
+                                title="Grouped posts">G</a>
+                            <a href="/post-grouped-snippets/{{ all_post_ids }}?topic={{ node.path|url_encode }}" class="snippet-link"
+                                title="Grouped snippets">S</a>
+                            <span class="topic-count">({{ node.count }})</span>
                         </div>
+                        {% endif %}
+                    </div>
+                    {%- endmacro %}
+
+                    <div class="topics-tree">
+                        {% for topic_node in topics_tree %}
+                        {{ render_topic_node(topic_node) }}
                         {% endfor %}
                     </div>
                 </div>

@@ -192,6 +192,73 @@ def _build_topics_index(
     return topic_counts, post_topic_mapping
 
 
+def _split_topic_parts(topic_name: str) -> list[str]:
+    """Split hierarchical topic path by '>' and remove empty parts."""
+    return [part.strip() for part in topic_name.split(">") if part.strip()]
+
+
+def _topic_matches_requested(group_name: str, requested_topic: Optional[str]) -> bool:
+    """Check whether group belongs to requested topic subtree."""
+    if not requested_topic:
+        return True
+
+    requested_parts: list[str] = _split_topic_parts(requested_topic)
+    group_parts: list[str] = _split_topic_parts(group_name)
+    if not requested_parts:
+        return True
+    if len(group_parts) < len(requested_parts):
+        return False
+    return group_parts[: len(requested_parts)] == requested_parts
+
+
+def _build_topics_tree(topic_counts: dict[str, dict]) -> list[dict]:
+    """Build aggregated hierarchical topics tree from flat topics map."""
+    raw_roots: dict[str, dict] = {}
+
+    for topic_name, topic_data in topic_counts.items():
+        topic_parts: list[str] = _split_topic_parts(topic_name)
+        if not topic_parts:
+            continue
+        topic_posts: set[str] = set(topic_data.get("posts", []))
+        if not topic_posts:
+            continue
+
+        current_children: dict[str, dict] = raw_roots
+        current_path: list[str] = []
+        for part in topic_parts:
+            current_path.append(part)
+            if part not in current_children:
+                current_children[part] = {
+                    "name": part,
+                    "path": " > ".join(current_path),
+                    "posts": set(),
+                    "children": {},
+                }
+            node: dict = current_children[part]
+            node["posts"].update(topic_posts)
+            current_children = node["children"]
+
+    def serialize_nodes(nodes: dict[str, dict]) -> list[dict]:
+        serialized: list[dict] = []
+        for node in nodes.values():
+            children: list[dict] = serialize_nodes(node["children"])
+            posts: list[str] = sorted(node["posts"])
+            serialized.append(
+                {
+                    "name": node["name"],
+                    "path": node["path"],
+                    "count": len(posts),
+                    "posts": posts,
+                    "children": children,
+                }
+            )
+
+        serialized.sort(key=lambda item: (-item["count"], item["name"].casefold()))
+        return serialized
+
+    return serialize_nodes(raw_roots)
+
+
 def on_post_speech(app: "RSSTagApplication", user: dict, request: Request) -> Response:
     try:
         post_id = request.form.get("post_id")
@@ -1340,6 +1407,10 @@ def on_post_grouped_get(
     app: "RSSTagApplication", user: dict, request: Request, pids: str
 ) -> Response:
     """Handler for grouped posts view with server-side highlighting"""
+    requested_topic: Optional[str] = request.args.get("topic")
+    if requested_topic:
+        requested_topic = unquote(requested_topic)
+
     projection: dict[str, bool] = {
         "content": True,
         "feed_id": True,
@@ -1403,6 +1474,8 @@ def on_post_grouped_get(
                 )
 
             for group_name, sentence_indices in post_grouped_data["groups"].items():
+                if not _topic_matches_requested(group_name, requested_topic):
+                    continue
                 adjusted_indices = [idx + sentence_offset for idx in sentence_indices]
                 if group_name not in all_groups:
                     all_groups[group_name] = []
@@ -1440,6 +1513,8 @@ def on_post_grouped_get(
         post_grouped_data = app.post_grouping.get_grouped_posts(user["sid"], [post_id])
         if post_grouped_data and post_grouped_data.get("groups"):
             for group_name, indices in post_grouped_data["groups"].items():
+                if not _topic_matches_requested(group_name, requested_topic):
+                    continue
                 river_topics.append({"name": group_name, "sentences": indices})
 
         if has_grouped_data and post_sentences:
@@ -1666,7 +1741,7 @@ def on_post_grouped_snippets_get(
             sentences_map = {s["number"]: s for s in post_grouped_data["sentences"]}
 
             for group, indices in post_grouped_data["groups"].items():
-                if requested_topic and group != requested_topic:
+                if not _topic_matches_requested(group, requested_topic):
                     continue
 
                 if group not in topics_data:
@@ -1741,9 +1816,9 @@ def on_post_grouped_snippets_get(
 def on_topics_list_get(
     app: "RSSTagApplication", user: dict, request: Request, page_number: int = 1
 ) -> Response:
-    """Handler for topics/chapters list page with pagination"""
+    """Handler for hierarchical topics/chapters list page with pagination."""
     # Pagination settings
-    topics_per_page: int = 100
+    topics_per_page: int = 50
     context_tags: Optional[list[str]] = _get_context_tags(user)
     normalized_context_tags: Optional[list[str]] = _normalize_context_tags(context_tags)
     topic_counts: dict[str, dict]
@@ -1753,13 +1828,10 @@ def on_topics_list_get(
         app, user, normalized_context_tags, only_unread=only_unread
     )
 
-    # Sort topics by count (descending)
-    sorted_topics: list[tuple[str, dict]] = sorted(
-        topic_counts.items(), key=lambda x: x[1]["count"], reverse=True
-    )
+    topics_tree: list[dict] = _build_topics_tree(topic_counts)
 
     # Calculate pagination
-    total_topics: int = len(sorted_topics)
+    total_topics: int = len(topics_tree)
     page_count: int = app.get_page_count(total_topics, topics_per_page)
     p_number: int = page_number
     if page_number <= 0:
@@ -1779,19 +1851,17 @@ def on_topics_list_get(
         p_number, page_count, topics_per_page, "on_topics_list_get"
     )
 
-    # Get topics for current page
-    paginated_topics: list[tuple[str, dict]] = sorted_topics[
-        start_topics_range:end_topics_range
-    ]
+    # Get top-level topics for current page
+    paginated_topics: list[dict] = topics_tree[start_topics_range:end_topics_range]
     topics_chart_data: list[dict[str, int | str]] = [
-        {"topic": topic_name, "count": topic_data["count"]}
-        for topic_name, topic_data in paginated_topics
+        {"topic": topic_data["name"], "count": topic_data["count"]}
+        for topic_data in paginated_topics
     ]
 
     page: Template = app.template_env.get_template("topics-list.html")
     return Response(
         page.render(
-            topics=paginated_topics,
+            topics_tree=paginated_topics,
             topics_chart_data=topics_chart_data,
             post_topic_mapping=post_topic_mapping,
             pages_map=pages_map,
@@ -1837,6 +1907,7 @@ def on_topics_search(
         grouped_url: str = app.routes.get_url_by_endpoint(
             "on_post_grouped_get", {"pids": all_post_ids}
         )
+        grouped_url = f"{grouped_url}?topic={quote_plus(topic_name)}"
         snippets_base_url: str = app.routes.get_url_by_endpoint(
             "on_post_grouped_snippets_get", {"pids": all_post_ids}
         )

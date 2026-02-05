@@ -1874,23 +1874,17 @@ h3.post_title {
         }
     }
 
-    .topics-cloud {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
+    .topics-tree {
         margin-top: 10px;
     }
 
-    .topic-item {
+    .topic-tree-node {
         background-color: #f8f9fa;
         border: 1px solid #e9ecef;
         border-radius: 4px;
         padding: 8px 12px;
         margin-bottom: 8px;
         font-size: 14px;
-        flex: 1 1 calc(33% - 16px);
-        min-width: 250px;
-        max-width: 100%;
         box-sizing: border-box;
 
         &:hover {
@@ -1899,24 +1893,47 @@ h3.post_title {
         }
     }
 
+    .topic-tree-node .topic-tree-node {
+        margin-top: 6px;
+        margin-bottom: 0;
+    }
+
+    .topic-tree-node.level-1 {
+        margin-left: 14px;
+    }
+
+    .topic-tree-node.level-2 {
+        margin-left: 28px;
+    }
+
+    .topic-tree-node.level-3,
+    .topic-tree-node.level-4,
+    .topic-tree-node.level-5 {
+        margin-left: 42px;
+    }
+
+    .topic-tree-details {
+        summary {
+            list-style: none;
+        }
+
+        summary::-webkit-details-marker {
+            display: none;
+        }
+    }
+
     .topic-header {
         display: flex;
         align-items: center;
         gap: 8px;
-        margin-bottom: 6px;
         flex-wrap: wrap;
     }
 
     .topic-link {
         color: #2c3e50;
-        text-decoration: none;
         font-weight: 500;
         flex: 1;
         min-width: 150px;
-
-        &:hover {
-            text-decoration: underline;
-        }
     }
 
     .topic-count {
@@ -1941,42 +1958,8 @@ h3.post_title {
         }
     }
 
-    .toggle-posts {
-        background: none;
-        border: none;
-        color: #666;
-        font-size: 12px;
-        cursor: pointer;
-        padding: 2px 6px;
-        border-radius: 3px;
-        white-space: nowrap;
-
-        &:hover {
-            background-color: #e9ecef;
-        }
-    }
-
-    .topic-posts {
-        display: none;
+    .topic-children {
         margin-top: 6px;
-        padding-top: 6px;
-        border-top: 1px dashed #e9ecef;
-        font-size: 13px;
-    }
-
-    .post-info {
-        margin-bottom: 4px;
-
-        a {
-            color: #495057;
-            text-decoration: none;
-            font-size: 12px;
-            display: block;
-
-            &:hover {
-                text-decoration: underline;
-            }
-        }
     }
 
     .topics-chart-wrapper {
@@ -2037,10 +2020,6 @@ h3.post_title {
     }
 
     @media (max-width: 768px) {
-        .topic-item {
-            flex: 1 1 100%;
-        }
-
         .topics-pie-chart,
         .topics-pie-legend {
             flex: 1 1 100%;
