@@ -97,6 +97,9 @@ def test_error_handling() -> bool:
     if len(result["groups"]) != 1:
         print(f"FAILED: Expected 1 fallback group, got {len(result['groups'])}")
         return False
+    if "Main Content" not in result["groups"]:
+        print("FAILED: Missing Main Content fallback group")
+        return False
 
     print("SUCCESS: Error handled gracefully with fallback.")
     return True

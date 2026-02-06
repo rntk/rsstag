@@ -149,12 +149,6 @@ class PostSplitter:
 
         return topic_ranges
 
-    def _get_llm_ranges(
-        self, tagged_text: str, coord_map: Optional[Dict[Tuple[int, int], int]] = None
-    ) -> List[Tuple[str, int, int]]:
-        """Backward-compatible alias for _get_llm_topic_ranges."""
-        return self._get_llm_topic_ranges(tagged_text, coord_map)
-
     def build_topic_ranges_prompt(self, tagged_text: str) -> str:
         return f"""You are analyzing a text presented as numbered sentences.
 Sentence numbers are 0-indexed.
@@ -257,19 +251,6 @@ SENTENCE RULES:
 </grid>
 
 Output:"""
-
-    def build_ranges_prompt(self, tagged_text: str) -> str:
-        """Backward-compatible alias for topic+range prompt."""
-        return self.build_topic_ranges_prompt(tagged_text)
-
-    def build_topics_prompt(self, tagged_text: str) -> str:
-        """Keep topics+ranges in a single prompt for batch flows."""
-        return self.build_topic_ranges_prompt(tagged_text)
-
-    def build_topic_mapping_prompt(self, topics: List[str], tagged_text: str) -> str:
-        """Keep topics+ranges in a single prompt for batch flows."""
-        _ = topics
-        return self.build_topic_ranges_prompt(tagged_text)
 
     def parse_topic_ranges_response(
         self, response: str, coord_map: Optional[Dict[Tuple[int, int], int]] = None
@@ -487,7 +468,7 @@ Output:"""
                 # First chapter MUST start at 1 to avoid a gap at the beginning
                 start = 1
             else:
-                prev_title, prev_start, prev_end = validated[-1]
+                prev_end = validated[-1][2]
                 # Start this chapter exactly after the previous one
                 start = prev_end + 1
 
@@ -721,6 +702,19 @@ Output:"""
 
         return result
 
+    def _single_main_chapter(
+        self, text_plain: str, text_html: str
+    ) -> List[Dict[str, Any]]:
+        """Build a single fallback chapter covering the entire content."""
+        return [
+            {
+                "title": "Main Content",
+                "text": text_html,
+                "plain_start": 0,
+                "plain_end": len(text_plain),
+            }
+        ]
+
     def _llm_split_chapters(
         self, text_plain: str, text_html: str
     ) -> Optional[List[Dict[str, Any]]]:
@@ -743,14 +737,7 @@ Output:"""
             self._log.info(
                 "No markers generated (short text), falling back to single chapter"
             )
-            return [
-                {
-                    "title": "Main Content",
-                    "text": text_html,
-                    "plain_start": 0,
-                    "plain_end": len(text_plain),
-                }
-            ]
+            return self._single_main_chapter(text_plain, text_html)
 
         # Try structured splitting
         try:
@@ -782,14 +769,7 @@ Output:"""
                 "LLM splitting failed (%s), falling back to single chapter",
                 e,
             )
-            return [
-                {
-                    "title": "Main Content",
-                    "text": text_html,
-                    "plain_start": 0,
-                    "plain_end": len(text_plain),
-                }
-            ]
+            return self._single_main_chapter(text_plain, text_html)
 
     def _call_llm(self, prompt: str, temperature: float = 0.0) -> str:
         """Calls the LLM handler.
