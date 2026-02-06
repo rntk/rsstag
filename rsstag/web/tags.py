@@ -944,9 +944,9 @@ def on_tag_grouped_topics_get(
                 )
                 title = post["content"].get("title", "")
                 full_content_html = f"{title}. {raw_content}" if title else raw_content
-                content_plain, _ = app.post_splitter._build_html_mapping(
-                    full_content_html
-                )
+                from rsstag.html_utils import build_html_mapping
+
+                content_plain, _ = build_html_mapping(full_content_html)
             except Exception as e:
                 logging.error("Failed to decompress content for post %s: %s", pid, e)
                 continue

@@ -56,13 +56,11 @@ def _topic_sentences_match_context(
         sentence: Optional[dict] = sentences_map.get(sentence_number)
         if not sentence:
             continue
-        start: Optional[int] = sentence.get("start")
-        end: Optional[int] = sentence.get("end")
-        if start is None or end is None:
+        sentence_text: str = _extract_sentence_text_for_context(
+            sentence, plain_text, text_length
+        )
+        if not sentence_text:
             continue
-        if start < 0 or end > text_length or start >= end:
-            continue
-        sentence_text: str = plain_text[start:end].casefold()
         for tag in context_tags:
             if tag in sentence_text:
                 found_tags.add(tag)
@@ -159,9 +157,9 @@ def _build_topics_index(
                             raw_content = (
                                 f"{post_obj['content']['title']}. {raw_content}"
                             )
-                        plain_text, _ = app.post_splitter._build_html_mapping(
-                            raw_content
-                        )
+                        from rsstag.html_utils import build_html_mapping
+
+                        plain_text, _ = build_html_mapping(raw_content)
                         plain_text_cache[first_post_id] = plain_text
 
                 if plain_text:
@@ -209,6 +207,73 @@ def _topic_matches_requested(group_name: str, requested_topic: Optional[str]) ->
     if len(group_parts) < len(requested_parts):
         return False
     return group_parts[: len(requested_parts)] == requested_parts
+
+
+def _strip_html_markup(value: str) -> str:
+    """Convert HTML-ish text to plain text."""
+    without_tags: str = re.sub(r"<[^>]+>", " ", value)
+    unescaped: str = html.unescape(without_tags)
+    return re.sub(r"\s+", " ", unescaped).strip()
+
+
+def _extract_sentence_text_for_context(
+    sentence: dict, plain_text: str, text_length: int
+) -> str:
+    """Extract sentence text for context checks, supporting old and new offsets."""
+    sentence_text = sentence.get("text")
+    if sentence_text:
+        return _strip_html_markup(str(sentence_text)).casefold()
+
+    start: Optional[int] = sentence.get("start")
+    end: Optional[int] = sentence.get("end")
+    if start is None or end is None:
+        return ""
+    if start < 0 or end > text_length or start >= end:
+        return ""
+    return plain_text[start:end].casefold()
+
+
+def _resolve_sentence_bounds(
+    raw_content: str, sentence: dict, search_start_idx: int
+) -> tuple[Optional[int], Optional[int], int]:
+    """Resolve sentence boundaries in raw content for highlighting."""
+    start_idx: Optional[int] = sentence.get("start")
+    end_idx: Optional[int] = sentence.get("end")
+    if (
+        isinstance(start_idx, int)
+        and isinstance(end_idx, int)
+        and 0 <= start_idx < end_idx <= len(raw_content)
+    ):
+        return start_idx, end_idx, end_idx
+
+    sentence_text = sentence.get("text")
+    if sentence_text:
+        text_value: str = str(sentence_text)
+        found_at: int = raw_content.find(text_value, search_start_idx)
+        if found_at == -1:
+            found_at = raw_content.find(text_value)
+        if found_at != -1:
+            end_found: int = found_at + len(text_value)
+            return found_at, end_found, end_found
+
+    return None, None, search_start_idx
+
+
+def _snippet_text_from_sentence(raw_content: str, sentence: dict) -> str:
+    """Get display-ready snippet text from sentence data."""
+    sentence_text = sentence.get("text")
+    if sentence_text:
+        return _strip_html_markup(str(sentence_text))
+
+    start_idx: Optional[int] = sentence.get("start")
+    end_idx: Optional[int] = sentence.get("end")
+    if (
+        isinstance(start_idx, int)
+        and isinstance(end_idx, int)
+        and 0 <= start_idx < end_idx <= len(raw_content)
+    ):
+        return _strip_html_markup(raw_content[start_idx:end_idx])
+    return ""
 
 
 def _build_topics_tree(topic_counts: dict[str, dict]) -> list[dict]:
@@ -1521,11 +1586,9 @@ def on_post_grouped_get(
                 river_topics.append({"name": group_name, "sentences": indices})
 
         if has_grouped_data and post_sentences:
-            # Build a mapping between plain text indices and HTML indices
-            mapped_plain, mapping = app.post_splitter._build_html_mapping(raw_content)
-
             # Identify ranges to replace
             matches = []
+            search_start_idx = 0
             for s in post_sentences:
                 num = s["number"]
                 color = sentence_colors.get(num, "#f0f0f0")
@@ -1535,31 +1598,22 @@ def on_post_grouped_get(
                 else:
                     topic_label = "Unassigned"
 
-                start_idx = s.get("start")
-                end_idx = s.get("end")
-                if start_idx is None or end_idx is None:
-                    text = s.get("text", "")
-                    if text:
-                        start_idx = mapped_plain.find(text)
-                        if start_idx != -1:
-                            end_idx = start_idx + len(text)
+                start_idx, end_idx, search_start_idx = _resolve_sentence_bounds(
+                    raw_content, s, search_start_idx
+                )
 
                 if (
                     start_idx is not None
                     and end_idx is not None
-                    and start_idx != -1
-                    and start_idx < len(mapping)
-                    and end_idx < len(mapping)
+                    and 0 <= start_idx < end_idx <= len(raw_content)
                 ):
-                    h_start = mapping[start_idx]
-                    h_end = mapping[end_idx]
                     matches.append(
                         {
-                            "start": h_start,
-                            "end": h_end,
+                            "start": start_idx,
+                            "end": end_idx,
                             "num": num,
                             "color": color,
-                            "text": raw_content[h_start:h_end],
+                            "text": raw_content[start_idx:end_idx],
                             "topic": topic_label,
                         }
                     )
@@ -1740,7 +1794,6 @@ def on_post_grouped_snippets_get(
             raw_content = all_posts[post_id].get("raw_content")
             if not raw_content:
                 continue
-            mapped_plain, _ = app.post_splitter._build_html_mapping(raw_content)
             sentences_map = {s["number"]: s for s in post_grouped_data["sentences"]}
 
             for group, indices in post_grouped_data["groups"].items():
@@ -1759,18 +1812,7 @@ def on_post_grouped_snippets_get(
                     s_obj = sentences_map.get(idx)
                     if not s_obj:
                         continue
-                    text = s_obj.get("text", "")
-                    if not text:
-                        s_start = s_obj.get("start")
-                        s_end = s_obj.get("end")
-                        if (
-                            s_start is not None
-                            and s_end is not None
-                            and s_start >= 0
-                            and s_end <= len(mapped_plain)
-                            and s_start < s_end
-                        ):
-                            text = mapped_plain[s_start:s_end]
+                    text = _snippet_text_from_sentence(raw_content, s_obj)
                     if not text:
                         continue
 

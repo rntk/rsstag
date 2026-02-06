@@ -1209,7 +1209,9 @@ class RSSTagApplication(object):
             title: str = post_obj["content"].get("title", "")
             if title:
                 raw_content = f"{title}. {raw_content}"
-            plain_text, _ = self.post_splitter._build_html_mapping(raw_content)
+            from rsstag.html_utils import build_html_mapping
+
+            plain_text, _ = build_html_mapping(raw_content)
             plain_text_cache[post_id] = plain_text
             return plain_text
 
@@ -1515,7 +1517,9 @@ class RSSTagApplication(object):
             title: str = post_obj["content"].get("title", "")
             if title:
                 raw_content = f"{title}. {raw_content}"
-            plain_text, _ = self.post_splitter._build_html_mapping(raw_content)
+            from rsstag.html_utils import build_html_mapping
+
+            plain_text, _ = build_html_mapping(raw_content)
             plain_text_cache[post_id] = plain_text
             return plain_text
 
