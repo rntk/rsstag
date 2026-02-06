@@ -406,7 +406,7 @@ window.onload = () => {
     if (context) {
       ReactDOM.render(<ClustersTopics />, context);
     }
-  } else if (path === '/topics-list') {
+  } else if (/^\/topics-list(\/[0-9]+)?$/.test(path)) {
     initTopicsPage();
   }
 };
