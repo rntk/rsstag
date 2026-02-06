@@ -155,16 +155,7 @@ class PostSplitter:
         """Backward-compatible alias for _get_llm_topic_ranges."""
         return self._get_llm_topic_ranges(tagged_text, coord_map)
 
-    def build_topic_ranges_prompt(self, tagged_text: str, suggested_topics: Optional[List[str]] = None) -> str:
-        vocabulary_hint = ""
-        if suggested_topics:
-            vocabulary_hint = f"""
-PREFERRED TOPICS (use these EXACT names when applicable):
-{', '.join(suggested_topics)}
-
-Use these exact topic names when they match the content. Only introduce new topics when the content doesn't fit any preferred topic.
-"""
-
+    def build_topic_ranges_prompt(self, tagged_text: str) -> str:
         return f"""You are analyzing a text presented as numbered sentences.
 Sentence numbers are 0-indexed.
 
@@ -186,7 +177,6 @@ Version format: "Name X.Y" (drop patch version)
 - ✓ "React 19" (not "React v19.0", "React 19.0")
 
 When in doubt: use the official product/company name with official capitalization.
-{vocabulary_hint}
 KEYWORD SELECTION HIERARCHY (prefer in order):
 1. Named entities: specific products, companies, people, technologies
    Examples: "GPT-4", "Kubernetes", "PostgreSQL", "Linus Torvalds"
