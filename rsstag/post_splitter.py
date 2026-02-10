@@ -5,13 +5,19 @@ from typing import Optional, Dict, Any, List
 
 # Import txt_splitt components
 from txt_splitt import (
+    AdjacentSameTopicJoiner,
     BracketMarker,
     DenseRegexSentenceSplitter,
     LLMRepairingGapHandler,
+    MappingOffsetRestorer,
+    NormalizingSplitter,
     Pipeline,
     SizeBasedChunker,
+    TagStripCleaner,
     TopicRangeLLM,
     TopicRangeParser,
+    Tracer,
+    TracingLLMCallable,
 )
 
 
@@ -59,7 +65,11 @@ class PostSplitter:
         self._llm_handler = llm_handler
 
     def generate_grouped_data(
-        self, content: str, title: str = ""
+        self,
+        content: str,
+        title: str = "",
+        is_html: bool = True,
+        tracer: Optional[Tracer] = None,
     ) -> Optional[Dict[str, Any]]:
         """Generate grouped data from raw text content and title
 
@@ -78,22 +88,38 @@ class PostSplitter:
             self._log.error("LLM handler not configured")
             raise LLMGenerationError("LLM handler not configured")
 
+        if tracer is None:
+            tracer = Tracer()
+
         try:
             # Create adapter for the LLM handler
             llm_adapter = LLMHandlerAdapter(self._llm_handler)
 
             # Initialize the pipeline components
             # We use settings similar to the reference split_text.py
-            splitter = DenseRegexSentenceSplitter(anchor_every_words=5)
+            splitter = NormalizingSplitter(
+                DenseRegexSentenceSplitter(anchor_every_words=5),
+                min_length=20,
+                max_length=260,
+            )
 
             # Using SizeBasedChunker with default 84000 chars as in example
             chunker = SizeBasedChunker(max_chars=84000)
 
+            # Set up tracing
+            llm_callable = TracingLLMCallable(llm_adapter, tracer)
+
             topic_range_llm = TopicRangeLLM(
-                client=llm_adapter,
+                client=llm_callable,
                 temperature=0.0,
                 chunker=chunker,
             )
+
+            html_cleaner = None
+            offset_restorer = None
+            if is_html:
+                html_cleaner = TagStripCleaner()
+                offset_restorer = MappingOffsetRestorer()
 
             # Create the pipeline
             pipeline = Pipeline(
@@ -101,16 +127,24 @@ class PostSplitter:
                 marker=BracketMarker(),
                 llm=topic_range_llm,
                 parser=TopicRangeParser(),
-                gap_handler=LLMRepairingGapHandler(llm_adapter, temperature=0.0),
-                joiner=None,
+                gap_handler=LLMRepairingGapHandler(
+                    llm_callable, temperature=0.0, tracer=tracer
+                ),
+                joiner=AdjacentSameTopicJoiner(),
+                html_cleaner=html_cleaner,
+                offset_restorer=offset_restorer,
+                tracer=tracer,
             )
 
             # Run the pipeline
             result = pipeline.run(text)
+            self._log.info("Pipeline trace:\n%s", tracer.format())
 
             return self._transform_result(result)
 
         except Exception as e:
+            if tracer:
+                self._log.info("Pipeline trace before failure:\n%s", tracer.format())
             self._log.error("Pipeline execution failed: %s", e)
             # Fallback for now or re-raise
             # Attempt to return a single group fallback?
