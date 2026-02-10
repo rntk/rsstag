@@ -1,7 +1,8 @@
 FROM ubuntu:22.04
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
 RUN apt-get update \
-    && apt-get -y install python3-pip curl
+    && apt-get -y install python3-pip curl git
 
 WORKDIR /rsstag
 
