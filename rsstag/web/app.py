@@ -55,15 +55,18 @@ import numpy as np
 
 
 class RSSTagApplication(object):
-    def __init__(self, config_path=None):
+    def __init__(self, config_path=None, log_file=None):
         self.config = load_config(config_path)
         self.no_category_name = "NotCategorized"
         if self.config["settings"]["no_category_name"]:
             self.no_category_name = self.config["settings"]["no_category_name"]
 
         try:
+            target_log = log_file
+            if not target_log:
+                target_log = self.config["settings"].get("web_log_file", self.config["settings"]["log_file"])
             logging.basicConfig(
-                filename=self.config["settings"]["log_file"],
+                filename=target_log,
                 filemode="a",
                 level=getattr(logging, self.config["settings"]["log_level"].upper()),
             )

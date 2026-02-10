@@ -47,11 +47,14 @@ from rsstag.workers.tag_worker import TagWorker
 class RSSTagWorkerDispatcher:
     """Rsstag workers handler"""
 
-    def __init__(self, config_path):
+    def __init__(self, config_path, log_file=None):
         self._config = load_config(config_path)
         self._workers_pool = []
+        target_log = log_file
+        if not target_log:
+            target_log = self._config["settings"].get("worker_log_file", self._config["settings"]["log_file"])
         logging.basicConfig(
-            filename=self._config["settings"]["log_file"],
+            filename=target_log,
             filemode="a",
             level=getattr(logging, self._config["settings"]["log_level"].upper()),
         )
