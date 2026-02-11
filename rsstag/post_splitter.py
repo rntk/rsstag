@@ -7,13 +7,13 @@ from typing import Optional, Dict, Any, List
 from txt_splitt import (
     AdjacentSameTopicJoiner,
     BracketMarker,
-    DenseRegexSentenceSplitter,
+    SparseRegexSentenceSplitter,
+    HTMLParserTagStripCleaner,
     LLMRepairingGapHandler,
     MappingOffsetRestorer,
     NormalizingSplitter,
     Pipeline,
-    SizeBasedChunker,
-    TagStripCleaner,
+    OverlapChunker,
     TopicRangeLLM,
     TopicRangeParser,
     Tracer,
@@ -97,14 +97,12 @@ class PostSplitter:
 
             # Initialize the pipeline components
             # We use settings similar to the reference split_text.py
-            splitter = NormalizingSplitter(
-                DenseRegexSentenceSplitter(anchor_every_words=5),
-                min_length=20,
-                max_length=260,
+            splitter = SparseRegexSentenceSplitter(
+                anchor_every_words=5, html_aware=True
             )
 
-            # Using SizeBasedChunker with default 84000 chars as in example
-            chunker = SizeBasedChunker(max_chars=84000)
+            # Using OverlapChunker as in example
+            chunker = OverlapChunker(max_chars=84000)
 
             # Set up tracing
             llm_callable = TracingLLMCallable(llm_adapter, tracer)
@@ -115,11 +113,8 @@ class PostSplitter:
                 chunker=chunker,
             )
 
-            html_cleaner = None
-            offset_restorer = None
-            if is_html:
-                html_cleaner = TagStripCleaner()
-                offset_restorer = MappingOffsetRestorer()
+            html_cleaner = HTMLParserTagStripCleaner()
+            offset_restorer = MappingOffsetRestorer()
 
             # Create the pipeline
             pipeline = Pipeline(
