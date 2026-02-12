@@ -177,6 +177,7 @@ class PostSplitter:
                     "number": s.index + 1,
                     "start": s.start,
                     "end": s.end,
+                    "text": s.text,
                     "read": False,
                 }
             )

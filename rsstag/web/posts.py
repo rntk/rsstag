@@ -233,6 +233,23 @@ def _extract_sentence_text_for_context(
     return plain_text[start:end].casefold()
 
 
+def _wrap_words_in_spans(text_chunk: str, num: int, topic: str, color: str) -> str:
+    """Wrap each word in a text chunk (no HTML tags) in its own span tag."""
+    tokens = re.split(r"(\S+)", text_chunk)
+    parts: list[str] = []
+    escaped_topic = html.escape(topic)
+    for token in tokens:
+        if token and re.fullmatch(r"\S+", token):
+            parts.append(
+                '<span class="sentence-group" data-sentence="{}" '
+                'data-topic="{}" title="{}" style="background-color: {}40;">'
+                "{}</span>".format(num, escaped_topic, escaped_topic, color, token)
+            )
+        else:
+            parts.append(token)
+    return "".join(parts)
+
+
 def _resolve_sentence_bounds(
     raw_content: str, sentence: dict, search_start_idx: int
 ) -> tuple[Optional[int], Optional[int], int]:
@@ -1627,71 +1644,42 @@ def on_post_grouped_get(
                     filtered_matches.append(m)
                     last_end = m["end"]
 
-            # Reconstruct content with spans
+            # Reconstruct content with per-word spans
             new_content_parts = []
             last_pos = 0
-
-            # Find all tag positions to avoid crossing them and breaking HTML structure
-            # (especially closing tags that might close our highlighting span prematurely)
-            block_pattern = re.compile(r"<[^>]+>", re.IGNORECASE)
+            tag_pattern = re.compile(r"<[^>]+>")
 
             for match in filtered_matches:
                 # Add text before the match
                 new_content_parts.append(raw_content[last_pos : match["start"]])
 
                 match_text = match["text"]
+                num = match["num"]
+                topic = match["topic"]
+                color = match["color"]
 
-                # Check if this match crosses any block boundaries
-                # If it does, we must split the span to keep HTML valid
-                internal_blocks = list(block_pattern.finditer(match_text))
-                if not internal_blocks:
-                    # Simple case: no internal blocks
-                    span = (
-                        '<span class="sentence-group" data-sentence="{}" '
-                        'data-topic="{}" title="{}" style="background-color: {}40;">{}</span>'
-                    ).format(
-                        match["num"],
-                        html.escape(match["topic"]),
-                        html.escape(match["topic"]),
-                        match["color"],
-                        match_text,
-                    )
-                    new_content_parts.append(span)
-                else:
-                    # Complex case: sentence crosses block tags
-                    # Split the span at each block tag
-                    curr_internal_pos = 0
-                    for ib in internal_blocks:
-                        # Text before the tag
-                        pre_tag_text = match_text[curr_internal_pos : ib.start()]
-                        if pre_tag_text:
-                            new_content_parts.append(
-                                '<span class="sentence-group" data-sentence="{}" '
-                                'data-topic="{}" title="{}" style="background-color: {}40;">{}</span>'.format(
-                                    match["num"],
-                                    html.escape(match["topic"]),
-                                    html.escape(match["topic"]),
-                                    match["color"],
-                                    pre_tag_text,
-                                )
-                            )
-                        # The tag itself (outside the span)
-                        new_content_parts.append(match_text[ib.start() : ib.end()])
-                        curr_internal_pos = ib.end()
-
-                    # Remaining text after last tag
-                    post_tag_text = match_text[curr_internal_pos:]
-                    if post_tag_text:
+                # Walk through the match text, splitting at HTML tags
+                internal_tags = list(tag_pattern.finditer(match_text))
+                curr_pos = 0
+                for tag_match in internal_tags:
+                    # Text before the tag: wrap each word
+                    text_before = match_text[curr_pos : tag_match.start()]
+                    if text_before:
                         new_content_parts.append(
-                            '<span class="sentence-group" data-sentence="{}" '
-                            'data-topic="{}" title="{}" style="background-color: {}40;">{}</span>'.format(
-                                match["num"],
-                                html.escape(match["topic"]),
-                                html.escape(match["topic"]),
-                                match["color"],
-                                post_tag_text,
-                            )
+                            _wrap_words_in_spans(text_before, num, topic, color)
                         )
+                    # The tag itself: pass through as-is
+                    new_content_parts.append(
+                        match_text[tag_match.start() : tag_match.end()]
+                    )
+                    curr_pos = tag_match.end()
+
+                # Remaining text after last tag (or entire text if no tags)
+                remaining = match_text[curr_pos:]
+                if remaining:
+                    new_content_parts.append(
+                        _wrap_words_in_spans(remaining, num, topic, color)
+                    )
 
                 last_pos = match["end"]
             new_content_parts.append(raw_content[last_pos:])
