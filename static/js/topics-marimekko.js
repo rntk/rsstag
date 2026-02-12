@@ -25,6 +25,8 @@ const COL_GAP = 6;
 const MIN_COL_WIDTH = 80;
 const FONT_SIZE_LABEL = 16;
 const FONT_SIZE_BOTTOM = 15;
+const MIN_ROW_HEIGHT = FONT_SIZE_LABEL + 8;
+const MIN_COL_HEIGHT = FONT_SIZE_LABEL + 10;
 
 class TopicsMarimekko {
     constructor() {
@@ -58,13 +60,6 @@ class TopicsMarimekko {
             container.textContent = 'No subtopics.';
             return;
         }
-
-        // Debug: check if text_length is present in data
-        console.log('Marimekko data sample:', {
-            topicName: topicNode.name,
-            firstChild: children[0],
-            hasTextLength: children[0] && 'text_length' in children[0]
-        });
 
         this.allColumns = children.map((sub, i) => {
             const subChildren = Array.isArray(sub.children) ? sub.children : [];
@@ -150,12 +145,21 @@ class TopicsMarimekko {
 
     _buildSvg(columns) {
         const chartWidth = Math.max(this.container.clientWidth, window.innerWidth * 0.9, 1000);
-        const chartHeight = Math.round(window.innerHeight * 0.85);
-        const barAreaHeight = chartHeight - BOTTOM_LABEL_HEIGHT - TOP_PADDING;
+        const baseChartHeight = Math.round(window.innerHeight * 0.85);
+        const baseBarAreaHeight = baseChartHeight - BOTTOM_LABEL_HEIGHT - TOP_PADDING;
 
         const totalWidthUnits = columns.reduce((s, c) => s + c.width, 0);
         const totalGap = COL_GAP * (columns.length - 1);
         const availableWidth = chartWidth - totalGap;
+
+        const requiredBarAreaHeight = columns.reduce((maxHeight, col) => {
+            const colTotalValue = col.rows.reduce((sum, row) => sum + row.value, 0);
+            const proportionalHeight = (colTotalValue / this.maxColValue) * baseBarAreaHeight;
+            const minReadableHeight = Math.max(MIN_COL_HEIGHT, col.rows.length * MIN_ROW_HEIGHT);
+            return Math.max(maxHeight, proportionalHeight, minReadableHeight);
+        }, baseBarAreaHeight);
+        const barAreaHeight = Math.max(baseBarAreaHeight, requiredBarAreaHeight);
+        const chartHeight = TOP_PADDING + barAreaHeight + BOTTOM_LABEL_HEIGHT;
 
         const svgNs = 'http://www.w3.org/2000/svg';
         const svg = document.createElementNS(svgNs, 'svg');
@@ -170,7 +174,10 @@ class TopicsMarimekko {
                 MIN_COL_WIDTH
             );
             const colTotalValue = col.rows.reduce((s, r) => s + r.value, 0);
-            const colHeight = (colTotalValue / this.maxColValue) * barAreaHeight;
+            const proportionalColHeight = (colTotalValue / this.maxColValue) * barAreaHeight;
+            const minReadableColHeight = Math.max(MIN_COL_HEIGHT, col.rows.length * MIN_ROW_HEIGHT);
+            const colHeight = Math.max(proportionalColHeight, minReadableColHeight);
+            const rowHeights = this._computeRowHeights(col.rows, colHeight);
 
             let y = TOP_PADDING + (barAreaHeight - colHeight);
 
@@ -178,7 +185,7 @@ class TopicsMarimekko {
             const colorIdx = col.originalIndex;
 
             col.rows.forEach((row, rowIdx) => {
-                const rowHeight = (row.value / colTotalValue) * colHeight;
+                const rowHeight = rowHeights[rowIdx];
 
                 const rect = document.createElementNS(svgNs, 'rect');
                 rect.setAttribute('x', x);
@@ -195,7 +202,7 @@ class TopicsMarimekko {
                 svg.appendChild(rect);
 
                 // Label inside bar
-                if (rowHeight >= 20 && colWidth >= 50) {
+                if (rowHeight >= MIN_ROW_HEIGHT && colWidth >= 50) {
                     const fontSize = Math.min(FONT_SIZE_LABEL, colWidth / 4.5);
                     const charWidth = fontSize * 0.55;
                     const maxChars = Math.max(Math.floor((colWidth - 10) / charWidth), 3);
@@ -238,6 +245,28 @@ class TopicsMarimekko {
         });
 
         return svg;
+    }
+
+    _computeRowHeights(rows, colHeight) {
+        const rowCount = rows.length;
+        if (rowCount === 0) {
+            return [];
+        }
+
+        const minTotal = rowCount * MIN_ROW_HEIGHT;
+        if (colHeight <= minTotal) {
+            return new Array(rowCount).fill(colHeight / rowCount);
+        }
+
+        const values = rows.map((row) => Math.max(0, Number(row.value) || 0));
+        const valueSum = values.reduce((sum, value) => sum + value, 0);
+        const extraHeight = colHeight - minTotal;
+
+        if (valueSum <= 0) {
+            return new Array(rowCount).fill(colHeight / rowCount);
+        }
+
+        return values.map((value) => MIN_ROW_HEIGHT + (value / valueSum) * extraHeight);
     }
 }
 
