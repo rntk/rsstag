@@ -2257,6 +2257,79 @@ h3.post_title {
         z-index: 10;
     }
 
+    .topics-marimekko-groups {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+    }
+
+    .topics-marimekko-group {
+        border: 1px solid #e9ecef;
+        border-radius: 6px;
+        background: #fff;
+        padding: 16px;
+    }
+
+    .topics-marimekko-group-title {
+        margin: 0 0 10px;
+        font-size: 16px;
+        line-height: 1.2;
+        color: #333;
+    }
+
+    .topics-marimekko-chart-host {
+        width: 100%;
+        overflow-x: auto;
+        min-width: 1000px;
+    }
+
+    .topics-marimekko-chart-host svg {
+        width: 100%;
+        height: auto;
+    }
+
+    .topics-chart-wrapper {
+        width: 95vw;
+        margin-left: calc(-95vw / 2 + 50%);
+        max-width: none;
+    }
+
+    .marimekko-nav {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        padding: 8px 12px;
+        background: #f5f5f5;
+        border-radius: 5px;
+    }
+
+    .marimekko-nav-btn {
+        padding: 6px 14px;
+        border: 1px solid #d0d7de;
+        background: #fff;
+        color: #2c3e50;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+
+        &:hover:not(:disabled) {
+            background: #f0f3f6;
+        }
+
+        &:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+    }
+
+    .marimekko-nav-info {
+        font-weight: 600;
+        font-size: 13px;
+        color: #444;
+    }
+
     @media (max-width: 768px) {
 
         .topics-pie-chart,

@@ -1,6 +1,7 @@
 'use strict';
 
 import TopicsSunburst from './topics-sunburst.js';
+import TopicsMarimekko from './topics-marimekko.js';
 
 // Topics List functionality
 
@@ -35,10 +36,12 @@ function initTopicTabs() {
     const tabs = tabsContainer.querySelectorAll('.tab-btn');
     const tabContents = {
         'topics-list': document.getElementById('tab-topics-list'),
-        'topics-chart': document.getElementById('tab-topics-chart')
+        'topics-chart': document.getElementById('tab-topics-chart'),
+        'topics-marimekko': document.getElementById('tab-topics-marimekko')
     };
 
     let chartRendered = false;
+    let marimekkoRendered = false;
 
     const activateTab = (tabName) => {
         tabs.forEach((tab) => {
@@ -53,6 +56,10 @@ function initTopicTabs() {
         if (tabName === 'topics-chart' && !chartRendered) {
             renderTopicsSunburstChart();
             chartRendered = true;
+        }
+        if (tabName === 'topics-marimekko' && !marimekkoRendered) {
+            renderTopicsMarimekkoChart();
+            marimekkoRendered = true;
         }
     };
 
@@ -73,14 +80,19 @@ function initTopicTabs() {
 
     let resizeTimeout = 0;
     window.addEventListener('resize', () => {
-        if (!chartRendered) {
+        if (!chartRendered && !marimekkoRendered) {
             return;
         }
         if (resizeTimeout) {
             clearTimeout(resizeTimeout);
         }
         resizeTimeout = setTimeout(() => {
-            renderTopicsSunburstChart();
+            if (chartRendered) {
+                renderTopicsSunburstChart();
+            }
+            if (marimekkoRendered) {
+                renderTopicsMarimekkoChart();
+            }
         }, 150);
     });
 }
@@ -192,6 +204,56 @@ function renderTopicsSunburstGroups(container, chartGroups) {
         const sunburst = new TopicsSunburst(group.data);
         sunburst.render(`#${chartHost.id}`);
     });
+}
+
+function renderTopicsMarimekkoChart() {
+    const data = window.sunburst_data;
+    const container = document.getElementById('topics_marimekko_chart');
+
+    if (!container) {
+        return;
+    }
+
+    container.innerHTML = '';
+
+    if (!data || !data.children || data.children.length === 0) {
+        container.textContent = 'No topics available for this page.';
+        return;
+    }
+
+    try {
+        const topLevelTopics = data.children;
+        const groupsContainer = document.createElement('div');
+        groupsContainer.className = 'topics-marimekko-groups';
+        container.appendChild(groupsContainer);
+
+        topLevelTopics.forEach((topic, index) => {
+            if (!topic.children || topic.children.length === 0) {
+                return;
+            }
+
+            const section = document.createElement('section');
+            section.className = 'topics-marimekko-group';
+
+            const heading = document.createElement('h3');
+            heading.className = 'topics-marimekko-group-title';
+            heading.textContent = topic.name;
+            section.appendChild(heading);
+
+            const chartHost = document.createElement('div');
+            chartHost.className = 'topics-marimekko-chart-host';
+            chartHost.id = `topics_marimekko_chart_${index}`;
+            section.appendChild(chartHost);
+
+            groupsContainer.appendChild(section);
+
+            const chart = new TopicsMarimekko();
+            chart.render(`#${chartHost.id}`, topic);
+        });
+    } catch (error) {
+        console.error('Error rendering marimekko chart:', error);
+        container.textContent = 'Error rendering marimekko chart: ' + error.message;
+    }
 }
 
 function initTopicsSearch() {

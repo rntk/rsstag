@@ -133,6 +133,7 @@ def _build_topics_index(
             s["number"]: s for s in sentences if "number" in s
         }
         topics_for_post: list[str] = []
+        topic_text_lengths: dict[str, int] = {}
         for topic, indices in post_data.get("groups", {}).items():
             topic_indices = indices
             if only_unread:
@@ -173,6 +174,16 @@ def _build_topics_index(
             else:
                 topics_for_post.append(topic)
 
+            if topic in topics_for_post:
+                tl: int = 0
+                for idx in topic_indices:
+                    s: Optional[dict] = sentences_map.get(idx)
+                    if s:
+                        txt = s.get("text")
+                        if txt:
+                            tl += len(str(txt))
+                topic_text_lengths[topic] = tl
+
         if not topics_for_post:
             continue
 
@@ -183,9 +194,10 @@ def _build_topics_index(
 
         for topic in topics_for_post:
             if topic not in topic_counts:
-                topic_counts[topic] = {"count": 0, "posts": []}
+                topic_counts[topic] = {"count": 0, "posts": [], "text_length": 0}
             topic_counts[topic]["count"] += 1
             topic_counts[topic]["posts"].append(post_id_str)
+            topic_counts[topic]["text_length"] += topic_text_lengths.get(topic, 0)
 
     return topic_counts, post_topic_mapping
 
@@ -305,6 +317,7 @@ def _build_topics_tree(topic_counts: dict[str, dict]) -> list[dict]:
         if not topic_posts:
             continue
         topic_count: int = int(topic_data.get("count", len(topic_posts)))
+        topic_text_length: int = int(topic_data.get("text_length", 0))
 
         current_children: dict[str, dict] = raw_roots
         current_path: list[str] = []
@@ -315,11 +328,13 @@ def _build_topics_tree(topic_counts: dict[str, dict]) -> list[dict]:
                     "name": part,
                     "path": " > ".join(current_path),
                     "count": 0,
+                    "text_length": 0,
                     "posts": set(),
                     "children": {},
                 }
             node: dict = current_children[part]
             node["count"] += topic_count
+            node["text_length"] += topic_text_length
             node["posts"].update(topic_posts)
             current_children = node["children"]
 
@@ -333,6 +348,7 @@ def _build_topics_tree(topic_counts: dict[str, dict]) -> list[dict]:
                     "name": node["name"],
                     "path": node["path"],
                     "count": node["count"],
+                    "text_length": node.get("text_length", 0),
                     "posts": posts,
                     "children": children,
                 }
@@ -1861,6 +1877,7 @@ def _convert_topics_to_sunburst(topics: list[dict]) -> list[dict]:
         node: dict = {
             "name": topic["name"],
             "value": topic["count"],
+            "text_length": topic.get("text_length", 0),
             "_topicPath": topic["path"],
             "_topicPosts": topic["posts"]
         }
