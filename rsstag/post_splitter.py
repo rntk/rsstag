@@ -60,6 +60,9 @@ class LLMHandlerAdapter:
 class PostSplitter:
     """Handles text splitting using txt_splitt pipeline"""
 
+    MAX_TOPIC_LENGTH = 500
+    MAX_PIPELINE_RETRIES = 3
+
     def __init__(self, llm_handler: Optional[Any] = None) -> None:
         self._log = logging.getLogger("post_splitter")
         self._llm_handler = llm_handler
@@ -88,64 +91,98 @@ class PostSplitter:
             self._log.error("LLM handler not configured")
             raise LLMGenerationError("LLM handler not configured")
 
-        if tracer is None:
-            tracer = Tracer()
+        # Create adapter once and retry whole pipeline execution on invalid topic output.
+        llm_adapter = LLMHandlerAdapter(self._llm_handler)
+        base_tracer = tracer
+        last_error: Optional[Exception] = None
+        saw_validation_error = False
 
-        try:
-            # Create adapter for the LLM handler
-            llm_adapter = LLMHandlerAdapter(self._llm_handler)
+        for attempt in range(1, self.MAX_PIPELINE_RETRIES + 1):
+            attempt_tracer = base_tracer if attempt == 1 and base_tracer is not None else Tracer()
 
-            # Initialize the pipeline components
-            # We use settings similar to the reference split_text.py
-            splitter = SparseRegexSentenceSplitter(
-                anchor_every_words=5, html_aware=True
+            try:
+                # Initialize the pipeline components
+                # We use settings similar to the reference split_text.py
+                splitter = SparseRegexSentenceSplitter(
+                    anchor_every_words=5, html_aware=True
+                )
+
+                # Using OverlapChunker as in example
+                chunker = OverlapChunker(max_chars=84000)
+
+                # Set up tracing
+                llm_callable = TracingLLMCallable(llm_adapter, attempt_tracer)
+
+                topic_range_llm = TopicRangeLLM(
+                    client=llm_callable,
+                    temperature=0.0,
+                    chunker=chunker,
+                )
+
+                html_cleaner = HTMLParserTagStripCleaner()
+                offset_restorer = MappingOffsetRestorer()
+
+                # Create the pipeline
+                pipeline = Pipeline(
+                    splitter=splitter,
+                    marker=BracketMarker(),
+                    llm=topic_range_llm,
+                    parser=TopicRangeParser(),
+                    gap_handler=LLMRepairingGapHandler(
+                        llm_callable, temperature=0.0, tracer=attempt_tracer
+                    ),
+                    joiner=AdjacentSameTopicJoiner(),
+                    html_cleaner=html_cleaner,
+                    offset_restorer=offset_restorer,
+                    tracer=attempt_tracer,
+                )
+
+                # Run the pipeline
+                result = pipeline.run(text)
+                transformed = self._transform_result(result)
+                self._validate_topic_lengths(transformed.get("groups", {}))
+                self._log.info(
+                    "Pipeline trace for attempt %s:\n%s",
+                    attempt,
+                    attempt_tracer.format(),
+                )
+                return transformed
+
+            except Exception as e:
+                last_error = e
+                if isinstance(e, ParsingError):
+                    saw_validation_error = True
+                self._log.warning(
+                    "Pipeline attempt %s/%s failed: %s",
+                    attempt,
+                    self.MAX_PIPELINE_RETRIES,
+                    e,
+                )
+                if attempt_tracer:
+                    self._log.info(
+                        "Pipeline trace before failure (attempt %s):\n%s",
+                        attempt,
+                        attempt_tracer.format(),
+                    )
+
+        if saw_validation_error and isinstance(last_error, ParsingError):
+            raise ParsingError(
+                f"Invalid LLM output after {self.MAX_PIPELINE_RETRIES} attempts: {last_error}"
+            ) from last_error
+
+        raise PostSplitterError(
+            f"Pipeline execution failed after {self.MAX_PIPELINE_RETRIES} attempts: {last_error}"
+        ) from last_error
+
+    def _validate_topic_lengths(self, groups: Dict[str, List[int]]) -> None:
+        """Validate topic titles produced by the LLM."""
+        invalid_topics = [
+            topic_name for topic_name in groups if len(topic_name) > self.MAX_TOPIC_LENGTH
+        ]
+        if invalid_topics:
+            raise ParsingError(
+                f"Topic names exceed {self.MAX_TOPIC_LENGTH} characters: {invalid_topics!r}"
             )
-
-            # Using OverlapChunker as in example
-            chunker = OverlapChunker(max_chars=84000)
-
-            # Set up tracing
-            llm_callable = TracingLLMCallable(llm_adapter, tracer)
-
-            topic_range_llm = TopicRangeLLM(
-                client=llm_callable,
-                temperature=0.0,
-                chunker=chunker,
-            )
-
-            html_cleaner = HTMLParserTagStripCleaner()
-            offset_restorer = MappingOffsetRestorer()
-
-            # Create the pipeline
-            pipeline = Pipeline(
-                splitter=splitter,
-                marker=BracketMarker(),
-                llm=topic_range_llm,
-                parser=TopicRangeParser(),
-                gap_handler=LLMRepairingGapHandler(
-                    llm_callable, temperature=0.0, tracer=tracer
-                ),
-                joiner=AdjacentSameTopicJoiner(),
-                html_cleaner=html_cleaner,
-                offset_restorer=offset_restorer,
-                tracer=tracer,
-            )
-
-            # Run the pipeline
-            result = pipeline.run(text)
-            self._log.info("Pipeline trace:\n%s", tracer.format())
-
-            return self._transform_result(result)
-
-        except Exception as e:
-            if tracer:
-                self._log.info("Pipeline trace before failure:\n%s", tracer.format())
-            self._log.error("Pipeline execution failed: %s", e)
-            # Fallback for now or re-raise
-            # Attempt to return a single group fallback?
-            # Creating a basic sentence split manually might be complex without the old code.
-            # Ideally we should raise, but to maintain some behavior we could check if we have sentences.
-            raise PostSplitterError(f"Pipeline failed: {e}") from e
 
     def _transform_result(self, result: Any) -> Dict[str, Any]:
         """Convert txt_splitt result to rsstag format.
@@ -214,4 +251,3 @@ class PostSplitter:
             "sentences": sentences_list,
             "groups": groups_dict,
         }
-
