@@ -95,6 +95,7 @@ class PostSplitter:
         llm_adapter = LLMHandlerAdapter(self._llm_handler)
         base_tracer = tracer
         last_error: Optional[Exception] = None
+        saw_validation_error = False
 
         for attempt in range(1, self.MAX_PIPELINE_RETRIES + 1):
             attempt_tracer = base_tracer if attempt == 1 and base_tracer is not None else Tracer()
@@ -149,6 +150,8 @@ class PostSplitter:
 
             except Exception as e:
                 last_error = e
+                if isinstance(e, ParsingError):
+                    saw_validation_error = True
                 self._log.warning(
                     "Pipeline attempt %s/%s failed: %s",
                     attempt,
@@ -162,17 +165,24 @@ class PostSplitter:
                         attempt_tracer.format(),
                     )
 
+        if saw_validation_error and isinstance(last_error, ParsingError):
+            raise ParsingError(
+                f"Invalid LLM output after {self.MAX_PIPELINE_RETRIES} attempts: {last_error}"
+            ) from last_error
+
         raise PostSplitterError(
-            f"Pipeline failed after {self.MAX_PIPELINE_RETRIES} attempts: {last_error}"
+            f"Pipeline execution failed after {self.MAX_PIPELINE_RETRIES} attempts: {last_error}"
         ) from last_error
 
     def _validate_topic_lengths(self, groups: Dict[str, List[int]]) -> None:
         """Validate topic titles produced by the LLM."""
-        for topic_name in groups:
-            if len(topic_name) > self.MAX_TOPIC_LENGTH:
-                raise ParsingError(
-                    f"Topic name exceeds {self.MAX_TOPIC_LENGTH} characters: {topic_name!r}"
-                )
+        invalid_topics = [
+            topic_name for topic_name in groups if len(topic_name) > self.MAX_TOPIC_LENGTH
+        ]
+        if invalid_topics:
+            raise ParsingError(
+                f"Topic names exceed {self.MAX_TOPIC_LENGTH} characters: {invalid_topics!r}"
+            )
 
     def _transform_result(self, result: Any) -> Dict[str, Any]:
         """Convert txt_splitt result to rsstag format.

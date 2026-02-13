@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from rsstag.post_splitter import PostSplitter, PostSplitterError
+from rsstag.post_splitter import ParsingError, PostSplitter
 
 
 class _DummyLLMHandler:
@@ -66,9 +66,10 @@ class TestPostSplitterTopicValidation(unittest.TestCase):
             "_transform_result",
             return_value={"sentences": [], "groups": {long_topic: [1]}},
         ):
-            with self.assertRaises(PostSplitterError) as cm:
+            with self.assertRaises(ParsingError) as cm:
                 splitter.generate_grouped_data("text", "title")
 
+        self.assertIn("Invalid LLM output", str(cm.exception))
         self.assertIn(long_topic, str(cm.exception))
         self.assertEqual(_FakePipeline.run_calls, splitter.MAX_PIPELINE_RETRIES)
 
