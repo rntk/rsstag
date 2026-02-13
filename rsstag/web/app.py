@@ -152,6 +152,8 @@ class RSSTagApplication(object):
             "on_refresh_get_post",
             "on_login_google_auth_get",
             "on_oauth2callback_get",
+            "on_external_workers_claim_post",
+            "on_external_workers_submit_post",
         )
         self.llm = LLMRouter(self.config)
 
@@ -245,6 +247,40 @@ class RSSTagApplication(object):
         logging.info("%s", time.time() - st)
 
         return response(http_env, start_resp)
+
+    @staticmethod
+    def _json_response(payload: Dict[str, Any], status: int = 200) -> Response:
+        return Response(
+            json.dumps(payload, default=str),
+            mimetype="application/json",
+            status=status,
+        )
+
+    def _get_worker_token_context(self, request: Request) -> Optional[Dict[str, str]]:
+        auth_header = request.headers.get("Authorization", "")
+        token = ""
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:].strip()
+
+        if not token:
+            token = request.headers.get("X-Worker-Token", "").strip()
+
+        if not token and request.is_json:
+            payload = request.get_json(silent=True) or {}
+            token = str(payload.get("token", "")).strip()
+
+        if not token:
+            return None
+
+        token_doc = self.tokens.validate(token)
+        if not token_doc:
+            return None
+        owner = token_doc.get("owner")
+        token_id = token_doc.get("_id")
+        if not owner or token_id is None:
+            return None
+
+        return {"owner": owner, "token_id": str(token_id)}
 
     def on_select_provider_get(self, _: Optional[dict], __: Request) -> Response:
         return users_handlers.on_select_provider_get(self)
@@ -1765,3 +1801,76 @@ class RSSTagApplication(object):
     def on_tokens_delete_post(self, user: dict, _: Request, token: str) -> Response:
         self.tokens.delete(user["sid"], token)
         return redirect("/tokens")
+
+    def on_external_workers_claim_post(
+        self, _: Optional[dict], request: Request
+    ) -> Response:
+        worker_ctx = self._get_worker_token_context(request)
+        if not worker_ctx:
+            return self._json_response({"success": False, "error": "Unauthorized"}, 401)
+
+        task = self.tasks.claim_external_task(
+            worker_ctx["owner"],
+            worker_token_id=worker_ctx["token_id"],
+        )
+        return self._json_response({"success": True, "task": task})
+
+    def on_external_workers_submit_post(
+        self, _: Optional[dict], request: Request
+    ) -> Response:
+        worker_ctx = self._get_worker_token_context(request)
+        if not worker_ctx:
+            return self._json_response({"success": False, "error": "Unauthorized"}, 401)
+
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return self._json_response({"success": False, "error": "Invalid JSON"}, 400)
+
+        task_type = payload.get("task_type")
+        item_id = payload.get("item_id")
+        success = payload.get("success")
+        result_payload = payload.get("result")
+        error = payload.get("error", "")
+
+        if not isinstance(task_type, int):
+            return self._json_response(
+                {"success": False, "error": "task_type must be integer"},
+                400,
+            )
+        if not isinstance(item_id, str) or not item_id.strip():
+            return self._json_response(
+                {"success": False, "error": "item_id must be non-empty string"},
+                400,
+            )
+        if not isinstance(success, bool):
+            return self._json_response(
+                {"success": False, "error": "success must be boolean"},
+                400,
+            )
+        if result_payload is not None and not isinstance(result_payload, dict):
+            return self._json_response(
+                {"success": False, "error": "result must be object"},
+                400,
+            )
+        if not isinstance(error, str):
+            return self._json_response(
+                {"success": False, "error": "error must be string"},
+                400,
+            )
+
+        submitted = self.tasks.submit_external_task_result(
+            owner=worker_ctx["owner"],
+            task_type=task_type,
+            item_id=item_id.strip(),
+            success=success,
+            result=result_payload,
+            error=error,
+            worker_token_id=worker_ctx["token_id"],
+        )
+        if not submitted:
+            return self._json_response(
+                {"success": False, "error": "Task submission rejected"},
+                400,
+            )
+
+        return self._json_response({"success": True})

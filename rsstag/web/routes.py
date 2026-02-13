@@ -538,6 +538,16 @@ class RSSTagRoutes:
                 "endpoint": "on_tokens_delete_post",
                 "methods": ["POST"],
             },
+            {
+                "url": "/api/external-workers/claim",
+                "endpoint": "on_external_workers_claim_post",
+                "methods": ["POST"],
+            },
+            {
+                "url": "/api/external-workers/submit",
+                "endpoint": "on_external_workers_submit_post",
+                "methods": ["POST"],
+            },
         ]
 
         decorated_routes = (

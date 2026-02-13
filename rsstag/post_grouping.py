@@ -1,9 +1,11 @@
 """Post grouping data management and DB dispatching"""
 
 import logging
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from pymongo import MongoClient
 import hashlib
+
+PostId = Union[int, str]
 
 
 class RssTagPostGrouping:
@@ -26,7 +28,7 @@ class RssTagPostGrouping:
                 "Can't create post_grouping indexes. May already exist. Info: %s", e
             )
 
-    def get_grouped_posts(self, owner: str, post_ids: List[int]) -> Optional[dict]:
+    def get_grouped_posts(self, owner: str, post_ids: List[PostId]) -> Optional[dict]:
         """Get grouped posts data by owner and post IDs"""
         post_ids_hash = self._generate_post_ids_hash(post_ids)
         return self._db.post_grouping.find_one(
@@ -36,7 +38,7 @@ class RssTagPostGrouping:
     def save_grouped_posts(
         self,
         owner: str,
-        post_ids: List[int],
+        post_ids: List[PostId],
         sentences: List[Dict[str, Any]],
         groups: Dict[str, List[int]],
     ) -> bool:
@@ -96,7 +98,7 @@ class RssTagPostGrouping:
             return all_read
         return False
 
-    def mark_sequences_read(self, owner: str, post_id: int, read_status: bool) -> bool:
+    def mark_sequences_read(self, owner: str, post_id: PostId, read_status: bool) -> bool:
         """Mark ALL sentences in a post's grouping as read/unread"""
         post_ids = [post_id]
         post_ids_hash = self._generate_post_ids_hash(post_ids)
@@ -115,8 +117,15 @@ class RssTagPostGrouping:
         )
         return True
 
-    def _generate_post_ids_hash(self, post_ids: List[int]) -> str:
+    def _generate_post_ids_hash(self, post_ids: List[PostId]) -> str:
         """Generate a hash from post IDs for unique identification"""
-        post_ids_sorted = sorted(post_ids)
+        # Convert to int where possible for numeric sorting, keep strings otherwise
+        def to_sortable(pid: PostId) -> Union[int, str]:
+            try:
+                return int(pid)
+            except (ValueError, TypeError):
+                return str(pid)
+        
+        post_ids_sorted = sorted(to_sortable(pid) for pid in post_ids)
         post_ids_str = ",".join(str(pid) for pid in post_ids_sorted)
         return hashlib.md5(post_ids_str.encode("utf-8")).hexdigest()

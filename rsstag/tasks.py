@@ -1,9 +1,12 @@
 import logging
 import time
-from typing import Optional, List
+import gzip
+from typing import Optional, List, Dict, Any, Set, Tuple
 from rsstag.users import RssTagUsers
-from pymongo import MongoClient, UpdateOne
+from pymongo import MongoClient, UpdateOne, ReturnDocument
 from bson.objectid import ObjectId
+from rsstag.post_grouping import RssTagPostGrouping
+from rsstag.tags import RssTagTags
 
 TASK_ALL = -1
 TASK_NOOP = 0
@@ -37,6 +40,11 @@ TASK_NOT_IN_PROCESSING = 0
 TASK_FREEZED = -1
 TAG_NOT_IN_PROCESSING = 0
 POST_GROUPING_NOT_IN_PROCESSING = 0
+MAX_EXTERNAL_ERROR_LENGTH = 1000
+EXTERNAL_WORKER_ALLOWED_TASK_TYPES: Set[int] = {
+    TASK_POST_GROUPING,
+    TASK_TAG_CLASSIFICATION,
+}
 
 
 class RssTagTasks:
@@ -815,6 +823,443 @@ class RssTagTasks:
             self._log.error('Unknow task type "%s"', task_type)
 
         return result
+
+    def _complete_user_task_if_done(self, owner: str, task_type: int) -> bool:
+        if task_type == TASK_POST_GROUPING:
+            pending_count = self._db.posts.count_documents(
+                {"owner": owner, "grouping": {"$exists": False}}
+            )
+        elif task_type == TASK_TAG_CLASSIFICATION:
+            pending_count = self._db.tags.count_documents(
+                {"owner": owner, "classifications": {"$exists": False}}
+            )
+        else:
+            return False
+
+        if pending_count > 0:
+            return False
+
+        user_task = self._db.tasks.find_one({"user": owner, "type": task_type})
+        if not user_task:
+            return True
+
+        can_delete = False
+        if user_task.get("manual", False):
+            can_delete = True
+        elif self.add_next_tasks(owner, task_type):
+            can_delete = True
+
+        if can_delete:
+            self._db.tasks.delete_one({"_id": user_task["_id"]})
+        return can_delete
+
+    def _find_external_user_task(self, owner: str) -> Optional[dict]:
+        pipeline = [
+            {
+                "$match": {
+                    "user": owner,
+                    "type": {"$in": list(EXTERNAL_WORKER_ALLOWED_TASK_TYPES)},
+                    "processing": {"$ne": TASK_FREEZED},
+                }
+            },
+            {"$sample": {"size": 1}},
+        ]
+        candidates = list(self._db.tasks.aggregate(pipeline))
+        if not candidates:
+            return None
+        return candidates[0]
+
+    def _build_tag_classification_snippets(
+        self, owner: str, tag: str, words: List[str]
+    ) -> List[Dict[str, Any]]:
+        snippets: List[Dict[str, Any]] = []
+        max_posts = 2000
+        max_snippets = 5000
+        processed_posts = 0
+        tag_words = set([tag] + words)
+
+        cursor = self._db.posts.find(
+            {"owner": owner, "tags": {"$all": [tag]}},
+            projection={"lemmas": True, "pid": True},
+        )
+
+        for post in cursor:
+            if processed_posts >= max_posts or len(snippets) >= max_snippets:
+                break
+
+            lemmas_data = post.get("lemmas")
+            if not isinstance(lemmas_data, (bytes, bytearray)):
+                continue
+
+            try:
+                lemmas_text = gzip.decompress(lemmas_data).decode("utf-8", "replace")
+            except Exception:
+                continue
+
+            if not lemmas_text:
+                continue
+
+            words_list = lemmas_text.split()
+            tag_indices = [i for i, word in enumerate(words_list) if word in tag_words]
+            if not tag_indices:
+                continue
+
+            ranges = [(max(0, i - 20), min(len(words_list), i + 21)) for i in tag_indices]
+            ranges.sort()
+
+            merged_ranges: List[Tuple[int, int]] = []
+            if ranges:
+                curr_start, curr_end = ranges[0]
+                for next_start, next_end in ranges[1:]:
+                    if next_start <= curr_end:
+                        curr_end = max(curr_end, next_end)
+                    else:
+                        merged_ranges.append((curr_start, curr_end))
+                        curr_start, curr_end = next_start, next_end
+                merged_ranges.append((curr_start, curr_end))
+
+            for start, end in merged_ranges:
+                if len(snippets) >= max_snippets:
+                    break
+                snippets.append(
+                    {
+                        "pid": post.get("pid"),
+                        "snippet": " ".join(words_list[start:end]),
+                    }
+                )
+
+            processed_posts += 1
+
+        return snippets
+
+    def claim_external_task(
+        self, owner: str, worker_token_id: Optional[str] = None
+    ) -> Optional[dict]:
+        user_task = self._find_external_user_task(owner)
+        if not user_task:
+            return None
+
+        task_type = user_task["type"]
+        now_ts = time.time()
+        claim_set: Dict[str, Any] = {"processing": now_ts}
+        if worker_token_id:
+            claim_set["external_claim_worker_token_id"] = worker_token_id
+            claim_set["external_claimed_at"] = now_ts
+
+        if task_type == TASK_POST_GROUPING:
+            post = self._db.posts.find_one_and_update(
+                {
+                    "owner": owner,
+                    "grouping": {"$exists": False},
+                    "processing": POST_NOT_IN_PROCESSING,
+                },
+                {"$set": claim_set},
+            )
+            if not post:
+                self._complete_user_task_if_done(owner, task_type)
+                return None
+
+            content = ""
+            title = ""
+            try:
+                title = post.get("content", {}).get("title", "")
+                raw_content = post.get("content", {}).get("content", b"")
+                if isinstance(raw_content, (bytes, bytearray)):
+                    content = gzip.decompress(raw_content).decode("utf-8", "replace")
+                elif isinstance(raw_content, str):
+                    content = raw_content
+            except Exception:
+                content = ""
+
+            return {
+                "task_id": str(user_task["_id"]),
+                "task_type": task_type,
+                "task_title": self.get_task_title(task_type),
+                "item": {
+                    "post_id": str(post["_id"]),
+                    "pid": post.get("pid"),
+                    "title": title,
+                    "content": content,
+                },
+            }
+
+        if task_type == TASK_TAG_CLASSIFICATION:
+            tag = self._db.tags.find_one_and_update(
+                {
+                    "owner": owner,
+                    "classifications": {"$exists": False},
+                    "processing": TAG_NOT_IN_PROCESSING,
+                },
+                {"$set": claim_set},
+            )
+            if not tag:
+                self._complete_user_task_if_done(owner, task_type)
+                return None
+
+            return {
+                "task_id": str(user_task["_id"]),
+                "task_type": task_type,
+                "task_title": self.get_task_title(task_type),
+                "item": {
+                    "tag_id": str(tag["_id"]),
+                    "tag": tag.get("tag", ""),
+                    "words": tag.get("words", []),
+                    "snippets": self._build_tag_classification_snippets(
+                        owner,
+                        tag.get("tag", ""),
+                        tag.get("words", []),
+                    ),
+                },
+            }
+
+        return None
+
+    def submit_external_task_result(
+        self,
+        owner: str,
+        task_type: int,
+        item_id: str,
+        success: bool,
+        result: Optional[Dict[str, Any]] = None,
+        error: str = "",
+        worker_token_id: Optional[str] = None,
+    ) -> bool:
+        if task_type not in EXTERNAL_WORKER_ALLOWED_TASK_TYPES:
+            return False
+
+        if not item_id:
+            return False
+
+        if result is None:
+            result = {}
+
+        try:
+            item_object_id = ObjectId(item_id)
+        except Exception:
+            return False
+
+        submit_ts = time.time()
+        submit_audit_set: Dict[str, Any] = {"external_submitted_at": submit_ts}
+        if worker_token_id:
+            submit_audit_set["external_result_worker_token_id"] = worker_token_id
+
+        if task_type == TASK_POST_GROUPING:
+            submit_filter: Dict[str, Any] = {
+                "_id": item_object_id,
+                "owner": owner,
+                "grouping": {"$exists": False},
+                "processing": {"$ne": POST_NOT_IN_PROCESSING},
+            }
+            if worker_token_id:
+                submit_filter["external_claim_worker_token_id"] = worker_token_id
+            post = self._db.posts.find_one_and_update(
+                submit_filter,
+                {"$set": {"processing": submit_ts}},
+                return_document=ReturnDocument.BEFORE,
+            )
+            if not post:
+                return False
+
+            if success:
+                sentences = result.get("sentences")
+                groups = result.get("groups")
+                if not isinstance(sentences, list) or not isinstance(groups, dict):
+                    self._db.posts.update_one(
+                        {
+                            "_id": item_object_id,
+                            "owner": owner,
+                            "processing": submit_ts,
+                        },
+                        {
+                            "$set": {
+                                "processing": POST_NOT_IN_PROCESSING,
+                                "external_error": "Invalid result format",
+                                **submit_audit_set,
+                            },
+                            "$unset": {
+                                "external_claim_worker_token_id": "",
+                                "external_claimed_at": "",
+                            },
+                        },
+                    )
+                    return False
+
+                post_pid = post.get("pid")
+                if post_pid is None:
+                    self._db.posts.update_one(
+                        {
+                            "_id": item_object_id,
+                            "owner": owner,
+                            "processing": submit_ts,
+                        },
+                        {
+                            "$set": {
+                                "processing": POST_NOT_IN_PROCESSING,
+                                "external_error": "Missing post pid",
+                                **submit_audit_set,
+                            },
+                            "$unset": {
+                                "external_claim_worker_token_id": "",
+                                "external_claimed_at": "",
+                            },
+                        },
+                    )
+                    return False
+
+                post_grouping = RssTagPostGrouping(self._db)
+                saved = post_grouping.save_grouped_posts(
+                    owner,
+                    [str(post_pid)],
+                    sentences,
+                    groups,
+                )
+                if not saved:
+                    self._db.posts.update_one(
+                        {
+                            "_id": item_object_id,
+                            "owner": owner,
+                            "processing": submit_ts,
+                        },
+                        {
+                            "$set": {
+                                "processing": POST_NOT_IN_PROCESSING,
+                                "external_error": "Failed to save grouping",
+                                **submit_audit_set,
+                            },
+                            "$unset": {
+                                "external_claim_worker_token_id": "",
+                                "external_claimed_at": "",
+                            },
+                        },
+                    )
+                    return False
+
+                self._db.posts.update_one(
+                    {
+                        "_id": item_object_id,
+                        "owner": owner,
+                        "processing": submit_ts,
+                    },
+                    {
+                        "$set": {
+                            "processing": POST_NOT_IN_PROCESSING,
+                            "grouping": 1,
+                            **submit_audit_set,
+                        },
+                        "$unset": {
+                            "external_claim_worker_token_id": "",
+                            "external_claimed_at": "",
+                        },
+                    },
+                )
+                self._complete_user_task_if_done(owner, task_type)
+                return True
+
+            self._db.posts.update_one(
+                {
+                    "_id": item_object_id,
+                    "owner": owner,
+                    "grouping": {"$exists": False},
+                    "processing": submit_ts,
+                },
+                {
+                    "$set": {
+                        "processing": POST_NOT_IN_PROCESSING,
+                        "external_error": error[:MAX_EXTERNAL_ERROR_LENGTH],
+                        **submit_audit_set,
+                    },
+                    "$unset": {
+                        "external_claim_worker_token_id": "",
+                        "external_claimed_at": "",
+                    },
+                },
+            )
+            return True
+
+        if task_type == TASK_TAG_CLASSIFICATION:
+            submit_filter = {
+                "_id": item_object_id,
+                "owner": owner,
+                "classifications": {"$exists": False},
+                "processing": {"$ne": TAG_NOT_IN_PROCESSING},
+            }
+            if worker_token_id:
+                submit_filter["external_claim_worker_token_id"] = worker_token_id
+            tag = self._db.tags.find_one_and_update(
+                submit_filter,
+                {"$set": {"processing": submit_ts}},
+                return_document=ReturnDocument.BEFORE,
+            )
+            if not tag:
+                return False
+
+            if success:
+                classifications = result.get("classifications", [])
+                if not isinstance(classifications, list):
+                    self._db.tags.update_one(
+                        {
+                            "_id": item_object_id,
+                            "owner": owner,
+                            "processing": submit_ts,
+                        },
+                        {
+                            "$set": {
+                                "processing": TAG_NOT_IN_PROCESSING,
+                                "external_error": "Invalid classifications format",
+                                **submit_audit_set,
+                            },
+                            "$unset": {
+                                "external_claim_worker_token_id": "",
+                                "external_claimed_at": "",
+                            },
+                        },
+                    )
+                    return False
+
+                tags_h = RssTagTags(self._db)
+                tags_h.add_classifications(owner, tag.get("tag", ""), classifications)
+                self._db.tags.update_one(
+                    {
+                        "_id": item_object_id,
+                        "owner": owner,
+                        "processing": submit_ts,
+                    },
+                    {
+                        "$set": {
+                            "processing": TAG_NOT_IN_PROCESSING,
+                            **submit_audit_set,
+                        },
+                        "$unset": {
+                            "external_claim_worker_token_id": "",
+                            "external_claimed_at": "",
+                        },
+                    },
+                )
+                self._complete_user_task_if_done(owner, task_type)
+                return True
+
+            self._db.tags.update_one(
+                {
+                    "_id": item_object_id,
+                    "owner": owner,
+                    "classifications": {"$exists": False},
+                    "processing": submit_ts,
+                },
+                {
+                    "$set": {
+                        "processing": TAG_NOT_IN_PROCESSING,
+                        "external_error": error[:MAX_EXTERNAL_ERROR_LENGTH],
+                        **submit_audit_set,
+                    },
+                    "$unset": {
+                        "external_claim_worker_token_id": "",
+                        "external_claimed_at": "",
+                    },
+                },
+            )
+            return True
+
+        return False
 
     def freeze_tasks(self, user: dict, type: int) -> Optional[bool]:
         try:
