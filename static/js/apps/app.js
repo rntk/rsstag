@@ -631,6 +631,15 @@ function tagWithContextInfoPage(tag) {
   );
   tag_grouped_topics_storage.start();
 
+  const tag_llm_topics_evsys = new EventsSystem();
+  const tag_llm_topics_storage = new TagsStorage(tag_llm_topics_evsys, '/tag-llm-topics');
+  ReactDOM.render(<TagsList ES={tag_llm_topics_evsys} />, document.getElementById('tag_llm_topics'));
+  ReactDOM.render(
+    <TagButton ES={tag_llm_topics_evsys} title="LLM topics" tag={tag} />,
+    document.getElementById('load_llm_topics')
+  );
+  tag_llm_topics_storage.start();
+
   const tag_mentions_evsys = new EventsSystem();
   const tag_mentions_chart = new TagMentionsChart('#mentions_chart', tag_mentions_evsys);
   const tag_mentions_storage = new TagMentionsStorage(tag.tag, tag_mentions_evsys);

@@ -488,6 +488,11 @@ class RSSTagRoutes:
                 "endpoint": "on_tag_grouped_topics_get",
                 "methods": ["GET"],
             },
+            {
+                "url": "/tag-llm-topics/<string:tag>",
+                "endpoint": "on_tag_llm_topics_get",
+                "methods": ["GET"],
+            },
         ]
 
         decorated_routes = (

@@ -7,7 +7,7 @@ import html
 import logging
 from collections import Counter, defaultdict
 from urllib.parse import unquote_plus, quote
-from typing import Optional
+from typing import Optional, Any, Dict, Set
 
 from typing import TYPE_CHECKING
 
@@ -27,6 +27,7 @@ from werkzeug.wrappers import Request, Response
 from werkzeug.exceptions import NotFound, InternalServerError
 
 from rsstag.stopwords import stopwords
+from rsstag.html_utils import build_html_mapping
 
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.cluster import DBSCAN
@@ -1006,6 +1007,128 @@ def on_tag_grouped_topics_get(
         code = 400
 
     return Response(json.dumps(result), mimetype="application/json", status=code)
+
+
+def on_tag_llm_topics_get(app: "RSSTagApplication", user: dict, tag: str) -> Response:
+    tag_data = app.tags.get_by_tag(user["sid"], tag)
+    if not tag_data:
+        return Response(
+            json.dumps({"error": "Tag not found"}),
+            mimetype="application/json",
+            status=404,
+        )
+
+    raw_words = tag_data.get("words", [])
+    words = [w for w in raw_words if w]
+    if not words:
+        words = [tag]
+
+    pattern = r"\b(" + "|".join(re.escape(w) for w in words) + r")\b"
+    word_re = re.compile(pattern, re.IGNORECASE)
+
+    only_unread = user["settings"].get("only_unread") or None
+    cursor = app.posts.get_by_tags(
+        user["sid"],
+        [tag],
+        only_unread=only_unread,
+        projection={"pid": True, "content": True},
+    )
+
+    topic_counts: Dict[str, int] = defaultdict(int)
+    topic_pids: Dict[str, Set[Any]] = defaultdict(set)
+
+    for post in cursor:
+        pid = post.get("pid")
+        if pid is None:
+            continue
+
+        grouping = app.post_grouping.get_grouped_posts(user["sid"], [pid])
+        if not grouping:
+            continue
+
+        grouped_sentences = grouping.get("sentences")
+        grouped_topics = grouping.get("groups")
+        if not grouped_sentences or not grouped_topics:
+            continue
+
+        needs_plain_text = any("text" not in s for s in grouped_sentences)
+        plain_text = ""
+        if needs_plain_text:
+            try:
+                raw_content = gzip.decompress(post["content"]["content"]).decode(
+                    "utf-8", "replace"
+                )
+                title = post["content"].get("title", "")
+                full_content_html = f"{title}. {raw_content}" if title else raw_content
+                plain_text, _ = build_html_mapping(full_content_html)
+            except Exception as e:
+                logging.warning(
+                    "Failed to build plain text for pid=%s while loading LLM topics: %s",
+                    pid,
+                    e,
+                )
+
+        matching_sentence_numbers: Set[int] = set()
+        for sentence in grouped_sentences:
+            sentence_number = sentence.get("number")
+            if sentence_number is None:
+                continue
+
+            text = sentence.get("text")
+            if text is None and plain_text:
+                s_start = sentence.get("start")
+                s_end = sentence.get("end")
+                if isinstance(s_start, int) and isinstance(s_end, int):
+                    text = plain_text[s_start:s_end]
+
+            if text and word_re.search(text):
+                matching_sentence_numbers.add(sentence_number)
+
+        if not matching_sentence_numbers:
+            continue
+
+        for topic, sentence_numbers in grouped_topics.items():
+            matched_for_topic = matching_sentence_numbers.intersection(
+                set(sentence_numbers)
+            )
+            if not matched_for_topic:
+                continue
+
+            topic_counts[topic] += len(matched_for_topic)
+            topic_pids[topic].add(pid)
+
+    word_counts: Dict[str, int] = defaultdict(int)
+    word_pids: Dict[str, Set[Any]] = defaultdict(set)
+    for topic_path, count in topic_counts.items():
+        topic_words = [part.strip() for part in topic_path.split(">") if part.strip()]
+        if not topic_words:
+            continue
+
+        for topic_word in topic_words:
+            word_counts[topic_word] += count
+            word_pids[topic_word].update(topic_pids[topic_path])
+
+    all_topics = []
+    for topic_word, count in word_counts.items():
+        pids_str = "_".join(
+            str(pid_value) for pid_value in sorted(word_pids[topic_word])
+        )
+        all_topics.append(
+            {
+                "tag": topic_word,
+                "url": app.routes.get_url_by_endpoint(
+                    endpoint="on_post_grouped_snippets_get",
+                    params={"pids": pids_str, "topic": topic_word},
+                ),
+                "count": count,
+                "words": [],
+                "sentiment": [],
+            }
+        )
+
+    all_topics.sort(key=lambda item: (-item["count"], item["tag"]))
+
+    return Response(json.dumps({"data": all_topics}), mimetype="application/json")
 
 
 def on_tag_specific_get(app: "RSSTagApplication", user: dict, tags: str) -> Response:

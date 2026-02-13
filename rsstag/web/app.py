@@ -798,6 +798,9 @@ class RSSTagApplication(object):
     def on_tag_grouped_topics_get(self, user: dict, _: Request, tag: str) -> Response:
         return tags_handlers.on_tag_grouped_topics_get(self, user, tag)
 
+    def on_tag_llm_topics_get(self, user: dict, _: Request, tag: str) -> Response:
+        return tags_handlers.on_tag_llm_topics_get(self, user, tag)
+
     def on_topics_texts_get(self, user: dict, request: Request, tag: str) -> Response:
         if tag:
             cursor = self.posts.get_by_tags(
