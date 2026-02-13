@@ -313,17 +313,28 @@ export default class PostGroupedPage {
         });
 
         const highlightedElements = [];
+        const highlightedBySentence = {};
         sentenceIndices.forEach(sentNum => {
             const spans = document.querySelectorAll('.sentence-group[data-sentence="' + sentNum + '"]');
             spans.forEach(span => {
                 span.classList.add('highlighted');
                 highlightedElements.push(span);
+                if (!highlightedBySentence[sentNum]) {
+                    highlightedBySentence[sentNum] = [];
+                }
+                highlightedBySentence[sentNum].push(span);
             });
         });
 
         if (highlightedElements.length > 0) {
             const targetIdx = Number.isFinite(focusIndex) ? Math.max(0, Math.min(highlightedElements.length - 1, focusIndex)) : 0;
-            const targetSpan = highlightedElements[targetIdx];
+            const clampedSentenceIndex = Number.isFinite(focusIndex)
+                ? Math.max(0, Math.min(sentenceIndices.length - 1, focusIndex))
+                : 0;
+            const targetSentence = sentenceIndices[clampedSentenceIndex];
+            const targetSpan = (targetSentence && highlightedBySentence[targetSentence] && highlightedBySentence[targetSentence][0])
+                ? highlightedBySentence[targetSentence][0]
+                : highlightedElements[targetIdx];
             if (targetSpan) {
                 setTimeout(() => {
                     targetSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
