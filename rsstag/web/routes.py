@@ -518,6 +518,11 @@ class RSSTagRoutes:
                 "endpoint": "on_workers_kill_post",
                 "methods": ["POST"],
             },
+            {
+                "url": "/statistics",
+                "endpoint": "on_statistics_get",
+                "methods": ["GET"],
+            },
         ]
 
         decorated_routes = (

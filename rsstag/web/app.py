@@ -1717,3 +1717,25 @@ class RSSTagApplication(object):
             )
         self.workers.add_kill_command(worker_id)
         return Response(json.dumps({"success": True}), mimetype="application/json")
+
+    def on_statistics_get(self, user: dict, _: Request) -> Response:
+        total_posts = self.db.posts.count_documents({"owner": user["sid"]})
+        total_tokens = 0
+        for post in self.db.posts.find({"owner": user["sid"]}, {"content.title": 1, "content.content": 1}):
+            title = post.get("content", {}).get("title", "")
+            content = post.get("content", {}).get("content", b"")
+            if isinstance(content, bytes):
+                content = gzip.decompress(content).decode("utf-8", "ignore")
+            text = f"{title} {content}"
+            total_tokens += len(text) // 4
+        
+        page = self.template_env.get_template("statistics.html")
+        return Response(
+            page.render(
+                total_posts=total_posts,
+                total_tokens=total_tokens,
+                user_settings=user["settings"],
+                provider=user["provider"],
+            ),
+            mimetype="text/html",
+        )
