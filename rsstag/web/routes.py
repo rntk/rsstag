@@ -503,6 +503,21 @@ class RSSTagRoutes:
                 "endpoint": "on_tag_llm_topics_get",
                 "methods": ["GET"],
             },
+            {
+                "url": "/workers",
+                "endpoint": "on_workers_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/workers/spawn",
+                "endpoint": "on_workers_spawn_post",
+                "methods": ["POST"],
+            },
+            {
+                "url": "/workers/kill/<int:worker_id>",
+                "endpoint": "on_workers_kill_post",
+                "methods": ["POST"],
+            },
         ]
 
         decorated_routes = (

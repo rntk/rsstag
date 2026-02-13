@@ -5,6 +5,7 @@ import time
 import traceback
 from multiprocessing import Process
 from random import randint
+from typing import Optional
 
 from pymongo import MongoClient
 
@@ -42,6 +43,7 @@ from rsstag.utils import load_config
 from rsstag.workers.llm_worker import LLMWorker
 from rsstag.workers.registry import WorkerRegistry
 from rsstag.workers.tag_worker import TagWorker
+from rsstag.workers_db import RssTagWorkers
 
 
 class RSSTagWorkerDispatcher:
@@ -58,6 +60,14 @@ class RSSTagWorkerDispatcher:
             filemode="a",
             level=getattr(logging, self._config["settings"]["log_level"].upper()),
         )
+        cl = MongoClient(
+            self._config["settings"]["db_host"],
+            int(self._config["settings"]["db_port"]),
+            username=self._config["settings"]["db_login"] if self._config["settings"]["db_login"] else None,
+            password=self._config["settings"]["db_password"] if self._config["settings"]["db_password"] else None,
+        )
+        db = cl[self._config["settings"]["db_name"]]
+        self._workers_db = RssTagWorkers(db)
 
     def start(self):
         """Start worker"""
@@ -65,8 +75,49 @@ class RSSTagWorkerDispatcher:
             self._workers_pool.append(Process(target=worker, args=(self._config,)))
             self._workers_pool[-1].start()
 
-        for w in self._workers_pool:
-            w.join()
+        # Monitor loop for commands
+        while True:
+            time.sleep(5)
+            
+            cmd = self._workers_db.get_next_command()
+            if not cmd:
+                continue
+            
+            if cmd["command"] == "spawn":
+                p = Process(target=worker, args=(self._config,))
+                p.start()
+                self._workers_pool.append(p)
+                logging.info(f"Spawned new worker: {p.pid}")
+            elif cmd["command"] == "kill":
+                worker_id = cmd.get("worker_id")
+                if not isinstance(worker_id, int) or isinstance(worker_id, bool) or worker_id <= 0:
+                    logging.warning("Rejected kill command with invalid worker_id: %r", worker_id)
+                    continue
+
+                managed_worker = self._get_worker_from_pool(worker_id)
+                if managed_worker is None:
+                    logging.warning("Rejected kill command for unknown worker: %s", worker_id)
+                    continue
+
+                try:
+                    managed_worker.terminate()
+                    managed_worker.join(timeout=5)
+                except OSError:
+                    logging.warning("Failed to terminate worker %s", worker_id)
+                    continue
+
+                self._workers_db.set_worker_status(worker_id, "killed")
+                logging.info("Killed managed worker: %s", worker_id)
+            
+            # Clean up finished workers
+            self._workers_pool = [w for w in self._workers_pool if w.is_alive()]
+
+    def _get_worker_from_pool(self, worker_id: int) -> Optional[Process]:
+        """Return a managed worker process by PID."""
+        for worker_process in self._workers_pool:
+            if worker_process.pid == worker_id:
+                return worker_process
+        return None
 
 
 def _build_registry(tag_worker: TagWorker, llm_worker: LLMWorker) -> WorkerRegistry:
@@ -93,6 +144,7 @@ def _build_registry(tag_worker: TagWorker, llm_worker: LLMWorker) -> WorkerRegis
 
 
 def worker(config):
+    import os
     cl = MongoClient(
         config["settings"]["db_host"],
         int(config["settings"]["db_port"]),
@@ -105,6 +157,12 @@ def worker(config):
     )
 
     db = cl[config["settings"]["db_name"]]
+    workers_db = RssTagWorkers(db)
+    worker_id = os.getpid()
+    
+    # Initialize heartbeat
+    workers_db.update_heartbeat(worker_id)
+    
     tag_worker = TagWorker(db, config)
     llm_worker = LLMWorker(db, config)
     registry = _build_registry(tag_worker, llm_worker)
@@ -117,8 +175,14 @@ def worker(config):
     }
     users = RssTagUsers(db)
     tasks = RssTagTasks(db)
+    last_heartbeat = time.time()
     while True:
         try:
+            # Update heartbeat every 10 seconds
+            if time.time() - last_heartbeat > 10:
+                workers_db.update_heartbeat(worker_id)
+                last_heartbeat = time.time()
+            
             task = tasks.get_task(users)
             task_done = False
             if task["type"] == TASK_NOOP:

@@ -19,6 +19,7 @@ from rsstag.tags import RssTagTags
 from rsstag.letters import RssTagLetters
 from rsstag.bi_grams import RssTagBiGrams
 from rsstag.users import RssTagUsers
+from rsstag.workers_db import RssTagWorkers
 from rsstag.lda import LDA
 from rsstag.html_cleaner import HTMLCleaner
 
@@ -126,6 +127,8 @@ class RSSTagApplication(object):
         self.bi_grams.prepare()
         self.users = RssTagUsers(self.db)
         self.users.prepare()
+        self.workers = RssTagWorkers(self.db)
+        self.workers.prepare()
         self.routes = RSSTagRoutes(self.config["settings"]["host_name"], handlers=self)
         self.endpoints = {}
         self.update_endpoints()
@@ -1688,3 +1691,29 @@ class RSSTagApplication(object):
 
     def on_context_filter_clear(self, user: dict, request: Request) -> Response:
         return context_filter_handlers.on_context_filter_clear(self, user, request)
+
+    def on_workers_get(self, user: dict, _: Request) -> Response:
+        workers = self.workers.get_all_workers()
+        page = self.template_env.get_template("workers.html")
+        return Response(
+            page.render(
+                workers=workers,
+                user_settings=user["settings"],
+                provider=user["provider"],
+            ),
+            mimetype="text/html",
+        )
+
+    def on_workers_spawn_post(self, user: dict, _: Request) -> Response:
+        self.workers.add_spawn_command()
+        return Response(json.dumps({"success": True}), mimetype="application/json")
+
+    def on_workers_kill_post(self, user: dict, _: Request, worker_id: int) -> Response:
+        if not self.workers.is_known_worker(worker_id):
+            return Response(
+                json.dumps({"success": False, "error": "Unknown worker id"}),
+                mimetype="application/json",
+                status=404,
+            )
+        self.workers.add_kill_command(worker_id)
+        return Response(json.dumps({"success": True}), mimetype="application/json")
