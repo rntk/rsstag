@@ -19,6 +19,7 @@ from rsstag.tags import RssTagTags
 from rsstag.letters import RssTagLetters
 from rsstag.bi_grams import RssTagBiGrams
 from rsstag.users import RssTagUsers
+from rsstag.tokens import RssTagTokens
 from rsstag.workers_db import RssTagWorkers
 from rsstag.lda import LDA
 from rsstag.html_cleaner import HTMLCleaner
@@ -127,6 +128,8 @@ class RSSTagApplication(object):
         self.bi_grams.prepare()
         self.users = RssTagUsers(self.db)
         self.users.prepare()
+        self.tokens = RssTagTokens(self.db)
+        self.tokens.prepare()
         self.workers = RssTagWorkers(self.db)
         self.workers.prepare()
         self.routes = RSSTagRoutes(self.config["settings"]["host_name"], handlers=self)
@@ -1739,3 +1742,26 @@ class RSSTagApplication(object):
             ),
             mimetype="text/html",
         )
+
+    def on_tokens_get(self, user: dict, _: Request) -> Response:
+        from datetime import datetime
+        tokens = list(self.tokens.get_all(user["sid"]))
+        page = self.template_env.get_template("tokens.html")
+        return Response(
+            page.render(
+                tokens=tokens,
+                now=datetime.utcnow,
+                user_settings=user["settings"],
+                provider=user["provider"],
+            ),
+            mimetype="text/html",
+        )
+
+    def on_tokens_create_post(self, user: dict, request: Request) -> Response:
+        expires_days = int(request.form.get("expires_days", 30))
+        self.tokens.create(user["sid"], expires_days)
+        return redirect("/tokens")
+
+    def on_tokens_delete_post(self, user: dict, _: Request, token: str) -> Response:
+        self.tokens.delete(user["sid"], token)
+        return redirect("/tokens")

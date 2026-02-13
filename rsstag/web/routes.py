@@ -523,6 +523,21 @@ class RSSTagRoutes:
                 "endpoint": "on_statistics_get",
                 "methods": ["GET"],
             },
+            {
+                "url": "/tokens",
+                "endpoint": "on_tokens_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/tokens/create",
+                "endpoint": "on_tokens_create_post",
+                "methods": ["POST"],
+            },
+            {
+                "url": "/tokens/delete/<string:token>",
+                "endpoint": "on_tokens_delete_post",
+                "methods": ["POST"],
+            },
         ]
 
         decorated_routes = (
