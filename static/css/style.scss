@@ -1617,7 +1617,8 @@ h3.post_title {
 
     .topic-controls {
         display: flex;
-        gap: 4px;
+        gap: 6px;
+        align-items: center;
     }
 
     .topic-btn {
@@ -1632,6 +1633,15 @@ h3.post_title {
         &:hover {
             background: #f0f0f0;
         }
+    }
+
+    .topic-btn-read-toggle {
+        margin-left: 12px;
+        min-width: 90px;
+    }
+
+    .sentence-group.sentence-read {
+        opacity: 0.6;
     }
 
     .graph-link {

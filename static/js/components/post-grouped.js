@@ -8,11 +8,13 @@ export default class PostGroupedPage {
         this.chartInitialized = false;
         this.topicFlowChart = null;
         this.riverCharts = {};
+        this.sentencesByGlobalNumber = new Map();
     }
 
     init() {
         this.stripGlobalStyles();
         this.setupPostSections();
+        this.indexSentences();
         this.addPostHoverEffects();
         this.isContentReady = true;
         this.buildTopicsList();
@@ -141,6 +143,21 @@ export default class PostGroupedPage {
         });
     }
 
+    indexSentences() {
+        this.sentencesByGlobalNumber.clear();
+        (window.sentences || []).forEach((sentence) => {
+            const globalNumber = Number(sentence.number);
+            if (!Number.isFinite(globalNumber)) {
+                return;
+            }
+            this.sentencesByGlobalNumber.set(globalNumber, {
+                postId: sentence.post_id,
+                postSentenceNumber: Number(sentence.post_sentence_number),
+                read: Boolean(sentence.read)
+            });
+        });
+    }
+
     buildTopicsList() {
         const topicsList = document.getElementById('topics_list');
         if (!topicsList) {
@@ -185,8 +202,13 @@ export default class PostGroupedPage {
             nextBtn.className = 'topic-btn topic-btn-next';
             nextBtn.title = 'Next sentence';
             nextBtn.textContent = 'Next';
+            const toggleReadBtn = document.createElement('button');
+            toggleReadBtn.className = 'topic-btn topic-btn-read-toggle';
+            toggleReadBtn.dataset.topicName = groupName;
+            this.updateTopicReadButton(toggleReadBtn, this.isTopicFullyRead(groupName));
             controls.appendChild(prevBtn);
             controls.appendChild(nextBtn);
+            controls.appendChild(toggleReadBtn);
 
             line.appendChild(titleWrap);
             line.appendChild(controls);
@@ -239,8 +261,156 @@ export default class PostGroupedPage {
 
                 this.moveTopicPointer(groupName, 1);
             });
+
+            toggleReadBtn.addEventListener('click', (ev) => {
+                ev.stopPropagation();
+                ev.preventDefault();
+                if (!this.isContentReady) return;
+
+                this.toggleTopicReadStatus(groupName, toggleReadBtn);
+            });
             topicsList.appendChild(el);
         });
+    }
+
+    updateTopicReadButton(button, isFullyRead) {
+        button.textContent = isFullyRead ? 'Mark Unread' : 'Mark Read';
+        button.title = isFullyRead
+            ? 'Mark all topic sentences on this page as unread'
+            : 'Mark all topic sentences on this page as read';
+        button.dataset.read = isFullyRead ? '1' : '0';
+        button.classList.toggle('snippet-tag-read', isFullyRead);
+        button.classList.toggle('snippet-tag-unread', !isFullyRead);
+    }
+
+    getSelectionsForTopic(topicName) {
+        const groupedSelections = new Map();
+        const sentenceNumbers = window.groups[topicName] || [];
+
+        sentenceNumbers.forEach((globalSentenceNumber) => {
+            const sentenceMeta = this.sentencesByGlobalNumber.get(Number(globalSentenceNumber));
+            if (!sentenceMeta || !sentenceMeta.postId || !Number.isFinite(sentenceMeta.postSentenceNumber)) {
+                return;
+            }
+            const postId = String(sentenceMeta.postId);
+            if (!groupedSelections.has(postId)) {
+                groupedSelections.set(postId, new Set());
+            }
+            groupedSelections.get(postId).add(sentenceMeta.postSentenceNumber);
+        });
+
+        return Array.from(groupedSelections.entries()).map(([postId, sentenceSet]) => ({
+            post_id: postId,
+            sentence_indices: Array.from(sentenceSet).sort((a, b) => a - b)
+        }));
+    }
+
+    isTopicFullyRead(topicName) {
+        const sentenceNumbers = window.groups[topicName] || [];
+        let hasAnySentence = false;
+
+        for (const globalSentenceNumber of sentenceNumbers) {
+            const sentenceMeta = this.sentencesByGlobalNumber.get(Number(globalSentenceNumber));
+            if (!sentenceMeta) {
+                continue;
+            }
+            hasAnySentence = true;
+            if (!sentenceMeta.read) {
+                return false;
+            }
+        }
+
+        return hasAnySentence;
+    }
+
+    setReadStateForSelections(selections, readed) {
+        const globalNumbersToUpdate = new Set();
+
+        selections.forEach((selection) => {
+            const postId = String(selection.post_id);
+            const sentenceIndices = selection.sentence_indices || [];
+
+            (window.sentences || []).forEach((sentence) => {
+                if (String(sentence.post_id) !== postId) {
+                    return;
+                }
+                const localNumber = Number(sentence.post_sentence_number);
+                if (sentenceIndices.includes(localNumber)) {
+                    const globalNumber = Number(sentence.number);
+                    if (Number.isFinite(globalNumber)) {
+                        sentence.read = readed;
+                        globalNumbersToUpdate.add(globalNumber);
+                    }
+                }
+            });
+        });
+
+        globalNumbersToUpdate.forEach((globalNumber) => {
+            const sentenceMeta = this.sentencesByGlobalNumber.get(globalNumber);
+            if (sentenceMeta) {
+                sentenceMeta.read = readed;
+            }
+            document
+                .querySelectorAll(`.sentence-group[data-sentence="${globalNumber}"]`)
+                .forEach((sentenceEl) => {
+                    sentenceEl.classList.toggle('sentence-read', readed);
+                });
+        });
+    }
+
+    refreshTopicReadButtons() {
+        document.querySelectorAll('.topic-btn-read-toggle').forEach((button) => {
+            const topicName = button.dataset.topicName;
+            if (!topicName) {
+                return;
+            }
+            this.updateTopicReadButton(button, this.isTopicFullyRead(topicName));
+        });
+    }
+
+    changeSnippetsStatus(selections, readed) {
+        if (!selections || !selections.length) {
+            return Promise.resolve(null);
+        }
+
+        return fetch('/read/snippets', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                selections: selections,
+                readed: readed
+            })
+        }).then((response) => response.json());
+    }
+
+    toggleTopicReadStatus(topicName, button) {
+        const selections = this.getSelectionsForTopic(topicName);
+        if (!selections.length) {
+            return;
+        }
+
+        const currentlyRead = button.dataset.read === '1';
+        const nextRead = !currentlyRead;
+        button.disabled = true;
+
+        this.changeSnippetsStatus(selections, nextRead)
+            .then((payload) => {
+                if (payload && payload.data === 'ok') {
+                    this.setReadStateForSelections(selections, nextRead);
+                    this.refreshTopicReadButtons();
+                } else {
+                    alert('Failed to update status');
+                }
+            })
+            .catch((err) => {
+                console.error(err);
+                alert('Failed to update status');
+            })
+            .finally(() => {
+                button.disabled = false;
+            });
     }
 
     buildPostsList() {

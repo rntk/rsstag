@@ -245,17 +245,22 @@ def _extract_sentence_text_for_context(
     return plain_text[start:end].casefold()
 
 
-def _wrap_words_in_spans(text_chunk: str, num: int, topic: str, color: str) -> str:
+def _wrap_words_in_spans(
+    text_chunk: str, num: int, topic: str, color: str, is_read: bool
+) -> str:
     """Wrap each word in a text chunk (no HTML tags) in its own span tag."""
     tokens = re.split(r"(\S+)", text_chunk)
     parts: list[str] = []
     escaped_topic = html.escape(topic)
+    read_class = " sentence-read" if is_read else ""
     for token in tokens:
         if token and re.fullmatch(r"\S+", token):
             parts.append(
-                '<span class="sentence-group" data-sentence="{}" '
+                '<span class="sentence-group{}" data-sentence="{}" '
                 'data-topic="{}" title="{}" style="background-color: {}40;">'
-                "{}</span>".format(num, escaped_topic, escaped_topic, color, token)
+                "{}</span>".format(
+                    read_class, num, escaped_topic, escaped_topic, color, token
+                )
             )
         else:
             parts.append(token)
@@ -1570,6 +1575,8 @@ def on_post_grouped_get(
                         "start": sentence.get("start"),
                         "end": sentence.get("end"),
                         "number": sentence_offset + sentence["number"],
+                        "post_sentence_number": sentence["number"],
+                        "read": sentence.get("read", False),
                         "post_id": post_id,
                     }
                 )
@@ -1609,6 +1616,7 @@ def on_post_grouped_get(
 
         # Find sentences belonging to this post
         post_sentences = [s for s in all_sentences_data if s["post_id"] == post_id]
+        post_sentences_by_number = {s["number"]: s for s in post_sentences}
 
         # Get per-post grouping data for river chart
         post_grouped_data = app.post_grouping.get_grouped_posts(user["sid"], [post_id])
@@ -1673,6 +1681,10 @@ def on_post_grouped_get(
                 num = match["num"]
                 topic = match["topic"]
                 color = match["color"]
+                sentence_info = post_sentences_by_number.get(num)
+                sentence_is_read = (
+                    bool(sentence_info.get("read")) if sentence_info else False
+                )
 
                 # Walk through the match text, splitting at HTML tags
                 internal_tags = list(tag_pattern.finditer(match_text))
@@ -1682,7 +1694,9 @@ def on_post_grouped_get(
                     text_before = match_text[curr_pos : tag_match.start()]
                     if text_before:
                         new_content_parts.append(
-                            _wrap_words_in_spans(text_before, num, topic, color)
+                            _wrap_words_in_spans(
+                                text_before, num, topic, color, sentence_is_read
+                            )
                         )
                     # The tag itself: pass through as-is
                     new_content_parts.append(
@@ -1694,7 +1708,9 @@ def on_post_grouped_get(
                 remaining = match_text[curr_pos:]
                 if remaining:
                     new_content_parts.append(
-                        _wrap_words_in_spans(remaining, num, topic, color)
+                        _wrap_words_in_spans(
+                            remaining, num, topic, color, sentence_is_read
+                        )
                     )
 
                 last_pos = match["end"]
