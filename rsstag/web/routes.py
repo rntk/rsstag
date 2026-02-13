@@ -474,6 +474,16 @@ class RSSTagRoutes:
                 "methods": ["POST"],
             },
             {
+                "url": "/processing",
+                "endpoint": "on_processing_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/processing/reset",
+                "endpoint": "on_processing_reset_post",
+                "methods": ["POST"],
+            },
+            {
                 "url": "/read/snippets",
                 "endpoint": "on_read_snippets_post",
                 "methods": ["POST"],

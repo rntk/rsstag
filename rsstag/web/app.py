@@ -30,6 +30,7 @@ import rsstag.web.openai as openai_handlers
 import rsstag.web.prefixes as prefixes_handlers
 import rsstag.web.chat as chat_handlers
 import rsstag.web.tasks as tasks_handlers
+import rsstag.web.processing as processing_handlers
 import rsstag.web.providers as providers_handlers
 import rsstag.web.feeds as feeds_handlers
 import rsstag.web.context_filter_handlers as context_filter_handlers
@@ -83,6 +84,7 @@ class RSSTagApplication(object):
         self.template_env.filters["tojson"] = lambda d: json.dumps(d, default=str)
         self.template_env.filters["url_encode"] = quote_plus
         self.template_env.filters["find_group"] = self._find_group_for_sentence
+        self.template_env.filters["timestamp_to_datetime"] = lambda ts: time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(ts)) if ts else 'N/A'
 
         # Add filter to convert hex color to rgba with alpha for softer highlights
         def _hex_to_rgba(hex_color: str, alpha: float = 0.15) -> str:
@@ -312,6 +314,12 @@ class RSSTagApplication(object):
         self, user: dict, request: Request, task_id: str
     ) -> Response:
         return tasks_handlers.on_tasks_remove_post(self, user, request, task_id)
+
+    def on_processing_get(self, user: dict, request: Request) -> Response:
+        return processing_handlers.on_processing_get(self, user, request)
+
+    def on_processing_reset_post(self, user: dict, request: Request) -> Response:
+        return processing_handlers.on_processing_reset_post(self, user, request)
 
     def on_error(self, _: Optional[dict], __: Request, e: HTTPException) -> Response:
         page = self.template_env.get_template("error.html")

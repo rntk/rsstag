@@ -25,6 +25,13 @@ class RssTagTags:
 
         return self._db.tags.find_one(query)
 
+    def get_processing(self, owner: str) -> Iterator[dict]:
+        query = {"owner": owner, "processing": {"$ne": 0, "$exists": True}}
+        return self._db.tags.find(query, projection={"tag": True, "processing": True})
+
+    def reset_processing(self, owner: str, tag: str) -> None:
+        self._db.tags.update_one({"owner": owner, "tag": tag}, {"$set": {"processing": 0}})
+
     def get_by_tags(
         self,
         owner: str,

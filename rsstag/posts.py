@@ -6,7 +6,7 @@ from pymongo import MongoClient, DESCENDING, ASCENDING, UpdateMany
 
 
 class RssTagPosts:
-    indexes = ["owner", "category_id", "feed_id", "read", "tags", "pid"]
+    indexes = ["owner", "category_id", "feed_id", "read", "tags", "pid", "processing"]
 
     def __init__(self, db: MongoClient) -> None:
         self._db: MongoClient = db
@@ -180,6 +180,13 @@ class RssTagPosts:
         query = {"owner": owner, "pid": {"$in": pids}}
 
         return self._db.posts.find(query, projection=projection)
+
+    def get_processing(self, owner: str) -> Iterator[dict]:
+        query = {"owner": owner, "processing": {"$ne": 0, "$exists": True}}
+        return self._db.posts.find(query, projection={"pid": True, "title": True, "processing": True})
+
+    def reset_processing(self, owner: str, pid: str) -> None:
+        self._db.posts.update_one({"owner": owner, "pid": pid}, {"$set": {"processing": 0}})
 
     def change_status(self, owner: str, pids: List[str], readed: bool) -> bool:
         query = {"owner": owner, "pid": {"$in": pids}}
