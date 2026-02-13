@@ -8,12 +8,14 @@ from http.client import HTTPConnection, HTTPSConnection
 
 class LLamaCPP:
     ALLOWED_MODELS = ["default"]
+    DEFAULT_TIMEOUT = 300  # 5 minutes
 
-    def __init__(self, host: str, model: str = "default"):
+    def __init__(self, host: str, model: str = "default", timeout: int = DEFAULT_TIMEOUT):
         u = urlparse(host)
         self.__host = u.netloc
         self.__is_https = u.scheme.lower() == "https"
         self.__model = model
+        self.__timeout = timeout
 
     def call(
         self,
@@ -49,9 +51,9 @@ class LLamaCPP:
 
     def get_connection(self) -> Union[HTTPConnection, HTTPSConnection]:
         if self.__is_https:
-            return HTTPSConnection(self.__host)
+            return HTTPSConnection(self.__host, timeout=self.__timeout)
         else:
-            return HTTPConnection(self.__host)
+            return HTTPConnection(self.__host, timeout=self.__timeout)
 
     def embeddings(self, texts: List[str]) -> Optional[List[List[float]]]:
         conn = self.get_connection()

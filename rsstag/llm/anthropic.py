@@ -12,8 +12,9 @@ class Anthropic:
         "claude-3-sonnet-20240229",
         "claude-3-haiku-20240307",
     ]
+    DEFAULT_TIMEOUT = 300.0  # 5 minutes
 
-    def __init__(self, token: str, model: str = "claude-3-5-haiku-20241022"):
+    def __init__(self, token: str, model: str = "claude-3-5-haiku-20241022", timeout: float = DEFAULT_TIMEOUT):
         self.__token = token
         if model not in self.ALLOWED_MODELS:
             self.__model = self.ALLOWED_MODELS[0]
@@ -21,6 +22,7 @@ class Anthropic:
             self.__model = model
         self.__client = anthropic.Anthropic(
             api_key=token,
+            timeout=timeout,
         )
 
     def call(self, user_msgs: List[str]) -> str:

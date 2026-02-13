@@ -13,6 +13,7 @@ class GroqCom:
         "mixtral-8x7b-32768",
         "gemma-7b-it",
     ]
+    DEFAULT_TIMEOUT = 300  # 5 minutes
 
     def __init__(
         self,
@@ -20,6 +21,7 @@ class GroqCom:
         max_context_tokens: int = 11000,
         token: Optional[str] = None,
         model: str = "llama-3.1-70b-versatile",
+        timeout: int = DEFAULT_TIMEOUT,
     ):
         u = urlparse(host)
         self.__host = u.netloc
@@ -33,6 +35,7 @@ class GroqCom:
             self.__model = self.ALLOWED_MODELS[0]
         else:
             self.__model = model
+        self.__timeout = timeout
 
     def estimate_tokens(self, text: str) -> int:
         """Rough estimation: ~4 characters per token on average"""
@@ -68,6 +71,6 @@ class GroqCom:
 
     def get_connection(self) -> Union[HTTPConnection, HTTPSConnection]:
         if self.__is_https:
-            return HTTPSConnection(self.__host)
+            return HTTPSConnection(self.__host, timeout=self.__timeout)
         else:
-            return HTTPConnection(self.__host)
+            return HTTPConnection(self.__host, timeout=self.__timeout)
