@@ -1,15 +1,15 @@
 """Worker management database operations."""
 import time
-from typing import Optional, List, Dict, Any
+from typing import Any, Dict, List, Optional
 
 
 class RssTagWorkers:
     """Worker heartbeat and command management"""
 
-    def __init__(self, db):
-        self._db = db
+    def __init__(self, db: Any) -> None:
+        self._db: Any = db
 
-    def prepare(self):
+    def prepare(self) -> None:
         """Prepare indexes"""
         self._db.worker_heartbeats.create_index("worker_id", unique=True)
         self._db.worker_commands.create_index("timestamp")
@@ -59,3 +59,10 @@ class RssTagWorkers:
             {"worker_id": worker_id},
             {"$set": {"status": status}}
         )
+
+    def delete_worker(self, worker_id: int) -> bool:
+        """Delete a worker heartbeat record by worker id."""
+        if not isinstance(worker_id, int) or isinstance(worker_id, bool) or worker_id <= 0:
+            raise ValueError("worker_id must be a positive integer")
+        deleted = self._db.worker_heartbeats.delete_one({"worker_id": worker_id})
+        return bool(getattr(deleted, "deleted_count", 0))

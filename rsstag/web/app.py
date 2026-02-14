@@ -1757,6 +1757,22 @@ class RSSTagApplication(object):
         self.workers.add_kill_command(worker_id)
         return Response(json.dumps({"success": True}), mimetype="application/json")
 
+    def on_workers_delete_post(self, user: dict, _: Request, worker_id: int) -> Response:
+        if not self.workers.is_known_worker(worker_id):
+            return Response(
+                json.dumps({"success": False, "error": "Unknown worker id"}),
+                mimetype="application/json",
+                status=404,
+            )
+        deleted: bool = self.workers.delete_worker(worker_id)
+        if not deleted:
+            return Response(
+                json.dumps({"success": False, "error": "Unable to delete worker"}),
+                mimetype="application/json",
+                status=500,
+            )
+        return Response(json.dumps({"success": True}), mimetype="application/json")
+
     def on_statistics_get(self, user: dict, _: Request) -> Response:
         total_posts = self.db.posts.count_documents({"owner": user["sid"]})
         total_tokens = 0

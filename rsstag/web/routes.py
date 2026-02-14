@@ -519,6 +519,11 @@ class RSSTagRoutes:
                 "methods": ["POST"],
             },
             {
+                "url": "/workers/delete/<int:worker_id>",
+                "endpoint": "on_workers_delete_post",
+                "methods": ["POST"],
+            },
+            {
                 "url": "/statistics",
                 "endpoint": "on_statistics_get",
                 "methods": ["GET"],

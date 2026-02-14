@@ -241,6 +241,47 @@ h3.post_title {
     gap: 0.8em;
 }
 
+.workers-actions {
+    margin: 0.8em 0;
+}
+
+.workers-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.2em 0;
+}
+
+.workers-table th,
+.workers-table td {
+    padding: 0.6em;
+    border: 1px solid #ddd;
+    text-align: left;
+}
+
+.workers-table th {
+    background-color: #f4f4f4;
+}
+
+.status-running {
+    color: green;
+}
+
+.status-killed {
+    color: red;
+}
+
+.status-stale {
+    color: orange;
+}
+
+.status-stopped {
+    color: #555;
+}
+
+.inline-form {
+    display: inline;
+}
+
 .clusters-topics-page {
     display: flex;
     flex-direction: column;

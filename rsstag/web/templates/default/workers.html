@@ -3,14 +3,6 @@
 <head>
 <title>RSSTag - Workers</title>
 {% include 'head-data.html' %}
-<style>
-.workers-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-.workers-table th, .workers-table td { padding: 10px; border: 1px solid #ddd; text-align: left; }
-.workers-table th { background-color: #f4f4f4; }
-.status-running { color: green; }
-.status-killed { color: red; }
-.status-stale { color: orange; }
-</style>
 </head>
 <body>
 {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
@@ -27,8 +19,8 @@
 <div class="page screen_middle">
     <h1>Workers Status</h1>
     
-    <div>
-        <form action="/workers/spawn" method="post" style="display: inline;">
+    <div class="workers-actions">
+        <form action="/workers/spawn" method="post" class="inline-form">
             <input type="submit" value="Spawn New Worker">
         </form>
         <button onclick="location.reload()">Refresh</button>
@@ -50,8 +42,11 @@
                 <td class="status-{{ worker.status }}">{{ worker.status }}</td>
                 <td>{{ worker.last_heartbeat | timestamp_to_datetime }}</td>
                 <td>
-                    <form action="/workers/kill/{{ worker.worker_id }}" method="post" style="display: inline;">
+                    <form action="/workers/kill/{{ worker.worker_id }}" method="post" class="inline-form">
                         <input type="submit" value="Kill" onclick="return confirm('Kill worker {{ worker.worker_id }}?')">
+                    </form>
+                    <form action="/workers/delete/{{ worker.worker_id }}" method="post" class="inline-form">
+                        <input type="submit" value="Delete Record" onclick="return confirm('Delete worker {{ worker.worker_id }} from DB without kill?')">
                     </form>
                 </td>
             </tr>
