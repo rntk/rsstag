@@ -1636,6 +1636,61 @@ h3.post_title {
         }
     }
 
+    .topic-tree-node {
+        margin: 6px 0;
+        padding: 8px;
+        border-radius: 6px;
+        border-left: 4px solid var(--topic-accent, #4a6baf);
+        background-color: color-mix(in srgb, var(--topic-accent, #4a6baf) 18%, #ffffff);
+        cursor: pointer;
+        transition: transform 0.15s ease, filter 0.15s ease;
+
+        &:hover {
+            transform: translateX(2px);
+            filter: brightness(0.96);
+        }
+
+        &.active {
+            outline: 2px solid #333;
+        }
+    }
+
+    .topic-children {
+        margin-top: 6px;
+        margin-left: 14px;
+        padding-left: 8px;
+        border-left: 1px dashed #c9c9c9;
+    }
+
+    .topic-title-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+    }
+
+    .topic-links {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .topic-link {
+        display: inline-block;
+        font-size: 11px;
+        text-decoration: none;
+        border: 1px solid #b7b7b7;
+        border-radius: 3px;
+        background: #ffffff;
+        color: #333;
+        padding: 1px 5px;
+
+        &:hover {
+            background: #f1f1f1;
+        }
+    }
+
     .topic-count {
         font-size: 11px;
         opacity: 0.7;

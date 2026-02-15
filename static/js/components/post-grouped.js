@@ -4,6 +4,8 @@ import TopicsRiverChart from './topics-river-chart.js';
 export default class PostGroupedPage {
     constructor() {
         this.topicState = {};
+        this.topicToSentences = {};
+        this.topicElements = new Map();
         this.isContentReady = false;
         this.chartInitialized = false;
         this.topicFlowChart = null;
@@ -158,119 +160,238 @@ export default class PostGroupedPage {
         });
     }
 
+    splitTopicPath(topicName) {
+        if (!topicName || typeof topicName !== 'string') {
+            return [];
+        }
+        return topicName
+            .split('>')
+            .map((part) => part.trim())
+            .filter(Boolean);
+    }
+
+    colorFromString(value) {
+        if (!value) {
+            return '#4a6baf';
+        }
+        let hash = 0;
+        for (let i = 0; i < value.length; i++) {
+            hash = ((hash << 5) - hash) + value.charCodeAt(i);
+            hash |= 0;
+        }
+        const hue = Math.abs(hash) % 360;
+        return `hsl(${hue}, 60%, 60%)`;
+    }
+
+    getTopicColor(topicPath) {
+        if (window.group_colors && window.group_colors[topicPath]) {
+            return window.group_colors[topicPath];
+        }
+        return this.colorFromString(topicPath);
+    }
+
+    buildTopicsTree() {
+        const groups = window.groups || {};
+        const roots = [];
+        const nodeByPath = new Map();
+
+        Object.keys(groups).forEach((groupName) => {
+            const sentenceIndices = (groups[groupName] || [])
+                .map((num) => Number(num))
+                .filter((num) => Number.isFinite(num));
+            const parts = this.splitTopicPath(groupName);
+            if (!parts.length) {
+                return;
+            }
+
+            let currentChildren = roots;
+            let pathParts = [];
+            parts.forEach((part) => {
+                pathParts.push(part);
+                const path = pathParts.join(' > ');
+                let node = nodeByPath.get(path);
+                if (!node) {
+                    node = {
+                        name: part,
+                        path: path,
+                        color: this.getTopicColor(path),
+                        sentenceSet: new Set(),
+                        children: []
+                    };
+                    nodeByPath.set(path, node);
+                    currentChildren.push(node);
+                }
+                sentenceIndices.forEach((sentenceNumber) => node.sentenceSet.add(sentenceNumber));
+                currentChildren = node.children;
+            });
+        });
+
+        const sortTree = (nodes) => {
+            nodes.sort((a, b) => {
+                if (b.sentenceSet.size !== a.sentenceSet.size) {
+                    return b.sentenceSet.size - a.sentenceSet.size;
+                }
+                return a.name.localeCompare(b.name);
+            });
+            nodes.forEach((node) => sortTree(node.children));
+        };
+        sortTree(roots);
+        return roots;
+    }
+
+    setActiveTopic(topicPath) {
+        document.querySelectorAll('.topic-tree-node.active').forEach((node) => {
+            node.classList.remove('active');
+        });
+        const topicElement = this.topicElements.get(topicPath);
+        if (topicElement) {
+            topicElement.classList.add('active');
+        }
+    }
+
+    renderTopicNode(node, topicsList, depth = 0) {
+        const topicPath = node.path;
+        const sentenceIndices = Array.from(node.sentenceSet).sort((a, b) => a - b);
+        this.topicToSentences[topicPath] = sentenceIndices;
+        this.topicState[topicPath] = {
+            sentences: sentenceIndices,
+            index: 0,
+            color: node.color
+        };
+
+        const rootEl = document.createElement('div');
+        rootEl.className = `topic-tree-node depth-${Math.min(depth, 5)}`;
+        rootEl.style.setProperty('--topic-accent', node.color);
+
+        const line = document.createElement('div');
+        line.className = 'topic-line';
+
+        const titleWrap = document.createElement('div');
+        titleWrap.className = 'topic-title-wrap';
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'topic-name';
+        nameSpan.textContent = node.name;
+        const countSpan = document.createElement('span');
+        countSpan.className = 'topic-count';
+        countSpan.textContent = `(${sentenceIndices.length})`;
+        titleWrap.appendChild(nameSpan);
+        titleWrap.appendChild(countSpan);
+
+        const linksWrap = document.createElement('div');
+        linksWrap.className = 'topic-links';
+        const topicParam = encodeURIComponent(topicPath);
+
+        const groupedLink = document.createElement('a');
+        groupedLink.className = 'topic-link topic-link-grouped';
+        groupedLink.href = `/post-grouped/${window.post_id}?topic=${topicParam}`;
+        groupedLink.textContent = 'Sentences';
+
+        const snippetsLink = document.createElement('a');
+        snippetsLink.className = 'topic-link topic-link-snippets';
+        snippetsLink.href = `/post-grouped-snippets/${window.post_id}?topic=${topicParam}`;
+        snippetsLink.textContent = 'Snippets';
+
+        linksWrap.appendChild(groupedLink);
+        linksWrap.appendChild(snippetsLink);
+        titleWrap.appendChild(linksWrap);
+
+        const controls = document.createElement('div');
+        controls.className = 'topic-controls';
+        const prevBtn = document.createElement('button');
+        prevBtn.className = 'topic-btn topic-btn-prev';
+        prevBtn.title = 'Previous sentence';
+        prevBtn.textContent = 'Prev';
+
+        const nextBtn = document.createElement('button');
+        nextBtn.className = 'topic-btn topic-btn-next';
+        nextBtn.title = 'Next sentence';
+        nextBtn.textContent = 'Next';
+
+        const toggleReadBtn = document.createElement('button');
+        toggleReadBtn.className = 'topic-btn topic-btn-read-toggle';
+        toggleReadBtn.dataset.topicName = topicPath;
+        this.updateTopicReadButton(toggleReadBtn, this.isTopicFullyRead(topicPath));
+        controls.appendChild(prevBtn);
+        controls.appendChild(nextBtn);
+        controls.appendChild(toggleReadBtn);
+
+        line.appendChild(titleWrap);
+        line.appendChild(controls);
+
+        rootEl.appendChild(line);
+        topicsList.appendChild(rootEl);
+        this.topicElements.set(topicPath, rootEl);
+
+        line.addEventListener('click', (ev) => {
+            const clickable = ev.target.closest('a,button');
+            if (clickable) {
+                return;
+            }
+            if (!this.isContentReady) {
+                return;
+            }
+            this.setActiveTopic(topicPath);
+            const state = this.topicState[topicPath];
+            if (state) {
+                state.index = 0;
+            }
+        });
+
+        prevBtn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            ev.preventDefault();
+            if (!this.isContentReady) {
+                return;
+            }
+            this.setActiveTopic(topicPath);
+            this.moveTopicPointer(topicPath, -1);
+        });
+
+        nextBtn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            ev.preventDefault();
+            if (!this.isContentReady) {
+                return;
+            }
+            this.setActiveTopic(topicPath);
+            this.moveTopicPointer(topicPath, 1);
+        });
+
+        toggleReadBtn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            ev.preventDefault();
+            if (!this.isContentReady) {
+                return;
+            }
+            this.toggleTopicReadStatus(topicPath, toggleReadBtn);
+        });
+
+        if (node.children && node.children.length) {
+            const childrenWrap = document.createElement('div');
+            childrenWrap.className = 'topic-children';
+            node.children.forEach((child) => {
+                this.renderTopicNode(child, childrenWrap, depth + 1);
+            });
+            rootEl.appendChild(childrenWrap);
+        }
+    }
+
     buildTopicsList() {
         const topicsList = document.getElementById('topics_list');
         if (!topicsList) {
             return;
         }
+        this.topicState = {};
+        this.topicToSentences = {};
+        this.topicElements = new Map();
         const groupKeys = Object.keys(window.groups || {});
 
         if (groupKeys.length === 0) {
             topicsList.innerHTML = '<p style="color: #666; font-style: italic;">No topics available</p>';
             return;
         }
-
-        groupKeys.forEach(groupName => {
-            const sentenceIndices = (window.groups[groupName] || []).slice().sort((a, b) => a - b);
-            const color = window.group_colors[groupName] || '#4a6baf';
-            const el = document.createElement('div');
-            el.className = 'topic-item';
-            el.style.backgroundColor = color + '40';
-            el.style.borderLeft = '4px solid ' + color;
-
-            const countLabel = sentenceIndices.length;
-            const line = document.createElement('div');
-            line.className = 'topic-line';
-
-            const titleWrap = document.createElement('div');
-            const nameSpan = document.createElement('span');
-            nameSpan.className = 'topic-name';
-            nameSpan.textContent = groupName;
-            const countSpan = document.createElement('span');
-            countSpan.className = 'topic-count';
-            countSpan.textContent = '(' + countLabel + ')';
-            titleWrap.appendChild(nameSpan);
-            titleWrap.appendChild(countSpan);
-
-            const controls = document.createElement('div');
-            controls.className = 'topic-controls';
-            const prevBtn = document.createElement('button');
-            prevBtn.className = 'topic-btn topic-btn-prev';
-            prevBtn.title = 'Previous sentence';
-            prevBtn.textContent = 'Prev';
-            const nextBtn = document.createElement('button');
-            nextBtn.className = 'topic-btn topic-btn-next';
-            nextBtn.title = 'Next sentence';
-            nextBtn.textContent = 'Next';
-            const toggleReadBtn = document.createElement('button');
-            toggleReadBtn.className = 'topic-btn topic-btn-read-toggle';
-            toggleReadBtn.dataset.topicName = groupName;
-            this.updateTopicReadButton(toggleReadBtn, this.isTopicFullyRead(groupName));
-            controls.appendChild(prevBtn);
-            controls.appendChild(nextBtn);
-            controls.appendChild(toggleReadBtn);
-
-            line.appendChild(titleWrap);
-            line.appendChild(controls);
-            el.appendChild(line);
-
-            this.topicState[groupName] = {
-                sentences: sentenceIndices,
-                index: 0,
-                color
-            };
-
-            el.onclick = () => {
-                if (!this.isContentReady) return;
-
-                document.querySelectorAll('.topic-item.active').forEach(item => {
-                    item.classList.remove('active');
-                });
-                el.classList.add('active');
-
-                if (window.has_grouped_data && this.topicState[groupName]) {
-                    this.topicState[groupName].index = 0;
-                    this.highlightSentences(sentenceIndices, color, 0);
-                } else {
-                    this.highlightPosts(sentenceIndices, color);
-                }
-            };
-
-            prevBtn.addEventListener('click', (ev) => {
-                ev.stopPropagation();
-                ev.preventDefault();
-                if (!this.isContentReady) return;
-
-                document.querySelectorAll('.topic-item.active').forEach(item => {
-                    item.classList.remove('active');
-                });
-                el.classList.add('active');
-
-                this.moveTopicPointer(groupName, -1);
-            });
-
-            nextBtn.addEventListener('click', (ev) => {
-                ev.stopPropagation();
-                ev.preventDefault();
-                if (!this.isContentReady) return;
-
-                document.querySelectorAll('.topic-item.active').forEach(item => {
-                    item.classList.remove('active');
-                });
-                el.classList.add('active');
-
-                this.moveTopicPointer(groupName, 1);
-            });
-
-            toggleReadBtn.addEventListener('click', (ev) => {
-                ev.stopPropagation();
-                ev.preventDefault();
-                if (!this.isContentReady) return;
-
-                this.toggleTopicReadStatus(groupName, toggleReadBtn);
-            });
-            topicsList.appendChild(el);
-        });
+        const topicTree = this.buildTopicsTree();
+        topicTree.forEach((node) => this.renderTopicNode(node, topicsList, 0));
     }
 
     updateTopicReadButton(button, isFullyRead) {
@@ -285,7 +406,7 @@ export default class PostGroupedPage {
 
     getSelectionsForTopic(topicName) {
         const groupedSelections = new Map();
-        const sentenceNumbers = window.groups[topicName] || [];
+        const sentenceNumbers = this.topicToSentences[topicName] || [];
 
         sentenceNumbers.forEach((globalSentenceNumber) => {
             const sentenceMeta = this.sentencesByGlobalNumber.get(Number(globalSentenceNumber));
@@ -306,7 +427,7 @@ export default class PostGroupedPage {
     }
 
     isTopicFullyRead(topicName) {
-        const sentenceNumbers = window.groups[topicName] || [];
+        const sentenceNumbers = this.topicToSentences[topicName] || [];
         let hasAnySentence = false;
 
         for (const globalSentenceNumber of sentenceNumbers) {
@@ -458,24 +579,16 @@ export default class PostGroupedPage {
                 });
 
                 if (topicName) {
-                    const topicItems = document.querySelectorAll('.topic-item');
-                    for (let item of topicItems) {
-                        const nameEl = item.querySelector('.topic-name');
-                        if (nameEl && nameEl.textContent.trim() === topicName) {
-                            topicElement = item;
-                            break;
-                        }
-                    }
-
-                    if (topicElement && typeof topicElement.onclick === 'function') {
-                        topicElement.onclick();
+                    topicElement = this.topicElements.get(topicName);
+                    if (topicElement) {
+                        topicElement.click();
                     }
                 }
             });
         });
     }
 
-    highlightSentences(sentenceIndices, color, focusIndex) {
+    highlightSentences(sentenceIndices, color, focusIndex, shouldScroll = true) {
         if (!sentenceIndices || sentenceIndices.length === 0) return;
 
         document.querySelectorAll('.sentence-group.highlighted').forEach(span => {
@@ -505,7 +618,7 @@ export default class PostGroupedPage {
             const targetSpan = (targetSentence && highlightedBySentence[targetSentence] && highlightedBySentence[targetSentence][0])
                 ? highlightedBySentence[targetSentence][0]
                 : highlightedElements[targetIdx];
-            if (targetSpan) {
+            if (targetSpan && shouldScroll) {
                 setTimeout(() => {
                     targetSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     targetSpan.classList.add('pulse');
@@ -580,15 +693,10 @@ export default class PostGroupedPage {
             const color = window.group_colors[topicName] || '#4a6baf';
             setTimeout(() => {
                 this.highlightSentences([highlightSentNum], color, 0);
-
-                const topicItems = document.querySelectorAll('.topic-item');
-                for (let item of topicItems) {
-                    const nameEl = item.querySelector('.topic-name');
-                    if (nameEl && nameEl.textContent.trim() === topicName) {
-                        item.classList.add('active');
-                        item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                        break;
-                    }
+                const topicEl = this.topicElements.get(topicName);
+                if (topicEl) {
+                    this.setActiveTopic(topicName);
+                    topicEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                 }
             }, 500);
         }
