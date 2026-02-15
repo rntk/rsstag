@@ -303,6 +303,7 @@ window.onload = () => {
     }
   } else if (
     /\/group\/(tag|hottag|tags-categories)\/.*/.test(path) ||
+    /\/group\/(rake-dyn|yake-dyn)\/.*/.test(path) ||
     /\/tags\/category\/.*/.test(path) ||
     /\/tags\/sentiment\/.*/.test(path) ||
     /\/tags\/group\/.*/.test(path) ||

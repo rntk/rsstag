@@ -28,6 +28,7 @@ import rsstag.web.posts as posts_handlers
 import rsstag.web.users as users_handlers
 import rsstag.web.tags as tags_handlers
 import rsstag.web.bigrams as bigrams_handlers
+import rsstag.web.keywords as keywords_handlers
 import rsstag.web.openai as openai_handlers
 import rsstag.web.prefixes as prefixes_handlers
 import rsstag.web.chat as chat_handlers
@@ -1685,6 +1686,12 @@ class RSSTagApplication(object):
 
     def on_group_by_bigrams_dyn_get(self, user: dict, _: Request, page_number: int):
         return bigrams_handlers.on_group_by_bigrams_dyn_get(self, user, page_number)
+
+    def on_group_by_rake_dyn_get(self, user: dict, _: Request, page_number: int):
+        return keywords_handlers.on_group_by_rake_dyn_get(self, user, page_number)
+
+    def on_group_by_yake_dyn_get(self, user: dict, _: Request, page_number: int):
+        return keywords_handlers.on_group_by_yake_dyn_get(self, user, page_number)
 
     def on_mark_telegram_posts_post(self, user: dict, request: Request):
         return posts_handlers.on_mark_telegram_posts_post(self, user, request)

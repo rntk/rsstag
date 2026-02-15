@@ -108,6 +108,16 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/group/rake-dyn/<int:page_number>",
+                "endpoint": "on_group_by_rake_dyn_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/group/yake-dyn/<int:page_number>",
+                "endpoint": "on_group_by_yake_dyn_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/group/tag/startwith/<string:letter>/<int:page_number>",
                 "endpoint": "on_group_by_tags_startwith_get",
                 "methods": ["GET"],
