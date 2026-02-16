@@ -9,7 +9,7 @@
 </head>
 
 <body>
-    {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
+    {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}{% from 'context-filter-bar.html' import context_filter_bar with context %}
 
     <div id="global_tools">
         <div class="left_half">
@@ -29,6 +29,7 @@
             {{ menu.settings_menu() }}
         </div>
     </div>
+    {{ context_filter_bar() }}
 
     <div class="page post-grouped-page">
         <h2>Posts - {{feed_title}}</h2>

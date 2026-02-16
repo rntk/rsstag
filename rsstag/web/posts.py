@@ -1517,6 +1517,9 @@ def on_post_grouped_get(
     if requested_topic:
         requested_topic = unquote(requested_topic)
 
+    context_tags = _get_context_tags(user)
+    normalized_context_tags = _normalize_context_tags(context_tags)
+
     projection: dict[str, bool] = {
         "content": True,
         "feed_id": True,
@@ -1563,11 +1566,27 @@ def on_post_grouped_get(
     all_groups = {}
     sentence_offset = 0
     has_grouped_data = False
+    plain_text_cache: dict[str, str] = {}
 
     for post_id in post_ids:
         post_grouped_data = app.post_grouping.get_grouped_posts(user["sid"], [post_id])
         if post_grouped_data and post_grouped_data.get("sentences"):
             has_grouped_data = True
+            sentences_map_ctx = {
+                s["number"]: s for s in post_grouped_data["sentences"]
+            }
+
+            if normalized_context_tags:
+                p_info_ctx = next(
+                    (p for p in posts_info if p["post_id"] == post_id), None
+                )
+                if p_info_ctx and post_id not in plain_text_cache:
+                    from rsstag.html_utils import build_html_mapping
+
+                    plain_text_cache[post_id], _ = build_html_mapping(
+                        p_info_ctx["raw_content"]
+                    )
+
             for sentence in post_grouped_data["sentences"]:
                 all_sentences_data.append(
                     {
@@ -1584,6 +1603,15 @@ def on_post_grouped_get(
             for group_name, sentence_indices in post_grouped_data["groups"].items():
                 if not _topic_matches_requested(group_name, requested_topic):
                     continue
+                if normalized_context_tags:
+                    pt = plain_text_cache.get(post_id)
+                    if pt and not _topic_sentences_match_context(
+                        sentence_indices,
+                        sentences_map_ctx,
+                        pt,
+                        normalized_context_tags,
+                    ):
+                        continue
                 adjusted_indices = [idx + sentence_offset for idx in sentence_indices]
                 if group_name not in all_groups:
                     all_groups[group_name] = []
@@ -1621,9 +1649,21 @@ def on_post_grouped_get(
         # Get per-post grouping data for river chart
         post_grouped_data = app.post_grouping.get_grouped_posts(user["sid"], [post_id])
         if post_grouped_data and post_grouped_data.get("groups"):
+            river_sentences_map = {
+                s["number"]: s for s in post_grouped_data.get("sentences", [])
+            }
             for group_name, indices in post_grouped_data["groups"].items():
                 if not _topic_matches_requested(group_name, requested_topic):
                     continue
+                if normalized_context_tags:
+                    pt = plain_text_cache.get(post_id)
+                    if pt and not _topic_sentences_match_context(
+                        indices,
+                        river_sentences_map,
+                        pt,
+                        normalized_context_tags,
+                    ):
+                        continue
                 river_topics.append({"name": group_name, "sentences": indices})
 
         if has_grouped_data and post_sentences:
@@ -1773,6 +1813,9 @@ def on_post_grouped_snippets_get(
     if requested_topic:
         requested_topic = unquote(requested_topic)
 
+    context_tags = _get_context_tags(user)
+    normalized_context_tags = _normalize_context_tags(context_tags)
+
     projection: dict[str, bool] = {"content": True, "feed_id": True, "url": True}
     all_posts: dict = {}
     feed_titles: set[str] = set()
@@ -1803,6 +1846,7 @@ def on_post_grouped_snippets_get(
 
     # Collect snippets
     topics_data = {}
+    plain_text_cache: dict[str, str] = {}
 
     for post_id in post_ids:
         post_grouped_data = app.post_grouping.get_grouped_posts(user["sid"], [post_id])
@@ -1816,9 +1860,23 @@ def on_post_grouped_snippets_get(
                 continue
             sentences_map = {s["number"]: s for s in post_grouped_data["sentences"]}
 
+            if normalized_context_tags and post_id not in plain_text_cache:
+                from rsstag.html_utils import build_html_mapping
+
+                plain_text_cache[post_id], _ = build_html_mapping(raw_content)
+
             for group, indices in post_grouped_data["groups"].items():
                 if not _topic_matches_requested(group, requested_topic):
                     continue
+                if normalized_context_tags:
+                    pt = plain_text_cache.get(post_id)
+                    if pt and not _topic_sentences_match_context(
+                        indices,
+                        sentences_map,
+                        pt,
+                        normalized_context_tags,
+                    ):
+                        continue
 
                 if group not in topics_data:
                     topics_data[group] = {"color": _group_color(group), "snippets": []}
