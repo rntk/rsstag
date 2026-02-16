@@ -71,8 +71,18 @@ class TopicsMarimekko {
                 return 1;
             };
             const rows = subChildren.length > 0
-                ? subChildren.map((c) => ({ name: c.name || '', value: getValue(c) }))
-                : [{ name: sub.name || '', value: getValue(sub) }];
+                ? subChildren.map((c) => ({
+                    name: c.name || '',
+                    value: getValue(c),
+                    topicPath: c._topicPath || '',
+                    topicPosts: Array.isArray(c._topicPosts) ? c._topicPosts : [],
+                }))
+                : [{
+                    name: sub.name || '',
+                    value: getValue(sub),
+                    topicPath: sub._topicPath || '',
+                    topicPosts: Array.isArray(sub._topicPosts) ? sub._topicPosts : [],
+                }];
             return { name: sub.name || '', width, rows, originalIndex: i };
         });
 
@@ -210,14 +220,34 @@ class TopicsMarimekko {
                         ? row.name.slice(0, maxChars - 1) + '\u2026'
                         : row.name;
 
+                    const topicPath = typeof row.topicPath === 'string' ? row.topicPath : '';
+                    const topicPosts = Array.isArray(row.topicPosts)
+                        ? row.topicPosts.filter(Boolean)
+                        : [];
+                    const canBuildLink = topicPath && topicPosts.length > 0;
+                    const snippetsUrl = canBuildLink
+                        ? `/post-grouped-snippets/${encodeURIComponent(topicPosts.join('_'))}?topic=${encodeURIComponent(topicPath)}`
+                        : null;
+
                     const text = document.createElementNS(svgNs, 'text');
                     text.setAttribute('x', x + 4);
                     text.setAttribute('y', y + rowHeight / 2 + fontSize * 0.35);
                     text.setAttribute('font-size', fontSize);
                     text.setAttribute('fill', '#222');
-                    text.setAttribute('pointer-events', 'none');
+                    text.setAttribute('text-decoration', 'underline');
                     text.textContent = label;
-                    svg.appendChild(text);
+
+                    if (snippetsUrl) {
+                        const link = document.createElementNS(svgNs, 'a');
+                        link.setAttribute('href', snippetsUrl);
+                        link.setAttribute('target', '_self');
+                        link.setAttribute('aria-label', `Open snippets for ${row.name || topicPath}`);
+                        link.appendChild(text);
+                        svg.appendChild(link);
+                    } else {
+                        text.setAttribute('pointer-events', 'none');
+                        svg.appendChild(text);
+                    }
                 }
 
                 y += rowHeight;
