@@ -1717,6 +1717,32 @@ h3.post_title {
         align-items: center;
     }
 
+    .topic-tree-node .topic-links,
+    .topic-tree-node .topic-controls {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition: opacity 0.15s ease;
+    }
+
+    .topic-line:hover .topic-links,
+    .topic-line:hover .topic-controls,
+    .topic-line:focus-within .topic-links,
+    .topic-line:focus-within .topic-controls {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+    }
+
+    @media (hover: none), (pointer: coarse) {
+        .topic-tree-node .topic-links,
+        .topic-tree-node .topic-controls {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
+    }
+
     .topic-btn {
         border: 1px solid #999;
         background: #fff;
