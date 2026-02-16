@@ -193,6 +193,11 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/topics-mindmap",
+                "endpoint": "on_topics_mindmap_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/topics-list",
                 "endpoint": "on_topics_list_get",
                 "methods": ["GET"],

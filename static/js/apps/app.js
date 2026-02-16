@@ -53,6 +53,7 @@ import ContextFilterStorage from '../storages/context-filter-storage.js';
 import ContextFilterBar from '../components/context-filter-bar.js';
 import ClustersTopics from '../components/ClustersTopics.js';
 import { initTopicsPage } from '../topics-list.js';
+import TopicsMindmap from '../components/topics-mindmap.js';
 
 function handleTextSelection() {
   const menu = document.createElement('div');
@@ -407,6 +408,9 @@ window.onload = () => {
     if (context) {
       ReactDOM.render(<ClustersTopics />, context);
     }
+  } else if (/^\/topics-mindmap$/.test(path)) {
+    const mindmap = new TopicsMindmap();
+    mindmap.render('#topics_mindmap_chart', window.mindmap_data);
   } else if (/^\/topics-list(\/[0-9]+)?$/.test(path)) {
     initTopicsPage();
   }

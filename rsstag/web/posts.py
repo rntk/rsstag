@@ -2023,6 +2023,36 @@ def on_topics_list_get(
     )
 
 
+def on_topics_mindmap_get(
+    app: "RSSTagApplication", user: dict, request: Request
+) -> Response:
+    """Handler for interactive topics mindmap page (all topics, no pagination)."""
+    context_tags: Optional[list[str]] = _get_context_tags(user)
+    normalized_context_tags: Optional[list[str]] = _normalize_context_tags(context_tags)
+    only_unread: bool = user.get("settings", {}).get("only_unread", False)
+    topic_counts: dict[str, dict]
+    topic_counts, _ = _build_topics_index(
+        app, user, normalized_context_tags, only_unread=only_unread
+    )
+
+    topics_tree: list[dict] = _build_topics_tree(topic_counts)
+
+    mindmap_data: dict = {
+        "name": "Topics",
+        "children": _convert_topics_to_sunburst(topics_tree),
+    }
+
+    page: Template = app.template_env.get_template("topics-mindmap.html")
+    return Response(
+        page.render(
+            mindmap_data=mindmap_data,
+            user_settings=user["settings"],
+            provider=user["provider"],
+        ),
+        mimetype="text/html",
+    )
+
+
 def on_topics_search(
     app: "RSSTagApplication", user: dict, request: Request
 ) -> Response:

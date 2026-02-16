@@ -601,6 +601,9 @@ class RSSTagApplication(object):
     ) -> Response:
         return posts_handlers.on_post_grouped_snippets_get(self, user, request, pids)
 
+    def on_topics_mindmap_get(self, user: dict, request: Request) -> Response:
+        return posts_handlers.on_topics_mindmap_get(self, user, request)
+
     def on_topics_list_get(
         self, user: dict, request: Request, page_number: int = 1
     ) -> Response:
