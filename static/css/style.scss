@@ -2551,6 +2551,108 @@ h3.post_title {
     }
 }
 
+.mindmap-snippet-panel-bg {
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.12));
+}
+
+.mindmap-snippet-container {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 13px;
+    padding: 4px;
+}
+
+.mindmap-snippet-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 4px 6px;
+    border-bottom: 1px solid #e0e0e0;
+    margin-bottom: 4px;
+}
+
+.mindmap-snippet-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: #555;
+}
+
+.mindmap-snippet-header-btns {
+    display: flex;
+    gap: 4px;
+}
+
+.mindmap-snippet-batch-btn {
+    padding: 2px 8px;
+    font-size: 10px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    background: #f8f8f8;
+    cursor: pointer;
+    color: #444;
+
+    &:hover {
+        background: #e8e8e8;
+    }
+}
+
+.mindmap-snippet-list {
+    padding: 0 2px;
+}
+
+.mindmap-snippet-item {
+    padding: 10px 6px;
+    border-bottom: 1px solid #f0f0f0;
+    transition: opacity 0.2s;
+
+    &.read {
+        opacity: 0.5;
+    }
+
+    &:last-child {
+        border-bottom: none;
+    }
+}
+
+.mindmap-snippet-text {
+    font-size: 13px;
+    line-height: 1.5;
+    color: #333;
+    margin-bottom: 4px;
+}
+
+.mindmap-snippet-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.mindmap-snippet-source {
+    font-size: 10px;
+    color: #888;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 250px;
+}
+
+.mindmap-snippet-toggle-btn {
+    padding: 1px 8px;
+    font-size: 10px;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+
+    &.snippet-tag-read {
+        background: #eee;
+        color: #666;
+    }
+
+    &.snippet-tag-unread {
+        background: #c8e6c9;
+        color: #2e7d32;
+    }
+}
+
 /* ============================================================================
    Tag Feeds Page Styles (tag-feeds.html)
    ============================================================================ */

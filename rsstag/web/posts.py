@@ -1800,51 +1800,18 @@ def on_post_grouped_get(
     )
 
 
-def on_post_grouped_snippets_get(
-    app: "RSSTagApplication", user: dict, request: Request, pids: str
-) -> Response:
-    """Handler for grouped snippets view"""
+def _collect_topic_snippets(
+    app: "RSSTagApplication",
+    user: dict,
+    post_ids: list[str],
+    all_posts: dict,
+    requested_topic: Optional[str],
+    normalized_context_tags: Optional[list[str]],
+) -> dict:
+    """Collect snippets grouped by topic for given posts.
 
-    post_ids: list[str] = [pid for pid in pids.split("_") if pid]
-    if not post_ids:
-        return app.on_error(user, request, NotFound())
-
-    requested_topic: Optional[str] = request.args.get("topic")
-    if requested_topic:
-        requested_topic = unquote(requested_topic)
-
-    context_tags = _get_context_tags(user)
-    normalized_context_tags = _normalize_context_tags(context_tags)
-
-    projection: dict[str, bool] = {"content": True, "feed_id": True, "url": True}
-    all_posts: dict = {}
-    feed_titles: set[str] = set()
-
-    for post_id in post_ids:
-        post = app.posts.get_by_pid(user["sid"], post_id, projection)
-        if post:
-            feed = app.feeds.get_by_feed_id(user["sid"], post["feed_id"])
-            feed_title = feed["title"] if feed else f"Post {post_id}"
-            feed_titles.add(feed_title)
-
-            raw_content = gzip.decompress(post["content"]["content"]).decode(
-                "utf-8", "replace"
-            )
-            if post["content"]["title"]:
-                raw_content = post["content"]["title"] + ". " + raw_content
-
-            all_posts[post_id] = {
-                "feed_title": feed_title,
-                "url": post.get("url"),
-                "title": post.get("content", {}).get("title", f"Post {post_id}"),
-                "raw_content": raw_content,
-            }
-
-    combined_feed_title = (
-        " | ".join(sorted(list(feed_titles))) if feed_titles else "Multiple Posts"
-    )
-
-    # Collect snippets
+    Returns dict of {topic_name: {"color": str, "snippets": [...]}}
+    """
     topics_data = {}
     plain_text_cache: dict[str, str] = {}
 
@@ -1898,8 +1865,6 @@ def on_post_grouped_snippets_get(
                         current_snippet["text"] += " " + text
                         current_snippet["index"] = idx
                         current_snippet["indices"].append(idx)
-                        # If any sentence in the snippet is unread, the whole snippet is unread?
-                        # Or only if all are read? Let's say if any is unread, it's unread.
                         if not s_obj.get("read", False):
                             current_snippet["read"] = False
                     else:
@@ -1919,6 +1884,57 @@ def on_post_grouped_snippets_get(
                 if current_snippet:
                     topics_data[group]["snippets"].append(current_snippet)
 
+    return topics_data
+
+
+def on_post_grouped_snippets_get(
+    app: "RSSTagApplication", user: dict, request: Request, pids: str
+) -> Response:
+    """Handler for grouped snippets view"""
+
+    post_ids: list[str] = [pid for pid in pids.split("_") if pid]
+    if not post_ids:
+        return app.on_error(user, request, NotFound())
+
+    requested_topic: Optional[str] = request.args.get("topic")
+    if requested_topic:
+        requested_topic = unquote(requested_topic)
+
+    context_tags = _get_context_tags(user)
+    normalized_context_tags = _normalize_context_tags(context_tags)
+
+    projection: dict[str, bool] = {"content": True, "feed_id": True, "url": True}
+    all_posts: dict = {}
+    feed_titles: set[str] = set()
+
+    for post_id in post_ids:
+        post = app.posts.get_by_pid(user["sid"], post_id, projection)
+        if post:
+            feed = app.feeds.get_by_feed_id(user["sid"], post["feed_id"])
+            feed_title = feed["title"] if feed else f"Post {post_id}"
+            feed_titles.add(feed_title)
+
+            raw_content = gzip.decompress(post["content"]["content"]).decode(
+                "utf-8", "replace"
+            )
+            if post["content"]["title"]:
+                raw_content = post["content"]["title"] + ". " + raw_content
+
+            all_posts[post_id] = {
+                "feed_title": feed_title,
+                "url": post.get("url"),
+                "title": post.get("content", {}).get("title", f"Post {post_id}"),
+                "raw_content": raw_content,
+            }
+
+    combined_feed_title = (
+        " | ".join(sorted(list(feed_titles))) if feed_titles else "Multiple Posts"
+    )
+
+    topics_data = _collect_topic_snippets(
+        app, user, post_ids, all_posts, requested_topic, normalized_context_tags
+    )
+
     # Sort topics by name or maybe by number of snippets?
     sorted_topics = sorted(topics_data.items(), key=lambda x: x[0])
 
@@ -1933,6 +1949,65 @@ def on_post_grouped_snippets_get(
             provider=user["provider"],
         ),
         mimetype="text/html",
+    )
+
+
+def on_topic_snippets_api_get(
+    app: "RSSTagApplication", user: dict, request: Request, pids: str
+) -> Response:
+    """JSON API endpoint returning snippets for a topic, used by the mindmap."""
+    post_ids: list[str] = [pid for pid in pids.split("_") if pid]
+    if not post_ids:
+        return Response(
+            json.dumps({"error": "No post ids"}),
+            mimetype="application/json",
+            status=400,
+        )
+
+    requested_topic: Optional[str] = request.args.get("topic")
+    if requested_topic:
+        requested_topic = unquote(requested_topic)
+
+    projection: dict[str, bool] = {"content": True, "feed_id": True, "url": True}
+    all_posts: dict = {}
+
+    for post_id in post_ids:
+        post = app.posts.get_by_pid(user["sid"], post_id, projection)
+        if post:
+            raw_content = gzip.decompress(post["content"]["content"]).decode(
+                "utf-8", "replace"
+            )
+            if post["content"]["title"]:
+                raw_content = post["content"]["title"] + ". " + raw_content
+
+            all_posts[post_id] = {
+                "url": post.get("url"),
+                "title": post.get("content", {}).get("title", f"Post {post_id}"),
+                "raw_content": raw_content,
+            }
+
+    topics_data = _collect_topic_snippets(
+        app, user, post_ids, all_posts, requested_topic, None
+    )
+
+    # Flatten all snippets across topics
+    all_snippets = []
+    for topic_name, topic_info in topics_data.items():
+        for snippet in topic_info["snippets"]:
+            all_snippets.append(
+                {
+                    "text": snippet["text"],
+                    "post_id": snippet["post_id"],
+                    "post_title": snippet["post_title"],
+                    "indices": snippet["indices"],
+                    "read": snippet["read"],
+                    "url": snippet["url"],
+                }
+            )
+
+    return Response(
+        json.dumps({"snippets": all_snippets}),
+        mimetype="application/json",
     )
 
 

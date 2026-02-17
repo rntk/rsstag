@@ -499,6 +499,11 @@ class RSSTagRoutes:
                 "methods": ["POST"],
             },
             {
+                "url": "/api/topic-snippets/<string:pids>",
+                "endpoint": "on_topic_snippets_api_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/read/snippets",
                 "endpoint": "on_read_snippets_post",
                 "methods": ["POST"],
