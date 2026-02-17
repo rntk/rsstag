@@ -1879,6 +1879,8 @@ def _collect_topic_snippets(
                             "indices": [idx],
                             "url": all_posts[post_id]["url"],
                             "read": s_obj.get("read", False),
+                            "feed_id": all_posts[post_id].get("feed_id", ""),
+                            "feed_title": all_posts[post_id].get("feed_title", ""),
                         }
 
                 if current_snippet:
@@ -1974,6 +1976,9 @@ def on_topic_snippets_api_get(
     for post_id in post_ids:
         post = app.posts.get_by_pid(user["sid"], post_id, projection)
         if post:
+            feed = app.feeds.get_by_feed_id(user["sid"], post["feed_id"])
+            feed_title = feed["title"] if feed else f"Post {post_id}"
+
             raw_content = gzip.decompress(post["content"]["content"]).decode(
                 "utf-8", "replace"
             )
@@ -1981,6 +1986,8 @@ def on_topic_snippets_api_get(
                 raw_content = post["content"]["title"] + ". " + raw_content
 
             all_posts[post_id] = {
+                "feed_id": post["feed_id"],
+                "feed_title": feed_title,
                 "url": post.get("url"),
                 "title": post.get("content", {}).get("title", f"Post {post_id}"),
                 "raw_content": raw_content,
@@ -2002,6 +2009,8 @@ def on_topic_snippets_api_get(
                     "indices": snippet["indices"],
                     "read": snippet["read"],
                     "url": snippet["url"],
+                    "feed_id": snippet["feed_id"],
+                    "feed_title": snippet["feed_title"],
                 }
             )
 

@@ -5,13 +5,20 @@ import * as d3 from 'd3';
 /**
  * Topics Mindmap - Interactive collapsible horizontal tree
  * Uses D3 tree layout with zoom/pan and click-to-collapse/expand.
- * Leaf nodes can expand inline to show topic snippets.
+ * Leaf nodes expand to "Sentences" and "Sources" pseudo-nodes.
  */
 export default class TopicsMindmap {
   constructor() {
     this.margin = { top: 20, right: 200, bottom: 20, left: 120 };
     this.nodeHeight = 32;
     this.nodeSpacingY = 8;
+    this.nodeMinWidth = 80;
+    this.nodeMaxWidth = 420;
+    this.nodeCharWidth = 7.5;
+    this.nodeHorizontalPadding = 40;
+    this.nodeLabelPadding = 10;
+    this.nodeArrowWidth = 20;
+    this.nodeGapX = 40;
     this.snippetPanelWidth = 420;
     this.snippetItemHeight = 80;
     this.snippetMaxHeight = 500;
@@ -121,13 +128,43 @@ export default class TopicsMindmap {
     return d.data._isSnippetNode === true;
   }
 
+  _isSentencesPseudo(d) {
+    return d.data._isSentencesPseudo === true;
+  }
+
+  _isSourcesPseudo(d) {
+    return d.data._isSourcesPseudo === true;
+  }
+
+  _isSourceNode(d) {
+    return d.data._isSourceNode === true;
+  }
+
+  _isPseudoOrSource(d) {
+    return this._isSentencesPseudo(d) || this._isSourcesPseudo(d) || this._isSourceNode(d);
+  }
+
   _nodeWidth(d) {
     if (this._isSnippetNode(d)) {
       return this.snippetPanelWidth;
     }
     const name = d.data.name || '';
-    const displayName = name.length > 25 ? name.slice(0, 25) + '...' : name;
-    return Math.max(displayName.length * 7.5 + 40, 80);
+    const estimatedWidth = name.length * this.nodeCharWidth + this.nodeHorizontalPadding;
+    return Math.min(Math.max(estimatedWidth, this.nodeMinWidth), this.nodeMaxWidth);
+  }
+
+  _displayNodeLabel(d) {
+    if (this._isSnippetNode(d)) return '';
+
+    const name = d.data.name || '';
+    const width = this._nodeWidth(d);
+    const arrowSpace = this._hasArrow(d) ? this.nodeArrowWidth : 0;
+    const usableWidth = width - this.nodeLabelPadding - arrowSpace - 4;
+    const maxChars = Math.max(Math.floor(usableWidth / this.nodeCharWidth), 3);
+
+    if (name.length <= maxChars) return name;
+    if (maxChars <= 3) return '...';
+    return name.slice(0, maxChars - 3) + '...';
   }
 
   _nodeHeightFor(d) {
@@ -147,7 +184,7 @@ export default class TopicsMindmap {
     if (this._isSnippetNode(d)) return false;
     const hasBranchChildren = d.data.children && d.data.children.length > 0;
     const isLeaf = this._isLeafTopic(d);
-    return hasBranchChildren || isLeaf;
+    return hasBranchChildren || isLeaf || this._isPseudoOrSource(d);
   }
 
   async _loadSnippets(d) {
@@ -176,20 +213,37 @@ export default class TopicsMindmap {
       d.data._loading = false;
       d.data._snippetsLoaded = true;
 
-      const snippetChild = {
-        name: '__snippets__',
-        _isSnippetNode: true,
-        _snippets: data.snippets || [],
-        _parentTopicPath: topicPath,
+      const snippets = data.snippets || [];
+      d.data._cachedSnippets = snippets;
+
+      // Count unique feeds
+      const feedSet = new Set(snippets.map((s) => s.feed_id || ''));
+      const feedCount = feedSet.size;
+
+      // Create two pseudo-children: Sentences and Sources
+      const sentencesData = {
+        name: `Sentences (${snippets.length})`,
+        _isSentencesPseudo: true,
+        _cachedSnippets: snippets,
       };
 
-      // Create as a D3 hierarchy child
-      const childNode = d3.hierarchy(snippetChild);
-      childNode.depth = d.depth + 1;
-      childNode.parent = d;
-      childNode.id = this.i++;
+      const sourcesData = {
+        name: `Sources (${feedCount})`,
+        _isSourcesPseudo: true,
+        _cachedSnippets: snippets,
+      };
 
-      d.children = [childNode];
+      const sentencesNode = d3.hierarchy(sentencesData);
+      sentencesNode.depth = d.depth + 1;
+      sentencesNode.parent = d;
+      sentencesNode.id = this.i++;
+
+      const sourcesNode = d3.hierarchy(sourcesData);
+      sourcesNode.depth = d.depth + 1;
+      sourcesNode.parent = d;
+      sourcesNode.id = this.i++;
+
+      d.children = [sentencesNode, sourcesNode];
       d._children = null;
 
       this._update(d);
@@ -198,6 +252,104 @@ export default class TopicsMindmap {
       console.error('Failed to load snippets:', err);
       this._update(d);
     }
+  }
+
+  _expandSentencesPseudo(d) {
+    // Toggle if already expanded
+    if (d.children || d._children) {
+      this._toggleChildren(d);
+      this._update(d);
+      return;
+    }
+
+    const snippets = d.data._cachedSnippets || [];
+
+    const snippetChild = {
+      name: '__snippets__',
+      _isSnippetNode: true,
+      _snippets: snippets,
+      _parentTopicPath: d.parent ? d.parent.data._topicPath : '',
+    };
+
+    const childNode = d3.hierarchy(snippetChild);
+    childNode.depth = d.depth + 1;
+    childNode.parent = d;
+    childNode.id = this.i++;
+
+    d.children = [childNode];
+    d._children = null;
+
+    this._update(d);
+  }
+
+  _expandSourcesPseudo(d) {
+    // Toggle if already expanded
+    if (d.children || d._children) {
+      this._toggleChildren(d);
+      this._update(d);
+      return;
+    }
+
+    const snippets = d.data._cachedSnippets || [];
+
+    // Group snippets by feed_id
+    const feedMap = new Map();
+    snippets.forEach((s) => {
+      const fid = s.feed_id || 'unknown';
+      if (!feedMap.has(fid)) {
+        feedMap.set(fid, { title: s.feed_title || fid, snippets: [] });
+      }
+      feedMap.get(fid).snippets.push(s);
+    });
+
+    const children = [];
+    for (const [feedId, info] of feedMap) {
+      const sourceData = {
+        name: `${info.title} (${info.snippets.length})`,
+        _isSourceNode: true,
+        _feedId: feedId,
+        _sourceSnippets: info.snippets,
+      };
+
+      const childNode = d3.hierarchy(sourceData);
+      childNode.depth = d.depth + 1;
+      childNode.parent = d;
+      childNode.id = this.i++;
+      children.push(childNode);
+    }
+
+    d.children = children;
+    d._children = null;
+
+    this._update(d);
+  }
+
+  _expandSourceNode(d) {
+    // Toggle if already expanded
+    if (d.children || d._children) {
+      this._toggleChildren(d);
+      this._update(d);
+      return;
+    }
+
+    const snippets = d.data._sourceSnippets || [];
+
+    const snippetChild = {
+      name: '__snippets__',
+      _isSnippetNode: true,
+      _snippets: snippets,
+      _parentTopicPath: '',
+    };
+
+    const childNode = d3.hierarchy(snippetChild);
+    childNode.depth = d.depth + 1;
+    childNode.parent = d;
+    childNode.id = this.i++;
+
+    d.children = [childNode];
+    d._children = null;
+
+    this._update(d);
   }
 
   _buildSnippetHTML(d) {
@@ -347,10 +499,13 @@ export default class TopicsMindmap {
     const visibleNodes = nodes.filter((d) => d.depth > 0);
     const visibleLinks = links.filter((d) => d.source.depth > 0);
 
-    // Shift positions so root's children start from x=0
-    visibleNodes.forEach((d) => {
-      d.y = (d.depth - 1) * 260;
-    });
+    // Position nodes horizontally using parent width + fixed gap,
+    // so wide nodes do not overlap their children.
+    if (this.root.children) {
+      this.root.children.forEach((child) => {
+        this._setHorizontalPosition(child, 0);
+      });
+    }
 
     // --- NODES ---
     const node = this.gNodes
@@ -361,7 +516,12 @@ export default class TopicsMindmap {
     const nodeEnter = node
       .enter()
       .append('g')
-      .attr('class', (d) => 'mindmap-node' + (this._isSnippetNode(d) ? ' mindmap-snippet-group' : ''))
+      .attr('class', (d) => {
+        let cls = 'mindmap-node';
+        if (this._isSnippetNode(d)) cls += ' mindmap-snippet-group';
+        if (this._isPseudoOrSource(d)) cls += ' mindmap-pseudo-node';
+        return cls;
+      })
       .attr('transform', () => `translate(${source.y0 || 0},${source.x0 || 0})`)
       .attr('opacity', 0);
 
@@ -371,7 +531,7 @@ export default class TopicsMindmap {
     // Rounded rect background
     regularEnter
       .append('rect')
-      .attr('class', 'mindmap-node-rect')
+      .attr('class', (d) => 'mindmap-node-rect' + (this._isPseudoOrSource(d) ? ' mindmap-pseudo-rect' : ''))
       .attr('x', 0)
       .attr('y', -this.nodeHeight / 2)
       .attr('width', (d) => this._nodeWidth(d))
@@ -391,14 +551,11 @@ export default class TopicsMindmap {
     regularEnter
       .append('text')
       .attr('class', 'mindmap-node-text')
-      .attr('x', 10)
+      .attr('x', this.nodeLabelPadding)
       .attr('dy', '0.35em')
       .attr('font-size', '12px')
       .attr('cursor', 'pointer')
-      .text((d) => {
-        const name = d.data.name || '';
-        return name.length > 25 ? name.slice(0, 25) + '...' : name;
-      })
+      .text((d) => this._displayNodeLabel(d))
       .on('click', (event, d) => {
         event.stopPropagation();
         this._navigateToTopic(d);
@@ -406,17 +563,18 @@ export default class TopicsMindmap {
 
     // Title tooltip
     regularEnter.append('title').text((d) => {
+      if (this._isPseudoOrSource(d)) return d.data.name || '';
       const path = d.data._topicPath || d.data.name || '';
       const count = d.data.value || 0;
       return `${path} (${count} posts)`;
     });
 
-    // Expand/collapse arrow (branch nodes with children OR leaf nodes with posts)
+    // Expand/collapse arrow
     regularEnter
       .filter((d) => this._hasArrow(d))
       .append('text')
       .attr('class', 'mindmap-node-arrow')
-      .attr('x', (d) => this._nodeWidth(d) - 20)
+      .attr('x', (d) => this._nodeWidth(d) - this.nodeArrowWidth)
       .attr('dy', '0.35em')
       .attr('font-size', '14px')
       .attr('text-anchor', 'middle')
@@ -428,7 +586,13 @@ export default class TopicsMindmap {
       })
       .on('click', (event, d) => {
         event.stopPropagation();
-        if (this._isLeafTopic(d)) {
+        if (this._isSentencesPseudo(d)) {
+          this._expandSentencesPseudo(d);
+        } else if (this._isSourcesPseudo(d)) {
+          this._expandSourcesPseudo(d);
+        } else if (this._isSourceNode(d)) {
+          this._expandSourceNode(d);
+        } else if (this._isLeafTopic(d)) {
           this._loadSnippets(d);
         } else {
           this._toggleChildren(d);
@@ -438,7 +602,7 @@ export default class TopicsMindmap {
 
     // Count badge
     regularEnter
-      .filter((d) => d.data.value)
+      .filter((d) => d.data.value && !this._isPseudoOrSource(d))
       .append('text')
       .attr('class', 'mindmap-node-count')
       .attr('x', (d) => this._nodeWidth(d) + 5)
@@ -489,8 +653,20 @@ export default class TopicsMindmap {
       return (d.children) ? '<' : '>';
     });
 
-    // Update rect fill on merge
-    nodeUpdate.select('.mindmap-node-rect').attr('fill', (d) => this._depthColor(d.depth));
+    // Keep width, colors, and labels in sync on updates
+    nodeUpdate
+      .select('.mindmap-node-rect')
+      .attr('width', (d) => this._nodeWidth(d))
+      .attr('fill', (d) => this._depthColor(d.depth));
+
+    nodeUpdate
+      .select('.mindmap-node-text')
+      .attr('x', this.nodeLabelPadding)
+      .text((d) => this._displayNodeLabel(d));
+
+    nodeUpdate
+      .select('.mindmap-node-arrow')
+      .attr('x', (d) => this._nodeWidth(d) - this.nodeArrowWidth);
 
     // Exit
     node
@@ -559,7 +735,22 @@ export default class TopicsMindmap {
     });
   }
 
+  _setHorizontalPosition(d, y) {
+    d.y = y;
+
+    const children = d.children || d._children;
+    if (!children || children.length === 0) return;
+
+    const childY = y + this._nodeWidth(d) + this.nodeGapX;
+    children.forEach((child) => {
+      this._setHorizontalPosition(child, childY);
+    });
+  }
+
   _navigateToTopic(d) {
+    // No-op for pseudo-nodes and source nodes
+    if (this._isPseudoOrSource(d)) return;
+
     const topicPath = d.data._topicPath;
     const topicPosts = d.data._topicPosts;
     if (topicPath && topicPosts && topicPosts.length > 0) {
