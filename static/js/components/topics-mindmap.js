@@ -22,6 +22,8 @@ export default class TopicsMindmap {
     this.snippetPanelWidth = 420;
     this.snippetItemHeight = 80;
     this.snippetMaxHeight = 500;
+    this.snippetOverlay = null;
+    this.overlaySnippetNode = null;
     this.duration = 400;
     this.i = 0; // node id counter
     this.root = null;
@@ -170,7 +172,8 @@ export default class TopicsMindmap {
   _nodeHeightFor(d) {
     if (this._isSnippetNode(d)) {
       const snippets = d.data._snippets || [];
-      const contentH = 36 + snippets.length * this.snippetItemHeight;
+      const multiSentenceExtra = snippets.length > 1 ? 20 : 8;
+      const contentH = 36 + snippets.length * this.snippetItemHeight + multiSentenceExtra;
       return Math.min(contentH, this.snippetMaxHeight);
     }
     return this.nodeHeight;
@@ -352,17 +355,29 @@ export default class TopicsMindmap {
     this._update(d);
   }
 
-  _buildSnippetHTML(d) {
+  _buildSnippetHTML(d, options = {}) {
     const snippets = d.data._snippets || [];
-    const panelH = this._nodeHeightFor(d);
-    const scrollH = panelH - 36;
+    const panelH = options.panelHeight || this._nodeHeightFor(d);
+    const scrollH = options.scrollHeight || panelH - 36;
+    const containerWidth = options.containerWidth || `${this.snippetPanelWidth - 16}px`;
+    const containerMaxHeight = options.containerMaxHeight || `${panelH}px`;
+    const includeMaximize = options.includeMaximize !== false;
+    const includeClose = options.includeClose === true;
+    const textPreviewLimit = typeof options.textPreviewLimit === 'number' ? options.textPreviewLimit : 200;
+    const sourceTitleLimit = typeof options.sourceTitleLimit === 'number' ? options.sourceTitleLimit : 30;
 
-    let html = `<div class="mindmap-snippet-container" style="width:${this.snippetPanelWidth - 16}px;max-height:${panelH}px;">`;
+    let html = `<div class="mindmap-snippet-container" style="width:${containerWidth};max-height:${containerMaxHeight};">`;
     html += `<div class="mindmap-snippet-header">`;
     html += `<span class="mindmap-snippet-title">${snippets.length} sentence${snippets.length !== 1 ? 's' : ''}</span>`;
     html += `<div class="mindmap-snippet-header-btns">`;
+    if (includeMaximize) {
+      html += `<button class="mindmap-snippet-batch-btn mindmap-snippet-maximize-btn" data-action="maximize">Maximize</button>`;
+    }
     html += `<button class="mindmap-snippet-batch-btn" data-action="read-all">Read All</button>`;
     html += `<button class="mindmap-snippet-batch-btn" data-action="unread-all">Unread All</button>`;
+    if (includeClose) {
+      html += `<button class="mindmap-snippet-batch-btn mindmap-snippet-close-btn" data-action="close-overlay">Close</button>`;
+    }
     html += `</div></div>`;
     html += `<div class="mindmap-snippet-list" style="max-height:${scrollH}px;overflow-y:auto;">`;
 
@@ -370,11 +385,11 @@ export default class TopicsMindmap {
       const readClass = s.read ? 'read' : '';
       const btnLabel = s.read ? 'Unread' : 'Read';
       const btnClass = s.read ? 'snippet-tag-read' : 'snippet-tag-unread';
-      const textPreview = s.text.length > 200 ? s.text.slice(0, 200) + '...' : s.text;
+      const textPreview = textPreviewLimit > 0 && s.text.length > textPreviewLimit ? s.text.slice(0, textPreviewLimit) + '...' : s.text;
       html += `<div class="mindmap-snippet-item ${readClass}" data-index="${i}">`;
       html += `<div class="mindmap-snippet-text">${this._escapeHtml(textPreview)}</div>`;
       html += `<div class="mindmap-snippet-meta">`;
-      html += `<span class="mindmap-snippet-source" title="${this._escapeHtml(s.post_title)}">${this._escapeHtml(this._truncate(s.post_title, 30))}</span>`;
+      html += `<span class="mindmap-snippet-source" title="${this._escapeHtml(s.post_title)}">${this._escapeHtml(this._truncate(s.post_title, sourceTitleLimit))}</span>`;
       html += `<button class="mindmap-snippet-toggle-btn ${btnClass}" data-index="${i}">${btnLabel}</button>`;
       html += `</div></div>`;
     });
@@ -413,10 +428,85 @@ export default class TopicsMindmap {
           } else if (batchBtn) {
             event.stopPropagation();
             const action = batchBtn.dataset.action;
-            this._batchToggleRead(d, action === 'read-all', container);
+            if (action === 'maximize') {
+              this._openSnippetOverlay(d);
+            } else if (action === 'read-all' || action === 'unread-all') {
+              this._batchToggleRead(d, action === 'read-all', container);
+            }
           }
         });
       });
+  }
+
+  _ensureSnippetOverlay() {
+    if (this.snippetOverlay) return;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'mindmap-snippet-overlay';
+    overlay.addEventListener('click', (event) => {
+      if (event.target === overlay) {
+        this._closeSnippetOverlay();
+      }
+    });
+
+    overlay.addEventListener('click', (event) => {
+      const btn = event.target.closest('.mindmap-snippet-toggle-btn');
+      const batchBtn = event.target.closest('.mindmap-snippet-batch-btn');
+      if (!this.overlaySnippetNode) return;
+
+      if (btn) {
+        event.stopPropagation();
+        const idx = parseInt(btn.dataset.index, 10);
+        this._toggleSnippetRead(this.overlaySnippetNode, idx, overlay);
+      } else if (batchBtn) {
+        event.stopPropagation();
+        const action = batchBtn.dataset.action;
+        if (action === 'close-overlay') {
+          this._closeSnippetOverlay();
+        } else if (action === 'read-all' || action === 'unread-all') {
+          this._batchToggleRead(this.overlaySnippetNode, action === 'read-all', overlay);
+        }
+      }
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && this.snippetOverlay && this.snippetOverlay.classList.contains('open')) {
+        this._closeSnippetOverlay();
+      }
+    });
+
+    document.body.appendChild(overlay);
+    this.snippetOverlay = overlay;
+  }
+
+  _openSnippetOverlay(d) {
+    if (!this._isSnippetNode(d)) return;
+
+    this._ensureSnippetOverlay();
+    this.overlaySnippetNode = d;
+
+    const html = this._buildSnippetHTML(d, {
+      panelHeight: '100%',
+      scrollHeight: 'calc(100vh - 170px)',
+      containerWidth: 'min(1200px, calc(100vw - 80px))',
+      containerMaxHeight: 'calc(100vh - 80px)',
+      includeMaximize: false,
+      includeClose: true,
+      textPreviewLimit: 0,
+      sourceTitleLimit: 120,
+    });
+
+    this.snippetOverlay.innerHTML = `<div class="mindmap-snippet-overlay-panel">${html}</div>`;
+    this.snippetOverlay.classList.add('open');
+    document.body.classList.add('mindmap-snippet-overlay-open');
+  }
+
+  _closeSnippetOverlay() {
+    if (!this.snippetOverlay) return;
+    this.snippetOverlay.classList.remove('open');
+    this.snippetOverlay.innerHTML = '';
+    this.overlaySnippetNode = null;
+    document.body.classList.remove('mindmap-snippet-overlay-open');
   }
 
   async _toggleSnippetRead(d, snippetIndex, container) {
@@ -441,6 +531,9 @@ export default class TopicsMindmap {
 
       snippet.read = newRead;
       this._updateSnippetDOM(d, container);
+      if (this.overlaySnippetNode === d && this.snippetOverlay && this.snippetOverlay.classList.contains('open') && container !== this.snippetOverlay) {
+        this._updateSnippetDOM(d, this.snippetOverlay);
+      }
     } catch (err) {
       console.error('Failed to toggle snippet read:', err);
     }
@@ -464,6 +557,9 @@ export default class TopicsMindmap {
 
       snippets.forEach((s) => { s.read = markRead; });
       this._updateSnippetDOM(d, container);
+      if (this.overlaySnippetNode === d && this.snippetOverlay && this.snippetOverlay.classList.contains('open') && container !== this.snippetOverlay) {
+        this._updateSnippetDOM(d, this.snippetOverlay);
+      }
     } catch (err) {
       console.error('Failed to batch toggle read:', err);
     }

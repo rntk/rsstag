@@ -2595,6 +2595,16 @@ h3.post_title {
     }
 }
 
+.mindmap-snippet-maximize-btn {
+    border-color: #9fb8d9;
+    background: #edf4ff;
+}
+
+.mindmap-snippet-close-btn {
+    border-color: #d9a29f;
+    background: #fff1f0;
+}
+
 .mindmap-snippet-list {
     padding: 0 2px;
 }
@@ -2655,6 +2665,39 @@ h3.post_title {
 
 .mindmap-pseudo-rect {
     stroke-dasharray: 5, 3;
+}
+
+.mindmap-snippet-overlay-open {
+    overflow: hidden;
+}
+
+.mindmap-snippet-overlay {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 1200;
+}
+
+.mindmap-snippet-overlay.open {
+    display: flex;
+}
+
+.mindmap-snippet-overlay-panel {
+    width: min(1200px, calc(100vw - 80px));
+    max-height: calc(100vh - 80px);
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    background: #fff;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+}
+
+.mindmap-snippet-overlay .mindmap-snippet-source {
+    max-width: 700px;
 }
 
 /* ============================================================================
