@@ -18,6 +18,7 @@ from rsstag.tasks import (
     TASK_GMAIL_SORT,
     TASK_NOT_IN_PROCESSING,
 )
+from rsstag.tags_builder import TagsBuilder
 from rsstag.utils import text_to_speech
 from rsstag.web.context_filter_handlers import get_context_filter_manager
 
@@ -2187,6 +2188,59 @@ def on_topics_search(
 
     result: dict[str, list[dict[str, str | int]]] = {"data": data}
     return Response(json.dumps(result), mimetype="application/json", status=200)
+
+
+def on_mindmap_tag_search_get(
+    app: "RSSTagApplication", user: dict, request: Request
+) -> Response:
+    """Search for tags related to a mindmap node word using stemming/lemmatization.
+
+    Stems the query word with the same TagsBuilder used when indexing tags, then
+    does a prefix search in the DB to find matching tags.
+
+    # TODO: This is a naive prefix search on the stemmed form of the word.
+    # Consider implementing a more sophisticated search later, e.g.:
+    # - Fuzzy / phonetic matching
+    # - Semantic similarity via embeddings
+    # - Synonym / related-term expansion
+    """
+    word: str = request.args.get("word", "").strip()
+    if not word:
+        return Response(
+            json.dumps({"error": "word parameter is required"}),
+            mimetype="application/json",
+            status=400,
+        )
+
+    builder = TagsBuilder()
+    stemmed: str = builder.process_word(word)
+
+    only_unread: bool = user.get("settings", {}).get("only_unread", False)
+    tags_cursor = app.tags.get_all(
+        user["sid"],
+        only_unread=only_unread,
+        opts={"regexp": f"^{re.escape(stemmed)}", "limit": 20},
+        projection={"_id": 0, "tag": 1, "posts_count": 1, "unread_count": 1},
+    )
+
+    results: list[dict] = []
+    for tag in tags_cursor:
+        tag_name: str = tag["tag"]
+        tag_url: str = app.routes.get_url_by_endpoint("on_get_tag_page", {"tag": tag_name}) or f"/tag-info/{tag_name}"
+        results.append(
+            {
+                "tag": tag_name,
+                "posts_count": tag.get("posts_count", 0),
+                "unread_count": tag.get("unread_count", 0),
+                "url": tag_url,
+            }
+        )
+
+    return Response(
+        json.dumps({"tags": results, "stemmed": stemmed}),
+        mimetype="application/json",
+        status=200,
+    )
 
 
 def on_post_graph_get(

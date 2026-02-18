@@ -11,14 +11,15 @@ export default class TopicsMindmap {
   constructor() {
     this.margin = { top: 20, right: 200, bottom: 20, left: 120 };
     this.nodeHeight = 32;
-    this.nodeSpacingY = 8;
+    this.nodeSpacingY = 20;
     this.nodeMinWidth = 80;
     this.nodeMaxWidth = 420;
     this.nodeCharWidth = 7.5;
     this.nodeHorizontalPadding = 40;
     this.nodeLabelPadding = 10;
     this.nodeArrowWidth = 20;
-    this.nodeGapX = 40;
+    this.nodeSearchBtnWidth = 20;
+    this.nodeGapX = 80;
     this.snippetPanelWidth = 420;
     this.snippetItemHeight = 80;
     this.snippetMaxHeight = 500;
@@ -142,8 +143,17 @@ export default class TopicsMindmap {
     return d.data._isSourceNode === true;
   }
 
+  _isTagSearchResult(d) {
+    return d.data._isTagSearchResult === true;
+  }
+
   _isPseudoOrSource(d) {
     return this._isSentencesPseudo(d) || this._isSourcesPseudo(d) || this._isSourceNode(d);
+  }
+
+  _hasSearchButton(d) {
+    if (this._isSnippetNode(d) || this._isPseudoOrSource(d) || this._isTagSearchResult(d)) return false;
+    return !!d.data._topicPath;
   }
 
   _nodeWidth(d) {
@@ -151,7 +161,8 @@ export default class TopicsMindmap {
       return this.snippetPanelWidth;
     }
     const name = d.data.name || '';
-    const estimatedWidth = name.length * this.nodeCharWidth + this.nodeHorizontalPadding;
+    const searchExtra = this._hasSearchButton(d) ? this.nodeSearchBtnWidth : 0;
+    const estimatedWidth = name.length * this.nodeCharWidth + this.nodeHorizontalPadding + searchExtra;
     return Math.min(Math.max(estimatedWidth, this.nodeMinWidth), this.nodeMaxWidth);
   }
 
@@ -161,7 +172,8 @@ export default class TopicsMindmap {
     const name = d.data.name || '';
     const width = this._nodeWidth(d);
     const arrowSpace = this._hasArrow(d) ? this.nodeArrowWidth : 0;
-    const usableWidth = width - this.nodeLabelPadding - arrowSpace - 4;
+    const searchSpace = this._hasSearchButton(d) ? this.nodeSearchBtnWidth : 0;
+    const usableWidth = width - this.nodeLabelPadding - arrowSpace - searchSpace - 4;
     const maxChars = Math.max(Math.floor(usableWidth / this.nodeCharWidth), 3);
 
     if (name.length <= maxChars) return name;
@@ -185,6 +197,7 @@ export default class TopicsMindmap {
 
   _hasArrow(d) {
     if (this._isSnippetNode(d)) return false;
+    if (this._isTagSearchResult(d)) return false;
     const hasBranchChildren = d.data.children && d.data.children.length > 0;
     const isLeaf = this._isLeafTopic(d);
     return hasBranchChildren || isLeaf || this._isPseudoOrSource(d);
@@ -627,15 +640,15 @@ export default class TopicsMindmap {
     // Rounded rect background
     regularEnter
       .append('rect')
-      .attr('class', (d) => 'mindmap-node-rect' + (this._isPseudoOrSource(d) ? ' mindmap-pseudo-rect' : ''))
+      .attr('class', (d) => 'mindmap-node-rect' + (this._isPseudoOrSource(d) ? ' mindmap-pseudo-rect' : '') + (this._isTagSearchResult(d) ? ' mindmap-tag-search-result-rect' : ''))
       .attr('x', 0)
       .attr('y', -this.nodeHeight / 2)
       .attr('width', (d) => this._nodeWidth(d))
       .attr('height', this.nodeHeight)
       .attr('rx', 8)
       .attr('ry', 8)
-      .attr('fill', (d) => this._depthColor(d.depth))
-      .attr('stroke', '#999')
+      .attr('fill', (d) => this._isTagSearchResult(d) ? '#fde8c0' : this._depthColor(d.depth))
+      .attr('stroke', (d) => this._isTagSearchResult(d) ? '#c8963c' : '#999')
       .attr('stroke-width', 1)
       .attr('cursor', 'pointer')
       .on('click', (event, d) => {
@@ -696,6 +709,27 @@ export default class TopicsMindmap {
         }
       });
 
+    // Search button (⊕) for topic nodes – opens a tag search for the node's word
+    regularEnter
+      .filter((d) => this._hasSearchButton(d))
+      .append('text')
+      .attr('class', 'mindmap-node-search-btn')
+      .attr('x', (d) => this._nodeWidth(d) - this.nodeArrowWidth - this.nodeSearchBtnWidth)
+      .attr('dy', '0.35em')
+      .attr('font-size', '13px')
+      .attr('text-anchor', 'middle')
+      .attr('cursor', 'pointer')
+      .attr('fill', '#5a7fa0')
+      .text((d) => {
+        if (d.data._tagSearchLoading) return '…';
+        if (d.data._tagSearchDone) return '✓';
+        return '⊕';
+      })
+      .on('click', (event, d) => {
+        event.stopPropagation();
+        this._searchTagsForNode(d);
+      });
+
     // Count badge
     regularEnter
       .filter((d) => d.data.value && !this._isPseudoOrSource(d))
@@ -753,7 +787,8 @@ export default class TopicsMindmap {
     nodeUpdate
       .select('.mindmap-node-rect')
       .attr('width', (d) => this._nodeWidth(d))
-      .attr('fill', (d) => this._depthColor(d.depth));
+      .attr('fill', (d) => this._isTagSearchResult(d) ? '#fde8c0' : this._depthColor(d.depth))
+      .attr('stroke', (d) => this._isTagSearchResult(d) ? '#c8963c' : '#999');
 
     nodeUpdate
       .select('.mindmap-node-text')
@@ -763,6 +798,15 @@ export default class TopicsMindmap {
     nodeUpdate
       .select('.mindmap-node-arrow')
       .attr('x', (d) => this._nodeWidth(d) - this.nodeArrowWidth);
+
+    nodeUpdate
+      .select('.mindmap-node-search-btn')
+      .attr('x', (d) => this._nodeWidth(d) - this.nodeArrowWidth - this.nodeSearchBtnWidth)
+      .text((d) => {
+        if (d.data._tagSearchLoading) return '…';
+        if (d.data._tagSearchDone) return '✓';
+        return '⊕';
+      });
 
     // Exit
     node
@@ -844,6 +888,12 @@ export default class TopicsMindmap {
   }
 
   _navigateToTopic(d) {
+    // Tag search result nodes link to the tag page
+    if (this._isTagSearchResult(d)) {
+      if (d.data._tagUrl) window.location.href = d.data._tagUrl;
+      return;
+    }
+
     // No-op for pseudo-nodes and source nodes
     if (this._isPseudoOrSource(d)) return;
 
@@ -853,6 +903,54 @@ export default class TopicsMindmap {
       const postIds = topicPosts.join('_');
       const url = `/post-grouped/${postIds}?topic=${encodeURIComponent(topicPath)}`;
       window.location.href = url;
+    }
+  }
+
+  async _searchTagsForNode(d) {
+    if (d.data._tagSearchLoading || d.data._tagSearchDone) return;
+
+    const word = (d.data.name || '').trim();
+    if (!word) return;
+
+    d.data._tagSearchLoading = true;
+    this._update(d);
+
+    try {
+      const resp = await fetch(`/api/mindmap-tag-search?word=${encodeURIComponent(word)}`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+
+      d.data._tagSearchLoading = false;
+      d.data._tagSearchDone = true;
+
+      const tags = data.tags || [];
+
+      if (tags.length > 0) {
+        const tagNodes = tags.map((tag) => {
+          const tagData = {
+            name: tag.tag,
+            value: tag.posts_count,
+            _isTagSearchResult: true,
+            _tagUrl: tag.url,
+          };
+          const node = d3.hierarchy(tagData);
+          node.depth = d.depth + 1;
+          node.parent = d;
+          node.id = this.i++;
+          return node;
+        });
+
+        // Merge with existing children; expand the node so results are visible
+        const base = d.children || d._children || [];
+        d.children = [...base, ...tagNodes];
+        d._children = null;
+      }
+
+      this._update(d);
+    } catch (err) {
+      d.data._tagSearchLoading = false;
+      console.error('Failed to search tags for node:', err);
+      this._update(d);
     }
   }
 

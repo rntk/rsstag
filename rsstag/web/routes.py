@@ -573,6 +573,11 @@ class RSSTagRoutes:
                 "endpoint": "on_external_workers_submit_post",
                 "methods": ["POST"],
             },
+            {
+                "url": "/api/mindmap-tag-search",
+                "endpoint": "on_mindmap_tag_search_get",
+                "methods": ["GET"],
+            },
         ]
 
         decorated_routes = (

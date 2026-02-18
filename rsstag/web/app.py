@@ -617,6 +617,9 @@ class RSSTagApplication(object):
     def on_topics_search(self, user: dict, request: Request) -> Response:
         return posts_handlers.on_topics_search(self, user, request)
 
+    def on_mindmap_tag_search_get(self, user: dict, request: Request) -> Response:
+        return posts_handlers.on_mindmap_tag_search_get(self, user, request)
+
     def on_post_graph_get(self, user: dict, request: Request, pids: str) -> Response:
         return posts_handlers.on_post_graph_get(self, user, request, pids)
 
