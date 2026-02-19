@@ -10,26 +10,11 @@ $negative: red;
 $neutral: grey;
 $positive_negative: orange;
 
-@mixin vendor-prefix($name, $argument) {
-    -webkit-#{$name}: #{$argument};
-    -ms-#{$name}: #{$argument};
-    -moz-#{$name}: #{$argument};
-    -o-#{$name}: #{$argument};
-    #{$name}: #{$argument};
-}
-
-body,
-html,
-img,
-p,
-a,
-span,
-div {
+*,
+*::before,
+*::after {
     padding: 0;
     margin: 0;
-    float: none;
-    clear: both;
-    font-family: Arial;
 }
 
 body,
@@ -40,6 +25,7 @@ html {
 }
 
 body {
+    font-family: Arial, sans-serif;
     padding-top: 6.5em; // Increased to accommodate both #global_tools (~3em) and #context_filter_bar (~3.5em total)
 }
 
@@ -121,7 +107,7 @@ h3.post_title {
     display: inline-block;
     vertical-align: top;
     border: 1px solid $my_gray;
-    @include vendor-prefix(border-radius, 0.5em);
+    border-radius: 0.5em;
     padding: 0.5em;
     margin: 0.5em;
     max-width: 100%;
@@ -294,7 +280,7 @@ h3.post_title {
     padding: 0.2em 0.6em;
     font-size: 10pt;
     cursor: pointer;
-    @include vendor-prefix(border-radius, 0.3em);
+    border-radius: 0.3em;
 }
 
 .clusters-read-btn:disabled {
@@ -326,7 +312,7 @@ h3.post_title {
     display: inline-flex;
     align-items: center;
     gap: 0.6em;
-    @include vendor-prefix(border-radius, 0.4em);
+    border-radius: 0.4em;
 }
 
 .clusters-topic-item.is-active {
@@ -347,7 +333,7 @@ h3.post_title {
     background: #ffffff;
     border: 1px solid $my_gray;
     padding: 0.8em;
-    @include vendor-prefix(border-radius, 0.4em);
+    border-radius: 0.4em;
 }
 
 .clusters-topic-sentences.is-loading {
@@ -406,7 +392,7 @@ h3.post_title {
     font-size: 9pt;
     padding: 0.2em 0.5em;
     cursor: pointer;
-    @include vendor-prefix(border-radius, 0.3em);
+    border-radius: 0.3em;
 }
 
 .clusters-topic-sentence.is-read .clusters-topic-toggle-read {
@@ -488,7 +474,7 @@ h3.post_title {
 .read_button {
     float: right;
     padding: 0 0.3em;
-    @include vendor-prefix(border-radius, 0.3em);
+    border-radius: 0.3em;
     cursor: pointer;
 }
 
@@ -509,7 +495,7 @@ h3.post_title {
 
 .tag_info_block {
     border: 1px solid $my_gray;
-    @include vendor-prefix(border-radius, 0.5em);
+    border-radius: 0.5em;
     margin: 1em 0;
     padding: 0.5em;
 }
@@ -526,7 +512,7 @@ h3.post_title {
     text-align: center;
     font-size: 10pt;
     border: 1px solid $my_gray;
-    @include vendor-prefix(border-radius, 0.5em);
+    border-radius: 0.5em;
     cursor: pointer;
     max-width: 100%;
 }
@@ -550,8 +536,8 @@ h3.post_title {
     text-align: center;
     font-size: 10pt;
     border: 1px solid $my_gray;
-    @include vendor-prefix(border-radius, 0.5em);
-    @include vendor-prefix(box-shadow, 0px 0px 2px 0px gray);
+    border-radius: 0.5em;
+    box-shadow: 0px 0px 2px 0px gray;
     cursor: pointer;
     max-width: 100%;
 }
@@ -672,9 +658,9 @@ h3.post_title {
     text-align: center;
     display: none;
     background-color: #fff;
-    @include vendor-prefix(opacity, 0.9);
+    opacity: 0.9;
     border: 1px solid $my_gray;
-    @include vendor-prefix(border-radius, 0.5em);
+    border-radius: 0.5em;
 }
 
 #status {
@@ -715,11 +701,11 @@ h3.post_title {
     padding: 0 0.2em;
 }
 
-.minimized:before {
+.minimized::before {
     content: '+';
 }
 
-.not_minimized:before {
+.not_minimized::before {
     content: '-';
 }
 
@@ -844,10 +830,6 @@ h3.post_title {
     margin: 0.3em;
 }
 
-.search_result_item:after {
-    display: block;
-}
-
 .selected_tag {
     background-color: $selected_color;
 }
@@ -893,7 +875,8 @@ h3.post_title {
     border: 1px solid black;
     border-radius: 6px;*/
     cursor: pointer;
-    font: 20pt bold;
+    font-size: 20pt;
+    font-weight: bold;
 }
 
 .main_menu_button img {
@@ -913,7 +896,7 @@ h3.post_title {
 .form_button {
     cursor: pointer;
     border: 1px solid black;
-    @include vendor-prefix(border-radius, 0.4em);
+    border-radius: 0.4em;
     padding: 0.1em;
 }
 
@@ -993,9 +976,9 @@ h3.post_title {
     margin: 0;
     padding: 0;
     background-color: $progressbar_color;
-    @include vendor-prefix(transition, width 1s);
-    @include vendor-prefix(opacity, 0.5);
-    @include vendor-prefix(box-shadow, 0 0 3px 2px $progressbar_color);
+    transition: width 1s;
+    opacity: 0.5;
+    box-shadow: 0 0 3px 2px $progressbar_color;
 }
 
 .post_tag_contexts {
@@ -1104,10 +1087,6 @@ h3.post_title {
     padding: 0 0.5em;
 }
 
-.tag_sentences_link {
-    padding: 0 0.5em;
-}
-
 .cluster_link {
     display: inline-block;
     margin: 0.4em;
@@ -1211,6 +1190,8 @@ h3.post_title {
     padding: 4px;
     word-break: break-word;
     white-space: normal;
+    max-width: 520px; // increased for more space
+    overflow: hidden;
 }
 
 .s-tree-table .left {
@@ -1233,12 +1214,6 @@ h3.post_title {
     width: 44%; // increased width for right
     min-width: 180px;
     max-width: 520px;
-}
-
-.s-tree-table th,
-.s-tree-table td {
-    max-width: 520px; // increased for more space
-    overflow: hidden;
 }
 
 .sentence-row .sentence-cell {
@@ -1304,7 +1279,7 @@ h3.post_title {
     padding: 0.5em;
     background-color: #f8f8f8;
     border: 1px solid $my_gray;
-    @include vendor-prefix(border-radius, 0.5em);
+    border-radius: 0.5em;
 
     h4 {
         margin: 0 0 0.5em 0;
@@ -1326,7 +1301,7 @@ h3.post_title {
 
     .legend-circle {
         display: inline-block;
-        @include vendor-prefix(border-radius, 50%);
+        border-radius: 50%;
     }
 }
 
@@ -1484,7 +1459,6 @@ h3.post_title {
     .post-text {
         max-width: 100%;
         overflow-x: auto;
-        word-wrap: break-word;
         overflow-wrap: break-word;
 
         img {
@@ -2050,7 +2024,6 @@ h3.post_title {
         flex-wrap: wrap;
         gap: 8px;
         overflow: hidden;
-        word-wrap: break-word;
         overflow-wrap: break-word;
     }
 
@@ -2058,7 +2031,6 @@ h3.post_title {
         font-size: 16px;
         line-height: 1.5;
         color: #444;
-        word-wrap: break-word;
         overflow-wrap: break-word;
         word-break: break-word;
         max-height: 400px;
@@ -2472,7 +2444,7 @@ h3.post_title {
         }
 
         .topics-sunburst-groups {
-            grid-template-columns: 1fr;
+            gap: 16px;
         }
     }
 }
@@ -3119,7 +3091,7 @@ h3.post_title {
 
     // Prevent overflow issues
     overflow: auto;
-    word-wrap: break-word;
+    overflow-wrap: break-word;
 
     // Reset any inherited text properties
     text-align: left;
@@ -3186,7 +3158,7 @@ h3.post_title {
     pre,
     code {
         white-space: pre-wrap;
-        word-wrap: break-word;
+        overflow-wrap: break-word;
         overflow-x: auto;
     }
 }
