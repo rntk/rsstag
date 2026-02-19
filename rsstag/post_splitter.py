@@ -12,6 +12,7 @@ from txt_splitt import (
     LLMRepairingGapHandler,
     MappingOffsetRestorer,
     NormalizingSplitter,
+    OptimizingMarker,
     Pipeline,
     OverlapChunker,
     TopicRangeLLM,
@@ -125,7 +126,7 @@ class PostSplitter:
                 # Create the pipeline
                 pipeline = Pipeline(
                     splitter=splitter,
-                    marker=BracketMarker(),
+                    marker=OptimizingMarker(BracketMarker()),
                     llm=topic_range_llm,
                     parser=TopicRangeParser(),
                     gap_handler=LLMRepairingGapHandler(

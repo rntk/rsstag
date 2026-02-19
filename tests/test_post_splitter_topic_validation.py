@@ -34,6 +34,7 @@ class TestPostSplitterTopicValidation(unittest.TestCase):
             HTMLParserTagStripCleaner=lambda *args, **kwargs: object(),
             MappingOffsetRestorer=lambda *args, **kwargs: object(),
             BracketMarker=lambda *args, **kwargs: object(),
+            OptimizingMarker=lambda *args, **kwargs: object(),
             TopicRangeParser=lambda *args, **kwargs: object(),
             LLMRepairingGapHandler=lambda *args, **kwargs: object(),
             AdjacentSameTopicJoiner=lambda *args, **kwargs: object(),
