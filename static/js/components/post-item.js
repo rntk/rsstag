@@ -240,6 +240,9 @@ export default class PostsItem extends React.Component {
             <span className={'read_button ' + read_button_class} onClick={this.clickReadButton}>
               {read_button_class}
             </span>
+            <a href={`/download/posts/${post.pos}`} className="download_button" download>
+              Download
+            </a>
             <div className={'post_links_content ' + (post.links ? '' : 'hide')}>{links}</div>
           </div>
         </div>

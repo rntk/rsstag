@@ -3162,3 +3162,101 @@ h3.post_title {
         overflow-x: auto;
     }
 }
+
+.filter-form {
+    margin: 20px 0;
+    display: flex;
+    gap: 10px;
+    
+    input {
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+    }
+    
+    button, a {
+        padding: 8px 16px;
+        background: #0066cc;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        text-decoration: none;
+        
+        &:hover {
+            background: #0052a3;
+        }
+    }
+}
+
+.posts-list {
+    margin: 20px 0;
+    
+    .post-item {
+        display: flex;
+        gap: 15px;
+        padding: 10px;
+        border-bottom: 1px solid #eee;
+        align-items: center;
+        
+        .post-id {
+            font-weight: bold;
+            min-width: 60px;
+        }
+        
+        .post-title {
+            flex: 1;
+        }
+        
+        .post-date {
+            color: #666;
+            min-width: 150px;
+        }
+        
+        .download-btn {
+            padding: 5px 10px;
+            background: #28a745;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            
+            &:hover {
+                background: #218838;
+            }
+        }
+    }
+}
+
+.pagination {
+    margin: 20px 0;
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    align-items: center;
+    
+    a {
+        padding: 8px 16px;
+        background: #0066cc;
+        color: white;
+        text-decoration: none;
+        border-radius: 4px;
+        
+        &:hover {
+            background: #0052a3;
+        }
+    }
+}
+
+.download_button, .download-button {
+    padding: 5px 10px;
+    background: #28a745;
+    color: white !important;
+    text-decoration: none;
+    border-radius: 4px;
+    display: inline-block;
+    margin-left: 10px;
+    
+    &:hover {
+        background: #218838;
+    }
+}

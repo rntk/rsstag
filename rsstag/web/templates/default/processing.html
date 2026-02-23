@@ -30,6 +30,7 @@
                 <li>
                     {{ post.title or post.pid }} 
                     (Processing: {{ post.processing }} - {{ post.processing|int|timestamp_to_datetime if post.processing else 'N/A' }})
+                    <a href="/download/posts/{{ post.pid }}" class="download-button" download>Download</a>
                     <form action="/processing/reset" method="post" class="inline-form">
                         <input type="hidden" name="type" value="post">
                         <input type="hidden" name="id" value="{{ post.pid }}">

@@ -620,6 +620,64 @@ class RSSTagApplication(object):
     def on_mindmap_tag_search_get(self, user: dict, request: Request) -> Response:
         return posts_handlers.on_mindmap_tag_search_get(self, user, request)
 
+    def on_download_posts_get(self, user: dict, request: Request) -> Response:
+        page_number = int(request.args.get("page", 1))
+        tag = request.args.get("tag", "").strip()
+        post_id = request.args.get("id", "").strip()
+        
+        items_per_page = 50
+        query = {"owner": user["sid"]}
+        
+        if tag:
+            query["tags"] = tag
+        if post_id:
+            try:
+                query["pid"] = int(post_id)
+            except ValueError:
+                query["pid"] = post_id
+        
+        total = self.db.posts.count_documents(query)
+        page_count = self.get_page_count(total, items_per_page)
+        
+        if page_number < 1:
+            page_number = 1
+        elif page_number > page_count:
+            page_number = page_count if page_count > 0 else 1
+        
+        skip = (page_number - 1) * items_per_page
+        posts = list(self.db.posts.find(query, {"pid": 1, "content.title": 1, "date": 1})
+                     .sort("date", -1).skip(skip).limit(items_per_page))
+        
+        page = self.template_env.get_template("download-posts.html")
+        return Response(
+            page.render(
+                posts=posts,
+                current_page=page_number,
+                total_pages=page_count,
+                tag=tag,
+                post_id=post_id,
+                user_settings=user["settings"],
+                provider=user["provider"],
+            ),
+            mimetype="text/html",
+        )
+
+    def on_download_post_get(self, user: dict, request: Request, post_id: str) -> Response:
+        post = self.posts.get_by_pid(user["sid"], post_id, {"content": 1})
+        
+        if not post or "content" not in post:
+            return Response("Post not found", status=404)
+        
+        content = gzip.decompress(post["content"]["content"]).decode("utf-8", "replace")
+        title = post["content"].get("title", f"post_{post_id}")
+        safe_title = title[:50].encode("ascii", "ignore").decode("ascii")
+        
+        return Response(
+            content,
+            mimetype="text/plain",
+            headers={"Content-Disposition": f'attachment; filename="{post_id}_{safe_title}.txt"'},
+        )
+
     def on_post_graph_get(self, user: dict, request: Request, pids: str) -> Response:
         return posts_handlers.on_post_graph_get(self, user, request, pids)
 

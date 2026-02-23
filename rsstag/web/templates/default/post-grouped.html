@@ -69,6 +69,7 @@
                                       data-post-id="{{ post.post_id }}">
                                     {{ 'read' if post.read else 'unread' }}
                                 </span>
+                                <a href="/download/posts/{{ post.post_id }}" class="download-button" download>Download</a>
                                 {% if post.feed_title %}
                                 <span class="post-feed">
                                     from {{ post.feed_title }}

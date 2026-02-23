@@ -578,6 +578,16 @@ class RSSTagRoutes:
                 "endpoint": "on_mindmap_tag_search_get",
                 "methods": ["GET"],
             },
+            {
+                "url": "/download/posts",
+                "endpoint": "on_download_posts_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/download/posts/<string:post_id>",
+                "endpoint": "on_download_post_get",
+                "methods": ["GET"],
+            },
         ]
 
         decorated_routes = (

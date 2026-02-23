@@ -8,7 +8,7 @@ from http.client import HTTPConnection, HTTPSConnection
 
 class LLamaCPP:
     ALLOWED_MODELS = ["default"]
-    DEFAULT_TIMEOUT = 300  # 5 minutes
+    DEFAULT_TIMEOUT = 600  # 10 minutes
 
     def __init__(self, host: str, model: str = "default", timeout: int = DEFAULT_TIMEOUT):
         u = urlparse(host)
