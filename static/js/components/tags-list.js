@@ -5,11 +5,20 @@ import TagItem from '../components/tag-item.js';
 export default class TagsList extends React.Component {
   constructor(props) {
     super(props);
+    this.state = { groupByLetter: true };
     this.updateTags = this.updateTags.bind(this);
+    this.toggleGrouping = this.toggleGrouping.bind(this);
   }
 
   updateTags(state) {
-    this.setState(state);
+    // Keep UI-only flags local to this component.
+    const nextState = { ...state };
+    delete nextState.groupByLetter;
+    this.setState(nextState);
+  }
+
+  toggleGrouping() {
+    this.setState((prevState) => ({ groupByLetter: !prevState.groupByLetter }));
   }
 
   componentDidMount() {
@@ -24,10 +33,54 @@ export default class TagsList extends React.Component {
 
   render() {
     if (this.state && this.state.tags && this.state.tags.size) {
+      const mode = this.state.groupByLetter ? 'grouped' : 'flat';
+      const toolsRow = (
+        <div className="tags_tools_row">
+          <button type="button" onClick={this.toggleGrouping} className="tags_grouping_toggle">
+            {this.state.groupByLetter ? 'Show by frequency' : 'Show grouped by letter'}
+          </button>
+        </div>
+      );
+
+      const tags = Array.from(this.state.tags.values());
+      const tagItems = (sortedTags, keyPrefix) =>
+        sortedTags.map((tag) => (
+          <TagItem
+            key={`${keyPrefix}_${tag.tag}`}
+            tag={tag}
+            tags={this.state.tags}
+            tag_hash={this.state.tag_hash}
+            ES={this.props.ES}
+            uniq_id={tag.tag}
+            is_bigram={this.props.is_bigram}
+            is_entity={this.props.is_entities}
+          />
+        ));
+
+      if (!this.state.groupByLetter) {
+        const sortedByCount = tags.sort((a, b) => {
+          const countDiff = (b.count || 0) - (a.count || 0);
+          if (countDiff !== 0) {
+            return countDiff;
+          }
+
+          const at = (a.tag || '').toString();
+          const bt = (b.tag || '').toString();
+          return at.localeCompare(bt, undefined, { numeric: true, sensitivity: 'base' });
+        });
+
+        return (
+          <div key={mode}>
+            {toolsRow}
+            <ol className="cloud">{tagItems(sortedByCount, 'flat')}</ol>
+          </div>
+        );
+      }
+
       let letterGroups = [];
 
       // Collect and sort tags alphabetically by their display text
-      const sorted = Array.from(this.state.tags.values()).sort((a, b) => {
+      const sorted = tags.sort((a, b) => {
         const at = (a.tag || '').toString();
         const bt = (b.tag || '').toString();
         return at.localeCompare(bt, undefined, { numeric: true, sensitivity: 'base' });
@@ -60,18 +113,7 @@ export default class TagsList extends React.Component {
           currentGroupTags = [];
         }
 
-        currentGroupTags.push(
-          <TagItem
-            key={tag.tag}
-            tag={tag}
-            tags={this.state.tags}
-            tag_hash={this.state.tag_hash}
-            ES={this.props.ES}
-            uniq_id={tag.tag}
-            is_bigram={this.props.is_bigram}
-            is_entity={this.props.is_entities}
-          />
-        );
+        currentGroupTags.push(...tagItems([tag], 'grouped'));
       }
 
       // Don't forget the last group
@@ -88,7 +130,12 @@ export default class TagsList extends React.Component {
         );
       }
 
-      return <ol className="cloud">{letterGroups}</ol>;
+      return (
+        <div key={mode}>
+          {toolsRow}
+          <ol className="cloud">{letterGroups}</ol>
+        </div>
+      );
     } else {
       return <p>No tags</p>;
     }
