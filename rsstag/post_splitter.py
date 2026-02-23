@@ -11,7 +11,6 @@ from txt_splitt import (
     HTMLParserTagStripCleaner,
     LLMRepairingGapHandler,
     MappingOffsetRestorer,
-    NormalizingSplitter,
     OptimizingMarker,
     Pipeline,
     OverlapChunker,
@@ -120,7 +119,7 @@ class PostSplitter:
                     chunker=chunker,
                 )
 
-                html_cleaner = HTMLParserTagStripCleaner()
+                html_cleaner = HTMLParserTagStripCleaner(strip_tags={"style", "script"})
                 offset_restorer = MappingOffsetRestorer()
 
                 # Create the pipeline
