@@ -502,9 +502,7 @@ def on_get_tag_page(
             chain_link=app.routes.get_url_by_endpoint(
                 endpoint="on_chain_get", params={"tags": tag_data["tag"]}
             ),
-            context_tree_link=app.routes.get_url_by_endpoint(
-                endpoint="on_tag_context_tree_get", params={"tag": tag_data["tag"]}
-            ),
+            context_tree_link="/tag-context-tree/{}".format(quote(tag_data["tag"])),
             user_settings=user["settings"],
             provider=user["provider"],
         ),
@@ -1300,9 +1298,7 @@ def on_get_context_tags(
             group_by_link=app.routes.get_url_by_endpoint(
                 endpoint="on_group_by_category_get"
             ),
-            context_tree_link=app.routes.get_url_by_endpoint(
-                endpoint="on_tag_context_tree_get", params={"tag": tag_data["tag"]}
-            ),
+            context_tree_link="/tag-context-tree/{}".format(quote(tag_data["tag"])),
             user_settings=user["settings"],
             provider=user["provider"],
         ),
@@ -1903,7 +1899,9 @@ def on_group_by_tags_by_category_get(
 
 
 def on_ba_surprise_get(app: "RSSTagApplication", user: dict, rqst: Request) -> Response:
-    """Bayesian Surprise page: find posts that most shifted the topic distribution."""
+    """Bayesian Surprise page: find tags whose co-occurrence patterns shifted most."""
+    from rsstag.surprise import TagBayesianSurprise
+
     log = logging.getLogger("ba_surprise")
     tag_filter = rqst.values.get("tag", default=None)
     feed_filter = rqst.values.get("feed", default=None)
@@ -1915,7 +1913,7 @@ def on_ba_surprise_get(app: "RSSTagApplication", user: dict, rqst: Request) -> R
         user["sid"], tag_filter, feed_filter, min_tags, only_unread,
     )
 
-    projection = {"_id": False, "content": True, "tags": True, "unix_date": True}
+    projection = {"_id": False, "tags": True, "unix_date": True}
 
     if tag_filter:
         cursor = app.posts.get_by_tags(
@@ -1938,71 +1936,31 @@ def on_ba_surprise_get(app: "RSSTagApplication", user: dict, rqst: Request) -> R
             projection=projection,
         )
 
-    cleaner = HTMLCleaner()
-    builder = TagsBuilder()
     posts_data = []
-    skipped = 0
-
     for post in cursor:
-        try:
-            txt = gzip.decompress(post["content"]["content"]).decode("utf-8", "replace")
-        except Exception as e:
-            log.warning("ba_surprise: skipping post, decompress error: %s", e)
-            skipped += 1
+        tags = post.get("tags", [])
+        if len(tags) < 2:
             continue
-        if post["content"].get("title"):
-            txt = post["content"]["title"] + ". " + txt
-
-        cleaner.purge()
-        cleaner.feed(txt)
-        strings = cleaner.get_content()
-        txt = " ".join(strings)
-        builder.purge()
-        builder.build_tags_and_bi_grams(txt)
-        prepared = builder.get_prepared_text()
-
         posts_data.append({
-            "tags": post.get("tags", []),
+            "tags": tags,
             "unix_date": post.get("unix_date", 0),
-            "text": prepared,
         })
 
-    log.info("ba_surprise: fetched %d posts, skipped %d", len(posts_data), skipped)
-    if posts_data:
-        sample = posts_data[0]
-        log.info(
-            "ba_surprise: sample post tags=%s text_len=%d text_preview=%r",
-            sample["tags"][:5], len(sample["text"]), sample["text"][:80],
-        )
+    log.info("ba_surprise: fetched %d posts", len(posts_data))
 
     # Sort chronologically so surprise is computed in temporal order
     posts_data.sort(key=lambda p: p["unix_date"])
 
-    texts = [p["text"] for p in posts_data]
-    scores = BayesianSurprise().compute(texts)
+    tag_lists = [p["tags"] for p in posts_data]
+    tag_scores = TagBayesianSurprise().compute(tag_lists)
 
     log.info(
-        "ba_surprise: computed %d scores, non-zero=%d, max=%.4f",
-        len(scores),
-        sum(1 for s in scores if s > 0),
-        max(scores) if scores else 0,
+        "ba_surprise: computed scores for %d tags, max=%.4f",
+        len(tag_scores),
+        max(tag_scores.values()) if tag_scores else 0,
     )
 
-    # Aggregate surprise per tag (average surprise of posts containing that tag)
-    tag_surprise_sum: dict = {}
-    tag_surprise_count: dict = {}
-    for post, score in zip(posts_data, scores):
-        for tag in post["tags"]:
-            tag_surprise_sum[tag] = tag_surprise_sum.get(tag, 0.0) + score
-            tag_surprise_count[tag] = tag_surprise_count.get(tag, 0) + 1
-
-    log.info("ba_surprise: unique tags from posts=%d", len(tag_surprise_sum))
-
-    tags_sorted = sorted(
-        tag_surprise_sum.keys(),
-        key=lambda t: tag_surprise_sum[t] / tag_surprise_count[t],
-        reverse=True,
-    )
+    tags_sorted = sorted(tag_scores.keys(), key=lambda t: tag_scores[t], reverse=True)
 
     cursor = app.tags.get_by_tags(
         user["sid"], tags_sorted, only_unread, projection={"_id": False}
@@ -2022,14 +1980,13 @@ def on_ba_surprise_get(app: "RSSTagApplication", user: dict, rqst: Request) -> R
         if count < min_tags:
             filtered_by_count += 1
             continue
-        avg_surprise = tag_surprise_sum[tag] / tag_surprise_count[tag]
         all_tags.append({
             "tag": tg["tag"],
             "url": "/tag/" + quote(tg["tag"]),
             "words": tg.get("words", []),
             "count": count,
             "sentiment": tg.get("sentiment", []),
-            "temp": round(avg_surprise, 4),
+            "temp": round(tag_scores[tag], 4),
             "freq": tg.get("freq", 0),
         })
 
