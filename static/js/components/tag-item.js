@@ -97,6 +97,17 @@ export default class TagItem extends React.Component {
               chain
             </a>
           )}
+          {hide_tag_info_link ? '' : ' '}
+          {hide_tag_info_link ? (
+            ''
+          ) : (
+            <a
+              href={'/tag-context-tree/' + encodeURIComponent(this.state.tag.tag)}
+              className="get_tag_context_tree"
+            >
+              tree
+            </a>
+          )}
         </li>
       </div>
     );

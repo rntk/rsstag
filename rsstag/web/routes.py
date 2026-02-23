@@ -593,6 +593,11 @@ class RSSTagRoutes:
                 "endpoint": "on_download_post_get",
                 "methods": ["GET"],
             },
+            {
+                "url": "/tag-context-tree/<string:tag>",
+                "endpoint": "on_tag_context_tree_get",
+                "methods": ["GET"],
+            },
         ]
 
         decorated_routes = (

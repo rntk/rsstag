@@ -412,6 +412,9 @@ window.onload = () => {
   } else if (/^\/topics-mindmap$/.test(path)) {
     const mindmap = new TopicsMindmap();
     mindmap.render('#topics_mindmap_chart', window.mindmap_data);
+  } else if (/^\/tag-context-tree\//.test(path)) {
+    const mindmap = new TopicsMindmap();
+    mindmap.render('#topics_mindmap_chart', window.mindmap_data);
   } else if (/^\/topics-list(\/[0-9]+)?$/.test(path)) {
     initTopicsPage();
   }

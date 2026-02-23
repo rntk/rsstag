@@ -502,6 +502,9 @@ def on_get_tag_page(
             chain_link=app.routes.get_url_by_endpoint(
                 endpoint="on_chain_get", params={"tags": tag_data["tag"]}
             ),
+            context_tree_link=app.routes.get_url_by_endpoint(
+                endpoint="on_tag_context_tree_get", params={"tag": tag_data["tag"]}
+            ),
             user_settings=user["settings"],
             provider=user["provider"],
         ),
@@ -1297,6 +1300,9 @@ def on_get_context_tags(
             group_by_link=app.routes.get_url_by_endpoint(
                 endpoint="on_group_by_category_get"
             ),
+            context_tree_link=app.routes.get_url_by_endpoint(
+                endpoint="on_tag_context_tree_get", params={"tag": tag_data["tag"]}
+            ),
             user_settings=user["settings"],
             provider=user["provider"],
         ),
@@ -2056,6 +2062,103 @@ def on_ba_surprise_get(app: "RSSTagApplication", user: dict, rqst: Request) -> R
             pages_map={},
             current_page=1,
             letters=letters,
+            user_settings=user["settings"],
+            provider=user["provider"],
+        ),
+        mimetype="text/html",
+    )
+
+
+def _build_tag_context_tree(post_lemmas: list, root_tag: str, max_levels: int) -> list:
+    """Build a context word tree for root_tag using pre-loaded lemma lists."""
+    MAX_CHILDREN = 30
+
+    def _build(chain_offsets: list, level: int) -> list:
+        if level > max_levels:
+            return []
+
+        word_data: dict = {}
+        for p in post_lemmas:
+            lemmas = p["lemmas"]
+            for root_pos in p["root_positions"]:
+                match = True
+                for offset, word in chain_offsets:
+                    pos = root_pos + offset
+                    if pos < 0 or pos >= len(lemmas) or lemmas[pos] != word:
+                        match = False
+                        break
+                if not match:
+                    continue
+
+                excluded = {root_tag} | {w for _, w in chain_offsets}
+                for sign in (1, -1):
+                    pos = root_pos + sign * level
+                    if 0 <= pos < len(lemmas):
+                        w = lemmas[pos]
+                        if w not in excluded and w.isalpha():
+                            if w not in word_data:
+                                word_data[w] = {"count": 0, "pids": set(), "offset": sign * level}
+                            word_data[w]["count"] += 1
+                            word_data[w]["pids"].add(p["pid"])
+
+        top_words = sorted(word_data.items(), key=lambda x: -x[1]["count"])[:MAX_CHILDREN]
+
+        children = []
+        for word, info in top_words:
+            child_offsets = chain_offsets + [(info["offset"], word)]
+            child = {
+                "name": word,
+                "value": info["count"],
+                "_topicPosts": list(info["pids"]),
+                "_topicPath": root_tag + " > " + " > ".join(w for _, w in child_offsets),
+                "children": _build(child_offsets, level + 1),
+            }
+            children.append(child)
+        return children
+
+    return _build([], 1)
+
+
+def on_tag_context_tree_get(
+    app: "RSSTagApplication", user: dict, request: Request, tag: str
+) -> Response:
+    """Render an interactive context-word tree mindmap for a given tag."""
+    try:
+        max_levels = int(request.args.get("levels", 5))
+        max_levels = max(1, min(max_levels, 10))
+    except (ValueError, TypeError):
+        max_levels = 5
+
+    only_unread = user["settings"].get("only_unread") or None
+
+    cursor = app.posts.get_by_tags(
+        user["sid"],
+        [tag],
+        only_unread=only_unread,
+        projection={"lemmas": True, "pid": True},
+    )
+
+    post_lemmas = []
+    for post in cursor:
+        if not post.get("lemmas"):
+            continue
+        lemmas = gzip.decompress(post["lemmas"]).decode("utf-8", "replace").split()
+        root_positions = [i for i, w in enumerate(lemmas) if w == tag]
+        if root_positions:
+            post_lemmas.append({"pid": post["pid"], "lemmas": lemmas, "root_positions": root_positions})
+
+    children = _build_tag_context_tree(post_lemmas, tag, max_levels)
+
+    mindmap_data = {
+        "name": tag,
+        "children": children,
+    }
+
+    page: Template = app.template_env.get_template("tag-context-tree.html")
+    return Response(
+        page.render(
+            tag=tag,
+            mindmap_data=mindmap_data,
             user_settings=user["settings"],
             provider=user["provider"],
         ),

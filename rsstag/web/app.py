@@ -887,6 +887,9 @@ class RSSTagApplication(object):
     def on_bigrams_dates_get(self, user: dict, _: Request, tag: str) -> Response:
         return bigrams_handlers.on_bigrams_dates_get(self, user, tag)
 
+    def on_tag_context_tree_get(self, user: dict, request: Request, tag: str) -> Response:
+        return tags_handlers.on_tag_context_tree_get(self, user, request, tag)
+
     def on_wordtree_texts_get(self, user: dict, request: Request, tag: str) -> Response:
         if tag:
             cursor = self.posts.get_by_tags(
