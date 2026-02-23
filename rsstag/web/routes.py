@@ -429,6 +429,11 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/ba-surprise",
+                "endpoint": "on_ba_surprise_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/openai",
                 "endpoint": "on_openai_post",
                 "methods": ["POST"],

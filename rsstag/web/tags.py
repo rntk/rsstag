@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 from rsstag.tags_builder import TagsBuilder
 from rsstag.html_cleaner import HTMLCleaner
 from rsstag.lda import LDA
+from rsstag.surprise import BayesianSurprise
 from rsstag.llm.llamacpp import LLamaCPP
 from rsstag.charts import create_svg_histogram
 from rsstag.web.context_filter_handlers import get_context_filter_manager
@@ -1887,6 +1888,173 @@ def on_group_by_tags_by_category_get(
             ),
             pages_map=pages_map,
             current_page=new_cookie_page_value,
+            letters=letters,
+            user_settings=user["settings"],
+            provider=user["provider"],
+        ),
+        mimetype="text/html",
+    )
+
+
+def on_ba_surprise_get(app: "RSSTagApplication", user: dict, rqst: Request) -> Response:
+    """Bayesian Surprise page: find posts that most shifted the topic distribution."""
+    log = logging.getLogger("ba_surprise")
+    tag_filter = rqst.values.get("tag", default=None)
+    feed_filter = rqst.values.get("feed", default=None)
+    min_tags = int(rqst.values.get("min_tags", default=3))
+    only_unread = user["settings"]["only_unread"]
+
+    log.info(
+        "ba_surprise: user=%s tag_filter=%r feed_filter=%r min_tags=%d only_unread=%s",
+        user["sid"], tag_filter, feed_filter, min_tags, only_unread,
+    )
+
+    projection = {"_id": False, "content": True, "tags": True, "unix_date": True}
+
+    if tag_filter:
+        cursor = app.posts.get_by_tags(
+            user["sid"],
+            [tag_filter],
+            only_unread,
+            projection=projection,
+        )
+    elif feed_filter:
+        cursor = app.posts.get_by_feed_id(
+            user["sid"],
+            feed_filter,
+            only_unread,
+            projection=projection,
+        )
+    else:
+        cursor = app.posts.get_all(
+            user["sid"],
+            only_unread,
+            projection=projection,
+        )
+
+    cleaner = HTMLCleaner()
+    builder = TagsBuilder()
+    posts_data = []
+    skipped = 0
+
+    for post in cursor:
+        try:
+            txt = gzip.decompress(post["content"]["content"]).decode("utf-8", "replace")
+        except Exception as e:
+            log.warning("ba_surprise: skipping post, decompress error: %s", e)
+            skipped += 1
+            continue
+        if post["content"].get("title"):
+            txt = post["content"]["title"] + ". " + txt
+
+        cleaner.purge()
+        cleaner.feed(txt)
+        strings = cleaner.get_content()
+        txt = " ".join(strings)
+        builder.purge()
+        builder.build_tags_and_bi_grams(txt)
+        prepared = builder.get_prepared_text()
+
+        posts_data.append({
+            "tags": post.get("tags", []),
+            "unix_date": post.get("unix_date", 0),
+            "text": prepared,
+        })
+
+    log.info("ba_surprise: fetched %d posts, skipped %d", len(posts_data), skipped)
+    if posts_data:
+        sample = posts_data[0]
+        log.info(
+            "ba_surprise: sample post tags=%s text_len=%d text_preview=%r",
+            sample["tags"][:5], len(sample["text"]), sample["text"][:80],
+        )
+
+    # Sort chronologically so surprise is computed in temporal order
+    posts_data.sort(key=lambda p: p["unix_date"])
+
+    texts = [p["text"] for p in posts_data]
+    scores = BayesianSurprise().compute(texts)
+
+    log.info(
+        "ba_surprise: computed %d scores, non-zero=%d, max=%.4f",
+        len(scores),
+        sum(1 for s in scores if s > 0),
+        max(scores) if scores else 0,
+    )
+
+    # Aggregate surprise per tag (average surprise of posts containing that tag)
+    tag_surprise_sum: dict = {}
+    tag_surprise_count: dict = {}
+    for post, score in zip(posts_data, scores):
+        for tag in post["tags"]:
+            tag_surprise_sum[tag] = tag_surprise_sum.get(tag, 0.0) + score
+            tag_surprise_count[tag] = tag_surprise_count.get(tag, 0) + 1
+
+    log.info("ba_surprise: unique tags from posts=%d", len(tag_surprise_sum))
+
+    tags_sorted = sorted(
+        tag_surprise_sum.keys(),
+        key=lambda t: tag_surprise_sum[t] / tag_surprise_count[t],
+        reverse=True,
+    )
+
+    cursor = app.tags.get_by_tags(
+        user["sid"], tags_sorted, only_unread, projection={"_id": False}
+    )
+    db_tags = {t["tag"]: t for t in cursor}
+    log.info("ba_surprise: db_tags found=%d", len(db_tags))
+
+    all_tags = []
+    filtered_by_count = 0
+    for tag in tags_sorted:
+        if len(all_tags) >= 500:
+            break
+        if tag not in db_tags:
+            continue
+        tg = db_tags[tag]
+        count = tg["unread_count"] if only_unread else tg["posts_count"]
+        if count < min_tags:
+            filtered_by_count += 1
+            continue
+        avg_surprise = tag_surprise_sum[tag] / tag_surprise_count[tag]
+        all_tags.append({
+            "tag": tg["tag"],
+            "url": "/tag/" + quote(tg["tag"]),
+            "words": tg.get("words", []),
+            "count": count,
+            "sentiment": tg.get("sentiment", []),
+            "temp": round(avg_surprise, 4),
+            "freq": tg.get("freq", 0),
+        })
+
+    log.info(
+        "ba_surprise: final all_tags=%d, filtered_by_count=%d",
+        len(all_tags), filtered_by_count,
+    )
+
+    db_letters = app.letters.get(user["sid"], make_sort=True)
+    if db_letters:
+        letters = app.letters.to_list(db_letters, user["settings"]["only_unread"])
+    else:
+        letters = []
+
+    page = app.template_env.get_template("group-by-tag.html")
+    return Response(
+        page.render(
+            tags=all_tags,
+            sort_by_title="tags",
+            sort_by_link=app.routes.get_url_by_endpoint(
+                endpoint="on_group_by_tags_get",
+                params={"page_number": 1},
+            ),
+            group_by_link=app.routes.get_url_by_endpoint(
+                endpoint="on_group_by_category_get"
+            ),
+            tags_categories_link=app.routes.get_url_by_endpoint(
+                endpoint="on_group_by_tags_categories_get", params={"page_number": 1}
+            ),
+            pages_map={},
+            current_page=1,
             letters=letters,
             user_settings=user["settings"],
             provider=user["provider"],

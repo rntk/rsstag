@@ -310,6 +310,7 @@ window.onload = () => {
     /\/tags\/group\/.*/.test(path) ||
     /\/topics\/[0-9]+/.test(path) ||
     /\/tfidf-tags/.test(path) ||
+    /\/ba-surprise/.test(path) ||
     /\/prefixes\/all\/.*/.test(path) ||
     /\/prefixes\/words\/.*/.test(path)
   ) {
