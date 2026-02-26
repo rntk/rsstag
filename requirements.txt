@@ -23,7 +23,7 @@ jiter==0.8.2
 joblib==1.4.2
 MarkupSafe==3.0.2
 multidict==6.1.0
-nltk==3.9.1
+nltk==3.9.3
 numpy==1.26.4
 openai
 propcache==0.3.0
