@@ -2,7 +2,7 @@ import inspect
 import logging
 from typing import Optional, Tuple, Dict, Any
 
-from rsstag.llm.batch import OpenAIBatchProvider
+from rsstag.llm.batch import LlmBatchProvider, NebiusBatchProvider, OpenAIBatchProvider
 
 
 class LLMRouter:
@@ -10,7 +10,7 @@ class LLMRouter:
         self._config = config
         self._handlers: Dict[str, Optional[Any]] = {}
         self._model_handlers: Dict[Tuple[str, str], Optional[Any]] = {}
-        self._batch_providers: Dict[str, OpenAIBatchProvider] = {}
+        self._batch_providers: Dict[str, LlmBatchProvider] = {}
         self._init_handlers()
         self._init_batch_providers()
 
@@ -19,17 +19,36 @@ class LLMRouter:
             self._handlers[name] = self._safe_build(name, None)
 
     def _init_batch_providers(self) -> None:
-        if self._config["openai"]["token"]:
+        openai_cfg = self._config.get("openai", {})
+        if openai_cfg.get("token"):
             try:
-                model = "gpt-5-nano"
-                openai_handler = self._handlers.get("openai")
-                if openai_handler and getattr(openai_handler, "model", None):
-                    model = openai_handler.model
+                model = openai_cfg.get("batch_model") or openai_cfg.get("model")
+                if not model:
+                    openai_handler = self._handlers.get("openai")
+                    model = getattr(openai_handler, "model", None) or "gpt-5-mini"
                 self._batch_providers["openai"] = OpenAIBatchProvider(
-                    self._config["openai"]["token"], model
+                    openai_cfg["token"],
+                    model,
+                    batch_host=openai_cfg.get("batch_host"),
                 )
             except Exception as e:
                 logging.warning("Can't initialize OpenAI batch provider: %s", e)
+
+        nebius_cfg = self._config.get("nebius", {})
+        if nebius_cfg.get("token"):
+            try:
+                model = (
+                    nebius_cfg.get("batch_model")
+                    or nebius_cfg.get("model")
+                    or "Qwen/Qwen3-235B-A22B"
+                )
+                self._batch_providers["nebius"] = NebiusBatchProvider(
+                    nebius_cfg["token"],
+                    model,
+                    batch_host=nebius_cfg.get("batch_host"),
+                )
+            except Exception as e:
+                logging.warning("Can't initialize Nebius batch provider: %s", e)
 
     def _safe_build(self, name: str, model: Optional[str]) -> Optional[Any]:
         try:
@@ -50,6 +69,9 @@ class LLMRouter:
 
             if model:
                 return ROpenAI(self._config["openai"]["token"], model=model)
+            cfg_model = self._config["openai"].get("model")
+            if cfg_model:
+                return ROpenAI(self._config["openai"]["token"], model=cfg_model)
             return ROpenAI(self._config["openai"]["token"])
         if name == "anthropic":
             from rsstag.llm.anthropic import Anthropic
@@ -193,7 +215,8 @@ class LLMRouter:
     def get_batch_provider(self, provider_name: Optional[str] = None):
         if provider_name and provider_name in self._batch_providers:
             return self._batch_providers[provider_name]
-        if "openai" in self._batch_providers:
-            return self._batch_providers["openai"]
+        for fallback in ("openai", "nebius"):
+            if fallback in self._batch_providers:
+                return self._batch_providers[fallback]
         logging.error("No batch LLM provider available")
         return None

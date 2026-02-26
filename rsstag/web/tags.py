@@ -1900,12 +1900,13 @@ def on_group_by_tags_by_category_get(
 
 def on_ba_surprise_get(app: "RSSTagApplication", user: dict, rqst: Request) -> Response:
     """Bayesian Surprise page: find tags whose co-occurrence patterns shifted most."""
-    from rsstag.surprise import TagBayesianSurprise
+    from rsstag.surprise import LeaveOneOutSurprise
 
     log = logging.getLogger("ba_surprise")
     tag_filter = rqst.values.get("tag", default=None)
     feed_filter = rqst.values.get("feed", default=None)
     min_tags = int(rqst.values.get("min_tags", default=3))
+    post_idx = int(rqst.values.get("post_idx", default=-1))
     only_unread = user["settings"]["only_unread"]
 
     log.info(
@@ -1913,7 +1914,7 @@ def on_ba_surprise_get(app: "RSSTagApplication", user: dict, rqst: Request) -> R
         user["sid"], tag_filter, feed_filter, min_tags, only_unread,
     )
 
-    projection = {"_id": False, "tags": True, "unix_date": True}
+    projection = {"_id": False, "tags": True}
 
     if tag_filter:
         cursor = app.posts.get_by_tags(
@@ -1936,23 +1937,16 @@ def on_ba_surprise_get(app: "RSSTagApplication", user: dict, rqst: Request) -> R
             projection=projection,
         )
 
-    posts_data = []
+    tag_lists = []
     for post in cursor:
         tags = post.get("tags", [])
-        if len(tags) < 2:
-            continue
-        posts_data.append({
-            "tags": tags,
-            "unix_date": post.get("unix_date", 0),
-        })
+        if len(tags) >= 2:
+            tag_lists.append(tags)
 
-    log.info("ba_surprise: fetched %d posts", len(posts_data))
+    log.info("ba_surprise: fetched %d posts", len(tag_lists))
 
-    # Sort chronologically so surprise is computed in temporal order
-    posts_data.sort(key=lambda p: p["unix_date"])
-
-    tag_lists = [p["tags"] for p in posts_data]
-    tag_scores = TagBayesianSurprise().compute(tag_lists)
+    log.info("ba_surprise: post_idx=%d total_posts=%d", post_idx, len(tag_lists))
+    tag_scores = LeaveOneOutSurprise().compute(tag_lists, post_idx=post_idx)
 
     log.info(
         "ba_surprise: computed scores for %d tags, max=%.4f",

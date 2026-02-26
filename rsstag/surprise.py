@@ -191,3 +191,105 @@ class TagBayesianSurprise:
             if tag_post_count[t] > 0:
                 result[t] = tag_surprise[t] / tag_post_count[t]
         return result
+
+
+class LeaveOneOutSurprise:
+    """Compute tag surprise using a leave-one-out approach.
+
+    For each post, computes how surprising its tag co-occurrences are compared
+    to the background formed by all other posts. This is order-independent and
+    finds tags that are genuinely unusual in the corpus.
+    """
+
+    def __init__(self, smoothing: float = 1.0):
+        self.smoothing = smoothing
+
+    def compute(self, posts: List[List[str]], post_idx: int = -1) -> Dict[str, float]:
+        """Compute per-tag surprise scores using leave-one-out KL divergence.
+
+        Args:
+            posts: List of tag-lists, one per post.
+            post_idx: If >= 0, only compute surprise for this single post
+                      (0-based index into the filtered post list, i.e. posts
+                      with >=2 tags). -1 means compute for all posts.
+
+        Returns:
+            Dict mapping tag -> average surprise score.
+        """
+        if not posts:
+            return {}
+
+        # Deduplicate tags per post
+        post_sets = [list(set(p)) for p in posts if len(set(p)) >= 2]
+        if not post_sets:
+            return {}
+
+        # Build vocabulary
+        tag2idx: Dict[str, int] = {}
+        for tags in post_sets:
+            for t in tags:
+                if t not in tag2idx:
+                    tag2idx[t] = len(tag2idx)
+        n = len(tag2idx)
+
+        # Global co-occurrence matrix and per-tag post counts
+        global_cooccur = np.zeros((n, n), dtype=np.float64)
+        tag_post_count = np.zeros(n, dtype=np.float64)
+
+        for tags in post_sets:
+            idxs = [tag2idx[t] for t in tags]
+            for i in idxs:
+                tag_post_count[i] += 1
+                for j in idxs:
+                    if i != j:
+                        global_cooccur[i][j] += 1
+
+        # Compute per-tag surprise via leave-one-out
+        tag_surprise: Dict[str, float] = defaultdict(float)
+        tag_count: Dict[str, int] = defaultdict(int)
+        smoothing = self.smoothing
+
+        idx2tag = {v: k for k, v in tag2idx.items()}
+
+        if 0 <= post_idx < len(post_sets):
+            iterate_posts = [post_sets[post_idx]]
+        else:
+            iterate_posts = post_sets
+
+        for tags in iterate_posts:
+            idxs = [tag2idx[t] for t in tags]
+            k = len(idxs)
+
+            for i in idxs:
+                # Background: global co-occurrence for tag i, minus this post
+                bg = global_cooccur[i].copy()
+                for j in idxs:
+                    if j != i:
+                        bg[j] -= 1.0
+                bg_total = tag_post_count[i] - 1
+                if bg_total <= 0:
+                    continue
+
+                # Background distribution (smoothed)
+                bg_dist = (bg + smoothing) / (bg_total + smoothing * n)
+
+                # Post distribution: uniform over co-occurring tags in this post
+                post_dist = np.full(n, smoothing / (k - 1 + smoothing * n))
+                for j in idxs:
+                    if j != i:
+                        post_dist[j] = (1.0 + smoothing) / (k - 1 + smoothing * n)
+
+                # KL(post || background)
+                mask = post_dist > 0
+                kl = np.sum(post_dist[mask] * np.log(post_dist[mask] / bg_dist[mask]))
+                kl = max(float(kl), 0.0)
+
+                t = idx2tag[i]
+                tag_surprise[t] += kl
+                tag_count[t] += 1
+
+        result = {}
+        for t in tag_surprise:
+            if tag_count[t] > 0:
+                result[t] = tag_surprise[t] / tag_count[t]
+        return result

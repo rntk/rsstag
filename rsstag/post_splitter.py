@@ -6,19 +6,23 @@ from typing import Optional, Dict, Any, List
 # Import txt_splitt components
 from txt_splitt import (
     AdjacentSameTopicJoiner,
+    BatchPipeline,
     BracketMarker,
     SparseRegexSentenceSplitter,
     HTMLParserTagStripCleaner,
     LLMRepairingGapHandler,
     MappingOffsetRestorer,
     OptimizingMarker,
-    Pipeline,
     OverlapChunker,
+    Pipeline,
+    PreparedDocument,
+    RepairingGapHandler,
     TopicRangeLLM,
     TopicRangeParser,
     Tracer,
     TracingLLMCallable,
 )
+from txt_splitt.llm import _build_topic_ranges_prompt
 
 
 class PostSplitterError(Exception):
@@ -173,6 +177,66 @@ class PostSplitter:
         raise PostSplitterError(
             f"Pipeline execution failed after {self.MAX_PIPELINE_RETRIES} attempts: {last_error}"
         ) from last_error
+
+    def _create_batch_pipeline(self) -> BatchPipeline:
+        """Create a BatchPipeline configured the same as the regular pipeline."""
+        html_cleaner = HTMLParserTagStripCleaner(strip_tags={"style", "script"})
+        offset_restorer = MappingOffsetRestorer()
+        return BatchPipeline(
+            splitter=SparseRegexSentenceSplitter(anchor_every_words=5, html_aware=True),
+            marker=OptimizingMarker(BracketMarker()),
+            parser=TopicRangeParser(),
+            gap_handler=RepairingGapHandler(),
+            chunker=OverlapChunker(max_chars=84000),
+            joiner=AdjacentSameTopicJoiner(),
+            html_cleaner=html_cleaner,
+            offset_restorer=offset_restorer,
+        )
+
+    def prepare_for_batch(
+        self, content: str, title: str = "", is_html: bool = True
+    ) -> Optional[PreparedDocument]:
+        """Prepare text for external batch LLM processing.
+
+        Returns a PreparedDocument whose .chunks contain tagged_text for LLM prompts,
+        or None if the text is empty.
+        """
+        if title:
+            text = title + ". " + content
+        else:
+            text = content
+
+        if not text.strip():
+            return None
+
+        batch_pipeline = self._create_batch_pipeline()
+        return batch_pipeline.prepare(text)
+
+    def build_batch_prompt(self, tagged_text: str) -> str:
+        """Build the LLM prompt for a single prepared chunk's tagged text."""
+        return _build_topic_ranges_prompt(tagged_text)
+
+    def finalize_batch(
+        self, prepared: PreparedDocument, merged_response: str
+    ) -> Optional[Dict[str, Any]]:
+        """Finalize batch LLM results for a prepared document.
+
+        Args:
+            prepared: The PreparedDocument from prepare_for_batch().
+            merged_response: LLM responses for all chunks joined with newlines.
+
+        Returns:
+            rsstag-format dict with "sentences" and "groups", or None on error.
+        """
+        try:
+            batch_pipeline = self._create_batch_pipeline()
+            result = batch_pipeline.finalize(prepared, merged_response)
+            transformed = self._transform_result(result)
+            self._validate_topic_lengths(transformed.get("groups", {}))
+            return transformed
+        except Exception as e:
+            self._log.error("BatchPipeline.finalize failed: %s", e)
+            return None
 
     def _validate_topic_lengths(self, groups: Dict[str, List[int]]) -> None:
         """Validate topic titles produced by the LLM."""

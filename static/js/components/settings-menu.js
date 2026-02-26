@@ -109,6 +109,10 @@ export default class SettingsMenu extends React.Component {
         <option key="cerebras" value="cerebras">Cerebras</option>,
         <option key="groqcom" value="groqcom">GroqCom</option>
       ];
+      const batchLlmOptions = [
+        ...llmOptions,
+        <option key="nebius" value="nebius">Nebius</option>,
+      ];
 
       return (
         <div>
@@ -167,7 +171,7 @@ export default class SettingsMenu extends React.Component {
                 value={this.state.settings.batch_llm || "openai"}
                 onChange={this.changeStringSettings}
               >
-                {llmOptions}
+                {batchLlmOptions}
               </select>
             </div>
             <div id="worker_llm_">

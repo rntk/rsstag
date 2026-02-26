@@ -336,6 +336,8 @@ def worker(config: Dict[str, Any]) -> None:
                     tasks.finish_task(task)
                     if task["type"] == TASK_CLUSTERING:
                         users.update_by_sid(task["user"]["sid"], {"in_queue": False})
+                else:
+                    time.sleep(randint(3, 8))
             except Exception as e:
                 logging.error(
                     "worker got exception: {}. {}".format(e, traceback.format_exc())

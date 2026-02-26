@@ -24,17 +24,24 @@ def get_sorted_dict_by_alphabet(dct, sort_type=None):
     return sorted_dct
 
 
-def load_config(config_path: str) -> Optional[dict]:
+def load_config(config_path: str) -> dict:
     """Load and parse config file"""
     c = ConfigParser()
     c.read(config_path, encoding="utf-8")
-    result = c
+    result = {section: dict(c[section]) for section in c.sections()}
+    if "DEFAULT" in c and c["DEFAULT"]:
+        result["DEFAULT"] = dict(c["DEFAULT"])
+
     host = os.environ.get("DB_HOST")
     if host:
-        c["settings"]["db_host"] = host
+        if "settings" not in result:
+            result["settings"] = {}
+        result["settings"]["db_host"] = host
     port = os.environ.get("DB_PORT")
     if port:
-        c["settings"]["db_port"] = port
+        if "settings" not in result:
+            result["settings"] = {}
+        result["settings"]["db_port"] = port
 
     return result
 

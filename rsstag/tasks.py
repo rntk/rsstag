@@ -654,19 +654,30 @@ class RssTagTasks:
                 self._db.tags.bulk_write(updates, ordered=False)
             elif task["type"] == TASK_POST_GROUPING_BATCH:
                 remove_task = False
+                batch_state = task.get("batch", {}) or {}
+                batch_status = batch_state.get("status", "")
                 updates = []
                 for post in task["data"]:
-                    updates.append(
-                        UpdateOne(
-                            {"_id": post["_id"]},
-                            {
-                                "$set": {
-                                    "processing": POST_NOT_IN_PROCESSING,
-                                    "grouping": 1,
-                                }
-                            },
+                    if batch_status == "failed":
+                        # Batch failed - only reset processing, don't mark as grouped
+                        updates.append(
+                            UpdateOne(
+                                {"_id": post["_id"]},
+                                {"$set": {"processing": POST_NOT_IN_PROCESSING}},
+                            )
                         )
-                    )
+                    else:
+                        updates.append(
+                            UpdateOne(
+                                {"_id": post["_id"]},
+                                {
+                                    "$set": {
+                                        "processing": POST_NOT_IN_PROCESSING,
+                                        "grouping": 1,
+                                    }
+                                },
+                            )
+                        )
                 if updates:
                     self._db.posts.bulk_write(updates, ordered=False)
             elif task["type"] == TASK_TAG_CLASSIFICATION_BATCH:
