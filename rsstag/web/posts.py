@@ -18,6 +18,7 @@ from rsstag.tasks import (
     TASK_GMAIL_SORT,
     TASK_NOT_IN_PROCESSING,
 )
+import rsstag.providers.providers as data_providers
 from rsstag.tags_builder import TagsBuilder
 from rsstag.utils import text_to_speech
 from rsstag.web.context_filter_handlers import get_context_filter_manager
@@ -700,7 +701,7 @@ def on_read_posts_post(
         db_posts = app.posts.get_by_pids(
             user["sid"],
             post_ids,
-            {"id": True, "tags": True, "bi_grams": True, "read": True},
+            {"id": True, "tags": True, "bi_grams": True, "read": True, "provider": True},
         )
         for d in db_posts:
             if d["read"] != readed:
@@ -711,7 +712,7 @@ def on_read_posts_post(
                         "status": readed,
                         "processing": TASK_NOT_IN_PROCESSING,
                         "type": TASK_MARK,
-                        "provider": user.get("provider", ""),
+                        "provider": d.get("provider") or user.get("provider", ""),
                     }
                 )
                 for t in d["tags"]:
@@ -754,7 +755,7 @@ def on_mark_telegram_posts_post(
             "id": "",
             "processing": TASK_NOT_IN_PROCESSING,
             "type": TASK_MARK_TELEGRAM,
-            "provider": user.get("provider", ""),
+            "provider": data_providers.TELEGRAM,
         }
     ]
     if not app.tasks.add_task(

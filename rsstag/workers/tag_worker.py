@@ -77,6 +77,18 @@ class TagWorker(BaseWorker):
 
         return result
 
+    def clear_user_processed_data(self, user: dict) -> bool:
+        try:
+            self._db.tags.delete_many({"owner": user["sid"]})
+            self._db.bi_grams.delete_many({"owner": user["sid"]})
+            self._db.letters.delete_many({"owner": user["sid"]})
+            result = True
+        except Exception as e:
+            logging.error("Can`t clear user processed data %s. Info: %s", user["sid"], e)
+            result = False
+
+        return result
+
     def make_tags(
         self,
         posts: List[dict],

@@ -330,37 +330,35 @@ def on_refresh_get_post(
     app: "RSSTagApplication", user: dict, request: Request
 ) -> Response:
     if user:
-        if not user.get("provider"):
+        configured = list(user.get("providers", {}).keys())
+        if not configured:
             return redirect(
                 app.routes.get_url_by_endpoint(endpoint="on_data_sources_get")
             )
         try:
-            updated = False
-            if not user["in_queue"]:
+            any_added = False
+            for prov in configured:
                 added = app.tasks.add_task(
                     {
                         "type": TASK_DOWNLOAD,
                         "user": user["sid"],
-                        "provider": user.get("provider", ""),
+                        "provider": prov,
                         "host": request.environ["HTTP_HOST"],
                     }
                 )
                 if added:
-                    updated = app.users.update_by_sid(
-                        user["sid"],
-                        {
-                            "in_queue": True,
-                            "message": "Downloading data, please wait",
-                        },
-                    )
-            else:
-                updated = app.users.update_by_sid(
-                    user["sid"], {"message": "You already in queue, please wait"}
-                )
-            if not updated:
-                logging.error(
-                    'Cant update data of user %s while create "posts update" task',
+                    any_added = True
+            if any_added:
+                app.users.update_by_sid(
                     user["sid"],
+                    {
+                        "in_queue": True,
+                        "message": "Downloading data, please wait",
+                    },
+                )
+            else:
+                app.users.update_by_sid(
+                    user["sid"], {"message": "You already in queue, please wait"}
                 )
         except Exception as e:
             logging.error(
@@ -372,15 +370,13 @@ def on_refresh_get_post(
 
 def on_status_get(app: "RSSTagApplication", user: Optional[dict]) -> Response:
     if user:
-        provider = user.get("provider")
-        provider_entry = (
-            app.users.get_provider_entry(user, provider) if provider else None
-        )
-        retoken = (
-            provider_entry.get("retoken")
-            if provider_entry
-            else user.get("retoken", False)
-        )
+        retoken = False
+        for prov_name, prov_entry in user.get("providers", {}).items():
+            if isinstance(prov_entry, dict) and prov_entry.get("retoken"):
+                retoken = True
+                break
+        if not retoken:
+            retoken = user.get("retoken", False)
         if retoken:
             result = {
                 "data": {
@@ -391,7 +387,7 @@ def on_status_get(app: "RSSTagApplication", user: Optional[dict]) -> Response:
         else:
             task_titles = app.tasks.get_tasks_status(user["sid"])
             result = {"data": {"is_ok": True, "msgs": task_titles}}
-            if provider == TELEGRAM:
+            if TELEGRAM in user.get("providers", {}):
                 if (TELEGRAM_CODE_FIELD in user) and (user[TELEGRAM_CODE_FIELD] == ""):
                     result["data"][TELEGRAM_CODE_FIELD] = True
                 if (TELEGRAM_PASSWORD_FIELD in user) and (

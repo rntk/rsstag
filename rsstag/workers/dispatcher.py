@@ -10,6 +10,7 @@ from types import FrameType
 from typing import Any, Dict, Optional
 
 from pymongo import MongoClient
+from pymongo.errors import BulkWriteError
 
 import rsstag.providers.providers as data_providers
 from rsstag.providers.bazqux import BazquxProvider
@@ -205,56 +206,67 @@ def worker(config: Dict[str, Any]) -> None:
                     continue
                 if task["type"] == TASK_DOWNLOAD:
                     logging.info("Start downloading for user")
-                    if tag_worker.clear_user_data(task["user"]):
-                        provider_name = task["data"].get("provider") or task["user"].get(
-                            "provider"
+                    provider_name = task["data"].get("provider") or task["user"].get(
+                        "provider"
+                    )
+                    provider_user = users.get_provider_user(task["user"], provider_name)
+                    if not provider_user:
+                        logging.warning(
+                            "No provider credentials for %s on user %s",
+                            provider_name,
+                            task["user"]["sid"],
                         )
-                        provider_user = users.get_provider_user(task["user"], provider_name)
-                        if not provider_user:
-                            logging.warning(
-                                "No provider credentials for %s on user %s",
-                                provider_name,
-                                task["user"]["sid"],
-                            )
-                            task_done = True
-                        else:
-                            provider = providers[provider_name]
-                            posts_n = 0
-                            selection = None
-                            if task.get("data"):
-                                selection = task["data"].get("selection")
-                            try:
-                                for posts, feeds in provider.download(
-                                    provider_user, selection
-                                ):
-                                    posts_n += len(posts)
-                                    f_ids = [f["feed_id"] for f in feeds]
-                                    c = db.feeds.find(
-                                        {
-                                            "owner": task["user"]["sid"],
-                                            "feed_id": {"$in": f_ids},
-                                        },
-                                        projection={"feed_id": True, "_id": False},
-                                    )
-                                    skip_ids = {fc["feed_id"] for fc in c}
-                                    n_feeds = []
-                                    for fee in feeds:
-                                        if fee["feed_id"] in skip_ids:
-                                            continue
-                                        n_feeds.append(fee)
-                                    if posts:
-                                        db.posts.insert_many(posts)
-                                    if n_feeds:
-                                        db.feeds.insert_many(n_feeds)
-                                task_done = True
-                            except Exception as e:
-                                task_done = False
-                                logging.error(
-                                    "Can`t save in db for user %s. Info: %s. %s",
-                                    task["user"]["sid"],
-                                    e,
-                                    traceback.format_exc(),
+                        task_done = True
+                    else:
+                        provider = providers[provider_name]
+                        posts_n = 0
+                        selection = None
+                        if task.get("data"):
+                            selection = task["data"].get("selection")
+                        try:
+                            for posts, feeds in provider.download(
+                                provider_user, selection
+                            ):
+                                posts_n += len(posts)
+                                f_ids = [f["feed_id"] for f in feeds]
+                                c = db.feeds.find(
+                                    {
+                                        "owner": task["user"]["sid"],
+                                        "feed_id": {"$in": f_ids},
+                                    },
+                                    projection={"feed_id": True, "_id": False},
                                 )
+                                skip_ids = {fc["feed_id"] for fc in c}
+                                n_feeds = []
+                                for fee in feeds:
+                                    if fee["feed_id"] in skip_ids:
+                                        continue
+                                    fee["provider"] = provider_name
+                                    n_feeds.append(fee)
+                                if posts:
+                                    for post in posts:
+                                        post["provider"] = provider_name
+                                    try:
+                                        db.posts.insert_many(posts, ordered=False)
+                                    except BulkWriteError as bulk_err:
+                                        # Ignore duplicate key errors (code 11000), re-raise others
+                                        non_dup = [
+                                            e for e in bulk_err.details.get("writeErrors", [])
+                                            if e.get("code") != 11000
+                                        ]
+                                        if non_dup:
+                                            raise
+                                if n_feeds:
+                                    db.feeds.insert_many(n_feeds)
+                            task_done = True
+                        except Exception as e:
+                            task_done = False
+                            logging.error(
+                                "Can`t save in db for user %s. Info: %s. %s",
+                                task["user"]["sid"],
+                                e,
+                                traceback.format_exc(),
+                            )
                             logging.info("Saved posts: %s.", posts_n)
 
                 elif task["type"] == TASK_MARK:

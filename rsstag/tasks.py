@@ -89,7 +89,7 @@ class RssTagTasks:
             try:
                 if data["type"] == TASK_DOWNLOAD:  # TODO: check insertion results
                     self._db.tasks.update_one(
-                        {"user": data["user"]},
+                        {"user": data["user"], "provider": data.get("provider", "")},
                         {
                             "$set": {
                                 "user": data["user"],
