@@ -85,11 +85,13 @@
                                 <a href="{{ snippet.url }}" target="_blank" class="source-tag snippet-tag-original"
                                     title="Go to source article">Original &nearr;</a>
                                 {% endif %}
+                                <span class="source-tag show-snippet-tags-btn" data-post-id="{{ snippet.post_id }}">Show tags</span>
                             </span>
                         </div>
                         <div class="post-content-isolated">
                             <div class="snippet-text">{{ snippet.text }}</div>
                         </div>
+                        <div class="snippet-tags-content hide"></div>
                     </div>
                     {% endfor %}
                 </div>

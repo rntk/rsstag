@@ -871,6 +871,38 @@ def on_post_links_get(app: "RSSTagApplication", user: dict, post_id: str) -> Res
     return Response(json.dumps(result), mimetype="application/json", status=code)
 
 
+MIN_TAG_LEN = 3
+
+
+def on_post_snippet_tags_post(app: "RSSTagApplication", user: dict, request: Request, post_id: str) -> Response:
+    try:
+        body = request.get_json() or {}
+    except Exception:
+        return Response(json.dumps({"error": "Invalid JSON"}), mimetype="application/json", status=400)
+    snippet_text = body.get("text", "").lower()
+
+    projection = {"tags": True}
+    current_post = app.posts.get_by_pid(user["sid"], post_id, projection)
+    if not current_post:
+        return Response(json.dumps({"error": "Not found"}), mimetype="application/json", status=404)
+
+    tags = []
+    for t in current_post.get("tags", []):
+        if len(t) < MIN_TAG_LEN:
+            continue
+        if snippet_text and t.lower() not in snippet_text:
+            continue
+        tags.append({
+            "url": app.routes.get_url_by_endpoint(
+                endpoint="on_get_tag_page", params={"tag": t}
+            ),
+            "tag": t,
+        })
+
+    result = {"data": {"tags": tags}}
+    return Response(json.dumps(result), mimetype="application/json", status=200)
+
+
 # TODO: delete or change or something other
 def on_get_posts_with_tags(
     app: "RSSTagApplication", user: dict, s_tags: str

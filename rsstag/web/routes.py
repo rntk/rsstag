@@ -178,6 +178,11 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/post-snippet-tags/<string:post_id>",
+                "endpoint": "on_post_snippet_tags_post",
+                "methods": ["POST"],
+            },
+            {
                 "url": "/post-grouped/<string:pids>",
                 "endpoint": "on_post_grouped_get",
                 "methods": ["GET"],

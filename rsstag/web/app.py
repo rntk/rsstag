@@ -590,8 +590,11 @@ class RSSTagApplication(object):
     def on_posts_content_post(self, user: dict, request: Request) -> Response:
         return posts_handlers.on_posts_content_post(self, user, request)
 
-    def on_post_links_get(self, user: dict, _: Request, post_id: int) -> Response:
+    def on_post_links_get(self, user: dict, _: Request, post_id: str) -> Response:
         return posts_handlers.on_post_links_get(self, user, post_id)
+
+    def on_post_snippet_tags_post(self, user: dict, request: Request, post_id: str) -> Response:
+        return posts_handlers.on_post_snippet_tags_post(self, user, request, post_id)
 
     def on_post_grouped_get(self, user: dict, request: Request, pids: str) -> Response:
         return posts_handlers.on_post_grouped_get(self, user, request, pids)
