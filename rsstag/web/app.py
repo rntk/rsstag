@@ -157,6 +157,15 @@ class RSSTagApplication(object):
             "on_external_workers_submit_post",
         )
         self.llm = LLMRouter(self.config)
+        try:
+            from rsstag.observability.business_metrics import register_business_metrics
+            from rsstag.observability.worker_instrumentation import instrument_tasks
+            from rsstag.observability.llm_instrumentation import instrument_llm_router
+            register_business_metrics(self.db)
+            instrument_tasks(self.tasks)
+            instrument_llm_router(self.llm)
+        except ImportError:
+            pass
 
         from rsstag.post_grouping import RssTagPostGrouping
         from rsstag.post_splitter import PostSplitter

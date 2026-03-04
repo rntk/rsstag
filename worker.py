@@ -81,6 +81,12 @@ def main() -> int:
     parser: argparse.ArgumentParser = _build_parser()
     args: argparse.Namespace = parser.parse_args()
 
+    try:
+        from rsstag.observability import init_observability
+        init_observability("rsstag-worker-dispatcher")
+    except ImportError:
+        pass
+
     if args.mode == "internal":
         from rsstag.workers.dispatcher import RSSTagWorkerDispatcher
 

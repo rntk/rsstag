@@ -149,6 +149,26 @@ def _build_registry(tag_worker: TagWorker, llm_worker: LLMWorker) -> WorkerRegis
 def worker(config: Dict[str, Any]) -> None:
     import os
 
+    # Observability: reset the parent's _initialized flag so this child process
+    # gets its own providers. Skip auto_instrument to avoid double-patching
+    # libraries already monkey-patched by the parent before fork.
+    record_bulk_write = lambda *a, **kw: None  # noqa: E731  # default no-op
+    try:
+        from rsstag.observability import init_observability, reset_for_child_process
+        from rsstag.observability.db_metrics import record_bulk_write, reset_instruments
+        from rsstag.observability.worker_instrumentation import (
+            instrument_registry,
+            instrument_tasks,
+        )
+        from rsstag.observability.llm_instrumentation import instrument_llm_router
+        from rsstag.observability.business_metrics import register_business_metrics
+        reset_for_child_process()
+        reset_instruments()
+        init_observability("rsstag-worker-child", auto_instrument=False)
+        _obs_available = True
+    except ImportError:
+        _obs_available = False
+
     cl = MongoClient(
         config["settings"]["db_host"],
         int(config["settings"]["db_port"]),
@@ -181,6 +201,9 @@ def worker(config: Dict[str, Any]) -> None:
     tag_worker = TagWorker(db, config)
     llm_worker = LLMWorker(db, config)
     registry = _build_registry(tag_worker, llm_worker)
+    if _obs_available:
+        instrument_registry(registry)
+        instrument_llm_router(llm_worker._llm)
 
     providers = {
         data_providers.BAZQUX: BazquxProvider(config),
@@ -190,6 +213,9 @@ def worker(config: Dict[str, Any]) -> None:
     }
     users = RssTagUsers(db)
     tasks = RssTagTasks(db)
+    if _obs_available:
+        instrument_tasks(tasks)
+        register_business_metrics(db)
     last_heartbeat = time.time()
     try:
         while not stop_requested:
@@ -248,6 +274,7 @@ def worker(config: Dict[str, Any]) -> None:
                                         post["provider"] = provider_name
                                     try:
                                         db.posts.insert_many(posts, ordered=False)
+                                        record_bulk_write("posts", len(posts))
                                     except BulkWriteError as bulk_err:
                                         # Ignore duplicate key errors (code 11000), re-raise others
                                         non_dup = [
@@ -258,6 +285,7 @@ def worker(config: Dict[str, Any]) -> None:
                                             raise
                                 if n_feeds:
                                     db.feeds.insert_many(n_feeds)
+                                    record_bulk_write("feeds", len(n_feeds))
                             task_done = True
                         except Exception as e:
                             task_done = False
