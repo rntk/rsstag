@@ -2,16 +2,23 @@ from typing import Dict, List, Tuple
 
 from werkzeug.wrappers import Request, Response
 
-from rsstag.tasks import TASK_POST_GROUPING
+from rsstag.tasks import (
+    TASK_POST_GROUPING,
+    SCOPE_MODE_ALL,
+    SCOPE_MODE_POSTS,
+    SCOPE_MODE_FEEDS,
+    SCOPE_MODE_CATEGORIES,
+    SCOPE_MODE_PROVIDER,
+)
 
 SUPPORTED_SCOPED_TASKS = {
     TASK_POST_GROUPING: "Group posts",
 }
 
-SCOPE_POST_IDS = "post_ids"
-SCOPE_FEED_IDS = "feed_ids"
-SCOPE_CATEGORY_IDS = "category_ids"
-SCOPE_PROVIDER = "provider"
+SCOPE_POST_IDS = SCOPE_MODE_POSTS
+SCOPE_FEED_IDS = SCOPE_MODE_FEEDS
+SCOPE_CATEGORY_IDS = SCOPE_MODE_CATEGORIES
+SCOPE_PROVIDER = SCOPE_MODE_PROVIDER
 SUPPORTED_SCOPES = (SCOPE_POST_IDS, SCOPE_FEED_IDS, SCOPE_CATEGORY_IDS, SCOPE_PROVIDER)
 SUPPORTED_TASK_SCOPES = {
     TASK_POST_GROUPING: set(SUPPORTED_SCOPES),
@@ -178,6 +185,26 @@ def on_metadata_post(app, user: dict, request: Request) -> Response:
         {"$unset": {"grouping": ""}, "$set": {"processing": 0}},
     )
 
+    scope = {
+        "mode": SCOPE_MODE_ALL,
+        "post_ids": [],
+        "feed_ids": [],
+        "category_ids": [],
+        "provider": "",
+    }
+    if scope_type == SCOPE_POST_IDS:
+        scope["mode"] = SCOPE_MODE_POSTS
+        scope["post_ids"] = pids
+    elif scope_type == SCOPE_FEED_IDS:
+        scope["mode"] = SCOPE_MODE_FEEDS
+        scope["feed_ids"] = selected_feed_ids
+    elif scope_type == SCOPE_CATEGORY_IDS:
+        scope["mode"] = SCOPE_MODE_CATEGORIES
+        scope["category_ids"] = selected_category_ids
+    elif scope_type == SCOPE_PROVIDER:
+        scope["mode"] = SCOPE_MODE_PROVIDER
+        scope["provider"] = selected_provider
+
     app.tasks.add_task(
         {
             "user": user["sid"],
@@ -185,6 +212,7 @@ def on_metadata_post(app, user: dict, request: Request) -> Response:
             "data": [],
             "host": app.config["settings"]["host_name"],
             "provider": user.get("provider", ""),
+            "scope": scope,
         }
     )
 
