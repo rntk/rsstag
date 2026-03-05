@@ -26,7 +26,12 @@ from rsstag.users import RssTagUsers
 from rsstag.w2v import W2VLearn
 from rsstag.fasttext import FastTextLearn
 from rsstag.web.routes import RSSTagRoutes
-from rsstag.tasks import TAG_NOT_IN_PROCESSING
+from rsstag.tasks import (
+    TAG_NOT_IN_PROCESSING,
+    POST_NOT_IN_PROCESSING,
+    TASK_POST_GROUPING_BATCH,
+    RssTagTasks,
+)
 from rsstag.workers.base import BaseWorker
 
 
@@ -594,7 +599,90 @@ class TagWorker(BaseWorker):
         bi_grams = RssTagBiGrams(self._db)
         return bi_grams.remove_by_count(task["user"]["sid"], 1)
 
+
+    def _handle_post_grouping_cleanup(self, task: dict) -> bool:
+        user_sid = task["user"]["sid"]
+        feed_ids = list(task.get("feed_ids", []) or [])
+        category_ids = list(task.get("category_ids", []) or [])
+        provider = task.get("provider") or ""
+        scope_post_ids = list(task.get("post_ids", []) or [])
+
+        if category_ids:
+            feeds_cursor = self._db.feeds.find(
+                {"owner": user_sid, "category_id": {"$in": category_ids}},
+                projection={"feed_id": True},
+            )
+            for feed in feeds_cursor:
+                feed_id = feed.get("feed_id")
+                if feed_id and feed_id not in feed_ids:
+                    feed_ids.append(feed_id)
+
+        post_query = {"owner": user_sid}
+        if scope_post_ids:
+            post_query["pid"] = {"$in": scope_post_ids}
+        if feed_ids:
+            post_query["feed_id"] = {"$in": feed_ids}
+        if provider:
+            post_query["provider"] = provider
+        if category_ids:
+            post_query["category_id"] = {"$in": category_ids}
+
+        post_ids = []
+        pids = []
+        posts_cursor = self._db.posts.find(post_query, projection={"_id": True, "pid": True})
+        for post in posts_cursor:
+            post_ids.append(post["_id"])
+            if post.get("pid"):
+                pids.append(post["pid"])
+
+        reset_count = 0
+        batch_size = 500
+        for i in range(0, len(post_ids), batch_size):
+            batch = post_ids[i : i + batch_size]
+            res = self._db.posts.update_many(
+                {"_id": {"$in": batch}},
+                {
+                    "$unset": {"grouping": ""},
+                    "$set": {"processing": POST_NOT_IN_PROCESSING},
+                },
+            )
+            reset_count += res.modified_count
+
+        from rsstag.post_grouping import RssTagPostGrouping
+
+        grouping = RssTagPostGrouping(self._db)
+        grouping_deleted = grouping.delete_grouped_posts(user_sid, pids)
+
+        enqueued = False
+        if post_ids:
+            tasks_h = RssTagTasks(self._db)
+            enqueued = bool(
+                tasks_h.add_task(
+                    {
+                        "user": user_sid,
+                        "type": TASK_POST_GROUPING_BATCH,
+                        "data": [],
+                        "host": task.get("host", self._config["settings"]["host_name"]),
+                        "provider": provider or task["user"].get("provider", ""),
+                        "batch": {"item_ids": [str(pid) for pid in post_ids]},
+                    }
+                )
+            )
+
+        logging.info(
+            "Post grouping cleanup done for user %s: posts_reset=%s, grouping_deleted=%s, task_enqueued=%s",
+            user_sid,
+            reset_count,
+            grouping_deleted,
+            int(enqueued),
+        )
+
+        return True
+
     def handle_delete_feeds(self, task: dict) -> bool:
+        if task.get("cleanup_grouping"):
+            return self._handle_post_grouping_cleanup(task)
+
         user_sid = task["user"]["sid"]
         feed_ids = task.get("feed_ids", [])
         if not feed_ids:

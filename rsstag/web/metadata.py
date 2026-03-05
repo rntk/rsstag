@@ -2,7 +2,7 @@ from typing import Dict, List, Tuple
 
 from werkzeug.wrappers import Request, Response
 
-from rsstag.tasks import TASK_POST_GROUPING
+from rsstag.tasks import TASK_POST_GROUPING, TASK_DELETE_FEEDS
 
 SUPPORTED_SCOPED_TASKS = {
     TASK_POST_GROUPING: "Group posts",
@@ -172,25 +172,22 @@ def on_metadata_post(app, user: dict, request: Request) -> Response:
             status=400,
         )
 
-    app.db.post_grouping.delete_many({"owner": user["sid"], "post_ids": {"$in": pids}})
-    app.db.posts.update_many(
-        {"owner": user["sid"], "pid": {"$in": pids}},
-        {"$unset": {"grouping": ""}, "$set": {"processing": 0}},
-    )
-
-    app.tasks.add_task(
-        {
-            "user": user["sid"],
-            "type": task_type,
-            "data": [],
-            "host": app.config["settings"]["host_name"],
-            "provider": user.get("provider", ""),
-        }
-    )
+    cleanup_task = {
+        "user": user["sid"],
+        "type": TASK_DELETE_FEEDS,
+        "feed_ids": selected_feed_ids,
+        "category_ids": selected_category_ids,
+        "provider": selected_provider if scope_type == SCOPE_PROVIDER else "",
+        "post_ids": pids if scope_type == SCOPE_POST_IDS else [],
+        "cleanup_grouping": True,
+        "manual": True,
+        "host": app.config["settings"]["host_name"],
+    }
+    app.tasks.add_task(cleanup_task)
 
     return _render_page(
         app,
         user,
-        success_message=f"Reprocessing queued for {len(pids)} post(s).",
+        success_message=f"Grouping cleanup queued for {len(pids)} post(s).",
         form_data=form_data,
     )
