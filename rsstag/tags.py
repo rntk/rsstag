@@ -45,17 +45,28 @@ class RssTagTags:
 
         return self._db.tags.find(query, projection=projection)
 
+    def get_by_tags_info(
+        self,
+        owner: str,
+        tags: list,
+        only_unread: Optional[bool] = None,
+    ) -> Iterator[dict]:
+        projection = {"_id": False}
+        return self.get_by_tags(owner, tags, only_unread, projection=projection)
+
     def get_all(
         self,
         owner: str,
         only_unread: Optional[bool] = None,
         hot_tags: bool = False,
-        opts: Optional[dict] = None,
+        regexp: Optional[str] = None,
+        offset: int = 0,
+        limit: int = 0,
         projection: Optional[dict] = None,
     ) -> Iterator[dict]:
         query = {"owner": owner}
-        if opts and "regexp" in opts:
-            query["tag"] = {"$regex": opts["regexp"], "$options": "i"}
+        if regexp:
+            query["tag"] = {"$regex": regexp, "$options": "i"}
         sort_data = []
         if hot_tags:
             sort_data.append(("temperature", DESCENDING))
@@ -65,10 +76,10 @@ class RssTagTags:
         else:
             sort_data.append(("posts_count", DESCENDING))
         params = {}
-        if opts and "offset" in opts:
-            params["skip"] = opts["offset"]
-        if opts and "limit" in opts:
-            params["limit"] = opts["limit"]
+        if offset:
+            params["skip"] = offset
+        if limit:
+            params["limit"] = limit
         if projection:
             params["projection"] = projection
 
@@ -163,7 +174,9 @@ class RssTagTags:
         sentiments: List[str],
         only_unread: Optional[bool] = None,
         hot_tags: bool = False,
-        opts: Optional[dict] = None,
+        regexp: Optional[str] = None,
+        offset: int = 0,
+        limit: int = 0,
         projection: Optional[dict] = None,
     ) -> Iterator[dict]:
         query = {
@@ -173,8 +186,8 @@ class RssTagTags:
                 {"sentiment": {"$all": sentiments}},
             ],
         }
-        if opts and "regexp" in opts:
-            query["tag"] = {"$regex": opts["regexp"], "$options": "i"}
+        if regexp:
+            query["tag"] = {"$regex": regexp, "$options": "i"}
         sort_data = []
         if hot_tags:
             sort_data.append(("temperature", DESCENDING))
@@ -184,10 +197,10 @@ class RssTagTags:
         else:
             sort_data.append(("posts_count", DESCENDING))
         params = {}
-        if opts and "offset" in opts:
-            params["skip"] = opts["offset"]
-        if opts and "limit" in opts:
-            params["limit"] = opts["limit"]
+        if offset:
+            params["skip"] = offset
+        if limit:
+            params["limit"] = limit
         if projection:
             params["projection"] = projection
 
@@ -199,15 +212,17 @@ class RssTagTags:
         groups: List[str],
         only_unread: Optional[bool] = None,
         hot_tags: bool = False,
-        opts: Optional[dict] = None,
+        regexp: Optional[str] = None,
+        offset: int = 0,
+        limit: int = 0,
         projection: Optional[dict] = None,
     ) -> Iterator[dict]:
         query = {
             "owner": owner,
             "$and": [{"groups": {"$exists": True}}, {"groups": {"$all": groups}}],
         }
-        if opts and "regexp" in opts:
-            query["tag"] = {"$regex": opts["regexp"], "$options": "i"}
+        if regexp:
+            query["tag"] = {"$regex": regexp, "$options": "i"}
         sort_data = []
         if hot_tags:
             sort_data.append(("temperature", DESCENDING))
@@ -217,10 +232,10 @@ class RssTagTags:
         else:
             sort_data.append(("posts_count", DESCENDING))
         params = {}
-        if opts and "offset" in opts:
-            params["skip"] = opts["offset"]
-        if opts and "limit" in opts:
-            params["limit"] = opts["limit"]
+        if offset:
+            params["skip"] = offset
+        if limit:
+            params["limit"] = limit
         if projection:
             params["projection"] = projection
 
@@ -317,12 +332,14 @@ class RssTagTags:
         category: str,
         only_unread: Optional[bool] = None,
         hot_tags: bool = False,
-        opts: Optional[dict] = None,
+        regexp: Optional[str] = None,
+        offset: int = 0,
+        limit: int = 0,
         projection: Optional[dict] = None,
     ) -> Iterator[dict]:
         query = {"owner": owner, "classifications.category": category}
-        if opts and "regexp" in opts:
-            query["tag"] = {"$regex": opts["regexp"], "$options": "i"}
+        if regexp:
+            query["tag"] = {"$regex": regexp, "$options": "i"}
         sort_data = []
         if hot_tags:
             sort_data.append(("temperature", DESCENDING))
@@ -332,10 +349,10 @@ class RssTagTags:
         else:
             sort_data.append(("posts_count", DESCENDING))
         params = {}
-        if opts and "offset" in opts:
-            params["skip"] = opts["offset"]
-        if opts and "limit" in opts:
-            params["limit"] = opts["limit"]
+        if offset:
+            params["skip"] = offset
+        if limit:
+            params["limit"] = limit
         if projection:
             params["projection"] = projection
 
@@ -348,3 +365,28 @@ class RssTagTags:
         if only_unread:
             query["unread_count"] = {"$gt": 0}
         return self._db.tags.count_documents(query)
+
+    def search_tags_by_prefix(
+        self, owner: str, prefix: str, only_unread: bool = False, limit: int = 10
+    ) -> Iterator[dict]:
+        regexp = "^{}.*".format(re.escape(prefix))
+        return self.get_all(owner, only_unread, regexp=regexp, limit=limit)
+
+    def search_tags_by_prefix_with_counts(
+        self, owner: str, prefix: str, only_unread: bool = False, limit: int = 20
+    ) -> Iterator[dict]:
+        regexp = "^{}".format(re.escape(prefix))
+        projection = {"_id": 0, "tag": 1, "posts_count": 1, "unread_count": 1}
+        return self.get_all(owner, only_unread, regexp=regexp, limit=limit, projection=projection)
+
+    def get_tags_with_words(self, owner: str, tags: list) -> Iterator[dict]:
+        projection = {"_id": 0, "tag": 1, "words": 1}
+        return self.get_by_tags(owner, tags, projection=projection)
+
+    def get_all_tags(self, owner: str, only_unread: bool = False) -> Iterator[dict]:
+        projection = {"tag": True}
+        return self.get_all(owner, only_unread, projection=projection)
+
+    def get_all_info(self, owner: str) -> Iterator[dict]:
+        projection = {"_id": False}
+        return self.get_all(owner, projection=projection)

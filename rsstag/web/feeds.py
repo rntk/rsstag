@@ -28,8 +28,8 @@ def on_delete_feeds_categories_post(app, user: dict, request: Request) -> Respon
 
         # Expand categories to feed_ids
         if category_ids:
-            db_feeds = app.feeds.get_by_categories(
-                user["sid"], category_ids, projection={"feed_id": True}
+            db_feeds = app.feeds.get_ids_by_categories(
+                user["sid"], category_ids
             )
             for f in db_feeds:
                 if f["feed_id"] not in feed_ids:

@@ -289,6 +289,10 @@ class RssTagPosts:
             full_query.update(query)
         return self._db.posts.count_documents(full_query)
 
+    def get_all_with_content(self, owner: str) -> Iterator[dict]:
+        projection = {"content.title": 1, "content.content": 1}
+        return self.find(owner, projection=projection)
+
     def find(self, owner: str, query: Optional[dict] = None, projection: Optional[dict] = None, sort: Optional[list] = None, skip: int = 0, limit: int = 0):
         full_query = {"owner": owner}
         if query:
@@ -307,6 +311,222 @@ class RssTagPosts:
             {"owner": owner, "pid": {"$in": pids}},
             {"$unset": {"grouping": ""}, "$set": {"processing": 0}},
         )
+
+    def get_by_pids_or_ids(
+        self, owner: str, ids: List[str], projection: Optional[dict] = None
+    ) -> Iterator[dict]:
+        query = {
+            "owner": owner,
+            "$or": [
+                {"pid": {"$in": ids}},
+                {"id": {"$in": ids}},
+            ],
+        }
+        return self._db.posts.find(query, projection=projection)
+
+    def get_by_pids_or_ids_with_content_and_read(self, owner: str, ids: List[str]) -> Iterator[dict]:
+        projection = {"_id": 0, "pid": 1, "id": 1, "content": 1, "read": 1}
+        return self.get_by_pids_or_ids(owner, ids, projection=projection)
+
+    def get_by_pids_or_ids_with_content(self, owner: str, ids: List[str]) -> Iterator[dict]:
+        projection = {"_id": 0, "pid": 1, "id": 1, "content": 1}
+        return self.get_by_pids_or_ids(owner, ids, projection=projection)
+
+    def get_by_tags_in(
+        self,
+        owner: str,
+        tags: List[str],
+        only_unread: bool = False,
+        projection: Optional[dict] = None,
+    ) -> Iterator[dict]:
+        query = {"owner": owner, "tags": {"$in": tags}}
+        if only_unread:
+            query["read"] = False
+        return self._db.posts.find(query, projection=projection)
+
+    def get_by_tags_in_without_content(
+        self, owner: str, tags: List[str], only_unread: bool = False
+    ) -> Iterator[dict]:
+        projection = {"content.content": 0}
+        return self.get_by_tags_in(owner, tags, only_unread, projection)
+
+    def get_by_tags_tags_only(
+        self, owner: str, tags: list, only_unread: Optional[bool] = None
+    ) -> Iterator[dict]:
+        projection = {"_id": False, "tags": True}
+        return self.get_by_tags(owner, tags, only_unread, projection=projection)
+
+    def get_by_tags_with_read_status(self, owner: str, tags: list) -> Iterator[dict]:
+        projection = {"read": True}
+        return self.get_by_tags(owner, tags, projection=projection)
+
+    def get_by_tags_with_dates_and_bigrams(
+        self, owner: str, tags: list, only_unread: bool = False
+    ) -> Iterator[dict]:
+        projection = {"unix_date": True, "bi_grams": True}
+        return self.get_by_tags(owner, tags, only_unread, projection=projection)
+
+    def get_by_category_summary(
+        self,
+        owner: str,
+        only_unread: Optional[bool] = None,
+        category: str = "",
+        context_tags: Optional[list] = None,
+    ) -> Iterator[dict]:
+        projection = {"_id": False, "content.content": False}
+        return self.get_by_category(owner, only_unread, category, projection, context_tags)
+
+    def get_all_summary(
+        self,
+        owner: str,
+        only_unread: Optional[bool] = None,
+    ) -> Iterator[dict]:
+        projection = {"_id": False, "content.content": False}
+        return self.get_all(owner, only_unread, projection=projection)
+
+    def get_by_tags_summary(
+        self,
+        owner: str,
+        tags: list,
+        only_unread: Optional[bool] = None,
+        context_tags: Optional[list] = None,
+    ) -> Iterator[dict]:
+        projection = {"_id": False, "content.content": False}
+        return self.get_by_tags(owner, tags, only_unread, projection, context_tags)
+
+    def get_by_bi_grams_summary(
+        self,
+        owner: str,
+        tags: list,
+        only_unread: Optional[bool] = None,
+        context_tags: Optional[list] = None,
+    ) -> Iterator[dict]:
+        projection = {"_id": False, "content.content": False}
+        return self.get_by_bi_grams(owner, tags, only_unread, projection, context_tags)
+
+    def get_by_feed_id_summary(
+        self,
+        owner: str,
+        feed_id: str,
+        only_unread: Optional[bool] = None,
+        context_tags: Optional[list] = None,
+    ) -> Iterator[dict]:
+        projection = {"_id": False, "content.content": False}
+        return self.get_by_feed_id(owner, feed_id, only_unread, projection, context_tags)
+
+    def get_by_pids_summary(
+        self, owner: str, pids: List[str]
+    ) -> Iterator[dict]:
+        projection = {"_id": False, "content.content": False}
+        return self.get_by_pids(owner, pids, projection=projection)
+
+    def get_by_clusters_summary(
+        self,
+        owner: str,
+        clusters: list,
+        only_unread: Optional[bool] = None,
+        context_tags: Optional[list] = None,
+    ) -> Iterator[dict]:
+        projection = {"_id": False, "content.content": False}
+        return self.get_by_clusters(owner, clusters, only_unread, projection, context_tags)
+
+    def get_by_pids_with_unix_date(self, owner: str, pids: List[str]) -> Iterator[dict]:
+        projection = {"pid": True, "unix_date": True}
+        return self.get_by_pids(owner, pids, projection=projection)
+
+    def get_neighbors_pids_by_unix_date(
+        self,
+        owner: str,
+        unix_date: float,
+        count: int,
+    ) -> List[dict]:
+        projection = {"pid": True}
+        return self.get_neighbors_by_unix_date(owner, unix_date, count, projection=projection)
+
+    def get_by_feed_id_tags_only(
+        self, owner: str, feed_id: str, only_unread: Optional[bool] = None
+    ) -> Iterator[dict]:
+        projection = {"_id": False, "tags": True}
+        return self.get_by_feed_id(owner, feed_id, only_unread, projection=projection)
+
+    def get_all_tags_only(
+        self, owner: str, only_unread: Optional[bool] = None
+    ) -> Iterator[dict]:
+        projection = {"_id": False, "tags": True}
+        return self.get_all(owner, only_unread, projection=projection)
+
+    def get_download_posts(
+        self,
+        owner: str,
+        tag: str = "",
+        post_id: str = "",
+        projection: Optional[dict] = None,
+        sort: Optional[list] = None,
+        skip: int = 0,
+        limit: int = 0,
+    ) -> Iterator[dict]:
+        query = {"owner": owner}
+        if tag:
+            query["tags"] = tag
+        if post_id:
+            try:
+                query["pid"] = int(post_id)
+            except ValueError:
+                query["pid"] = post_id
+
+        return self.find(owner, query=query, projection=projection, sort=sort, skip=skip, limit=limit)
+
+    def get_download_posts_page(
+        self,
+        owner: str,
+        tag: str = "",
+        post_id: str = "",
+        sort: Optional[list] = None,
+        skip: int = 0,
+        limit: int = 0,
+    ) -> Iterator[dict]:
+        projection = {"pid": 1, "content.title": 1, "date": 1}
+        return self.get_download_posts(owner, tag, post_id, projection, sort, skip, limit)
+
+    def count_download_posts(
+        self, owner: str, tag: str = "", post_id: str = ""
+    ) -> int:
+        query = {}
+        if tag:
+            query["tags"] = tag
+        if post_id:
+            try:
+                query["pid"] = int(post_id)
+            except ValueError:
+                query["pid"] = post_id
+
+        return self.count(owner, query=query)
+
+    def get_pids_by_scope(
+        self,
+        owner: str,
+        scope_type: str,
+        post_ids: List[str] = None,
+        feed_ids: List[str] = None,
+        category_ids: List[str] = None,
+        provider: str = "",
+    ) -> Iterator[dict]:
+        projection = {"pid": True}
+        query = {}
+        if scope_type == "post_ids":
+            if post_ids:
+                query["pid"] = {"$in": post_ids}
+        elif scope_type == "feed_ids":
+            if feed_ids:
+                query["feed_id"] = {"$in": feed_ids}
+        elif scope_type == "category_ids":
+            if category_ids:
+                query["category_id"] = {"$in": category_ids}
+        elif scope_type == "provider":
+            if provider:
+                query["provider"] = provider
+
+        return self.find(owner, query=query, projection=projection)
 
 
 class PostLemmaSentence:

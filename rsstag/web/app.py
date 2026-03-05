@@ -645,17 +645,8 @@ class RSSTagApplication(object):
         post_id = request.args.get("id", "").strip()
         
         items_per_page = 50
-        query = {"owner": user["sid"]}
         
-        if tag:
-            query["tags"] = tag
-        if post_id:
-            try:
-                query["pid"] = int(post_id)
-            except ValueError:
-                query["pid"] = post_id
-        
-        total = self.posts.count(user["sid"], query)
+        total = self.posts.count_download_posts(user["sid"], tag, post_id)
         page_count = self.get_page_count(total, items_per_page)
         
         if page_number < 1:
@@ -664,8 +655,10 @@ class RSSTagApplication(object):
             page_number = page_count if page_count > 0 else 1
         
         skip = (page_number - 1) * items_per_page
-        posts = list(self.posts.find(user["sid"], query=query, projection={"pid": 1, "content.title": 1, "date": 1},
-                     sort=[("date", -1)], skip=skip, limit=items_per_page))
+        posts = list(self.posts.get_download_posts_page(
+            user["sid"], tag, post_id,
+            sort=[("date", -1)], skip=skip, limit=items_per_page
+        ))
         
         page = self.template_env.get_template("download-posts.html")
         return Response(
@@ -1315,23 +1308,9 @@ class RSSTagApplication(object):
 
         posts_data: Dict[Any, Dict[str, Any]] = {}
         if post_ids:
-            posts_projection: Dict[str, int] = {
-                "_id": 0,
-                "pid": 1,
-                "id": 1,
-                "content": 1,
-                "read": 1,
-            }
             posts_list: List[Dict[str, Any]] = list(
-                self.posts.find(
-                    user["sid"],
-                    query={
-                        "$or": [
-                            {"pid": {"$in": list(post_ids)}},
-                            {"id": {"$in": list(post_ids)}},
-                        ],
-                    },
-                    projection=posts_projection,
+                self.posts.get_by_pids_or_ids_with_content_and_read(
+                    user["sid"], list(post_ids)
                 )
             )
             for post in posts_list:
@@ -1624,22 +1603,9 @@ class RSSTagApplication(object):
 
         posts_data: Dict[Any, Dict[str, Any]] = {}
         if post_ids:
-            posts_projection: Dict[str, int] = {
-                "_id": 0,
-                "pid": 1,
-                "id": 1,
-                "content": 1,
-            }
             posts_list: List[Dict[str, Any]] = list(
-                self.posts.find(
-                    user["sid"],
-                    query={
-                        "$or": [
-                            {"pid": {"$in": list(post_ids)}},
-                            {"id": {"$in": list(post_ids)}},
-                        ],
-                    },
-                    projection=posts_projection,
+                self.posts.get_by_pids_or_ids_with_content(
+                    user["sid"], list(post_ids)
                 )
             )
             for post in posts_list:
@@ -1877,7 +1843,7 @@ class RSSTagApplication(object):
     def on_statistics_get(self, user: dict, _: Request) -> Response:
         total_posts = self.posts.count(user["sid"])
         total_tokens = 0
-        for post in self.posts.find(user["sid"], projection={"content.title": 1, "content.content": 1}):
+        for post in self.posts.get_all_with_content(user["sid"]):
             title = post.get("content", {}).get("title", "")
             content = post.get("content", {}).get("content", b"")
             if isinstance(content, bytes):

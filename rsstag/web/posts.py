@@ -97,9 +97,9 @@ def _build_topics_index(
     if normalized_context_tags:
         posts_projection["content"] = 1
     posts_list: list[dict] = list(
-        app.posts.get_by_pids(
+        app.posts.get_by_pids_for_topics(
             user["sid"], list(all_post_ids),
-            projection=posts_projection,
+            with_content=bool(normalized_context_tags)
         )
     )
     posts_data: dict[int, dict] = {post["pid"]: post for post in posts_list}
@@ -107,9 +107,8 @@ def _build_topics_index(
     feed_ids: set[int] = {post["feed_id"] for post in posts_data.values()}
     feeds_data: dict[int, str] = {
         feed["feed_id"]: feed.get("title", "Unknown Feed")
-        for feed in app.feeds.find(
-            user["sid"], query={"feed_id": {"$in": list(feed_ids)}},
-            projection={"_id": 0, "feed_id": 1, "title": 1},
+        for feed in app.feeds.get_titles_by_ids(
+            user["sid"], list(feed_ids)
         )
     }
 
@@ -436,18 +435,18 @@ def on_category_get(
     else:
         only_unread = None
     if cat != app.feeds.all_feeds:
-        db_posts_c = app.posts.get_by_category(
-            user["sid"], only_unread, cat, projection
+        db_posts_c = app.posts.get_by_category_summary(
+            user["sid"], only_unread, cat
         )
     else:
-        db_posts_c = app.posts.get_all(user["sid"], only_unread, projection)
+        db_posts_c = app.posts.get_all_summary(user["sid"], only_unread)
 
     db_posts = list(db_posts_c)
 
     if user["settings"]["similar_posts"]:
         clusters = app.posts.get_clusters(db_posts)
-        cl_posts = app.posts.get_by_clusters(
-            user["sid"], list(clusters), only_unread, projection
+        cl_posts = app.posts.get_by_clusters_summary(
+            user["sid"], list(clusters), only_unread
         )
         for post in cl_posts:
             if post["feed_id"] not in by_feed:
@@ -502,18 +501,17 @@ def on_tag_get(
 
     context_tags = _get_context_tags(user)
 
-    db_posts_c = app.posts.get_by_tags(
-        user["sid"], [tag], only_unread, projection, context_tags=context_tags
+    db_posts_c = app.posts.get_by_tags_summary(
+        user["sid"], [tag], only_unread, context_tags=context_tags
     )
     db_posts = list(db_posts_c)
 
     if user["settings"]["similar_posts"]:
         clusters = app.posts.get_clusters(db_posts)
-        cl_posts = app.posts.get_by_clusters(
+        cl_posts = app.posts.get_by_clusters_summary(
             user["sid"],
             list(clusters),
             only_unread,
-            projection,
             context_tags=context_tags,
         )
         db_posts.extend(cl_posts)
@@ -565,15 +563,15 @@ def on_bi_gram_get(
         only_unread = user["settings"]["only_unread"]
     else:
         only_unread = None
-    db_posts_c = app.posts.get_by_bi_grams(
-        user["sid"], [bi_gram], only_unread, projection
+    db_posts_c = app.posts.get_by_bi_grams_summary(
+        user["sid"], [bi_gram], only_unread
     )
     db_posts = list(db_posts_c)
 
     if user["settings"]["similar_posts"]:
         clusters = app.posts.get_clusters(db_posts)
-        cl_posts = app.posts.get_by_clusters(
-            user["sid"], list(clusters), only_unread, projection
+        cl_posts = app.posts.get_by_clusters_summary(
+            user["sid"], list(clusters), only_unread
         )
         db_posts.extend(cl_posts)
     posts = []
@@ -628,11 +626,10 @@ def on_feed_get(
 
     context_tags = _get_context_tags(user)
 
-    db_posts_c = app.posts.get_by_feed_id(
+    db_posts_c = app.posts.get_by_feed_id_summary(
         user["sid"],
         current_feed["feed_id"],
         only_unread,
-        projection,
         context_tags=context_tags,
     )
     db_posts = list(db_posts_c)
@@ -640,11 +637,10 @@ def on_feed_get(
     posts = []
     if user["settings"]["similar_posts"]:
         clusters = app.posts.get_clusters(db_posts)
-        cl_posts = app.posts.get_by_clusters(
+        cl_posts = app.posts.get_by_clusters_summary(
             user["sid"],
             list(clusters),
             only_unread,
-            projection,
             context_tags=context_tags,
         )
         db_posts.extend(cl_posts)
@@ -798,8 +794,7 @@ def on_posts_content_post(
         code = 400
 
     if wanted_posts:
-        projection = {"pid": True, "content": True, "attachments": True}
-        posts = app.posts.get_by_pids(user["sid"], wanted_posts, projection)
+        posts = app.posts.get_by_pids_with_content(user["sid"], wanted_posts)
         posts_content = []
         for post in posts:
             attachments = ""
@@ -824,8 +819,7 @@ def on_posts_content_post(
 
 
 def on_post_links_get(app: "RSSTagApplication", user: dict, post_id: str) -> Response:
-    projection = {"tags": True, "feed_id": True, "url": True, "clusters": True}
-    current_post = app.posts.get_by_pid(user["sid"], post_id, projection)
+    current_post = app.posts.get_by_pid_for_links(user["sid"], post_id)
     if current_post:
         feed = app.feeds.get_by_feed_id(user["sid"], current_post["feed_id"])
         if feed:
@@ -913,22 +907,22 @@ def on_get_posts_with_tags(
     tags = s_tags.split("-")
     if tags:
         result = {}
-        tags_cursor = app.tags.get_by_tags(user["sid"], tags, projection={"_id": 0, "tag": 1, "words": 1})
+        tags_cursor = app.tags.get_tags_with_words(user["sid"], tags)
         for tag in tags_cursor:
             result[tag["tag"]] = {"words": ", ".join(tag["words"]), "posts": []}
 
-        query = {"tags": {"$in": tags}}
-        if user["settings"]["only_unread"]:
-            query["read"] = False
-        posts_cursor = app.posts.find(user["sid"], query=query, projection={"content.content": 0})
+        posts_cursor = app.posts.get_by_tags_in_without_content(
+            user["sid"], tags,
+            only_unread=bool(user["settings"]["only_unread"])
+        )
         feeds = {}
         posts = {}
         for post in posts_cursor:
             posts[post["id"]] = post
             if post["feed_id"] not in feeds:
                 feeds[post["feed_id"]] = {}
-        feeds_cursor = app.feeds.find(
-            user["sid"], query={"feed_id": {"$in": list(feeds.keys())}}
+        feeds_cursor = app.feeds.get_by_feed_ids(
+            user["sid"], list(feeds.keys())
         )
         for feed in feeds_cursor:
             feeds[feed["feed_id"]] = feed
@@ -1433,29 +1427,28 @@ def on_posts_get(
     if context_n > 0:
         only_unread = None
         base_posts = list(
-            app.posts.get_by_pids(
-                user["sid"], pids_i, projection={"pid": True, "unix_date": True}
+            app.posts.get_by_pids_with_unix_date(
+                user["sid"], pids_i
             )
         )
         for post in base_posts:
-            neighbors = app.posts.get_neighbors_by_unix_date(
+            neighbors = app.posts.get_neighbors_pids_by_unix_date(
                 user["sid"],
                 post["unix_date"],
                 context_n,
-                projection={"pid": True},
             )
             for neighbor in neighbors:
                 c_pids.add(neighbor["pid"])
     if c_pids:
         pids_i.extend(pid for pid in c_pids if pid not in pids_i)
 
-    db_posts_c = app.posts.get_by_pids(user["sid"], pids_i, projection)
+    db_posts_c = app.posts.get_by_pids_summary(user["sid"], pids_i)
     db_posts = list(db_posts_c)
 
     if user["settings"]["similar_posts"]:
         clusters = app.posts.get_clusters(db_posts)
-        cl_posts = app.posts.get_by_clusters(
-            user["sid"], list(clusters), only_unread, projection
+        cl_posts = app.posts.get_by_clusters_summary(
+            user["sid"], list(clusters), only_unread
         )
         db_posts.extend(cl_posts)
     posts = []
@@ -1497,13 +1490,12 @@ def on_posts_get(
 
 
 def on_cluster_get(app: "RSSTagApplication", user: dict, cluster: int) -> Response:
-    projection = {"_id": False, "content.content": False}
     if user["settings"]["only_unread"]:
         only_unread = user["settings"]["only_unread"]
     else:
         only_unread = None
-    db_posts = app.posts.get_by_clusters(
-        user["sid"], [cluster], only_unread, projection
+    db_posts = app.posts.get_by_clusters_summary(
+        user["sid"], [cluster], only_unread
     )
 
     posts = []
@@ -2248,11 +2240,11 @@ def on_mindmap_tag_search_get(
     stemmed: str = builder.process_word(word)
 
     only_unread: bool = user.get("settings", {}).get("only_unread", False)
-    tags_cursor = app.tags.get_all(
+    tags_cursor = app.tags.search_tags_by_prefix_with_counts(
         user["sid"],
+        stemmed,
         only_unread=only_unread,
-        opts={"regexp": f"^{re.escape(stemmed)}", "limit": 20},
-        projection={"_id": 0, "tag": 1, "posts_count": 1, "unread_count": 1},
+        limit=20
     )
 
     results: list[dict] = []

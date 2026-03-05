@@ -51,7 +51,8 @@ def on_group_by_bigrams_get(
         user["sid"],
         user["settings"]["only_unread"],
         user["settings"]["hot_tags"],
-        opts={"offset": start_tags_range, "limit": user["settings"]["tags_on_page"]},
+        offset=start_tags_range,
+        limit=user["settings"]["tags_on_page"],
         context_tags=context_tags,
     )
 
@@ -342,11 +343,10 @@ def on_get_tag_bi_grams_graph(
 
 def on_bigrams_dates_get(app: "RSSTagApplication", user: dict, tag: str) -> Response:
     if tag:
-        cursor = app.posts.get_by_tags(
+        cursor = app.posts.get_by_tags_with_dates_and_bigrams(
             user["sid"],
             [tag],
-            user["settings"]["only_unread"],
-            {"unix_date": True, "bi_grams": True},
+            bool(user["settings"]["only_unread"])
         )
         data = {}
         for dt in cursor:
@@ -382,7 +382,7 @@ def on_group_by_bigrams_dyn_get(
         only_unread = user["settings"]["only_unread"]
     else:
         only_unread = None
-    posts = app.posts.get_all(user["sid"], only_unread, projection={"lemmas": True})
+    posts = app.posts.get_all_lemmas(user["sid"], bool(only_unread))
     texts = []
     for post in posts:
         texts.append(gzip.decompress(post["lemmas"]).decode("utf-8", "replace"))

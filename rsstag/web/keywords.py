@@ -22,8 +22,8 @@ class KeywordItem:
 
 def _load_lemmas_texts(app: "RSSTagApplication", user: dict) -> List[str]:
     only_unread: Optional[bool] = user["settings"]["only_unread"] or None
-    posts: Iterable[dict] = app.posts.get_all(
-        user["sid"], only_unread, projection={"lemmas": True}
+    posts: Iterable[dict] = app.posts.get_all_lemmas(
+        user["sid"], bool(only_unread)
     )
     texts: List[str] = []
     for post in posts:

@@ -93,13 +93,15 @@ class RssTagBiGrams:
         owner: str,
         only_unread: bool = False,
         hot_tags: bool = False,
-        opts: dict = None,
+        regexp: Optional[str] = None,
+        offset: int = 0,
+        limit: int = 0,
         projection: dict = None,
         context_tags: Optional[List[str]] = None,
     ) -> Iterator[dict]:
         query = {"owner": owner}
-        if opts and "regexp" in opts:
-            query["tag"] = {"$regex": opts["regexp"], "$options": "i"}
+        if regexp:
+            query["tag"] = {"$regex": regexp, "$options": "i"}
         if context_tags:
             query["tags"] = {"$all": context_tags}
         sort_data = []
@@ -111,10 +113,10 @@ class RssTagBiGrams:
         else:
             sort_data.append(("posts_count", DESCENDING))
         params = {}
-        if opts and "offset" in opts:
-            params["skip"] = opts["offset"]
-        if opts and "limit" in opts:
-            params["limit"] = opts["limit"]
+        if offset:
+            params["skip"] = offset
+        if limit:
+            params["limit"] = limit
         if projection:
             params["projection"] = projection
 

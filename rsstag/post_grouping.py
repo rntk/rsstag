@@ -68,6 +68,29 @@ class RssTagPostGrouping:
             self._log.error("Can't save grouped posts data. Info: %s", e)
             return False
 
+    def delete_grouped_posts_by_post_ids(
+        self, owner: str, post_ids: List[PostId], batch_size: int = 500
+    ) -> int:
+        """Delete post_grouping docs for owner where any `post_ids` value matches."""
+        if not post_ids:
+            return 0
+
+        deleted_total = 0
+        unique_post_ids = [pid for pid in set(str(post_id) for post_id in post_ids) if pid]
+        for start in range(0, len(unique_post_ids), batch_size):
+            batch = unique_post_ids[start : start + batch_size]
+            result = self._db.post_grouping.delete_many(
+                {"owner": owner, "post_ids": {"$in": batch}}
+            )
+            deleted_total += int(result.deleted_count)
+
+        return deleted_total
+
+    def delete_grouped_posts_by_scope(self, owner: str, scope: Optional[dict]) -> int:
+        """Delete post_grouping docs by owner and expanded scope."""
+        post_ids = self._get_scope_post_ids(owner, scope)
+        return self.delete_grouped_posts_by_post_ids(owner, post_ids)
+
     def update_snippets_read_status(
         self, owner: str, post_id: Any, sentence_indices: List[int], read_status: bool
     ) -> Optional[bool]:
@@ -139,3 +162,38 @@ class RssTagPostGrouping:
         post_ids_sorted = sorted(to_sortable(pid) for pid in post_ids)
         post_ids_str = ",".join(str(pid) for pid in post_ids_sorted)
         return hashlib.md5(post_ids_str.encode("utf-8")).hexdigest()
+
+    def _get_scope_post_ids(self, owner: str, scope: Optional[dict]) -> List[PostId]:
+        query = self._build_scope_post_query(owner, scope)
+        cursor = self._db.posts.find(query, projection={"pid": True})
+        return [post.get("pid") for post in cursor if post.get("pid")]
+
+    def _build_scope_post_query(self, owner: str, scope: Optional[dict]) -> Dict[str, Any]:
+        query: Dict[str, Any] = {"owner": owner}
+        if not isinstance(scope, dict):
+            return query
+
+        mode = scope.get("mode", "all")
+        if mode == "posts":
+            query["pid"] = {"$in": [str(value) for value in scope.get("post_ids", []) if value]}
+        elif mode == "feeds":
+            query["feed_id"] = {
+                "$in": [str(value) for value in scope.get("feed_ids", []) if value]
+            }
+        elif mode == "categories":
+            category_ids = [str(value) for value in scope.get("category_ids", []) if value]
+            if category_ids:
+                feeds = self._db.feeds.find(
+                    {"owner": owner, "category_id": {"$in": category_ids}},
+                    projection={"feed_id": True},
+                )
+                feed_ids = [feed.get("feed_id") for feed in feeds if feed.get("feed_id")]
+                query["feed_id"] = {"$in": feed_ids}
+            else:
+                query["feed_id"] = {"$in": []}
+        elif mode == "provider":
+            provider = str(scope.get("provider", "")).strip()
+            if provider:
+                query["provider"] = provider
+
+        return query

@@ -59,7 +59,8 @@ def on_group_by_tags_get(
         user["sid"],
         user["settings"]["only_unread"],
         user["settings"]["hot_tags"],
-        opts={"offset": start_tags_range, "limit": user["settings"]["tags_on_page"]},
+        offset=start_tags_range,
+        limit=user["settings"]["tags_on_page"],
     )
 
     for t in tags:
@@ -269,7 +270,8 @@ def on_group_by_tags_sentiment(
         [sentiment],
         user["settings"]["only_unread"],
         user["settings"]["hot_tags"],
-        opts={"offset": start_tags_range, "limit": user["settings"]["tags_on_page"]},
+        offset=start_tags_range,
+        limit=user["settings"]["tags_on_page"],
     )
 
     for t in tags:
@@ -351,11 +353,9 @@ def on_group_by_tags_startwith_get(
         user["sid"],
         user["settings"]["only_unread"],
         user["settings"]["hot_tags"],
-        opts={
-            "offset": start_tags_range,
-            "limit": user["settings"]["tags_on_page"],
-            "regexp": "^{}".format(letter),
-        },
+        offset=start_tags_range,
+        limit=user["settings"]["tags_on_page"],
+        regexp="^{}".format(letter),
     )
 
     for t in tags:
@@ -431,7 +431,8 @@ def on_group_by_tags_group(
         [group],
         user["settings"]["only_unread"],
         user["settings"]["hot_tags"],
-        opts={"offset": start_tags_range, "limit": user["settings"]["tags_on_page"]},
+        offset=start_tags_range,
+        limit=user["settings"]["tags_on_page"],
     )
 
     for t in tags:
@@ -518,7 +519,8 @@ def on_post_tags_search(
         search_result = app.tags.get_all(
             user["sid"],
             only_unread=user["settings"]["only_unread"],
-            opts={"regexp": "^{}.*".format(s_request), "limit": 10},
+            regexp="^{}.*".format(s_request),
+            limit=10,
         )
         code = 200
         result = {"data": []}
@@ -666,11 +668,10 @@ def on_get_tag_siblings(app: "RSSTagApplication", user: dict, tags: str) -> Resp
 def on_get_tag_pmi(app: "RSSTagApplication", user: dict, tag: str) -> Response:
     if tag:
         req_tags = set(tag.split())
-        cursor = app.posts.get_by_tags(
+        cursor = app.posts.get_by_tags_with_lemmas(
             user["sid"],
             list(req_tags),
-            user["settings"]["only_unread"],
-            {"lemmas": True},
+            bool(user["settings"]["only_unread"])
         )
         stopw = set(stopwords.words("english") + stopwords.words("russian"))
         texts = [
@@ -755,11 +756,10 @@ def on_get_tag_pmi(app: "RSSTagApplication", user: dict, tag: str) -> Response:
 def on_tag_tfidf_get(app: "RSSTagApplication", user: dict, tag: str) -> Response:
     if tag:
         req_tags_s = set(tag.split())
-        cursor = app.posts.get_by_tags(
+        cursor = app.posts.get_by_tags_with_lemmas(
             user["sid"],
             list(req_tags_s),
-            user["settings"]["only_unread"],
-            {"lemmas": True},
+            bool(user["settings"]["only_unread"])
         )
         topics = set()
         stopw = set(stopwords.words("english") + stopwords.words("russian"))
@@ -821,11 +821,10 @@ def on_tag_tfidf_get(app: "RSSTagApplication", user: dict, tag: str) -> Response
 
 def on_tag_clusters_get(app: "RSSTagApplication", user: dict, tag: str) -> Response:
     if tag:
-        cursor = app.posts.get_by_tags(
+        cursor = app.posts.get_by_tags_with_lemmas_and_pid(
             user["sid"],
             tag.split(),
-            user["settings"]["only_unread"],
-            {"lemmas": True, "pid": True},
+            bool(user["settings"]["only_unread"])
         )
         pids = []
         texts = []
@@ -870,8 +869,8 @@ def on_tag_entities_get(app: "RSSTagApplication", user: dict, tag: str) -> Respo
 def on_tag_topics_get(app: "RSSTagApplication", user: dict, tags: str) -> Response:
     if tags:
         req_tags = tags.split()
-        cursor = app.posts.get_by_tags(
-            user["sid"], req_tags, user["settings"]["only_unread"], {"lemmas": True}
+        cursor = app.posts.get_by_tags_with_lemmas(
+            user["sid"], req_tags, bool(user["settings"]["only_unread"])
         )
         texts = [
             gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
@@ -921,11 +920,10 @@ def on_tag_grouped_topics_get(
     word_re = re.compile(pattern, re.IGNORECASE)
 
     only_unread = user["settings"].get("only_unread") or None
-    cursor = app.posts.get_by_tags(
+    cursor = app.posts.get_by_tags_with_content(
         user["sid"],
         [tag],
-        only_unread=only_unread,
-        projection={"pid": True, "content": True},
+        only_unread=only_unread
     )
 
     topic_counts = defaultdict(int)
@@ -1029,11 +1027,10 @@ def on_tag_llm_topics_get(app: "RSSTagApplication", user: dict, tag: str) -> Res
     word_re = re.compile(pattern, re.IGNORECASE)
 
     only_unread = user["settings"].get("only_unread") or None
-    cursor = app.posts.get_by_tags(
+    cursor = app.posts.get_by_tags_with_content(
         user["sid"],
         [tag],
-        only_unread=only_unread,
-        projection={"pid": True, "content": True},
+        only_unread=only_unread
     )
 
     topic_counts: Dict[str, int] = defaultdict(int)
@@ -1137,8 +1134,8 @@ def on_tag_specific_get(app: "RSSTagApplication", user: dict, tags: str) -> Resp
     if tags:
         tags = tags.casefold()
         req_tags_s = set(tags.split())
-        cursor = app.posts.get_all(
-            user["sid"], user["settings"]["only_unread"], projection={"lemmas": True}
+        cursor = app.posts.get_all_lemmas(
+            user["sid"], bool(user["settings"]["only_unread"])
         )
         tag_words = set()
         other_words = set()
@@ -1154,11 +1151,10 @@ def on_tag_specific_get(app: "RSSTagApplication", user: dict, tags: str) -> Resp
         # spec.remove(tags)
         del tag_words
         del other_words
-        cursor = app.tags.get_by_tags(
+        cursor = app.tags.get_by_tags_info(
             user["sid"],
             list(spec),
             user["settings"]["only_unread"],
-            projection={"_id": False},
         )
         all_tags = []
         for tag in cursor:
@@ -1190,18 +1186,17 @@ def on_tag_specific1_get(app: "RSSTagApplication", user: dict, tags: str) -> Res
         only_unread = user["settings"]["only_unread"]
         tags = tags.casefold()
         req_tags_s = set(tags.split())
-        cursor = app.posts.get_by_tags(
+        cursor = app.posts.get_by_tags_with_lemmas(
             user["sid"],
             list(req_tags_s),
-            user["settings"]["only_unread"],
-            projection={"lemmas": True},
+            bool(user["settings"]["only_unread"])
         )
         tag_fr = Counter()
         for post in cursor:
             txt = gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
             tag_fr.update(txt.split())
 
-        cursor = app.tags.get_all(user["sid"], projection={"_id": False})
+        cursor = app.tags.get_all_info(user["sid"])
         tag_c = []
         for tag in cursor:
             tg = tag["tag"]
@@ -1253,7 +1248,7 @@ def on_get_context_tags(
     app: "RSSTagApplication", user: dict, request: Request, tags: str
 ) -> Response:
     tags_l = tags.split()
-    cursor = app.tags.get_by_tags(user["sid"], tags_l, projection={"_id": False})
+    cursor = app.tags.get_by_tags_info(user["sid"], tags_l)
     tag_data = None
     for t in cursor:
         if tag_data is None:
@@ -1265,7 +1260,7 @@ def on_get_context_tags(
     if not tag_data:
         return app.on_error(user, request, NotFound())
 
-    cursor = app.posts.get_by_tags(user["sid"], tags_l, projection={"read": True})
+    cursor = app.posts.get_by_tags_with_read_status(user["sid"], tags_l)
     n_r = 0
     n_ur = 0
     for p in cursor:
@@ -1309,8 +1304,8 @@ def on_get_context_tags(
 def on_get_tag_similar_tags(app: "RSSTagApplication", user: dict, tag: str) -> Response:
     if tag:
         tags_words = set(tag.split())
-        cursor = app.tags.get_all(
-            user["sid"], user["settings"]["only_unread"], projection={"tag": True}
+        cursor = app.tags.get_all_tags(
+            user["sid"], bool(user["settings"]["only_unread"])
         )
         words = [t["tag"] for t in cursor if t["tag"] not in tags_words]
         similar = set()
@@ -1322,11 +1317,10 @@ def on_get_tag_similar_tags(app: "RSSTagApplication", user: dict, tag: str) -> R
         for y in ys:
             similar.add(words[y])
 
-        cursor = app.tags.get_by_tags(
+        cursor = app.tags.get_by_tags_info(
             user["sid"],
             list(similar),
             user["settings"]["only_unread"],
-            projection={"_id": False},
         )
         tags = [t for t in cursor]
 
@@ -1355,9 +1349,7 @@ def on_get_tag_similar_tags(app: "RSSTagApplication", user: dict, tag: str) -> R
 
 
 def on_get_tfidf_tags(app: "RSSTagApplication", user: dict, rqst: Request) -> Response:
-    cursor = app.posts.get_all(
-        user["sid"], user["settings"]["only_unread"], projection={"_id": False}
-    )
+    cursor = app.posts.get_all_with_content(user["sid"])
     vectorizer = TfidfVectorizer()
     texts = []
     cleaner = HTMLCleaner()
@@ -1383,8 +1375,8 @@ def on_get_tfidf_tags(app: "RSSTagApplication", user: dict, rqst: Request) -> Re
 
     tfidfs.sort(key=lambda x: x[1], reverse=True)
     tags = [w[0] for w in tfidfs]
-    cursor = app.tags.get_by_tags(
-        user["sid"], tags, user["settings"]["only_unread"], projection={"_id": False}
+    cursor = app.tags.get_by_tags_info(
+        user["sid"], tags, user["settings"]["only_unread"]
     )
     db_tags = {t["tag"]: t for t in cursor}
     # db_tags.sort(key=lambda x: x["unread_count"], reverse=True)
@@ -1443,8 +1435,8 @@ def on_get_tfidf_tags(app: "RSSTagApplication", user: dict, rqst: Request) -> Re
 
 def on_get_sunburst(app: "RSSTagApplication", user: dict, tags: str) -> Response:
     tags_l = tags.split()
-    cursor = app.posts.get_by_tags(
-        user["sid"], tags_l, user["settings"]["only_unread"], projection={"_id": False}
+    cursor = app.posts.get_by_tags_info(
+        user["sid"], tags_l, bool(user["settings"]["only_unread"])
     )
     tag_data = {"tag": tags}
     cur_tag = tags_l[-1]
@@ -1526,8 +1518,8 @@ tmp_cache = {}
 
 def on_get_sunburst_(app: "RSSTagApplication", user: dict, tags: str) -> Response:
     tags_l = tags.split()
-    cursor = app.posts.get_by_tags(
-        user["sid"], tags_l, user["settings"]["only_unread"], projection={"_id": False}
+    cursor = app.posts.get_by_tags_info(
+        user["sid"], tags_l, bool(user["settings"]["only_unread"])
     )
     tag_data = {"tag": tags}
     cur_tag = tags_l[-1]
@@ -1666,8 +1658,8 @@ def on_get_chain(app: "RSSTagApplication", user: dict, tags: str) -> Response:
             if ct not in tags_l:
                 tags_l.append(ct)
 
-    cursor = app.posts.get_by_tags(
-        user["sid"], tags_l, user["settings"]["only_unread"], projection={"_id": False}
+    cursor = app.posts.get_by_tags_info(
+        user["sid"], tags_l, bool(user["settings"]["only_unread"])
     )
     tag_data = {"tag": tags}
 
@@ -1849,7 +1841,8 @@ def on_group_by_tags_by_category_get(
         category,
         only_unread,
         user["settings"]["hot_tags"],
-        opts={"offset": start_tags_range, "limit": user["settings"]["tags_on_page"]},
+        offset=start_tags_range,
+        limit=user["settings"]["tags_on_page"],
     )
 
     sorted_tags = []
@@ -1917,24 +1910,21 @@ def on_ba_surprise_get(app: "RSSTagApplication", user: dict, rqst: Request) -> R
     projection = {"_id": False, "tags": True}
 
     if tag_filter:
-        cursor = app.posts.get_by_tags(
+        cursor = app.posts.get_by_tags_tags_only(
             user["sid"],
             [tag_filter],
             only_unread,
-            projection=projection,
         )
     elif feed_filter:
-        cursor = app.posts.get_by_feed_id(
+        cursor = app.posts.get_by_feed_id_tags_only(
             user["sid"],
             feed_filter,
             only_unread,
-            projection=projection,
         )
     else:
-        cursor = app.posts.get_all(
+        cursor = app.posts.get_all_tags_only(
             user["sid"],
             only_unread,
-            projection=projection,
         )
 
     tag_lists = []
@@ -1956,8 +1946,8 @@ def on_ba_surprise_get(app: "RSSTagApplication", user: dict, rqst: Request) -> R
 
     tags_sorted = sorted(tag_scores.keys(), key=lambda t: tag_scores[t], reverse=True)
 
-    cursor = app.tags.get_by_tags(
-        user["sid"], tags_sorted, only_unread, projection={"_id": False}
+    cursor = app.tags.get_by_tags_info(
+        user["sid"], tags_sorted, only_unread
     )
     db_tags = {t["tag"]: t for t in cursor}
     log.info("ba_surprise: db_tags found=%d", len(db_tags))
@@ -2082,11 +2072,10 @@ def on_tag_context_tree_get(
 
     only_unread = user["settings"].get("only_unread") or None
 
-    cursor = app.posts.get_by_tags(
+    cursor = app.posts.get_by_tags_with_lemmas_and_pid(
         user["sid"],
         [tag],
-        only_unread=only_unread,
-        projection={"lemmas": True, "pid": True},
+        only_unread=only_unread
     )
 
     post_lemmas = []

@@ -4,6 +4,7 @@ from werkzeug.wrappers import Request, Response
 
 from rsstag.tasks import (
     TASK_POST_GROUPING,
+    TASK_POST_GROUPING_CLEANUP,
     SCOPE_MODE_ALL,
     SCOPE_MODE_POSTS,
     SCOPE_MODE_FEEDS,
@@ -35,9 +36,7 @@ def _build_filters_data(app, user: dict) -> Tuple[List[Dict], List[str]]:
     feeds: List[Dict] = []
     categories = set()
 
-    for feed in app.feeds.get_all(
-        user["sid"], projection={"feed_id": True, "title": True, "category_id": True}
-    ):
+    for feed in app.feeds.get_all_with_category(user["sid"]):
         category_id = feed.get("category_id")
         if category_id:
             categories.add(category_id)
@@ -159,7 +158,13 @@ def on_metadata_post(app, user: dict, request: Request) -> Response:
     if errors:
         return _render_page(app, user, errors=errors, form_data=form_data, status=400)
 
-    posts = list(app.posts.find(user["sid"], query=query, projection={"pid": True}))
+    posts = list(app.posts.get_pids_by_scope(
+        user["sid"], scope_type,
+        post_ids=_split_csv(post_ids_raw) if scope_type == SCOPE_POST_IDS else None,
+        feed_ids=selected_feed_ids if scope_type == SCOPE_FEED_IDS else None,
+        category_ids=selected_category_ids if scope_type == SCOPE_CATEGORY_IDS else None,
+        provider=selected_provider if scope_type == SCOPE_PROVIDER else "",
+    ))
     if not posts:
         return _render_page(
             app,
@@ -205,7 +210,7 @@ def on_metadata_post(app, user: dict, request: Request) -> Response:
     app.tasks.add_task(
         {
             "user": user["sid"],
-            "type": task_type,
+            "type": TASK_POST_GROUPING_CLEANUP,
             "data": [],
             "host": app.config["settings"]["host_name"],
             "provider": user.get("provider", ""),
@@ -216,6 +221,6 @@ def on_metadata_post(app, user: dict, request: Request) -> Response:
     return _render_page(
         app,
         user,
-        success_message=f"Reprocessing queued for {len(pids)} post(s).",
+        success_message=f"Cleanup and reprocessing queued for {len(pids)} post(s).",
         form_data=form_data,
     )

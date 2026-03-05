@@ -17,7 +17,11 @@ from rsstag.llm.batch import BatchTaskStatus
 from rsstag.llm.router import LLMRouter
 from rsstag.posts import RssTagPosts
 from rsstag.tags import RssTagTags
-from rsstag.tasks import POST_NOT_IN_PROCESSING
+from rsstag.tasks import (
+    POST_NOT_IN_PROCESSING,
+    TASK_POST_GROUPING,
+    TASK_POST_GROUPING_BATCH,
+)
 from rsstag.workers.base import BaseWorker
 
 
@@ -175,6 +179,9 @@ class _PostGroupingWorker:
         logging.warning("Error while make post grouping: %s", task)
         return True
 
+    def handle_post_grouping_cleanup(self, task: Dict[str, Any]) -> bool:
+        return self.make_post_grouping_cleanup(task)
+
     def make_post_grouping(self, task: Dict[str, Any]) -> bool:
         try:
             from rsstag.post_grouping import RssTagPostGrouping
@@ -247,6 +254,9 @@ class _PostGroupingWorker:
         except Exception as exc:
             logging.error("Can't make post grouping. Info: %s", exc)
             return False
+
+    def make_post_grouping_cleanup(self, task: Dict[str, Any]) -> bool:
+        return self._post_grouping_worker.make_post_grouping_cleanup(task)
 
     def make_post_grouping_batch(self, task: Dict[str, Any]) -> bool:
         try:
@@ -1213,8 +1223,14 @@ class LLMWorker(BaseWorker):
     def make_post_grouping(self, task: Dict[str, Any]) -> bool:
         return self._post_grouping_worker.make_post_grouping(task)
 
+    def make_post_grouping_cleanup(self, task: Dict[str, Any]) -> bool:
+        return self._post_grouping_worker.make_post_grouping_cleanup(task)
+
     def make_post_grouping_batch(self, task: Dict[str, Any]) -> bool:
         return self._post_grouping_worker.make_post_grouping_batch(task)
+
+    def handle_post_grouping_cleanup(self, task: Dict[str, Any]) -> bool:
+        return self._post_grouping_worker.handle_post_grouping_cleanup(task)
 
     def make_tags_classification(self, task: Dict[str, Any]) -> bool:
         return self._tag_classification_worker.make_tags_classification(task)
