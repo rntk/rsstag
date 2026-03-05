@@ -655,7 +655,7 @@ class RSSTagApplication(object):
             except ValueError:
                 query["pid"] = post_id
         
-        total = self.db.posts.count_documents(query)
+        total = self.posts.count(user["sid"], query)
         page_count = self.get_page_count(total, items_per_page)
         
         if page_number < 1:
@@ -664,8 +664,8 @@ class RSSTagApplication(object):
             page_number = page_count if page_count > 0 else 1
         
         skip = (page_number - 1) * items_per_page
-        posts = list(self.db.posts.find(query, {"pid": 1, "content.title": 1, "date": 1})
-                     .sort("date", -1).skip(skip).limit(items_per_page))
+        posts = list(self.posts.find(user["sid"], query=query, projection={"pid": 1, "content.title": 1, "date": 1},
+                     sort=[("date", -1)], skip=skip, limit=items_per_page))
         
         page = self.template_env.get_template("download-posts.html")
         return Response(
@@ -1303,8 +1303,8 @@ class RSSTagApplication(object):
 
     def on_clusters_topics_dyn_get(self, user: dict, request: Request) -> Response:
         grouped_posts: List[Dict[str, Any]] = list(
-            self.db.post_grouping.find(
-                {"owner": user["sid"]},
+            self.post_grouping.get_all(
+                user["sid"],
                 {"_id": 0, "post_ids": 1, "sentences": 1, "groups": 1},
             )
         )
@@ -1323,15 +1323,15 @@ class RSSTagApplication(object):
                 "read": 1,
             }
             posts_list: List[Dict[str, Any]] = list(
-                self.db.posts.find(
-                    {
-                        "owner": user["sid"],
+                self.posts.find(
+                    user["sid"],
+                    query={
                         "$or": [
                             {"pid": {"$in": list(post_ids)}},
                             {"id": {"$in": list(post_ids)}},
                         ],
                     },
-                    posts_projection,
+                    projection=posts_projection,
                 )
             )
             for post in posts_list:
@@ -1631,15 +1631,15 @@ class RSSTagApplication(object):
                 "content": 1,
             }
             posts_list: List[Dict[str, Any]] = list(
-                self.db.posts.find(
-                    {
-                        "owner": user["sid"],
+                self.posts.find(
+                    user["sid"],
+                    query={
                         "$or": [
                             {"pid": {"$in": list(post_ids)}},
                             {"id": {"$in": list(post_ids)}},
                         ],
                     },
-                    posts_projection,
+                    projection=posts_projection,
                 )
             )
             for post in posts_list:
@@ -1875,9 +1875,9 @@ class RSSTagApplication(object):
         return Response(json.dumps({"success": True}), mimetype="application/json")
 
     def on_statistics_get(self, user: dict, _: Request) -> Response:
-        total_posts = self.db.posts.count_documents({"owner": user["sid"]})
+        total_posts = self.posts.count(user["sid"])
         total_tokens = 0
-        for post in self.db.posts.find({"owner": user["sid"]}, {"content.title": 1, "content.content": 1}):
+        for post in self.posts.find(user["sid"], projection={"content.title": 1, "content.content": 1}):
             title = post.get("content", {}).get("title", "")
             content = post.get("content", {}).get("content", b"")
             if isinstance(content, bytes):

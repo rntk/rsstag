@@ -283,8 +283,30 @@ class RssTagPosts:
 
         return result
 
-    def count(self, owner: str) -> int:
-        return self._db.posts.count_documents({"owner": owner})
+    def count(self, owner: str, query: Optional[dict] = None) -> int:
+        full_query = {"owner": owner}
+        if query:
+            full_query.update(query)
+        return self._db.posts.count_documents(full_query)
+
+    def find(self, owner: str, query: Optional[dict] = None, projection: Optional[dict] = None, sort: Optional[list] = None, skip: int = 0, limit: int = 0):
+        full_query = {"owner": owner}
+        if query:
+            full_query.update(query)
+        cursor = self._db.posts.find(full_query, projection=projection)
+        if sort:
+            cursor = cursor.sort(sort)
+        if skip:
+            cursor = cursor.skip(skip)
+        if limit:
+            cursor = cursor.limit(limit)
+        return cursor
+
+    def delete_grouping(self, owner: str, pids: List[str]) -> None:
+        self._db.posts.update_many(
+            {"owner": owner, "pid": {"$in": pids}},
+            {"$unset": {"grouping": ""}, "$set": {"processing": 0}},
+        )
 
 
 class PostLemmaSentence:

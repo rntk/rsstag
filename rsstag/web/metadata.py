@@ -159,7 +159,7 @@ def on_metadata_post(app, user: dict, request: Request) -> Response:
     if errors:
         return _render_page(app, user, errors=errors, form_data=form_data, status=400)
 
-    posts = list(app.db.posts.find(query, projection={"pid": True}))
+    posts = list(app.posts.find(user["sid"], query=query, projection={"pid": True}))
     if not posts:
         return _render_page(
             app,
@@ -179,11 +179,8 @@ def on_metadata_post(app, user: dict, request: Request) -> Response:
             status=400,
         )
 
-    app.db.post_grouping.delete_many({"owner": user["sid"], "post_ids": {"$in": pids}})
-    app.db.posts.update_many(
-        {"owner": user["sid"], "pid": {"$in": pids}},
-        {"$unset": {"grouping": ""}, "$set": {"processing": 0}},
-    )
+    app.post_grouping.delete_by_post_ids(user["sid"], pids)
+    app.posts.delete_grouping(user["sid"], pids)
 
     scope = {
         "mode": SCOPE_MODE_ALL,

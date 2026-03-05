@@ -90,7 +90,7 @@ def on_provider_feeds_get_post(
         )
         try:
             if provider == data_providers.TELEGRAM:
-                telegram = TelegramProvider(app.config, app.db)
+                telegram = TelegramProvider(app.config, app.posts._db)
                 channels = telegram.list_channels(provider_user)
                 logging.info(
                     "Successfully refreshed %d channels for telegram", len(channels)

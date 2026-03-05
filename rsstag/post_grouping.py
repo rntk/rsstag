@@ -35,6 +35,10 @@ class RssTagPostGrouping:
             {"owner": owner, "post_ids_hash": post_ids_hash}
         )
 
+    def get_all(self, owner: str, projection: Optional[dict] = None):
+        """Get all grouped posts for an owner"""
+        return self._db.post_grouping.find({"owner": owner}, projection=projection)
+
     def save_grouped_posts(
         self,
         owner: str,
@@ -116,6 +120,12 @@ class RssTagPostGrouping:
             {"$set": {"sentences": sentences}},
         )
         return True
+
+    def delete_by_post_ids(self, owner: str, pids: List[PostId]) -> None:
+        """Delete groupings that contain any of the specified post IDs"""
+        self._db.post_grouping.delete_many(
+            {"owner": owner, "post_ids": {"$in": pids}}
+        )
 
     def _generate_post_ids_hash(self, post_ids: List[PostId]) -> str:
         """Generate a hash from post IDs for unique identification"""

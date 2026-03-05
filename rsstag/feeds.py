@@ -44,3 +44,9 @@ class RssTagFeeds:
     ) -> Iterator[dict]:
         query = {"owner": owner, "category_id": {"$in": categories}}
         return self.db.feeds.find(query, projection=projection)
+
+    def find(self, owner: str, query: Optional[dict] = None, projection: Optional[dict] = None):
+        full_query = {"owner": owner}
+        if query:
+            full_query.update(query)
+        return self.db.feeds.find(full_query, projection=projection)
