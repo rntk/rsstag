@@ -632,7 +632,7 @@ class TagWorker(BaseWorker):
         posts_cursor = self._db.posts.find(post_query, projection={"_id": True, "pid": True})
         for post in posts_cursor:
             post_ids.append(post["_id"])
-            if post.get("pid"):
+            if post.get("pid") is not None:
                 pids.append(post["pid"])
 
         reset_count = 0
@@ -651,7 +651,15 @@ class TagWorker(BaseWorker):
         from rsstag.post_grouping import RssTagPostGrouping
 
         grouping = RssTagPostGrouping(self._db)
-        grouping_deleted = grouping.delete_grouped_posts(user_sid, pids)
+        if pids:
+            grouping_deleted = grouping.delete_grouped_posts(user_sid, pids)
+        else:
+            grouping_deleted = grouping.delete_grouped_posts_by_scope(
+                user_sid,
+                feed_ids=feed_ids,
+                provider=provider,
+                category_ids=category_ids,
+            )
 
         enqueued = False
         if post_ids:

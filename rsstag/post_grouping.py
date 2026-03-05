@@ -149,12 +149,20 @@ class RssTagPostGrouping:
     ) -> int:
         """Delete grouping docs for posts in feed/provider/category scope."""
         scope_query: Dict[str, Any] = {"owner": owner}
-        if feed_ids:
-            scope_query["feed_id"] = {"$in": feed_ids}
+        expanded_feed_ids = list(feed_ids or [])
+
+        if category_ids:
+            category_feed_ids = self._db.feeds.distinct(
+                "feed_id", {"owner": owner, "category_id": {"$in": category_ids}}
+            )
+            for feed_id in category_feed_ids:
+                if feed_id not in expanded_feed_ids:
+                    expanded_feed_ids.append(feed_id)
+
+        if expanded_feed_ids:
+            scope_query["feed_id"] = {"$in": expanded_feed_ids}
         if provider:
             scope_query["provider"] = provider
-        if category_ids:
-            scope_query["category_id"] = {"$in": category_ids}
 
         post_ids: List[PostId] = list(self._db.posts.distinct("pid", scope_query))
         return self.delete_grouped_posts(owner, post_ids)
