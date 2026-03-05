@@ -4,6 +4,7 @@ from werkzeug.wrappers import Request, Response
 
 from rsstag.tasks import (
     TASK_POST_GROUPING,
+    TASK_POST_GROUPING_CLEANUP,
     SCOPE_MODE_ALL,
     SCOPE_MODE_POSTS,
     SCOPE_MODE_FEEDS,
@@ -179,12 +180,6 @@ def on_metadata_post(app, user: dict, request: Request) -> Response:
             status=400,
         )
 
-    app.db.post_grouping.delete_many({"owner": user["sid"], "post_ids": {"$in": pids}})
-    app.db.posts.update_many(
-        {"owner": user["sid"], "pid": {"$in": pids}},
-        {"$unset": {"grouping": ""}, "$set": {"processing": 0}},
-    )
-
     scope = {
         "mode": SCOPE_MODE_ALL,
         "post_ids": [],
@@ -208,7 +203,7 @@ def on_metadata_post(app, user: dict, request: Request) -> Response:
     app.tasks.add_task(
         {
             "user": user["sid"],
-            "type": task_type,
+            "type": TASK_POST_GROUPING_CLEANUP,
             "data": [],
             "host": app.config["settings"]["host_name"],
             "provider": user.get("provider", ""),
@@ -219,6 +214,6 @@ def on_metadata_post(app, user: dict, request: Request) -> Response:
     return _render_page(
         app,
         user,
-        success_message=f"Reprocessing queued for {len(pids)} post(s).",
+        success_message=f"Cleanup and reprocessing queued for {len(pids)} post(s).",
         form_data=form_data,
     )

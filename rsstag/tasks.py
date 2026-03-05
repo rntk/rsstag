@@ -33,6 +33,7 @@ TASK_TAG_CLASSIFICATION = 20
 TASK_POST_GROUPING_BATCH = 21
 TASK_TAG_CLASSIFICATION_BATCH = 22
 TASK_DELETE_FEEDS = 23
+TASK_POST_GROUPING_CLEANUP = 24
 
 SCOPE_MODE_ALL = "all"
 SCOPE_MODE_POSTS = "posts"
@@ -211,7 +212,7 @@ class RssTagTasks:
                         "manual": manual,
                         "provider": data.get("provider", ""),
                     }
-                    if data["type"] in (TASK_POST_GROUPING, TASK_POST_GROUPING_BATCH):
+                    if data["type"] in (TASK_POST_GROUPING, TASK_POST_GROUPING_BATCH, TASK_POST_GROUPING_CLEANUP):
                         update_data["scope"] = self._normalize_scope(data.get("scope"))
                     for key in data:
                         if key not in update_data:
@@ -468,6 +469,12 @@ class RssTagTasks:
                         {"_id": user_task["_id"]},
                         {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
                     )
+            elif user_task["type"] == TASK_POST_GROUPING_CLEANUP:
+                data = []
+                self._db.tasks.update_one(
+                    {"_id": user_task["_id"]},
+                    {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
+                )
             elif user_task["type"] == TASK_TAGS_RANK:
                 data = []
                 tags_dt = self._db.tags.find(
@@ -920,6 +927,7 @@ class RssTagTasks:
             TASK_POST_GROUPING_BATCH: "Post grouping (batch)",
             TASK_TAG_CLASSIFICATION_BATCH: "Tags classification (batch)",
             TASK_DELETE_FEEDS: "Delete feeds",
+            TASK_POST_GROUPING_CLEANUP: "Post grouping cleanup",
         }
 
         if task_type in task_titles:
