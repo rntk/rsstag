@@ -499,6 +499,16 @@ class RSSTagRoutes:
                 "methods": ["POST"],
             },
             {
+                "url": "/metadata",
+                "endpoint": "on_metadata_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/metadata",
+                "endpoint": "on_metadata_post",
+                "methods": ["POST"],
+            },
+            {
                 "url": "/processing",
                 "endpoint": "on_processing_get",
                 "methods": ["GET"],
