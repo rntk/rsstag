@@ -34,6 +34,19 @@ TASK_POST_GROUPING_BATCH = 21
 TASK_TAG_CLASSIFICATION_BATCH = 22
 TASK_DELETE_FEEDS = 23
 
+SCOPE_MODE_ALL = "all"
+SCOPE_MODE_POSTS = "posts"
+SCOPE_MODE_FEEDS = "feeds"
+SCOPE_MODE_CATEGORIES = "categories"
+SCOPE_MODE_PROVIDER = "provider"
+SUPPORTED_SCOPE_MODES = {
+    SCOPE_MODE_ALL,
+    SCOPE_MODE_POSTS,
+    SCOPE_MODE_FEEDS,
+    SCOPE_MODE_CATEGORIES,
+    SCOPE_MODE_PROVIDER,
+}
+
 POST_NOT_IN_PROCESSING = 0
 BIGRAM_NOT_IN_PROCESSING = 0
 TASK_NOT_IN_PROCESSING = 0
@@ -83,6 +96,88 @@ class RssTagTasks:
                     "Can`t create index %s. May be already exists. Info: %s", index, e
                 )
 
+    def _normalize_scope(self, scope: Optional[dict]) -> Dict[str, Any]:
+        normalized: Dict[str, Any] = {
+            "mode": SCOPE_MODE_ALL,
+            "post_ids": [],
+            "feed_ids": [],
+            "category_ids": [],
+            "provider": "",
+        }
+        if not isinstance(scope, dict):
+            return normalized
+
+        mode = scope.get("mode", SCOPE_MODE_ALL)
+        if mode not in SUPPORTED_SCOPE_MODES:
+            mode = SCOPE_MODE_ALL
+        normalized["mode"] = mode
+
+        for ids_key in ("post_ids", "feed_ids", "category_ids"):
+            ids = scope.get(ids_key, [])
+            if isinstance(ids, list):
+                normalized[ids_key] = [str(value) for value in ids if value]
+
+        provider = scope.get("provider", "")
+        if isinstance(provider, str):
+            normalized["provider"] = provider.strip()
+
+        return normalized
+
+    def _resolve_scope_feed_ids(self, owner: str, scope: Dict[str, Any]) -> List[str]:
+        mode = scope.get("mode")
+        if mode == SCOPE_MODE_FEEDS:
+            return list(scope.get("feed_ids", []))
+        if mode != SCOPE_MODE_CATEGORIES:
+            return []
+
+        category_ids = list(scope.get("category_ids", []))
+        if not category_ids:
+            return []
+
+        feeds = self._db.feeds.find(
+            {"owner": owner, "category_id": {"$in": category_ids}},
+            projection={"feed_id": True},
+        )
+        return [feed.get("feed_id") for feed in feeds if feed.get("feed_id")]
+
+    def _build_post_scope_predicate(self, owner: str, task_doc: dict) -> Dict[str, Any]:
+        query: Dict[str, Any] = {"owner": owner}
+        scope = self._normalize_scope(task_doc.get("scope"))
+        mode = scope["mode"]
+
+        if mode == SCOPE_MODE_POSTS:
+            query["pid"] = {"$in": scope.get("post_ids", [])}
+        elif mode in (SCOPE_MODE_FEEDS, SCOPE_MODE_CATEGORIES):
+            feed_ids = self._resolve_scope_feed_ids(owner, scope)
+            query["feed_id"] = {"$in": feed_ids}
+        elif mode == SCOPE_MODE_PROVIDER and scope.get("provider"):
+            query["provider"] = scope["provider"]
+
+        return query
+
+    def _count_pending_grouping_posts(self, owner: str, task_doc: dict) -> int:
+        scope_query = self._build_post_scope_predicate(owner, task_doc)
+        return self._db.posts.count_documents({**scope_query, "grouping": {"$exists": False}})
+
+    def _find_pending_grouping_post(
+        self,
+        owner: str,
+        task_doc: dict,
+        extra_query: Optional[Dict[str, Any]] = None,
+        claim_set: Optional[Dict[str, Any]] = None,
+    ) -> Optional[dict]:
+        query: Dict[str, Any] = {
+            **self._build_post_scope_predicate(owner, task_doc),
+            "grouping": {"$exists": False},
+        }
+        if extra_query:
+            query.update(extra_query)
+
+        update = {"$set": claim_set} if claim_set else None
+        if update:
+            return self._db.posts.find_one_and_update(query, update)
+        return self._db.posts.find_one(query)
+
     def add_task(self, data: dict, manual: bool = True):
         result = True
         if data and "type" in data:
@@ -116,6 +211,8 @@ class RssTagTasks:
                         "manual": manual,
                         "provider": data.get("provider", ""),
                     }
+                    if data["type"] in (TASK_POST_GROUPING, TASK_POST_GROUPING_BATCH):
+                        update_data["scope"] = self._normalize_scope(data.get("scope"))
                     for key in data:
                         if key not in update_data:
                             update_data[key] = data[key]
@@ -276,10 +373,11 @@ class RssTagTasks:
                         self._db.tasks.delete_one({"_id": user_task["_id"]})
             elif user_task["type"] == TASK_POST_GROUPING:
                 data = []
+                scope_query = self._build_post_scope_predicate(task["user"]["sid"], user_task)
                 # Get posts that need grouping
                 ps = self._db.posts.find(
                     {
-                        "owner": task["user"]["sid"],
+                        **scope_query,
                         "grouping": {"$exists": False},
                         "processing": POST_NOT_IN_PROCESSING,
                     }
@@ -297,7 +395,7 @@ class RssTagTasks:
                 else:
                     task["type"] = TASK_NOOP
                     psc = self._db.posts.count_documents(
-                        {"owner": task["user"]["sid"], "grouping": {"$exists": False}}
+                        {**scope_query, "grouping": {"$exists": False}}
                     )
                     if psc == 0:
                         can_delete = False
@@ -317,6 +415,7 @@ class RssTagTasks:
                     )
             elif user_task["type"] == TASK_POST_GROUPING_BATCH:
                 data = []
+                scope_query = self._build_post_scope_predicate(task["user"]["sid"], user_task)
                 unlock_task = True
                 batch_state = user_task.get("batch", {})
                 batch_ids = batch_state.get("item_ids", [])
@@ -326,13 +425,13 @@ class RssTagTasks:
                         ObjectId(tag_id) if isinstance(tag_id, str) else tag_id
                         for tag_id in batch_ids
                     ]
-                    ps = self._db.posts.find({"_id": {"$in": ids}})
+                    ps = self._db.posts.find({"_id": {"$in": ids}, **scope_query})
                     for p in ps:
                         data.append(p)
                 else:
                     ps = self._db.posts.find(
                         {
-                            "owner": task["user"]["sid"],
+                            **scope_query,
                             "grouping": {"$exists": False},
                             "processing": POST_NOT_IN_PROCESSING,
                         }
@@ -349,7 +448,7 @@ class RssTagTasks:
                         task["type"] = TASK_NOOP
                         psc = self._db.posts.count_documents(
                             {
-                                "owner": task["user"]["sid"],
+                                **scope_query,
                                 "grouping": {"$exists": False},
                             }
                         )
@@ -778,17 +877,13 @@ class RssTagTasks:
                         {"owner": user_id, "ner": {"$exists": False}}
                     )
                 elif task["type"] == TASK_POST_GROUPING:
-                    info["count"] = self._db.posts.count_documents(
-                        {"owner": user_id, "grouping": {"$exists": False}}
-                    )
+                    info["count"] = self._count_pending_grouping_posts(user_id, task)
                 elif task["type"] == TASK_TAG_CLASSIFICATION:
                     info["count"] = self._db.tags.count_documents(
                         {"owner": user_id, "classifications": {"$exists": False}}
                     )
                 elif task["type"] == TASK_POST_GROUPING_BATCH:
-                    info["count"] = self._db.posts.count_documents(
-                        {"owner": user_id, "grouping": {"$exists": False}}
-                    )
+                    info["count"] = self._count_pending_grouping_posts(user_id, task)
                 elif task["type"] == TASK_TAG_CLASSIFICATION_BATCH:
                     info["count"] = self._db.tags.count_documents(
                         {"owner": user_id, "classifications": {"$exists": False}}
@@ -836,10 +931,9 @@ class RssTagTasks:
         return result
 
     def _complete_user_task_if_done(self, owner: str, task_type: int) -> bool:
+        user_task = self._db.tasks.find_one({"user": owner, "type": task_type})
         if task_type == TASK_POST_GROUPING:
-            pending_count = self._db.posts.count_documents(
-                {"owner": owner, "grouping": {"$exists": False}}
-            )
+            pending_count = self._count_pending_grouping_posts(owner, user_task or {})
         elif task_type == TASK_TAG_CLASSIFICATION:
             pending_count = self._db.tags.count_documents(
                 {"owner": owner, "classifications": {"$exists": False}}
@@ -850,7 +944,6 @@ class RssTagTasks:
         if pending_count > 0:
             return False
 
-        user_task = self._db.tasks.find_one({"user": owner, "type": task_type})
         if not user_task:
             return True
 
@@ -958,13 +1051,11 @@ class RssTagTasks:
             claim_set["external_claimed_at"] = now_ts
 
         if task_type == TASK_POST_GROUPING:
-            post = self._db.posts.find_one_and_update(
-                {
-                    "owner": owner,
-                    "grouping": {"$exists": False},
-                    "processing": POST_NOT_IN_PROCESSING,
-                },
-                {"$set": claim_set},
+            post = self._find_pending_grouping_post(
+                owner,
+                user_task,
+                extra_query={"processing": POST_NOT_IN_PROCESSING},
+                claim_set=claim_set,
             )
             if not post:
                 self._complete_user_task_if_done(owner, task_type)
