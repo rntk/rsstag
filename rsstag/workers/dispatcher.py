@@ -32,6 +32,7 @@ from rsstag.tasks import (
     TASK_NOOP,
     TASK_POST_GROUPING,
     TASK_POST_GROUPING_BATCH,
+    TASK_POST_GROUPING_CLEANUP,
     TASK_TAGS,
     TASK_TAGS_GROUP,
     TASK_TAGS_RANK,
@@ -139,6 +140,7 @@ def _build_registry(tag_worker: TagWorker, llm_worker: LLMWorker) -> WorkerRegis
     registry.register(TASK_POST_GROUPING, llm_worker.handle_post_grouping)
     registry.register(TASK_TAG_CLASSIFICATION, llm_worker.handle_tags_classification)
     registry.register(TASK_POST_GROUPING_BATCH, llm_worker.make_post_grouping_batch)
+    registry.register(TASK_POST_GROUPING_CLEANUP, llm_worker.handle_post_grouping_cleanup)
     registry.register(
         TASK_TAG_CLASSIFICATION_BATCH, llm_worker.make_tags_classification_batch
     )
