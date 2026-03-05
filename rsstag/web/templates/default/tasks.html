@@ -45,6 +45,7 @@
 
     <div class="add-task-section">
         <h2>Add Task</h2>
+        <p class="help">Task labels include capability hints: "(global only)" or "(supports scoped reprocess)".</p>
         <form action="/tasks" method="post">
             <select name="task_type">
                 {% for type_id, title in available_tasks.items() %}
