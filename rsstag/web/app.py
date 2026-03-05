@@ -36,6 +36,7 @@ import rsstag.web.tasks as tasks_handlers
 import rsstag.web.processing as processing_handlers
 import rsstag.web.providers as providers_handlers
 import rsstag.web.feeds as feeds_handlers
+import rsstag.web.metadata as metadata_handlers
 import rsstag.web.context_filter_handlers as context_filter_handlers
 
 from rsstag.llm.router import LLMRouter
@@ -366,6 +367,12 @@ class RSSTagApplication(object):
         self, user: dict, request: Request, task_id: str
     ) -> Response:
         return tasks_handlers.on_tasks_remove_post(self, user, request, task_id)
+
+    def on_metadata_get(self, user: dict, request: Request) -> Response:
+        return metadata_handlers.on_metadata_get(self, user, request)
+
+    def on_metadata_post(self, user: dict, request: Request) -> Response:
+        return metadata_handlers.on_metadata_post(self, user, request)
 
     def on_processing_get(self, user: dict, request: Request) -> Response:
         return processing_handlers.on_processing_get(self, user, request)

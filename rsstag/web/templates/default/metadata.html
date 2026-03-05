@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>RSSTag - Metadata Tasks</title>
+{% include 'head-data.html' %}
+</head>
+<body>
+{% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
+<noscript>
+    <h1>Please enable javascript in your browser</h1>
+</noscript>
+<div id="global_tools">
+    {% include "logo.html" %}
+    <div class="panel right_half">
+        <span class="login_button global_tools_button">
+            <a href="/data-sources">{% if provider %}{{provider}}{% else %}Data sources{% endif %}</a>
+        </span>
+        {{ g_status.global_status() }}
+        {{ menu.settings_menu() }}
+    </div>
+</div>
+<div class="page screen_middle">
+    <h1>Metadata Reprocessing</h1>
+
+    {% if success_message %}
+    <p class="ok">{{ success_message }}</p>
+    {% endif %}
+
+    {% if errors %}
+    <div id="error">
+        {% for err in errors %}
+        <p>{{ err }}</p>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <form action="/metadata" method="post">
+        <div class="add-task-section">
+            <h2>Task</h2>
+            <select name="task_type">
+                {% for type_id, title in supported_tasks.items() %}
+                <option value="{{ type_id }}" {% if form_data.task_type == (type_id|string) %}selected{% endif %}>{{ title }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="add-task-section">
+            <h2>Scope</h2>
+            <select name="scope_type" id="scope_type" onchange="toggleScopeBlocks()">
+                <option value="{{ scope_values.post_ids }}" {% if form_data.scope_type == scope_values.post_ids %}selected{% endif %}>Post IDs</option>
+                <option value="{{ scope_values.feed_ids }}" {% if form_data.scope_type == scope_values.feed_ids %}selected{% endif %}>Feed IDs</option>
+                <option value="{{ scope_values.category_ids }}" {% if form_data.scope_type == scope_values.category_ids %}selected{% endif %}>Category IDs</option>
+                <option value="{{ scope_values.provider }}" {% if form_data.scope_type == scope_values.provider %}selected{% endif %}>Provider</option>
+            </select>
+        </div>
+
+        <div id="scope-post_ids" class="scope-block">
+            <h3>Post IDs</h3>
+            <p>Comma/newline separated post IDs.</p>
+            <textarea name="post_ids" rows="6" cols="80">{{ form_data.post_ids }}</textarea>
+        </div>
+
+        <div id="scope-feed_ids" class="scope-block">
+            <h3>Feed IDs</h3>
+            {% for feed in feeds %}
+            <label>
+                <input type="checkbox" name="feed_ids" value="{{ feed.feed_id }}" {% if feed.feed_id in form_data.feed_ids %}checked{% endif %}>
+                {{ feed.title or feed.feed_id }} ({{ feed.feed_id }})
+            </label><br>
+            {% endfor %}
+        </div>
+
+        <div id="scope-category_ids" class="scope-block">
+            <h3>Category IDs</h3>
+            {% for category in categories %}
+            <label>
+                <input type="checkbox" name="category_ids" value="{{ category }}" {% if category in form_data.category_ids %}checked{% endif %}>
+                {{ category }}
+            </label><br>
+            {% endfor %}
+        </div>
+
+        <div id="scope-provider" class="scope-block">
+            <h3>Provider</h3>
+            <select name="provider">
+                <option value="">-- Select provider --</option>
+                {% for item in providers %}
+                <option value="{{ item }}" {% if form_data.provider == item %}selected{% endif %}>{{ item }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <input type="submit" value="Enqueue cleanup + reprocess">
+    </form>
+
+    <div class="root_item"><a href="/">Back to Home</a></div>
+</div>
+
+<script>
+function toggleScopeBlocks() {
+    var selected = document.getElementById('scope_type').value;
+    var blocks = document.querySelectorAll('.scope-block');
+    for (var i = 0; i < blocks.length; i++) {
+        blocks[i].style.display = 'none';
+    }
+    var active = document.getElementById('scope-' + selected);
+    if (active) {
+        active.style.display = 'block';
+    }
+}
+
+toggleScopeBlocks();
+</script>
+
+<div id="status" ><span></span></div>
+{% include "root-footer.html" %}
+<div id="progressbar"></div></body>
+</html>
