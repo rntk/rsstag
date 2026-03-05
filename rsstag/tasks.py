@@ -48,6 +48,38 @@ SUPPORTED_SCOPE_MODES = {
     SCOPE_MODE_PROVIDER,
 }
 
+SCOPE_CAPABILITY_GLOBAL_ONLY = "global_only"
+SCOPE_CAPABILITY_SCOPED_SUPPORTED = "scoped_supported"
+
+TASK_SCOPE_REGISTRY: Dict[int, Dict[str, Any]] = {
+    TASK_W2V: {"scope": SCOPE_CAPABILITY_GLOBAL_ONLY},
+    TASK_FASTTEXT: {"scope": SCOPE_CAPABILITY_GLOBAL_ONLY},
+    TASK_POST_GROUPING: {"scope": SCOPE_CAPABILITY_SCOPED_SUPPORTED},
+    TASK_POST_GROUPING_BATCH: {"scope": SCOPE_CAPABILITY_SCOPED_SUPPORTED},
+    TASK_POST_GROUPING_CLEANUP: {"scope": SCOPE_CAPABILITY_SCOPED_SUPPORTED},
+}
+
+
+def get_task_scope_capability(task_type: int) -> str:
+    return TASK_SCOPE_REGISTRY.get(task_type, {}).get(
+        "scope", SCOPE_CAPABILITY_GLOBAL_ONLY
+    )
+
+
+def get_task_scope_hint(task_type: int) -> str:
+    capability = get_task_scope_capability(task_type)
+    if capability == SCOPE_CAPABILITY_SCOPED_SUPPORTED:
+        return "supports scoped reprocess"
+    return "global only"
+
+
+def get_scoped_supported_tasks() -> Dict[int, str]:
+    return {
+        task_type: ""
+        for task_type, task_data in TASK_SCOPE_REGISTRY.items()
+        if task_data.get("scope") == SCOPE_CAPABILITY_SCOPED_SUPPORTED
+    }
+
 POST_NOT_IN_PROCESSING = 0
 BIGRAM_NOT_IN_PROCESSING = 0
 TASK_NOT_IN_PROCESSING = 0
@@ -124,6 +156,40 @@ class RssTagTasks:
 
         return normalized
 
+    def validate_task_scope(self, task_type: int, scope: Optional[dict]) -> Tuple[bool, str]:
+        normalized = self._normalize_scope(scope)
+        capability = get_task_scope_capability(task_type)
+
+        if capability == SCOPE_CAPABILITY_GLOBAL_ONLY and normalized["mode"] != SCOPE_MODE_ALL:
+            return (
+                False,
+                f"Task {task_type} is global-only and does not support scope mode '{normalized['mode']}'.",
+            )
+
+        if normalized["mode"] == SCOPE_MODE_POSTS and not normalized.get("post_ids"):
+            return False, "Scope mode 'posts' requires at least one post id."
+        if normalized["mode"] == SCOPE_MODE_FEEDS and not normalized.get("feed_ids"):
+            return False, "Scope mode 'feeds' requires at least one feed id."
+        if normalized["mode"] == SCOPE_MODE_CATEGORIES and not normalized.get("category_ids"):
+            return False, "Scope mode 'categories' requires at least one category id."
+        if normalized["mode"] == SCOPE_MODE_PROVIDER and not normalized.get("provider"):
+            return False, "Scope mode 'provider' requires a provider value."
+
+        return True, ""
+
+    def mark_task_failed(self, task_id: Any, error: str) -> None:
+        self._db.tasks.update_one(
+            {"_id": task_id},
+            {
+                "$set": {
+                    "processing": TASK_FREEZED,
+                    "failed": True,
+                    "failed_at": time.time(),
+                    "error": error,
+                }
+            },
+        )
+
     def _resolve_scope_feed_ids(self, owner: str, scope: Dict[str, Any]) -> List[str]:
         mode = scope.get("mode")
         if mode == SCOPE_MODE_FEEDS:
@@ -183,6 +249,17 @@ class RssTagTasks:
         result = True
         if data and "type" in data:
             try:
+                normalized_scope = self._normalize_scope(data.get("scope"))
+                is_scope_valid, scope_error = self.validate_task_scope(data["type"], normalized_scope)
+                if not is_scope_valid:
+                    self._log.warning(
+                        "Can`t add task %s for user %s. Invalid scope: %s",
+                        data["type"],
+                        data.get("user", ""),
+                        scope_error,
+                    )
+                    return False
+
                 if data["type"] == TASK_DOWNLOAD:  # TODO: check insertion results
                     self._db.tasks.update_one(
                         {"user": data["user"], "provider": data.get("provider", "")},
@@ -212,8 +289,8 @@ class RssTagTasks:
                         "manual": manual,
                         "provider": data.get("provider", ""),
                     }
-                    if data["type"] in (TASK_POST_GROUPING, TASK_POST_GROUPING_BATCH, TASK_POST_GROUPING_CLEANUP):
-                        update_data["scope"] = self._normalize_scope(data.get("scope"))
+                    if data.get("scope") is not None or data["type"] in (TASK_POST_GROUPING, TASK_POST_GROUPING_BATCH, TASK_POST_GROUPING_CLEANUP):
+                        update_data["scope"] = normalized_scope
                     for key in data:
                         if key not in update_data:
                             update_data[key] = data[key]
@@ -296,6 +373,20 @@ class RssTagTasks:
             task["type"] = user_task["type"]
             task["manual"] = user_task.get("manual", False)
             task["batch"] = user_task.get("batch", {})
+            is_scope_valid, scope_error = self.validate_task_scope(
+                user_task["type"], user_task.get("scope")
+            )
+            if not is_scope_valid:
+                self._log.warning(
+                    "Ignoring invalid task+scope combination. task_id=%s type=%s user=%s error=%s",
+                    user_task.get("_id"),
+                    user_task.get("type"),
+                    user_task.get("user"),
+                    scope_error,
+                )
+                self.mark_task_failed(user_task["_id"], scope_error)
+                task["type"] = TASK_NOOP
+                return task
             data = user_task
             if user_task["type"] == TASK_TAGS:
                 data = []
@@ -913,21 +1004,21 @@ class RssTagTasks:
             TASK_LETTERS: "Buildings first letters dictionary",
             TASK_NER: "Named entity recognition",
             TASK_CLUSTERING: "Posts clusterization",
-            TASK_W2V: "Learning Word2Vec",
+            TASK_W2V: "Learning Word2Vec (global only)",
             TASK_D2V: "Learning Doc2Vec",
-            TASK_FASTTEXT: "Learning FastText",
+            TASK_FASTTEXT: "Learning FastText (global only)",
             TASK_TAGS_SENTIMENT: "Tags sentiment",
             TASK_TAGS_GROUP: "Tags groups searching",
             TASK_TAGS_COORDS: "Searching geo objects in tags",
             TASK_BIGRAMS_RANK: "Bi-grams ranking",
             TASK_TAGS_RANK: "Tags ranking",
             TASK_CLEAN_BIGRAMS: "Clean bi-grams",
-            TASK_POST_GROUPING: "Post grouping",
+            TASK_POST_GROUPING: "Post grouping (supports scoped reprocess)",
             TASK_TAG_CLASSIFICATION: "Tags classification",
-            TASK_POST_GROUPING_BATCH: "Post grouping (batch)",
+            TASK_POST_GROUPING_BATCH: "Post grouping (batch, supports scoped reprocess)",
             TASK_TAG_CLASSIFICATION_BATCH: "Tags classification (batch)",
             TASK_DELETE_FEEDS: "Delete feeds",
-            TASK_POST_GROUPING_CLEANUP: "Post grouping cleanup",
+            TASK_POST_GROUPING_CLEANUP: "Post grouping cleanup (supports scoped reprocess)",
         }
 
         if task_type in task_titles:

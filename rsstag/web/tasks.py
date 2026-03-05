@@ -23,12 +23,13 @@ from rsstag.tasks import (
     TASK_GMAIL_SORT,
     TASK_POST_GROUPING_BATCH,
     TASK_TAG_CLASSIFICATION_BATCH,
+    get_task_scope_hint,
 )
 
 
 def on_tasks_get(app, user: dict, request: Request) -> Response:
     current_tasks = app.tasks.get_current_tasks(user["sid"])
-    available_tasks = {
+    base_tasks = {
         TASK_DOWNLOAD: "Download posts",
         TASK_MARK: "Sync read state",
         TASK_TAGS: "Build tags",
@@ -50,6 +51,10 @@ def on_tasks_get(app, user: dict, request: Request) -> Response:
         TASK_GMAIL_SORT: "Sort Gmail emails",
         TASK_POST_GROUPING_BATCH: "Group posts (batch)",
         TASK_TAG_CLASSIFICATION_BATCH: "Classify tags (batch)",
+    }
+    available_tasks = {
+        task_type: f"{title} ({get_task_scope_hint(task_type)})"
+        for task_type, title in base_tasks.items()
     }
 
     page = app.template_env.get_template("tasks.html")

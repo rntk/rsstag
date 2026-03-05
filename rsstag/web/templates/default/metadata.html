@@ -37,21 +37,23 @@
     <form action="/metadata" method="post">
         <div class="add-task-section">
             <h2>Task</h2>
-            <select name="task_type">
+            <select name="task_type" id="task_type" onchange="syncScopeAvailability()">
                 {% for type_id, title in supported_tasks.items() %}
                 <option value="{{ type_id }}" {% if form_data.task_type == (type_id|string) %}selected{% endif %}>{{ title }}</option>
                 {% endfor %}
             </select>
+            <p id="task-capability-hint" class="help"></p>
         </div>
 
         <div class="add-task-section">
             <h2>Scope</h2>
             <select name="scope_type" id="scope_type" onchange="toggleScopeBlocks()">
-                <option value="{{ scope_values.post_ids }}" {% if form_data.scope_type == scope_values.post_ids %}selected{% endif %}>Post IDs</option>
-                <option value="{{ scope_values.feed_ids }}" {% if form_data.scope_type == scope_values.feed_ids %}selected{% endif %}>Feed IDs</option>
-                <option value="{{ scope_values.category_ids }}" {% if form_data.scope_type == scope_values.category_ids %}selected{% endif %}>Category IDs</option>
-                <option value="{{ scope_values.provider }}" {% if form_data.scope_type == scope_values.provider %}selected{% endif %}>Provider</option>
+                <option value="{{ scope_values.post_ids }}" data-scope="{{ scope_values.post_ids }}" {% if form_data.scope_type == scope_values.post_ids %}selected{% endif %}>Post IDs</option>
+                <option value="{{ scope_values.feed_ids }}" data-scope="{{ scope_values.feed_ids }}" {% if form_data.scope_type == scope_values.feed_ids %}selected{% endif %}>Feed IDs</option>
+                <option value="{{ scope_values.category_ids }}" data-scope="{{ scope_values.category_ids }}" {% if form_data.scope_type == scope_values.category_ids %}selected{% endif %}>Category IDs</option>
+                <option value="{{ scope_values.provider }}" data-scope="{{ scope_values.provider }}" {% if form_data.scope_type == scope_values.provider %}selected{% endif %}>Provider</option>
             </select>
+            <p id="scope-helper" class="help">Pick a scope supported by the selected task.</p>
         </div>
 
         <div id="scope-post_ids" class="scope-block">
@@ -97,19 +99,58 @@
 </div>
 
 <script>
+var taskScopeCapabilities = {{ task_scope_capabilities | tojson }};
+var scopedCapabilityValue = {{ scoped_capability_value | tojson }};
+
+function syncScopeAvailability() {
+    var taskType = document.getElementById('task_type').value;
+    var scopeSelect = document.getElementById('scope_type');
+    var capability = taskScopeCapabilities[taskType] || 'global_only';
+    var taskHint = document.getElementById('task-capability-hint');
+
+    if (capability === scopedCapabilityValue) {
+        taskHint.textContent = 'Selected task supports scoped reprocess.';
+    } else {
+        taskHint.textContent = 'Selected task is global only and scoped filters are disabled.';
+    }
+
+    var options = scopeSelect.querySelectorAll('option');
+    for (var i = 0; i < options.length; i++) {
+        var option = options[i];
+        option.disabled = capability !== scopedCapabilityValue;
+    }
+
+    if (capability !== scopedCapabilityValue && scopeSelect.options.length > 0) {
+        scopeSelect.selectedIndex = 0;
+    }
+
+    toggleScopeBlocks();
+}
+
 function toggleScopeBlocks() {
     var selected = document.getElementById('scope_type').value;
+    var taskType = document.getElementById('task_type').value;
+    var capability = taskScopeCapabilities[taskType] || 'global_only';
     var blocks = document.querySelectorAll('.scope-block');
+    var helper = document.getElementById('scope-helper');
+
     for (var i = 0; i < blocks.length; i++) {
         blocks[i].style.display = 'none';
     }
+
+    if (capability !== scopedCapabilityValue) {
+        helper.textContent = 'This task is global only. Scoped inputs are ignored.';
+        return;
+    }
+
+    helper.textContent = 'Provide identifiers for the selected scope.';
     var active = document.getElementById('scope-' + selected);
     if (active) {
         active.style.display = 'block';
     }
 }
 
-toggleScopeBlocks();
+syncScopeAvailability();
 </script>
 
 <div id="status" ><span></span></div>

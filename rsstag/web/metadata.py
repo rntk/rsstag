@@ -10,10 +10,13 @@ from rsstag.tasks import (
     SCOPE_MODE_FEEDS,
     SCOPE_MODE_CATEGORIES,
     SCOPE_MODE_PROVIDER,
+    get_task_scope_hint,
+    get_task_scope_capability,
+    SCOPE_CAPABILITY_SCOPED_SUPPORTED,
 )
 
 SUPPORTED_SCOPED_TASKS = {
-    TASK_POST_GROUPING: "Group posts",
+    TASK_POST_GROUPING: f"Group posts ({get_task_scope_hint(TASK_POST_GROUPING)})",
 }
 
 SCOPE_POST_IDS = SCOPE_MODE_POSTS
@@ -21,10 +24,6 @@ SCOPE_FEED_IDS = SCOPE_MODE_FEEDS
 SCOPE_CATEGORY_IDS = SCOPE_MODE_CATEGORIES
 SCOPE_PROVIDER = SCOPE_MODE_PROVIDER
 SUPPORTED_SCOPES = (SCOPE_POST_IDS, SCOPE_FEED_IDS, SCOPE_CATEGORY_IDS, SCOPE_PROVIDER)
-SUPPORTED_TASK_SCOPES = {
-    TASK_POST_GROUPING: set(SUPPORTED_SCOPES),
-}
-
 
 def _split_csv(raw: str) -> List[str]:
     if not raw:
@@ -78,6 +77,9 @@ def _render_page(app, user: dict, *, errors=None, success_message: str = "", for
             support=app.config["settings"]["support"],
             version=app.config["settings"]["version"],
             supported_tasks=SUPPORTED_SCOPED_TASKS,
+            supported_scopes=list(SUPPORTED_SCOPES),
+            task_scope_capabilities={str(task_id): get_task_scope_capability(task_id) for task_id in SUPPORTED_SCOPED_TASKS},
+            scoped_capability_value=SCOPE_CAPABILITY_SCOPED_SUPPORTED,
             feeds=feeds,
             categories=categories,
             providers=providers,
@@ -125,14 +127,15 @@ def on_metadata_post(app, user: dict, request: Request) -> Response:
         errors.append("Invalid task type selected.")
 
     if task_type not in SUPPORTED_SCOPED_TASKS:
-        errors.append("Unsupported task for scoped metadata processing.")
+        errors.append("Unsupported task for metadata reprocessing.")
 
     if scope_type not in SUPPORTED_SCOPES:
         errors.append("Invalid scope type selected.")
 
-    if task_type in SUPPORTED_TASK_SCOPES and scope_type in SUPPORTED_SCOPES:
-        if scope_type not in SUPPORTED_TASK_SCOPES[task_type]:
-            errors.append("Unsupported task and scope combination selected.")
+    if task_type in SUPPORTED_SCOPED_TASKS and get_task_scope_capability(task_type) != SCOPE_CAPABILITY_SCOPED_SUPPORTED:
+        errors.append(
+            f"Task '{SUPPORTED_SCOPED_TASKS[task_type]}' is global-only and cannot run with scoped filters."
+        )
 
     query: Dict = {"owner": user["sid"]}
     if scope_type == SCOPE_POST_IDS:
@@ -199,6 +202,16 @@ def on_metadata_post(app, user: dict, request: Request) -> Response:
     elif scope_type == SCOPE_PROVIDER:
         scope["mode"] = SCOPE_MODE_PROVIDER
         scope["provider"] = selected_provider
+
+    is_scope_valid, scope_error = app.tasks.validate_task_scope(task_type, scope)
+    if not is_scope_valid:
+        return _render_page(
+            app,
+            user,
+            errors=[f"Invalid task and scope combination: {scope_error}"],
+            form_data=form_data,
+            status=400,
+        )
 
     app.tasks.add_task(
         {

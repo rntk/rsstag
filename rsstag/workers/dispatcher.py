@@ -369,10 +369,24 @@ def worker(config: Dict[str, Any]) -> None:
                         else:
                             task_done = sorted_emails
                 else:
-                    task_done = registry.handle(task)
-                    if task_done is None:
-                        logging.warning("Unknown task type %s", task["type"])
-                        task_done = False
+                    is_scope_valid, scope_error = tasks.validate_task_scope(
+                        task["type"], task.get("scope")
+                    )
+                    if not is_scope_valid:
+                        logging.warning(
+                            "Rejecting invalid task+scope combination. task_id=%s type=%s user=%s error=%s",
+                            task.get("_id"),
+                            task.get("type"),
+                            task.get("user", {}).get("sid"),
+                            scope_error,
+                        )
+                        tasks.mark_task_failed(task.get("_id"), scope_error)
+                        task_done = True
+                    else:
+                        task_done = registry.handle(task)
+                        if task_done is None:
+                            logging.warning("Unknown task type %s", task["type"])
+                            task_done = False
 
                 if task_done:
                     tasks.finish_task(task)
