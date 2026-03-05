@@ -2,16 +2,23 @@ from typing import Dict, List, Tuple
 
 from werkzeug.wrappers import Request, Response
 
-from rsstag.tasks import TASK_POST_GROUPING
+from rsstag.tasks import (
+    TASK_POST_GROUPING,
+    TASK_DELETE_FEEDS,
+    SCOPE_MODE_POSTS,
+    SCOPE_MODE_FEEDS,
+    SCOPE_MODE_CATEGORIES,
+    SCOPE_MODE_PROVIDER,
+)
 
 SUPPORTED_SCOPED_TASKS = {
     TASK_POST_GROUPING: "Group posts",
 }
 
-SCOPE_POST_IDS = "post_ids"
-SCOPE_FEED_IDS = "feed_ids"
-SCOPE_CATEGORY_IDS = "category_ids"
-SCOPE_PROVIDER = "provider"
+SCOPE_POST_IDS = SCOPE_MODE_POSTS
+SCOPE_FEED_IDS = SCOPE_MODE_FEEDS
+SCOPE_CATEGORY_IDS = SCOPE_MODE_CATEGORIES
+SCOPE_PROVIDER = SCOPE_MODE_PROVIDER
 SUPPORTED_SCOPES = (SCOPE_POST_IDS, SCOPE_FEED_IDS, SCOPE_CATEGORY_IDS, SCOPE_PROVIDER)
 SUPPORTED_TASK_SCOPES = {
     TASK_POST_GROUPING: set(SUPPORTED_SCOPES),
@@ -162,7 +169,7 @@ def on_metadata_post(app, user: dict, request: Request) -> Response:
             status=400,
         )
 
-    pids = [post["pid"] for post in posts if post.get("pid")]
+    pids = [post["pid"] for post in posts if post.get("pid") is not None]
     if not pids:
         return _render_page(
             app,
@@ -172,25 +179,22 @@ def on_metadata_post(app, user: dict, request: Request) -> Response:
             status=400,
         )
 
-    app.db.post_grouping.delete_many({"owner": user["sid"], "post_ids": {"$in": pids}})
-    app.db.posts.update_many(
-        {"owner": user["sid"], "pid": {"$in": pids}},
-        {"$unset": {"grouping": ""}, "$set": {"processing": 0}},
-    )
-
-    app.tasks.add_task(
-        {
-            "user": user["sid"],
-            "type": task_type,
-            "data": [],
-            "host": app.config["settings"]["host_name"],
-            "provider": user.get("provider", ""),
-        }
-    )
+    cleanup_task = {
+        "user": user["sid"],
+        "type": TASK_DELETE_FEEDS,
+        "feed_ids": selected_feed_ids,
+        "category_ids": selected_category_ids,
+        "provider": selected_provider if scope_type == SCOPE_PROVIDER else "",
+        "post_ids": pids if scope_type == SCOPE_POST_IDS else [],
+        "cleanup_grouping": True,
+        "manual": True,
+        "host": app.config["settings"]["host_name"],
+    }
+    app.tasks.add_task(cleanup_task)
 
     return _render_page(
         app,
         user,
-        success_message=f"Reprocessing queued for {len(pids)} post(s).",
+        success_message=f"Grouping cleanup queued for {len(pids)} post(s).",
         form_data=form_data,
     )

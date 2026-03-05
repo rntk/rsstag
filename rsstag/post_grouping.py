@@ -129,3 +129,40 @@ class RssTagPostGrouping:
         post_ids_sorted = sorted(to_sortable(pid) for pid in post_ids)
         post_ids_str = ",".join(str(pid) for pid in post_ids_sorted)
         return hashlib.md5(post_ids_str.encode("utf-8")).hexdigest()
+
+    def delete_grouped_posts(self, owner: str, post_ids: List[PostId]) -> int:
+        """Delete grouping docs by owner and post IDs list."""
+        if not post_ids:
+            return 0
+
+        result = self._db.post_grouping.delete_many(
+            {"owner": owner, "post_ids": {"$in": post_ids}}
+        )
+        return result.deleted_count
+
+    def delete_grouped_posts_by_scope(
+        self,
+        owner: str,
+        feed_ids: Optional[List[Any]] = None,
+        provider: str = "",
+        category_ids: Optional[List[Any]] = None,
+    ) -> int:
+        """Delete grouping docs for posts in feed/provider/category scope."""
+        scope_query: Dict[str, Any] = {"owner": owner}
+        expanded_feed_ids = list(feed_ids or [])
+
+        if category_ids:
+            category_feed_ids = self._db.feeds.distinct(
+                "feed_id", {"owner": owner, "category_id": {"$in": category_ids}}
+            )
+            for feed_id in category_feed_ids:
+                if feed_id not in expanded_feed_ids:
+                    expanded_feed_ids.append(feed_id)
+
+        if expanded_feed_ids:
+            scope_query["feed_id"] = {"$in": expanded_feed_ids}
+        if provider:
+            scope_query["provider"] = provider
+
+        post_ids: List[PostId] = list(self._db.posts.distinct("pid", scope_query))
+        return self.delete_grouped_posts(owner, post_ids)
