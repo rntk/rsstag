@@ -19,6 +19,10 @@ from rsstag.posts import RssTagPosts
 from rsstag.tags import RssTagTags
 from rsstag.tasks import (
     POST_NOT_IN_PROCESSING,
+    SCOPE_MODE_CATEGORIES,
+    SCOPE_MODE_FEEDS,
+    SCOPE_MODE_POSTS,
+    SCOPE_MODE_PROVIDER,
     TASK_POST_GROUPING,
     TASK_POST_GROUPING_BATCH,
 )
@@ -256,7 +260,72 @@ class _PostGroupingWorker:
             return False
 
     def make_post_grouping_cleanup(self, task: Dict[str, Any]) -> bool:
-        return self._post_grouping_worker.make_post_grouping_cleanup(task)
+        try:
+            from rsstag.post_grouping import RssTagPostGrouping
+            from rsstag.tasks import RssTagTasks
+
+            owner: str = task["user"]["sid"]
+            scope: Dict[str, Any] = task.get("scope", {}) or {}
+
+            query: Dict[str, Any] = {"owner": owner}
+            scope_mode: str = str(scope.get("mode", "all"))
+            if scope_mode == SCOPE_MODE_POSTS:
+                post_ids: List[str] = [
+                    str(value) for value in scope.get("post_ids", []) if value
+                ]
+                query["pid"] = {"$in": post_ids}
+            elif scope_mode == SCOPE_MODE_FEEDS:
+                feed_ids: List[str] = [
+                    str(value) for value in scope.get("feed_ids", []) if value
+                ]
+                query["feed_id"] = {"$in": feed_ids}
+            elif scope_mode == SCOPE_MODE_CATEGORIES:
+                category_ids: List[str] = [
+                    str(value) for value in scope.get("category_ids", []) if value
+                ]
+                if category_ids:
+                    feeds = self._db.feeds.find(
+                        {"owner": owner, "category_id": {"$in": category_ids}},
+                        projection={"feed_id": True},
+                    )
+                    feed_ids = [feed.get("feed_id") for feed in feeds if feed.get("feed_id")]
+                    query["feed_id"] = {"$in": feed_ids}
+                else:
+                    query["feed_id"] = {"$in": []}
+            elif scope_mode == SCOPE_MODE_PROVIDER:
+                provider: str = str(scope.get("provider", "")).strip()
+                if provider:
+                    query["provider"] = provider
+
+            posts = list(self._db.posts.find(query, projection={"pid": True}))
+            post_ids = [post.get("pid") for post in posts if post.get("pid")]
+
+            post_grouping = RssTagPostGrouping(self._db)
+            post_grouping.delete_grouped_posts_by_post_ids(owner, post_ids)
+
+            self._db.posts.update_many(
+                query,
+                {
+                    "$unset": {"grouping": ""},
+                    "$set": {"processing": POST_NOT_IN_PROCESSING},
+                },
+            )
+
+            tasks_h = RssTagTasks(self._db)
+            return bool(
+                tasks_h.add_task(
+                    {
+                        "user": owner,
+                        "type": TASK_POST_GROUPING,
+                        "provider": task["user"].get("provider", ""),
+                        "scope": scope,
+                    },
+                    manual=False,
+                )
+            )
+        except Exception as exc:
+            logging.error("Can't cleanup post grouping data. Info: %s", exc)
+            return False
 
     def make_post_grouping_batch(self, task: Dict[str, Any]) -> bool:
         try:
