@@ -5,6 +5,7 @@ from werkzeug.wrappers import Request, Response
 from rsstag.tasks import (
     TASK_POST_GROUPING,
     TASK_DELETE_FEEDS,
+    SCOPE_MODE_ALL,
     SCOPE_MODE_POSTS,
     SCOPE_MODE_FEEDS,
     SCOPE_MODE_CATEGORIES,
