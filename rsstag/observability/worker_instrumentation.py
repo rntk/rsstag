@@ -94,22 +94,45 @@ def instrument_tasks(tasks_instance: Any) -> None:
     _orig_get_task = tasks_instance.get_task
     _orig_finish_task = tasks_instance.finish_task
 
-    def _add_task(task_type, user, data=None, **kwargs):
+    def _add_task(*args, **kwargs):
+        manual = kwargs.pop("manual", True)
+        task_data = None
+
+        if args and isinstance(args[0], dict):
+            task_data = dict(args[0])
+            if len(args) > 1:
+                manual = args[1]
+        else:
+            # Backward-compatible path for older call sites that may still use
+            # add_task(task_type, user, data=None, manual=True).
+            task_type = args[0] if len(args) > 0 else kwargs.pop("task_type", None)
+            user = args[1] if len(args) > 1 else kwargs.pop("user", None)
+            payload = args[2] if len(args) > 2 else kwargs.pop("data", None)
+            if len(args) > 3:
+                manual = args[3]
+
+            task_data = dict(payload) if isinstance(payload, dict) else {}
+            if task_type is not None:
+                task_data["type"] = task_type
+            if user is not None:
+                task_data["user"] = user
+            task_data.update(kwargs)
+
         # Inject current trace context into the task document so workers can link spans.
-        # Use a copy to avoid mutating the caller's dict.
         carrier: dict = {}
         try:
             inject(carrier)
         except Exception:
             pass
         if carrier:
-            data = dict(data) if isinstance(data, dict) else {}
-            data["_trace_context"] = carrier
+            task_data["_trace_context"] = carrier
 
-        result = _orig_add_task(task_type, user, data, **kwargs)
+        result = _orig_add_task(task_data, manual=manual)
 
         try:
-            enqueued_counter.add(1, {"task_type": _task_type_label(task_type)})
+            enqueued_counter.add(
+                1, {"task_type": _task_type_label(task_data.get("type"))}
+            )
         except Exception:
             pass
         return result

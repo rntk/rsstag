@@ -56,13 +56,13 @@
             <p id="scope-helper" class="help">Pick a scope supported by the selected task.</p>
         </div>
 
-        <div id="scope-post_ids" class="scope-block">
+        <div id="scope-posts" class="scope-block">
             <h3>Post IDs</h3>
             <p>Comma/newline separated post IDs.</p>
             <textarea name="post_ids" rows="6" cols="80">{{ form_data.post_ids }}</textarea>
         </div>
 
-        <div id="scope-feed_ids" class="scope-block">
+        <div id="scope-feeds" class="scope-block">
             <h3>Feed IDs</h3>
             {% for feed in feeds %}
             <label>
@@ -72,7 +72,7 @@
             {% endfor %}
         </div>
 
-        <div id="scope-category_ids" class="scope-block">
+        <div id="scope-categories" class="scope-block">
             <h3>Category IDs</h3>
             {% for category in categories %}
             <label>
