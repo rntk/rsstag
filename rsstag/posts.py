@@ -181,6 +181,15 @@ class RssTagPosts:
 
         return self._db.posts.find(query, projection=projection)
 
+    def get_by_tags_list(self, owner: str, tags: list, only_unread: Optional[bool] = None, projection: Optional[dict] = None) -> Iterator[dict]:
+        query = {"owner": owner, "tags": {"$in": tags}}
+        if only_unread is not None:
+            query["read"] = not only_unread
+        return self._db.posts.find(query, projection=projection)
+
+    def get_by_query(self, query: dict, projection: Optional[dict] = None) -> Iterator[dict]:
+        return self._db.posts.find(query, projection=projection)
+
     def get_processing(self, owner: str) -> Iterator[dict]:
         query = {"owner": owner, "processing": {"$ne": 0, "$exists": True}}
         return self._db.posts.find(query, projection={"pid": True, "title": True, "processing": True})
