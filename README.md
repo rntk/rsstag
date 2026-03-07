@@ -104,3 +104,25 @@ At the root of the project run:
 ### 5. Open
 
 Use browser to open `http://127.0.0.1:8885`
+
+### 6. Run DB-backed tests
+
+The integration-style test suites expect MongoDB on `127.0.0.1:8765`.
+
+Start the test database:
+
+```bash
+docker compose -f docker-compose.test.yml up -d
+```
+
+Run the worker-focused tests:
+
+```bash
+python3 -m unittest tests.test_worker_bootstrap tests.test_worker_external_loop tests.test_worker_registry_completeness tests.test_worker_dispatcher_init tests.test_worker_task_dispatch tests.test_worker_process_lifecycle tests.test_worker_classes_init
+```
+
+Stop the test database when finished:
+
+```bash
+docker compose -f docker-compose.test.yml down
+```

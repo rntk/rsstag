@@ -56,6 +56,8 @@ class RSSTagWorkerDispatcher:
 
     def __init__(self, config_path, log_file=None):
         self._config = load_config(config_path)
+        if not self._config or "settings" not in self._config:
+            raise ValueError(f"Unable to load worker config from: {config_path}")
         self._workers_pool = []
         target_log = log_file
         if not target_log:
@@ -72,7 +74,21 @@ class RSSTagWorkerDispatcher:
             password=self._config["settings"]["db_password"] if self._config["settings"]["db_password"] else None,
         )
         db = cl[self._config["settings"]["db_name"]]
+        self._client = cl
+        self._db = db
         self._workers_db = RssTagWorkers(db)
+
+    @property
+    def config(self) -> Dict[str, Any]:
+        return self._config
+
+    @property
+    def workers_db(self) -> RssTagWorkers:
+        return self._workers_db
+
+    @property
+    def db(self) -> Any:
+        return self._db
 
     def start(self):
         """Start worker"""

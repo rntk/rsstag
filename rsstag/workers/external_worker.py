@@ -137,6 +137,10 @@ class ExternalWorkerRegistry:
     def get(self, task_type: int) -> Optional[TaskPlugin]:
         return self._plugins.get(task_type)
 
+    @property
+    def plugins(self) -> Dict[int, TaskPlugin]:
+        return self._plugins
+
 
 class PostGroupingPlugin:
     """External task plugin for post grouping."""

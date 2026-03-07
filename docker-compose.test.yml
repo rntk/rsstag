@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  mongodb-test:
+    image: mongo:8
+    restart: unless-stopped
+    ports:
+      - "8765:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ ping: 1 })"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 5s

@@ -66,3 +66,7 @@ class RssTagWorkers:
             raise ValueError("worker_id must be a positive integer")
         deleted = self._db.worker_heartbeats.delete_one({"worker_id": worker_id})
         return bool(getattr(deleted, "deleted_count", 0))
+
+    def delete_heartbeat(self, worker_id: int) -> bool:
+        """Backward-compatible alias for deleting worker heartbeat state."""
+        return self.delete_worker(worker_id)

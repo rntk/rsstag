@@ -8,3 +8,4 @@ class BaseWorker:
         self._db = db
         self._config = config
         self._stopw = set(stopwords.words("english") + stopwords.words("russian"))
+        self.stopwords = self._stopw

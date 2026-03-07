@@ -10,6 +10,10 @@ class WorkerRegistry:
     def register(self, task_type: str, handler: Callable[[dict], bool]) -> None:
         self._handlers[task_type] = handler
 
+    @property
+    def handlers(self) -> Dict[str, Callable[[dict], bool]]:
+        return self._handlers
+
     def handle(self, task: dict) -> Optional[bool]:
         handler = self._handlers.get(task["type"])
         if not handler:
