@@ -95,6 +95,39 @@ class TestRssTagTasksScope(unittest.TestCase):
 
         self.assertEqual({"owner": "alice", "provider": "telegram"}, query)
 
+    def test_build_post_scope_predicate_provider_mode_empty_provider_falls_back_to_owner_only(self):
+        # If a stored task has mode=provider but empty provider, the predicate
+        # must not silently match all posts — this documents the current behaviour
+        # so any change is explicit.
+        task = {"scope": {"mode": SCOPE_MODE_PROVIDER, "provider": ""}}
+
+        query = self.storage._build_post_scope_predicate("alice", task)
+
+        self.assertEqual({"owner": "alice"}, query)
+
+    def test_validate_task_scope_none_scope_defaults_to_all_and_succeeds(self):
+        # None scope should normalise to ALL mode, which is valid for any task.
+        ok, error = self.storage.validate_task_scope(TASK_POST_GROUPING, None)
+
+        self.assertTrue(ok)
+        self.assertEqual("", error)
+
+    def test_validate_task_scope_all_mode_accepted_for_global_only_task(self):
+        # A global-only task with ALL scope (the default) must be accepted.
+        ok, error = self.storage.validate_task_scope(TASK_W2V, {"mode": SCOPE_MODE_ALL})
+
+        self.assertTrue(ok)
+        self.assertEqual("", error)
+
+    def test_validate_task_scope_unknown_mode_treated_as_all(self):
+        # An unrecognised mode is normalised to ALL, so validation should pass.
+        ok, error = self.storage.validate_task_scope(
+            TASK_POST_GROUPING, {"mode": "nonexistent_mode"}
+        )
+
+        self.assertTrue(ok)
+        self.assertEqual("", error)
+
 
 if __name__ == "__main__":
     unittest.main()
