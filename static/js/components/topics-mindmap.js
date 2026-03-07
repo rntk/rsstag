@@ -31,7 +31,9 @@ export default class TopicsMindmap {
     this.svg = null;
     this.gLinks = null;
     this.gNodes = null;
+    this.container = null;
     this.zoom = null;
+    this.resizeHandler = null;
     this.baseColor = '#d7d7af';
     this.nodeColors = ['#c8d0e8', '#d7d7af', '#c8e0c8', '#e0d0c8', '#d8c8e0', '#c8dce0'];
   }
@@ -39,10 +41,10 @@ export default class TopicsMindmap {
   render(selector, data) {
     const container = document.querySelector(selector);
     if (!container) return;
+    this.container = container;
     container.innerHTML = '';
 
-    const width = container.clientWidth || window.innerWidth;
-    const height = window.innerHeight - 140;
+    const { width, height } = this._getViewportSize();
 
     // Build hierarchy: synthetic hidden root wrapping top-level topics
     const hierarchyData = {
@@ -94,6 +96,37 @@ export default class TopicsMindmap {
 
     // Add reset view button
     this._addResetButton(container);
+
+    if (this.resizeHandler) {
+      window.removeEventListener('resize', this.resizeHandler);
+    }
+    this.resizeHandler = () => this._handleResize();
+    window.addEventListener('resize', this.resizeHandler);
+  }
+
+  _getViewportSize() {
+    if (!this.container) {
+      return {
+        width: window.innerWidth,
+        height: Math.max(window.innerHeight - 140, 480)
+      };
+    }
+
+    const width = this.container.clientWidth || window.innerWidth;
+    const rect = this.container.getBoundingClientRect();
+    const availableHeight = window.innerHeight - rect.top - 24;
+
+    return {
+      width,
+      height: Math.max(Math.floor(availableHeight), 480)
+    };
+  }
+
+  _handleResize() {
+    if (!this.svg) return;
+    const { width, height } = this._getViewportSize();
+    this.svg.attr('width', width).attr('height', height);
+    this._fitToView();
   }
 
   _collapseAll(d) {
