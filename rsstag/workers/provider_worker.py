@@ -34,8 +34,10 @@ class ProviderWorker:
 
         provider = self._providers.get(provider_name)
         if not provider:
-            logging.warning("Unknown provider %s", provider_name)
-            return True
+            error = f"Unknown provider {provider_name}"
+            logging.warning(error)
+            self._tasks.mark_task_failed(task.get("_id"), error)
+            return False
 
         posts_n = 0
         selection = None
@@ -99,8 +101,10 @@ class ProviderWorker:
             return True
         provider = self._providers.get(provider_name)
         if not provider:
-            logging.warning("Unknown provider %s", provider_name)
-            return True
+            error = f"Unknown provider {provider_name}"
+            logging.warning(error)
+            self._tasks.mark_task_failed(task.get("_id"), error)
+            return False
 
         marked = provider.mark(task["data"], provider_user)
         if marked is None:
@@ -114,8 +118,10 @@ class ProviderWorker:
     def handle_mark_telegram(self, task: Dict[str, Any]) -> bool:
         provider = self._providers.get(data_providers.TELEGRAM)
         if not provider:
-            logging.warning("Unknown provider telegram")
-            return True
+            error = "Unknown provider telegram"
+            logging.warning(error)
+            self._tasks.mark_task_failed(task.get("_id"), error)
+            return False
 
         provider_user = self._users.get_provider_user(
             task["user"], data_providers.TELEGRAM
@@ -141,8 +147,10 @@ class ProviderWorker:
     def handle_gmail_sort(self, task: Dict[str, Any]) -> bool:
         provider = self._providers.get(data_providers.GMAIL)
         if not provider:
-            logging.warning("Unknown provider gmail")
-            return True
+            error = "Unknown provider gmail"
+            logging.warning(error)
+            self._tasks.mark_task_failed(task.get("_id"), error)
+            return False
 
         provider_user = self._users.get_provider_user(
             task["user"], data_providers.GMAIL
