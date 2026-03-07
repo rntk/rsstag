@@ -9,8 +9,7 @@ from typing import Tuple, List, Optional, Dict, Any
 from collections import defaultdict
 from io import StringIO
 import unicodedata
-from threading import Thread
-from multiprocessing import Lock
+from threading import Thread, Lock
 from queue import Queue, Empty
 import traceback
 import re

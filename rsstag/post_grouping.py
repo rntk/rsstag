@@ -1,7 +1,7 @@
 """Post grouping data management and DB dispatching"""
 
 import logging
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any, Union, Iterator
 from pymongo import MongoClient
 import hashlib
 
