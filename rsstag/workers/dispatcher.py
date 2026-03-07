@@ -47,6 +47,7 @@ from rsstag.utils import load_config
 from rsstag.workers.llm_worker import LLMWorker
 from rsstag.workers.registry import WorkerRegistry
 from rsstag.workers.tag_worker import TagWorker
+from rsstag.workers.provider_worker import ProviderWorker
 from rsstag.workers_db import RssTagWorkers
 
 
@@ -124,8 +125,12 @@ class RSSTagWorkerDispatcher:
         return None
 
 
-def _build_registry(tag_worker: TagWorker, llm_worker: LLMWorker) -> WorkerRegistry:
+def _build_registry(tag_worker: TagWorker, llm_worker: LLMWorker, provider_worker: ProviderWorker) -> WorkerRegistry:
     registry = WorkerRegistry()
+    registry.register(TASK_DOWNLOAD, provider_worker.handle_download)
+    registry.register(TASK_MARK, provider_worker.handle_mark)
+    registry.register(TASK_MARK_TELEGRAM, provider_worker.handle_mark_telegram)
+    registry.register(TASK_GMAIL_SORT, provider_worker.handle_gmail_sort)
     registry.register(TASK_TAGS, tag_worker.handle_tags)
     registry.register(TASK_LETTERS, tag_worker.handle_letters)
     registry.register(TASK_NER, tag_worker.handle_ner)
@@ -200,13 +205,6 @@ def worker(config: Dict[str, Any]) -> None:
     signal.signal(signal.SIGTERM, _request_stop)
     signal.signal(signal.SIGINT, _request_stop)
 
-    tag_worker = TagWorker(db, config)
-    llm_worker = LLMWorker(db, config)
-    registry = _build_registry(tag_worker, llm_worker)
-    if _obs_available:
-        instrument_registry(registry)
-        instrument_llm_router(llm_worker._llm)
-
     providers = {
         data_providers.BAZQUX: BazquxProvider(config),
         data_providers.TELEGRAM: TelegramProvider(config, db),
@@ -215,6 +213,15 @@ def worker(config: Dict[str, Any]) -> None:
     }
     users = RssTagUsers(db)
     tasks = RssTagTasks(db)
+
+    tag_worker = TagWorker(db, config)
+    llm_worker = LLMWorker(db, config)
+    provider_worker = ProviderWorker(db, config, providers, users, tasks, record_bulk_write)
+    registry = _build_registry(tag_worker, llm_worker, provider_worker)
+    if _obs_available:
+        instrument_registry(registry)
+        instrument_llm_router(llm_worker._llm)
+
     if _obs_available:
         instrument_tasks(tasks)
         register_business_metrics(db)
@@ -232,161 +239,24 @@ def worker(config: Dict[str, Any]) -> None:
                 if task["type"] == TASK_NOOP:
                     time.sleep(randint(3, 8))
                     continue
-                if task["type"] == TASK_DOWNLOAD:
-                    logging.info("Start downloading for user")
-                    provider_name = task["data"].get("provider") or task["user"].get(
-                        "provider"
+                is_scope_valid, scope_error = tasks.validate_task_scope(
+                    task["type"], task.get("scope")
+                )
+                if not is_scope_valid:
+                    logging.warning(
+                        "Rejecting invalid task+scope combination. task_id=%s type=%s user=%s error=%s",
+                        task.get("_id"),
+                        task.get("type"),
+                        task.get("user", {}).get("sid"),
+                        scope_error,
                     )
-                    provider_user = users.get_provider_user(task["user"], provider_name)
-                    if not provider_user:
-                        logging.warning(
-                            "No provider credentials for %s on user %s",
-                            provider_name,
-                            task["user"]["sid"],
-                        )
-                        task_done = True
-                    else:
-                        provider = providers[provider_name]
-                        posts_n = 0
-                        selection = None
-                        if task.get("data"):
-                            selection = task["data"].get("selection")
-                        try:
-                            for posts, feeds in provider.download(
-                                provider_user, selection
-                            ):
-                                posts_n += len(posts)
-                                f_ids = [f["feed_id"] for f in feeds]
-                                c = db.feeds.find(
-                                    {
-                                        "owner": task["user"]["sid"],
-                                        "feed_id": {"$in": f_ids},
-                                    },
-                                    projection={"feed_id": True, "_id": False},
-                                )
-                                skip_ids = {fc["feed_id"] for fc in c}
-                                n_feeds = []
-                                for fee in feeds:
-                                    if fee["feed_id"] in skip_ids:
-                                        continue
-                                    fee["provider"] = provider_name
-                                    n_feeds.append(fee)
-                                if posts:
-                                    for post in posts:
-                                        post["provider"] = provider_name
-                                    try:
-                                        db.posts.insert_many(posts, ordered=False)
-                                        record_bulk_write("posts", len(posts))
-                                    except BulkWriteError as bulk_err:
-                                        # Ignore duplicate key errors (code 11000), re-raise others
-                                        non_dup = [
-                                            e for e in bulk_err.details.get("writeErrors", [])
-                                            if e.get("code") != 11000
-                                        ]
-                                        if non_dup:
-                                            raise
-                                if n_feeds:
-                                    db.feeds.insert_many(n_feeds)
-                                    record_bulk_write("feeds", len(n_feeds))
-                            task_done = True
-                        except Exception as e:
-                            task_done = False
-                            logging.error(
-                                "Can`t save in db for user %s. Info: %s. %s",
-                                task["user"]["sid"],
-                                e,
-                                traceback.format_exc(),
-                            )
-                            logging.info("Saved posts: %s.", posts_n)
-
-                elif task["type"] == TASK_MARK:
-                    provider_name = task["data"].get("provider") or task["user"].get(
-                        "provider"
-                    )
-                    provider_user = users.get_provider_user(task["user"], provider_name)
-                    if not provider_user:
-                        logging.warning(
-                            "No provider credentials for %s on user %s",
-                            provider_name,
-                            task["user"]["sid"],
-                        )
-                        task_done = True
-                    else:
-                        provider = providers[provider_name]
-                        marked = provider.mark(task["data"], provider_user)
-                        if marked is None:
-                            tasks.freeze_tasks(task["user"], task["type"])
-                            users.update_provider(
-                                task["user"]["sid"], provider_name, {"retoken": True}
-                            )
-                            task_done = False
-                        else:
-                            task_done = marked
-                elif task["type"] == TASK_MARK_TELEGRAM:
-                    provider = providers[data_providers.TELEGRAM]
-                    provider_user = users.get_provider_user(
-                        task["user"], data_providers.TELEGRAM
-                    )
-                    if not provider_user:
-                        logging.warning(
-                            "No provider credentials for telegram on user %s",
-                            task["user"]["sid"],
-                        )
-                        task_done = True
-                    else:
-                        marked = provider.mark_all(task["data"], provider_user)
-                        if marked is None:
-                            tasks.freeze_tasks(task["user"], task["type"])
-                            users.update_provider(
-                                task["user"]["sid"],
-                                data_providers.TELEGRAM,
-                                {"retoken": True},
-                            )
-                            task_done = False
-                        else:
-                            task_done = marked
-                elif task["type"] == TASK_GMAIL_SORT:
-                    provider = providers[data_providers.GMAIL]
-                    provider_user = users.get_provider_user(
-                        task["user"], data_providers.GMAIL
-                    )
-                    if not provider_user:
-                        logging.warning(
-                            "No provider credentials for gmail on user %s",
-                            task["user"]["sid"],
-                        )
-                        task_done = True
-                    else:
-                        sorted_emails = provider.sort_emails_by_domain(provider_user)
-                        if sorted_emails is None:
-                            tasks.freeze_tasks(task["user"], task["type"])
-                            users.update_provider(
-                                task["user"]["sid"],
-                                data_providers.GMAIL,
-                                {"retoken": True},
-                            )
-                            task_done = False
-                        else:
-                            task_done = sorted_emails
+                    tasks.mark_task_failed(task.get("_id"), scope_error)
+                    task_done = True
                 else:
-                    is_scope_valid, scope_error = tasks.validate_task_scope(
-                        task["type"], task.get("scope")
-                    )
-                    if not is_scope_valid:
-                        logging.warning(
-                            "Rejecting invalid task+scope combination. task_id=%s type=%s user=%s error=%s",
-                            task.get("_id"),
-                            task.get("type"),
-                            task.get("user", {}).get("sid"),
-                            scope_error,
-                        )
-                        tasks.mark_task_failed(task.get("_id"), scope_error)
-                        task_done = True
-                    else:
-                        task_done = registry.handle(task)
-                        if task_done is None:
-                            logging.warning("Unknown task type %s", task["type"])
-                            task_done = False
+                    task_done = registry.handle(task)
+                    if task_done is None:
+                        logging.warning("Unknown task type %s", task["type"])
+                        task_done = False
 
                 if task_done:
                     tasks.finish_task(task)
