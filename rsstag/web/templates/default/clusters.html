@@ -1,7 +1,7 @@
 ﻿<!DOCTYPE html />
 <html>
 <head>
-<title>Clusters</title>
+<title>{{ page_title or 'Clusters' }}</title>
 {% include "head-data.html" %}
 </head>
 <body>
@@ -23,12 +23,13 @@
 </div>
 <div class="page">
     <div id="posts_page">
+        <h2>{{ page_title or 'Clusters' }}</h2>
         {% if links %}
             {% for cl in links %}
             <a href="{{cl[1]}}" class="cluster_link">{{cl[0]}}&nbsp;({{cl[2]}})</a>
             {% endfor %}
         {% else %}
-            <p>No clusters</p>
+            <p>{{ empty_message or 'No clusters' }}</p>
         {% endif %}
     </div>
 </div>

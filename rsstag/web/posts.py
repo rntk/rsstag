@@ -7,11 +7,16 @@ from collections import defaultdict
 from urllib.parse import unquote_plus, unquote, quote_plus
 import requests  # Add requests import
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 from jinja2 import Template
 
 if TYPE_CHECKING:
     from rsstag.web.app import RSSTagApplication
+from rsstag.snippets import (
+    merge_grouped_snippets,
+    snippet_text_from_sentence,
+    strip_html_markup,
+)
 from rsstag.tasks import (
     TASK_MARK,
     TASK_MARK_TELEGRAM,
@@ -223,9 +228,7 @@ def _topic_matches_requested(group_name: str, requested_topic: Optional[str]) ->
 
 def _strip_html_markup(value: str) -> str:
     """Convert HTML-ish text to plain text."""
-    without_tags: str = re.sub(r"<[^>]+>", " ", value)
-    unescaped: str = html.unescape(without_tags)
-    return re.sub(r"\s+", " ", unescaped).strip()
+    return strip_html_markup(value)
 
 
 def _extract_sentence_text_for_context(
@@ -295,19 +298,76 @@ def _resolve_sentence_bounds(
 
 def _snippet_text_from_sentence(raw_content: str, sentence: dict) -> str:
     """Get display-ready snippet text from sentence data."""
-    sentence_text = sentence.get("text")
-    if sentence_text:
-        return _strip_html_markup(str(sentence_text))
+    return snippet_text_from_sentence(raw_content, sentence)
 
-    start_idx: Optional[int] = sentence.get("start")
-    end_idx: Optional[int] = sentence.get("end")
-    if (
-        isinstance(start_idx, int)
-        and isinstance(end_idx, int)
-        and 0 <= start_idx < end_idx <= len(raw_content)
-    ):
-        return _strip_html_markup(raw_content[start_idx:end_idx])
-    return ""
+
+def _build_snippet_ref_key(post_id: str, topic: str, indices: list[int]) -> str:
+    return "::".join(
+        [str(post_id), str(topic), ",".join(str(index) for index in indices)]
+    )
+
+
+def _flatten_topic_snippets(topics_data: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    snippets: list[dict[str, Any]] = []
+    for topic_name, topic_data in topics_data.items():
+        for snippet in topic_data.get("snippets", []):
+            item: dict[str, Any] = dict(snippet)
+            item["topic"] = topic_name
+            snippets.append(item)
+    return snippets
+
+
+def _build_snippet_lookup(
+    topics_data: dict[str, dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    lookup: dict[str, dict[str, Any]] = {}
+    for snippet in _flatten_topic_snippets(topics_data):
+        key: str = _build_snippet_ref_key(
+            str(snippet["post_id"]),
+            str(snippet.get("topic", "")),
+            [int(index) for index in snippet.get("indices", [])],
+        )
+        lookup[key] = snippet
+    return lookup
+
+
+def _load_posts_for_snippets(
+    app: "RSSTagApplication",
+    user: dict,
+    post_ids: list[str],
+) -> tuple[dict[str, dict[str, Any]], str]:
+    projection: dict[str, bool] = {"content": True, "feed_id": True, "url": True}
+    all_posts: dict[str, dict[str, Any]] = {}
+    feed_titles: set[str] = set()
+
+    for post_id in post_ids:
+        post: Optional[dict] = app.posts.get_by_pid(user["sid"], post_id, projection)
+        if not post:
+            continue
+
+        feed: Optional[dict] = app.feeds.get_by_feed_id(user["sid"], post["feed_id"])
+        feed_title: str = feed["title"] if feed else f"Post {post_id}"
+        feed_titles.add(feed_title)
+
+        raw_content: str = gzip.decompress(post["content"]["content"]).decode(
+            "utf-8", "replace"
+        )
+        title: str = str(post.get("content", {}).get("title", ""))
+        if title:
+            raw_content = f"{title}. {raw_content}"
+
+        all_posts[post_id] = {
+            "feed_title": feed_title,
+            "url": post.get("url"),
+            "title": title or f"Post {post_id}",
+            "raw_content": raw_content,
+            "feed_id": str(post.get("feed_id", "")),
+        }
+
+    combined_feed_title: str = (
+        " | ".join(sorted(list(feed_titles))) if feed_titles else "Multiple Posts"
+    )
+    return all_posts, combined_feed_title
 
 
 def _build_topics_tree(topic_counts: dict[str, dict]) -> list[dict]:
@@ -1839,10 +1899,12 @@ def _collect_topic_snippets(
 
     Returns dict of {topic_name: {"color": str, "snippets": [...]}}
     """
-    topics_data = {}
+    topics_data: dict[str, dict[str, Any]] = {}
     plain_text_cache: dict[str, str] = {}
 
     for post_id in post_ids:
+        if post_id not in all_posts:
+            continue
         post_grouped_data = app.post_grouping.get_grouped_posts(user["sid"], [post_id])
         if (
             post_grouped_data
@@ -1859,9 +1921,22 @@ def _collect_topic_snippets(
 
                 plain_text_cache[post_id], _ = build_html_mapping(raw_content)
 
-            for group, indices in post_grouped_data["groups"].items():
+            post_topics_data = merge_grouped_snippets(
+                raw_content,
+                list(post_grouped_data.get("sentences", [])),
+                dict(post_grouped_data.get("groups", {})),
+                {
+                    "post_id": post_id,
+                    "post_title": all_posts[post_id]["title"],
+                    "url": all_posts[post_id]["url"],
+                    "feed_id": all_posts[post_id].get("feed_id", ""),
+                    "feed_title": all_posts[post_id].get("feed_title", ""),
+                },
+            )
+            for group, snippets in post_topics_data.items():
                 if not _topic_matches_requested(group, requested_topic):
                     continue
+                indices = post_grouped_data["groups"].get(group, [])
                 if normalized_context_tags:
                     pt = plain_text_cache.get(post_id)
                     if pt and not _topic_sentences_match_context(
@@ -1874,44 +1949,7 @@ def _collect_topic_snippets(
 
                 if group not in topics_data:
                     topics_data[group] = {"color": _group_color(group), "snippets": []}
-
-                sorted_indices = sorted(indices)
-                if not sorted_indices:
-                    continue
-
-                current_snippet = None
-                for idx in sorted_indices:
-                    s_obj = sentences_map.get(idx)
-                    if not s_obj:
-                        continue
-                    text = _snippet_text_from_sentence(raw_content, s_obj)
-                    if not text:
-                        continue
-
-                    if current_snippet and idx == current_snippet["index"] + 1:
-                        current_snippet["text"] += " " + text
-                        current_snippet["index"] = idx
-                        current_snippet["indices"].append(idx)
-                        if not s_obj.get("read", False):
-                            current_snippet["read"] = False
-                    else:
-                        if current_snippet:
-                            topics_data[group]["snippets"].append(current_snippet)
-
-                        current_snippet = {
-                            "text": text,
-                            "post_id": post_id,
-                            "post_title": all_posts[post_id]["title"],
-                            "index": idx,
-                            "indices": [idx],
-                            "url": all_posts[post_id]["url"],
-                            "read": s_obj.get("read", False),
-                            "feed_id": all_posts[post_id].get("feed_id", ""),
-                            "feed_title": all_posts[post_id].get("feed_title", ""),
-                        }
-
-                if current_snippet:
-                    topics_data[group]["snippets"].append(current_snippet)
+                topics_data[group]["snippets"].extend(snippets)
 
     return topics_data
 
@@ -1931,34 +1969,7 @@ def on_post_grouped_snippets_get(
 
     context_tags = _get_context_tags(user)
     normalized_context_tags = _normalize_context_tags(context_tags)
-
-    projection: dict[str, bool] = {"content": True, "feed_id": True, "url": True}
-    all_posts: dict = {}
-    feed_titles: set[str] = set()
-
-    for post_id in post_ids:
-        post = app.posts.get_by_pid(user["sid"], post_id, projection)
-        if post:
-            feed = app.feeds.get_by_feed_id(user["sid"], post["feed_id"])
-            feed_title = feed["title"] if feed else f"Post {post_id}"
-            feed_titles.add(feed_title)
-
-            raw_content = gzip.decompress(post["content"]["content"]).decode(
-                "utf-8", "replace"
-            )
-            if post["content"]["title"]:
-                raw_content = post["content"]["title"] + ". " + raw_content
-
-            all_posts[post_id] = {
-                "feed_title": feed_title,
-                "url": post.get("url"),
-                "title": post.get("content", {}).get("title", f"Post {post_id}"),
-                "raw_content": raw_content,
-            }
-
-    combined_feed_title = (
-        " | ".join(sorted(list(feed_titles))) if feed_titles else "Multiple Posts"
-    )
+    all_posts, combined_feed_title = _load_posts_for_snippets(app, user, post_ids)
 
     topics_data = _collect_topic_snippets(
         app, user, post_ids, all_posts, requested_topic, normalized_context_tags
@@ -1997,28 +2008,7 @@ def on_topic_snippets_api_get(
     if requested_topic:
         requested_topic = unquote(requested_topic)
 
-    projection: dict[str, bool] = {"content": True, "feed_id": True, "url": True}
-    all_posts: dict = {}
-
-    for post_id in post_ids:
-        post = app.posts.get_by_pid(user["sid"], post_id, projection)
-        if post:
-            feed = app.feeds.get_by_feed_id(user["sid"], post["feed_id"])
-            feed_title = feed["title"] if feed else f"Post {post_id}"
-
-            raw_content = gzip.decompress(post["content"]["content"]).decode(
-                "utf-8", "replace"
-            )
-            if post["content"]["title"]:
-                raw_content = post["content"]["title"] + ". " + raw_content
-
-            all_posts[post_id] = {
-                "feed_id": post["feed_id"],
-                "feed_title": feed_title,
-                "url": post.get("url"),
-                "title": post.get("content", {}).get("title", f"Post {post_id}"),
-                "raw_content": raw_content,
-            }
+    all_posts, _ = _load_posts_for_snippets(app, user, post_ids)
 
     topics_data = _collect_topic_snippets(
         app, user, post_ids, all_posts, requested_topic, None
@@ -2044,6 +2034,127 @@ def on_topic_snippets_api_get(
     return Response(
         json.dumps({"snippets": all_snippets}),
         mimetype="application/json",
+    )
+
+
+def on_sentence_clusters_get(
+    app: "RSSTagApplication", user: dict, request: Request
+) -> Response:
+    """Render the persisted sentence cluster list."""
+    cluster_docs: list[dict[str, Any]] = list(
+        app.snippet_clusters.get_all_by_owner(
+            user["sid"],
+            projection={"cluster_id": 1, "title": 1, "snippet_refs": 1, "post_ids": 1},
+        )
+    )
+    if not cluster_docs:
+        page: Template = app.template_env.get_template("clusters.html")
+        return Response(
+            page.render(
+                links=[],
+                page_title="Sentence Clusters",
+                empty_message="No sentence clusters",
+                user_settings=user["settings"],
+                provider=user["provider"],
+            ),
+            mimetype="text/html",
+        )
+
+    post_ids: list[str] = sorted(
+        {
+            str(post_id)
+            for cluster_doc in cluster_docs
+            for post_id in cluster_doc.get("post_ids", [])
+            if post_id
+        }
+    )
+    all_posts, _ = _load_posts_for_snippets(app, user, post_ids)
+    topics_data = _collect_topic_snippets(app, user, post_ids, all_posts, None, None)
+    snippet_lookup = _build_snippet_lookup(topics_data)
+
+    only_unread: bool = bool(user.get("settings", {}).get("only_unread", False))
+    links: list[tuple[str, str, int]] = []
+    for cluster_doc in cluster_docs:
+        visible_count: int = 0
+        for snippet_ref in cluster_doc.get("snippet_refs", []):
+            key: str = _build_snippet_ref_key(
+                str(snippet_ref.get("post_id", "")),
+                str(snippet_ref.get("topic", "")),
+                [int(index) for index in snippet_ref.get("indices", [])],
+            )
+            snippet: Optional[dict[str, Any]] = snippet_lookup.get(key)
+            if not snippet:
+                continue
+            if only_unread and bool(snippet.get("read", False)):
+                continue
+            visible_count += 1
+
+        if visible_count == 0:
+            continue
+
+        link: str = app.routes.get_url_by_endpoint(
+            endpoint="on_sentence_cluster_get",
+            params={"cluster_id": int(cluster_doc["cluster_id"])},
+        )
+        links.append((str(cluster_doc.get("title", "Snippet Cluster")), link, visible_count))
+
+    links.sort(key=lambda item: item[2], reverse=True)
+    page = app.template_env.get_template("clusters.html")
+    return Response(
+        page.render(
+            links=links,
+            page_title="Sentence Clusters",
+            empty_message="No sentence clusters",
+            user_settings=user["settings"],
+            provider=user["provider"],
+        ),
+        mimetype="text/html",
+    )
+
+
+def on_sentence_cluster_get(
+    app: "RSSTagApplication", user: dict, request: Request, cluster_id: int
+) -> Response:
+    """Render snippets belonging to one persisted sentence cluster."""
+    cluster_doc: Optional[dict[str, Any]] = app.snippet_clusters.get_by_cluster_id(
+        user["sid"],
+        cluster_id,
+        projection={"cluster_id": 1, "title": 1, "snippet_refs": 1, "post_ids": 1},
+    )
+    if not cluster_doc:
+        return app.on_error(user, request, NotFound())
+
+    post_ids: list[str] = [str(post_id) for post_id in cluster_doc.get("post_ids", []) if post_id]
+    all_posts, combined_feed_title = _load_posts_for_snippets(app, user, post_ids)
+    topics_data = _collect_topic_snippets(app, user, post_ids, all_posts, None, None)
+    snippet_lookup = _build_snippet_lookup(topics_data)
+
+    snippets: list[dict[str, Any]] = []
+    only_unread: bool = bool(user.get("settings", {}).get("only_unread", False))
+    for snippet_ref in cluster_doc.get("snippet_refs", []):
+        key: str = _build_snippet_ref_key(
+            str(snippet_ref.get("post_id", "")),
+            str(snippet_ref.get("topic", "")),
+            [int(index) for index in snippet_ref.get("indices", [])],
+        )
+        snippet: Optional[dict[str, Any]] = snippet_lookup.get(key)
+        if not snippet:
+            continue
+        if only_unread and bool(snippet.get("read", False)):
+            continue
+        snippets.append(snippet)
+
+    page = app.template_env.get_template("sentence-cluster-detail.html")
+    return Response(
+        page.render(
+            cluster_id=cluster_id,
+            cluster_title=cluster_doc.get("title", "Snippet Cluster"),
+            snippets=snippets,
+            feed_title=combined_feed_title,
+            user_settings=user["settings"],
+            provider=user["provider"],
+        ),
+        mimetype="text/html",
     )
 
 

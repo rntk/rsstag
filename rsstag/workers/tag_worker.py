@@ -5,10 +5,10 @@ import logging
 import math
 import os.path
 import time
-from collections import defaultdict
+from collections import Counter, defaultdict
 from functools import lru_cache
 from random import randint
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from pymongo import UpdateOne
 from sklearn.cluster import DBSCAN
@@ -19,7 +19,10 @@ from rsstag.entity_extractor import RssTagEntityExtractor
 from rsstag.html_cleaner import HTMLCleaner
 from rsstag.letters import RssTagLetters
 from rsstag.posts import PostLemmaSentence, RssTagPosts
+from rsstag.post_grouping import RssTagPostGrouping
 from rsstag.sentiment import RuSentiLex, SentimentConverter, WordNetAffectRuRom
+from rsstag.snippet_clusters import RssTagSnippetClusters
+from rsstag.snippets import merge_grouped_snippets
 from rsstag.tags import RssTagTags
 from rsstag.tags_builder import TagsBuilder
 from rsstag.users import RssTagUsers
@@ -53,6 +56,9 @@ class TagWorker(BaseWorker):
 
     def handle_clustering(self, task: dict) -> Optional[bool]:
         return self.make_clustering(task["user"]["sid"])
+
+    def handle_snippet_clustering(self, task: dict) -> Optional[bool]:
+        return self.make_snippet_clustering(task["user"]["sid"])
 
     def handle_w2v(self, task: dict) -> Optional[bool]:
         return self.make_w2v(task["user"]["sid"])
@@ -342,6 +348,174 @@ class TagWorker(BaseWorker):
             return posts.set_clusters(owner, clusters)
 
         return True
+
+    def _build_snippet_cluster_title(self, snippets: List[Dict[str, Any]]) -> str:
+        """Build a short human-readable title for a snippet cluster."""
+        texts: List[str] = [str(snippet.get("text", "")).strip() for snippet in snippets]
+        texts = [text for text in texts if text]
+        if texts:
+            try:
+                vectorizer = TfidfVectorizer(stop_words=list(self._stopw))
+                vectors = vectorizer.fit_transform(texts)
+                if vectors.shape[1] > 0:
+                    centroid = vectors.mean(axis=0).A1
+                    feature_names = vectorizer.get_feature_names_out()
+                    top_indices = centroid.argsort()[-3:][::-1]
+                    top_words = [feature_names[index] for index in top_indices]
+                    title = ", ".join(word for word in top_words if word)
+                    if title:
+                        return title
+            except ValueError:
+                pass
+
+        topic_counter: Counter[str] = Counter(
+            str(snippet.get("topic", "")).strip()
+            for snippet in snippets
+            if str(snippet.get("topic", "")).strip()
+        )
+        if topic_counter:
+            return ", ".join(topic for topic, _count in topic_counter.most_common(2))
+        return "Snippet Cluster"
+
+    def make_snippet_clustering(self, owner: str) -> Optional[bool]:
+        """Cluster merged snippet ranges produced by post grouping."""
+        post_grouping = RssTagPostGrouping(self._db)
+        snippet_clusters = RssTagSnippetClusters(self._db)
+        grouped_posts: List[Dict[str, Any]] = list(
+            post_grouping.get_all_by_owner(
+                owner,
+                projection={"post_ids": 1, "sentences": 1, "groups": 1},
+            )
+        )
+        if not grouped_posts:
+            return snippet_clusters.replace_clusters(owner, [])
+
+        post_ids: List[str] = sorted(
+            {
+                str(post_id)
+                for grouped_post in grouped_posts
+                for post_id in grouped_post.get("post_ids", [])
+                if post_id
+            }
+        )
+        posts_map: Dict[str, Dict[str, Any]] = {
+            str(post.get("pid")): post
+            for post in self._db.posts.find(
+                {"owner": owner, "pid": {"$in": post_ids}},
+                projection={"pid": 1, "content": 1, "feed_id": 1, "url": 1},
+            )
+        }
+        feed_ids: List[str] = sorted(
+            {
+                str(post.get("feed_id"))
+                for post in posts_map.values()
+                if post.get("feed_id") is not None
+            }
+        )
+        feeds_map: Dict[str, Dict[str, Any]] = {
+            str(feed.get("feed_id")): feed
+            for feed in self._db.feeds.find(
+                {"owner": owner, "feed_id": {"$in": feed_ids}},
+                projection={"feed_id": 1, "title": 1},
+            )
+        }
+
+        snippets: List[Dict[str, Any]] = []
+        for grouped_post in grouped_posts:
+            doc_post_ids: List[str] = [
+                str(post_id) for post_id in grouped_post.get("post_ids", []) if post_id
+            ]
+            if len(doc_post_ids) != 1:
+                continue
+
+            post_id: str = doc_post_ids[0]
+            post: Optional[Dict[str, Any]] = posts_map.get(post_id)
+            if not post:
+                continue
+
+            raw_content_bytes: Any = post.get("content", {}).get("content", b"")
+            try:
+                raw_content: str = gzip.decompress(raw_content_bytes).decode(
+                    "utf-8", "replace"
+                )
+            except Exception:
+                continue
+
+            title: str = str(post.get("content", {}).get("title", ""))
+            if title:
+                raw_content = f"{title}. {raw_content}"
+
+            feed_id: str = str(post.get("feed_id", ""))
+            topic_snippets: Dict[str, List[Dict[str, Any]]] = merge_grouped_snippets(
+                raw_content,
+                list(grouped_post.get("sentences", [])),
+                dict(grouped_post.get("groups", {})),
+                {
+                    "post_id": post_id,
+                    "post_title": title or f"Post {post_id}",
+                    "url": post.get("url"),
+                    "feed_id": feed_id,
+                    "feed_title": feeds_map.get(feed_id, {}).get(
+                        "title", f"Post {post_id}"
+                    ),
+                },
+            )
+            for topic_items in topic_snippets.values():
+                snippets.extend(topic_items)
+
+        clusterable_snippets: List[Dict[str, Any]] = [
+            snippet for snippet in snippets if str(snippet.get("text", "")).strip()
+        ]
+        if len(clusterable_snippets) < 2:
+            return snippet_clusters.replace_clusters(owner, [])
+
+        try:
+            vectorizer = TfidfVectorizer(stop_words=list(self._stopw))
+            vectors = vectorizer.fit_transform(
+                [str(snippet["text"]) for snippet in clusterable_snippets]
+            )
+            if vectors.shape[1] == 0:
+                return snippet_clusters.replace_clusters(owner, [])
+            labels = DBSCAN(eps=0.7, min_samples=2, metric="cosine").fit_predict(vectors)
+        except ValueError:
+            return snippet_clusters.replace_clusters(owner, [])
+
+        grouped_clusters: Dict[int, List[Dict[str, Any]]] = defaultdict(list)
+        for label, snippet in zip(labels, clusterable_snippets):
+            cluster_id: int = int(label)
+            if cluster_id < 0:
+                continue
+            grouped_clusters[cluster_id].append(snippet)
+
+        payload: List[Dict[str, Any]] = []
+        for cluster_id in sorted(grouped_clusters):
+            cluster_snippets: List[Dict[str, Any]] = grouped_clusters[cluster_id]
+            payload.append(
+                {
+                    "cluster_id": cluster_id,
+                    "title": self._build_snippet_cluster_title(cluster_snippets),
+                    "item_count": len(cluster_snippets),
+                    "post_ids": sorted(
+                        {str(snippet["post_id"]) for snippet in cluster_snippets}
+                    ),
+                    "snippet_refs": [
+                        {
+                            "post_id": str(snippet["post_id"]),
+                            "topic": str(snippet.get("topic", "")),
+                            "indices": [int(index) for index in snippet.get("indices", [])],
+                        }
+                        for snippet in cluster_snippets
+                    ],
+                }
+            )
+
+        logging.info(
+            "Snippet clusters for user %s: snippets=%s clusters=%s",
+            owner,
+            len(clusterable_snippets),
+            len(payload),
+        )
+        return snippet_clusters.replace_clusters(owner, payload)
 
     def make_w2v(self, owner: str) -> Optional[bool]:
         l_sent = PostLemmaSentence(self._db, owner, split=True)

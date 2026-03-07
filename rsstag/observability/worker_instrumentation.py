@@ -30,6 +30,7 @@ from rsstag.tasks import (
     TASK_POST_GROUPING_BATCH,
     TASK_TAG_CLASSIFICATION_BATCH,
     TASK_DELETE_FEEDS,
+    TASK_SNIPPET_CLUSTERING,
 )
 
 TASK_TYPE_NAMES = {
@@ -58,6 +59,7 @@ TASK_TYPE_NAMES = {
     TASK_POST_GROUPING_BATCH: "post_grouping_batch",
     TASK_TAG_CLASSIFICATION_BATCH: "tag_classification_batch",
     TASK_DELETE_FEEDS: "delete_feeds",
+    TASK_SNIPPET_CLUSTERING: "snippet_clustering",
 }
 
 

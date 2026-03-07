@@ -3296,3 +3296,16 @@ h3.post_title {
         background: #218838;
     }
 }
+
+.sentence-cluster-page {
+    .sentence-cluster-card {
+        border-left: 4px solid #2f6f8f;
+    }
+
+    .snippet-secondary-meta {
+        margin: 6px 0 10px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+}

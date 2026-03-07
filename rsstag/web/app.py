@@ -21,6 +21,7 @@ from rsstag.bi_grams import RssTagBiGrams
 from rsstag.users import RssTagUsers
 from rsstag.tokens import RssTagTokens
 from rsstag.workers_db import RssTagWorkers
+from rsstag.snippet_clusters import RssTagSnippetClusters
 from rsstag.lda import LDA
 from rsstag.html_cleaner import HTMLCleaner
 
@@ -134,6 +135,8 @@ class RSSTagApplication(object):
         self.tokens.prepare()
         self.workers = RssTagWorkers(self.db)
         self.workers.prepare()
+        self.snippet_clusters = RssTagSnippetClusters(self.db)
+        self.snippet_clusters.prepare()
         self.routes = RSSTagRoutes(self.config["settings"]["host_name"], handlers=self)
         self.endpoints = {}
         self.update_endpoints()
@@ -624,6 +627,14 @@ class RSSTagApplication(object):
         self, user: dict, request: Request, pids: str
     ) -> Response:
         return posts_handlers.on_topic_snippets_api_get(self, user, request, pids)
+
+    def on_sentence_clusters_get(self, user: dict, request: Request) -> Response:
+        return posts_handlers.on_sentence_clusters_get(self, user, request)
+
+    def on_sentence_cluster_get(
+        self, user: dict, request: Request, cluster_id: int
+    ) -> Response:
+        return posts_handlers.on_sentence_cluster_get(self, user, request, cluster_id)
 
     def on_topics_mindmap_get(self, user: dict, request: Request) -> Response:
         return posts_handlers.on_topics_mindmap_get(self, user, request)

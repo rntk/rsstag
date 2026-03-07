@@ -414,6 +414,16 @@ class RSSTagRoutes:
                 "methods": ["POST"],
             },
             {
+                "url": "/sentence-clusters",
+                "endpoint": "on_sentence_clusters_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/sentence-clusters/<int:cluster_id>",
+                "endpoint": "on_sentence_cluster_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/telegram-auth",
                 "endpoint": "on_telegram_auth_post",
                 "methods": ["POST"],

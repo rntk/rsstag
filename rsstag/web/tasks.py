@@ -23,6 +23,7 @@ from rsstag.tasks import (
     TASK_GMAIL_SORT,
     TASK_POST_GROUPING_BATCH,
     TASK_TAG_CLASSIFICATION_BATCH,
+    TASK_SNIPPET_CLUSTERING,
     get_task_scope_hint,
 )
 
@@ -51,6 +52,7 @@ def on_tasks_get(app, user: dict, request: Request) -> Response:
         TASK_GMAIL_SORT: "Sort Gmail emails",
         TASK_POST_GROUPING_BATCH: "Group posts (batch)",
         TASK_TAG_CLASSIFICATION_BATCH: "Classify tags (batch)",
+        TASK_SNIPPET_CLUSTERING: "Cluster snippets",
     }
     available_tasks = {
         task_type: f"{title} ({get_task_scope_hint(task_type)})"

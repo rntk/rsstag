@@ -34,6 +34,7 @@ TASK_POST_GROUPING_BATCH = 21
 TASK_TAG_CLASSIFICATION_BATCH = 22
 TASK_DELETE_FEEDS = 23
 TASK_POST_GROUPING_CLEANUP = 24
+TASK_SNIPPET_CLUSTERING = 25
 
 SCOPE_MODE_ALL = "all"
 SCOPE_MODE_POSTS = "posts"
@@ -1010,6 +1011,7 @@ class RssTagTasks:
             TASK_TAG_CLASSIFICATION_BATCH: "Tags classification (batch)",
             TASK_DELETE_FEEDS: "Delete feeds",
             TASK_POST_GROUPING_CLEANUP: "Post grouping cleanup (supports scoped reprocess)",
+            TASK_SNIPPET_CLUSTERING: "Snippet clustering",
         }
 
         if task_type in task_titles:
