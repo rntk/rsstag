@@ -1,10 +1,11 @@
+import gzip
 import os
 import socket
 import tempfile
 import unittest
 from configparser import ConfigParser
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Dict, Optional
 
 from pymongo.database import Database
 from werkzeug.test import Client
@@ -164,3 +165,87 @@ class MongoWebTestCase(unittest.TestCase):
     @classmethod
     def build_client(cls) -> Client:
         return Client(cls.app.set_response, Response)
+
+    @classmethod
+    def seed_test_user(cls, login: str = "testuser", password: str = "testpass") -> tuple[dict, str]:
+        """Create a user in DB with a known SID. Returns (user_doc, sid)."""
+        sid = cls.app.users.create_account(login, password)
+        assert sid is not None, f"Failed to create test user '{login}'"
+        user = cls.app.users.get_by_sid(sid)
+        assert user is not None, f"Failed to retrieve test user with sid '{sid}'"
+        return dict(user), str(sid)
+
+    @classmethod
+    def get_authenticated_client(cls, sid: str) -> Client:
+        """Return a Client pre-configured with the given SID cookie."""
+        client = Client(cls.app.set_response, Response)
+        client.set_cookie("sid", sid)
+        return client
+
+    @classmethod
+    def seed_minimal_data(cls, owner: str) -> Dict[str, Any]:
+        """Insert minimal fixtures: 1 feed, 2 posts, 1 tag, 1 letter, 1 bi_gram.
+        Returns dict of inserted identifiers."""
+        compressed = gzip.compress("Test post content for integration tests.".encode("utf-8"))
+
+        feed_id = "test-feed-1"
+        cls.test_db.feeds.insert_one({
+            "owner": owner,
+            "feed_id": feed_id,
+            "category_id": "test-category",
+            "category_title": "Test Category",
+            "category_local_url": "/category/test-category",
+            "local_url": f"/feed/{feed_id}",
+            "title": "Test Feed",
+            "url": "http://example.com/feed",
+            "favicon": "",
+            "processing": 0,
+        })
+
+        post_pids = []
+        for i in range(2):
+            pid = f"test-post-{i + 1}"
+            cls.test_db.posts.insert_one({
+                "owner": owner,
+                "pid": pid,
+                "feed_id": feed_id,
+                "processing": 0,
+                "tags": ["testtag"],
+                "content": {
+                    "title": f"Test Post {i + 1}",
+                    "content": compressed,
+                },
+                "date": 1700000000 + i,
+            })
+            post_pids.append(pid)
+
+        cls.test_db.tags.insert_one({
+            "owner": owner,
+            "tag": "testtag",
+            "posts_count": 2,
+            "unread_count": 2,
+            "words": ["testtag"],
+            "local_url": "/tag/testtag",
+            "processing": 0,
+            "temperature": 1,
+            "freq": 1.0,
+            "sentiment": [],
+        })
+
+        cls.test_db.letters.insert_one({"owner": owner, "letter": "t", "count": 2})
+
+        cls.test_db.bi_grams.insert_one({
+            "owner": owner,
+            "tag": "test phrase",
+            "posts_count": 1,
+            "processing": 0,
+            "temperature": 1,
+        })
+
+        return {
+            "feed_id": feed_id,
+            "post_pids": post_pids,
+            "tag": "testtag",
+            "category": "test-category",
+            "letter": "t",
+        }

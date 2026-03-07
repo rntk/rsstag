@@ -534,6 +534,11 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/api/sentence-clusters/<int:cluster_id>/topic-snippets",
+                "endpoint": "on_sentence_cluster_topic_snippets_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/read/snippets",
                 "endpoint": "on_read_snippets_post",
                 "methods": ["POST"],

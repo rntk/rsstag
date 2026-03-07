@@ -169,6 +169,61 @@ function handleScroll() {
   }
 }
 
+function initSentenceClusterPage() {
+  const tabsContainer = document.getElementById('sentence_cluster_tabs');
+  if (!tabsContainer) {
+    return;
+  }
+
+  const tabs = tabsContainer.querySelectorAll('.sentence-cluster-tab-btn');
+  const contents = {
+    snippets: document.getElementById('sentence_cluster_tab_snippets'),
+    'groups-mind-map': document.getElementById('sentence_cluster_tab_groups_mind_map')
+  };
+  const chartContainer = document.getElementById('sentence_cluster_mindmap_chart');
+  let mindmapRendered = false;
+
+  const renderMindmapIfNeeded = () => {
+    if (mindmapRendered || !chartContainer || !window.sentence_cluster_mindmap_data) {
+      return;
+    }
+
+    const clusterId = window.sentence_cluster_id;
+    const mindmap = new TopicsMindmap();
+    mindmap.render('#sentence_cluster_mindmap_chart', window.sentence_cluster_mindmap_data, {
+      topicClickAction: 'toggle',
+      countLabel: 'snippets',
+      snippetApiBaseUrl: `/api/sentence-clusters/${encodeURIComponent(clusterId)}/topic-snippets`
+    });
+    mindmapRendered = true;
+  };
+
+  const activateTab = (tabName) => {
+    tabs.forEach((tab) => {
+      tab.classList.toggle('active', tab.getAttribute('data-tab') === tabName);
+    });
+
+    Object.entries(contents).forEach(([name, content]) => {
+      if (content) {
+        content.classList.toggle('active', name === tabName);
+      }
+    });
+
+    if (tabName === 'groups-mind-map') {
+      renderMindmapIfNeeded();
+    }
+  };
+
+  tabs.forEach((tab) => {
+    tab.addEventListener('click', () => {
+      const tabName = tab.getAttribute('data-tab');
+      if (tabName) {
+        activateTab(tabName);
+      }
+    });
+  });
+}
+
 window.onload = () => {
   if (window.EVSYS === undefined) {
     window.EVSYS = new EventsSystem();
@@ -412,6 +467,8 @@ window.onload = () => {
   } else if (/^\/topics-mindmap$/.test(path)) {
     const mindmap = new TopicsMindmap();
     mindmap.render('#topics_mindmap_chart', window.mindmap_data);
+  } else if (/^\/sentence-clusters\/[0-9]+$/.test(path)) {
+    initSentenceClusterPage();
   } else if (/^\/tag-context-tree\//.test(path)) {
     const mindmap = new TopicsMindmap();
     mindmap.render('#topics_mindmap_chart', window.mindmap_data);

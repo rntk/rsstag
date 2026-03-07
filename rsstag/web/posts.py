@@ -331,6 +331,20 @@ def _build_snippet_lookup(
     return lookup
 
 
+def _serialize_snippet_for_api(snippet: dict[str, Any]) -> dict[str, Any]:
+    """Return the JSON shape expected by the snippets API consumers."""
+    return {
+        "text": snippet["text"],
+        "post_id": snippet["post_id"],
+        "post_title": snippet["post_title"],
+        "indices": snippet["indices"],
+        "read": snippet["read"],
+        "url": snippet["url"],
+        "feed_id": snippet["feed_id"],
+        "feed_title": snippet["feed_title"],
+    }
+
+
 def _load_posts_for_snippets(
     app: "RSSTagApplication",
     user: dict,
@@ -423,6 +437,69 @@ def _build_topics_tree(topic_counts: dict[str, dict]) -> list[dict]:
         return serialized
 
     return serialize_nodes(raw_roots)
+
+
+def _build_topic_counts_from_snippets(
+    snippets: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Aggregate topic counts from already filtered snippets."""
+    topic_counts: dict[str, dict[str, Any]] = {}
+    for snippet in snippets:
+        topic_name: str = str(snippet.get("topic", "")).strip()
+        if not topic_name:
+            continue
+
+        if topic_name not in topic_counts:
+            topic_counts[topic_name] = {"count": 0, "posts": set(), "text_length": 0}
+
+        topic_counts[topic_name]["count"] += 1
+        topic_counts[topic_name]["posts"].add(str(snippet.get("post_id", "")))
+        topic_counts[topic_name]["text_length"] += len(str(snippet.get("text", "")))
+
+    return topic_counts
+
+
+def _build_sentence_cluster_mindmap_data(
+    snippets: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Build cluster-scoped mind map tree from visible snippets."""
+    topic_counts: dict[str, dict[str, Any]] = _build_topic_counts_from_snippets(snippets)
+    topics_tree: list[dict[str, Any]] = _build_topics_tree(topic_counts)
+    return {
+        "name": "Topics",
+        "children": _convert_topics_to_sunburst(topics_tree),
+    }
+
+
+def _load_sentence_cluster_snippets(
+    app: "RSSTagApplication",
+    user: dict,
+    cluster_doc: dict[str, Any],
+    only_unread: bool,
+) -> tuple[list[dict[str, Any]], str]:
+    """Resolve cluster snippet refs into visible snippet payloads."""
+    post_ids: list[str] = [
+        str(post_id) for post_id in cluster_doc.get("post_ids", []) if post_id
+    ]
+    all_posts, combined_feed_title = _load_posts_for_snippets(app, user, post_ids)
+    topics_data = _collect_topic_snippets(app, user, post_ids, all_posts, None, None)
+    snippet_lookup = _build_snippet_lookup(topics_data)
+
+    snippets: list[dict[str, Any]] = []
+    for snippet_ref in cluster_doc.get("snippet_refs", []):
+        key: str = _build_snippet_ref_key(
+            str(snippet_ref.get("post_id", "")),
+            str(snippet_ref.get("topic", "")),
+            [int(index) for index in snippet_ref.get("indices", [])],
+        )
+        snippet: Optional[dict[str, Any]] = snippet_lookup.get(key)
+        if not snippet:
+            continue
+        if only_unread and bool(snippet.get("read", False)):
+            continue
+        snippets.append(snippet)
+
+    return snippets, combined_feed_title
 
 
 def on_post_speech(app: "RSSTagApplication", user: dict, request: Request) -> Response:
@@ -2015,24 +2092,53 @@ def on_topic_snippets_api_get(
     )
 
     # Flatten all snippets across topics
-    all_snippets = []
-    for topic_name, topic_info in topics_data.items():
+    all_snippets: list[dict[str, Any]] = []
+    for topic_info in topics_data.values():
         for snippet in topic_info["snippets"]:
-            all_snippets.append(
-                {
-                    "text": snippet["text"],
-                    "post_id": snippet["post_id"],
-                    "post_title": snippet["post_title"],
-                    "indices": snippet["indices"],
-                    "read": snippet["read"],
-                    "url": snippet["url"],
-                    "feed_id": snippet["feed_id"],
-                    "feed_title": snippet["feed_title"],
-                }
-            )
+            all_snippets.append(_serialize_snippet_for_api(snippet))
 
     return Response(
         json.dumps({"snippets": all_snippets}),
+        mimetype="application/json",
+    )
+
+
+def on_sentence_cluster_topic_snippets_get(
+    app: "RSSTagApplication", user: dict, request: Request, cluster_id: int
+) -> Response:
+    """Return cluster-scoped snippets for one requested topic path."""
+    cluster_doc: Optional[dict[str, Any]] = app.snippet_clusters.get_by_cluster_id(
+        user["sid"],
+        cluster_id,
+        projection={"cluster_id": 1, "title": 1, "snippet_refs": 1, "post_ids": 1},
+    )
+    if not cluster_doc:
+        return Response(
+            json.dumps({"error": "Cluster not found"}),
+            mimetype="application/json",
+            status=404,
+        )
+
+    requested_topic: Optional[str] = request.args.get("topic")
+    if requested_topic:
+        requested_topic = unquote(requested_topic)
+
+    only_unread: bool = bool(user.get("settings", {}).get("only_unread", False))
+    snippets, _ = _load_sentence_cluster_snippets(app, user, cluster_doc, only_unread)
+    filtered_snippets: list[dict[str, Any]] = [
+        snippet
+        for snippet in snippets
+        if _topic_matches_requested(str(snippet.get("topic", "")), requested_topic)
+    ]
+
+    return Response(
+        json.dumps(
+            {
+                "snippets": [
+                    _serialize_snippet_for_api(snippet) for snippet in filtered_snippets
+                ]
+            }
+        ),
         mimetype="application/json",
     )
 
@@ -2124,25 +2230,11 @@ def on_sentence_cluster_get(
     if not cluster_doc:
         return app.on_error(user, request, NotFound())
 
-    post_ids: list[str] = [str(post_id) for post_id in cluster_doc.get("post_ids", []) if post_id]
-    all_posts, combined_feed_title = _load_posts_for_snippets(app, user, post_ids)
-    topics_data = _collect_topic_snippets(app, user, post_ids, all_posts, None, None)
-    snippet_lookup = _build_snippet_lookup(topics_data)
-
-    snippets: list[dict[str, Any]] = []
     only_unread: bool = bool(user.get("settings", {}).get("only_unread", False))
-    for snippet_ref in cluster_doc.get("snippet_refs", []):
-        key: str = _build_snippet_ref_key(
-            str(snippet_ref.get("post_id", "")),
-            str(snippet_ref.get("topic", "")),
-            [int(index) for index in snippet_ref.get("indices", [])],
-        )
-        snippet: Optional[dict[str, Any]] = snippet_lookup.get(key)
-        if not snippet:
-            continue
-        if only_unread and bool(snippet.get("read", False)):
-            continue
-        snippets.append(snippet)
+    snippets, combined_feed_title = _load_sentence_cluster_snippets(
+        app, user, cluster_doc, only_unread
+    )
+    mindmap_data: dict[str, Any] = _build_sentence_cluster_mindmap_data(snippets)
 
     page = app.template_env.get_template("sentence-cluster-detail.html")
     return Response(
@@ -2150,6 +2242,7 @@ def on_sentence_cluster_get(
             cluster_id=cluster_id,
             cluster_title=cluster_doc.get("title", "Snippet Cluster"),
             snippets=snippets,
+            mindmap_data=mindmap_data,
             feed_title=combined_feed_title,
             user_settings=user["settings"],
             provider=user["provider"],

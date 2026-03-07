@@ -23,6 +23,7 @@ EXPECTED_INTERNAL_TASK_TYPES: List[int] = [
     task_module.TASK_LETTERS,
     task_module.TASK_NER,
     task_module.TASK_CLUSTERING,
+    task_module.TASK_SNIPPET_CLUSTERING,
     task_module.TASK_W2V,
     task_module.TASK_TAGS_SENTIMENT,
     task_module.TASK_TAGS_GROUP,
@@ -205,6 +206,7 @@ class TestWorkerRegistryCompleteness(unittest.TestCase):
             task_module.TASK_NER: tag_worker.handle_ner,
             task_module.TASK_TAGS_SENTIMENT: tag_worker.handle_tags_sentiment,
             task_module.TASK_CLUSTERING: tag_worker.handle_clustering,
+            task_module.TASK_SNIPPET_CLUSTERING: tag_worker.handle_snippet_clustering,
             task_module.TASK_W2V: tag_worker.handle_w2v,
             task_module.TASK_FASTTEXT: tag_worker.handle_fasttext,
             task_module.TASK_TAGS_GROUP: tag_worker.handle_tags_groups,
@@ -227,4 +229,3 @@ class TestWorkerRegistrySignatures(unittest.TestCase):
         signature: inspect.Signature = inspect.signature(WorkerRegistry.register)
         self.assertIn("task_type", signature.parameters)
         self.assertIn("handler", signature.parameters)
-

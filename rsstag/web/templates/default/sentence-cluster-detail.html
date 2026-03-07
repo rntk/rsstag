@@ -40,67 +40,94 @@
         <h2>Sentence Cluster: {{ cluster_title }}</h2>
         <h3 class="filter-title">Cluster #{{ cluster_id }} | {{ snippets|length }} snippets | {{ feed_title }}</h3>
 
-        <div id="snippets_container">
-            {% if snippets %}
-            <div class="topic-card sentence-cluster-card">
-                <div class="topic-header">
-                    <span class="topic-title">{{ cluster_title }}</span>
-                    <span class="topic-count">{{ snippets|length }} snippets</span>
-                </div>
+        <div class="sentence-cluster-tabs" id="sentence_cluster_tabs">
+            <div class="sentence-cluster-tab-header">
+                <button type="button" class="sentence-cluster-tab-btn active" data-tab="snippets">
+                    Snippets
+                </button>
+                <button type="button" class="sentence-cluster-tab-btn" data-tab="groups-mind-map">
+                    Groups Mind Map
+                </button>
+            </div>
 
-                <div class="snippets-list">
-                    {% for snippet in snippets %}
-                    <div class="snippet-item {{ 'read' if snippet.read else '' }}"
-                        id="snippet_{{ snippet.post_id }}_{{ snippet.indices | join('_') }}">
-                        <div class="snippet-meta">
-                            <span>
-                                <span class="source-tag snippet-source-info">{{ snippet.topic }}</span>
-                                from <span class="source-tag snippet-source-info">{{ snippet.post_title }}</span>
-                            </span>
-                            <span class="snippet-actions">
-                                <span
-                                    class="source-tag toggle-read-btn {{ 'snippet-tag-read' if snippet.read else 'snippet-tag-unread' }}"
-                                    data-post-id="{{ snippet.post_id }}"
-                                    data-indices="{{ snippet.indices | join(',') }}"
-                                    data-read="{{ 1 if snippet.read else 0 }}"
-                                    title="Mark as {{ 'unread' if snippet.read else 'read' }}">
-                                    {{ 'Mark Unread' if snippet.read else 'Mark Read' }}
-                                </span>
-                                <a href="/post-grouped/{{snippet.post_id}}?highlight_sentence={{snippet.index}}#post_{{snippet.post_id}}"
-                                    class="source-tag" title="See this sentence in the grouped full posts view">See in
-                                    context</a>
-                                <a href="/posts/{{snippet.post_id}}" class="source-tag snippet-tag-context"
-                                    title="Show only this post content">Show full post</a>
-                                {% if snippet.url %}
-                                <a href="{{ snippet.url }}" target="_blank" class="source-tag snippet-tag-original"
-                                    title="Go to source article">Original &nearr;</a>
-                                {% endif %}
-                                <span class="source-tag show-snippet-tags-btn" data-post-id="{{ snippet.post_id }}">Show tags</span>
-                            </span>
+            <div id="sentence_cluster_tab_snippets" class="sentence-cluster-tab-content active">
+                <div id="snippets_container">
+                    {% if snippets %}
+                    <div class="topic-card sentence-cluster-card">
+                        <div class="topic-header">
+                            <span class="topic-title">{{ cluster_title }}</span>
+                            <span class="topic-count">{{ snippets|length }} snippets</span>
                         </div>
-                        <div class="snippet-secondary-meta">
-                            {% if snippet.feed_title %}
-                            <span class="source-tag">{{ snippet.feed_title }}</span>
-                            {% endif %}
-                            <span class="source-tag">Sentences: {{ snippet.indices | join(', ') }}</span>
+
+                        <div class="snippets-list">
+                            {% for snippet in snippets %}
+                            <div class="snippet-item {{ 'read' if snippet.read else '' }}"
+                                id="snippet_{{ snippet.post_id }}_{{ snippet.indices | join('_') }}">
+                                <div class="snippet-meta">
+                                    <span>
+                                        <span class="source-tag snippet-source-info">{{ snippet.topic }}</span>
+                                        from <span class="source-tag snippet-source-info">{{ snippet.post_title }}</span>
+                                    </span>
+                                    <span class="snippet-actions">
+                                        <span
+                                            class="source-tag toggle-read-btn {{ 'snippet-tag-read' if snippet.read else 'snippet-tag-unread' }}"
+                                            data-post-id="{{ snippet.post_id }}"
+                                            data-indices="{{ snippet.indices | join(',') }}"
+                                            data-read="{{ 1 if snippet.read else 0 }}"
+                                            title="Mark as {{ 'unread' if snippet.read else 'read' }}">
+                                            {{ 'Mark Unread' if snippet.read else 'Mark Read' }}
+                                        </span>
+                                        <a href="/post-grouped/{{snippet.post_id}}?highlight_sentence={{snippet.index}}#post_{{snippet.post_id}}"
+                                            class="source-tag" title="See this sentence in the grouped full posts view">See in
+                                            context</a>
+                                        <a href="/posts/{{snippet.post_id}}" class="source-tag snippet-tag-context"
+                                            title="Show only this post content">Show full post</a>
+                                        {% if snippet.url %}
+                                        <a href="{{ snippet.url }}" target="_blank" class="source-tag snippet-tag-original"
+                                            title="Go to source article">Original &nearr;</a>
+                                        {% endif %}
+                                        <span class="source-tag show-snippet-tags-btn" data-post-id="{{ snippet.post_id }}">Show tags</span>
+                                    </span>
+                                </div>
+                                <div class="snippet-secondary-meta">
+                                    {% if snippet.feed_title %}
+                                    <span class="source-tag">{{ snippet.feed_title }}</span>
+                                    {% endif %}
+                                    <span class="source-tag">Sentences: {{ snippet.indices | join(', ') }}</span>
+                                </div>
+                                <div class="post-content-isolated">
+                                    <div class="snippet-text">{{ snippet.text }}</div>
+                                </div>
+                                <div class="snippet-tags-content hide"></div>
+                            </div>
+                            {% endfor %}
                         </div>
-                        <div class="post-content-isolated">
-                            <div class="snippet-text">{{ snippet.text }}</div>
-                        </div>
-                        <div class="snippet-tags-content hide"></div>
                     </div>
-                    {% endfor %}
+                    {% else %}
+                    <div class="no-snippets-message">
+                        No snippets remain in this cluster for the current filters.
+                    </div>
+                    {% endif %}
                 </div>
             </div>
-            {% else %}
-            <div class="no-snippets-message">
-                No snippets remain in this cluster for the current filters.
+
+            <div id="sentence_cluster_tab_groups_mind_map" class="sentence-cluster-tab-content">
+                {% if mindmap_data.children %}
+                <div id="sentence_cluster_mindmap_chart" class="topics-mindmap-chart"></div>
+                {% else %}
+                <div class="no-snippets-message">
+                    No topics are available in this cluster for the current filters.
+                </div>
+                {% endif %}
             </div>
-            {% endif %}
         </div>
     </div>
 
     <div id="progressbar"></div>
+    <script type="text/javascript">
+        window.sentence_cluster_id = {{ cluster_id | tojson | safe }};
+        window.sentence_cluster_mindmap_data = {{ mindmap_data | tojson | safe }};
+    </script>
     <script src="/static/js/post-grouped-snippets.js"></script>
 </body>
 

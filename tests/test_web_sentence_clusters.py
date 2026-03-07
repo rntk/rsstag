@@ -1,13 +1,12 @@
 import gzip
+from typing import Tuple
 
 from tests.web_test_utils import MongoWebTestCase
 
 
 class TestWebSentenceClusters(MongoWebTestCase):
-    def test_sentence_clusters_pages_render_persisted_clusters(self) -> None:
+    def _seed_sentence_cluster_fixture(self) -> Tuple[dict, str]:
         user, sid = self.seed_test_user("snippetweb")
-        client = self.get_authenticated_client(sid)
-
         self.test_db.feeds.insert_one(
             {
                 "owner": user["sid"],
@@ -90,6 +89,12 @@ class TestWebSentenceClusters(MongoWebTestCase):
             ],
         )
 
+        return user, sid
+
+    def test_sentence_clusters_pages_render_persisted_clusters(self) -> None:
+        user, sid = self._seed_sentence_cluster_fixture()
+        client = self.get_authenticated_client(sid)
+
         list_response = client.get("/sentence-clusters")
         detail_response = client.get("/sentence-clusters/5")
 
@@ -104,3 +109,58 @@ class TestWebSentenceClusters(MongoWebTestCase):
         self.assertIn("Another sentence Another follow up", detail_html)
         self.assertIn("Topic A", detail_html)
         self.assertIn("Topic C", detail_html)
+        self.assertIn("Groups Mind Map", detail_html)
+        self.assertIn('"name": "Topics"', detail_html)
+        self.assertNotIn("Topic B", detail_html)
+
+    def test_sentence_cluster_topic_snippets_api_is_cluster_scoped(self) -> None:
+        _, sid = self._seed_sentence_cluster_fixture()
+        client = self.get_authenticated_client(sid)
+
+        response = client.get(
+            "/api/sentence-clusters/5/topic-snippets?topic=Topic%20A"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        assert payload is not None
+
+        snippets = payload["snippets"]
+        self.assertEqual(len(snippets), 1)
+        self.assertEqual(snippets[0]["post_id"], "p1")
+        self.assertEqual(snippets[0]["text"], "Sentence one Sentence two")
+
+        all_topics_response = client.get("/api/sentence-clusters/5/topic-snippets")
+        self.assertEqual(all_topics_response.status_code, 200)
+        all_payload = all_topics_response.get_json()
+        assert all_payload is not None
+
+        all_texts = [snippet["text"] for snippet in all_payload["snippets"]]
+        self.assertIn("Sentence one Sentence two", all_texts)
+        self.assertIn("Another sentence Another follow up", all_texts)
+        self.assertNotIn("Sentence three", all_texts)
+
+    def test_sentence_cluster_detail_and_api_respect_only_unread(self) -> None:
+        user, sid = self._seed_sentence_cluster_fixture()
+        self.test_db.users.update_one(
+            {"sid": user["sid"]},
+            {"$set": {"settings.only_unread": True}},
+        )
+        client = self.get_authenticated_client(sid)
+
+        detail_response = client.get("/sentence-clusters/5")
+        api_response = client.get("/api/sentence-clusters/5/topic-snippets")
+
+        detail_html = detail_response.get_data(as_text=True)
+        self.assertEqual(detail_response.status_code, 200)
+        self.assertIn("Sentence one Sentence two", detail_html)
+        self.assertIn("Another sentence Another follow up", detail_html)
+        self.assertNotIn("Sentence three", detail_html)
+
+        self.assertEqual(api_response.status_code, 200)
+        payload = api_response.get_json()
+        assert payload is not None
+        texts = [snippet["text"] for snippet in payload["snippets"]]
+        self.assertIn("Sentence one Sentence two", texts)
+        self.assertIn("Another sentence Another follow up", texts)
+        self.assertNotIn("Sentence three", texts)

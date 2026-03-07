@@ -22,6 +22,7 @@ class TestWebAppInit(MongoWebTestCase):
             "workers",
             "tasks",
             "post_grouping",
+            "snippet_clusters",
         )
 
         for attr_name in storage_attrs:
@@ -35,6 +36,7 @@ class TestWebAppInit(MongoWebTestCase):
             "feeds": {"owner", "feed_id"},
             "users": {"sid"},
             "tasks": {"user", "processing"},
+            "snippet_clusters": {"owner", "cluster_id"},
         }
 
         for collection_name, index_names in expected_indexes.items():

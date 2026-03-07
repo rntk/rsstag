@@ -2128,6 +2128,50 @@ h3.post_title {
 }
 
 /* ============================================================================
+   Sentence Cluster Detail Page Styles
+   ============================================================================ */
+
+.sentence-cluster-page {
+    .sentence-cluster-tabs {
+        margin-top: 20px;
+    }
+
+    .sentence-cluster-tab-header {
+        display: flex;
+        gap: 8px;
+        border-bottom: 1px solid #ddd;
+        margin-bottom: 18px;
+        flex-wrap: wrap;
+    }
+
+    .sentence-cluster-tab-btn {
+        padding: 10px 16px;
+        cursor: pointer;
+        border: 1px solid transparent;
+        border-bottom: none;
+        background: #f0f0f0;
+        border-radius: 6px 6px 0 0;
+        color: #555;
+
+        &.active {
+            background: #fff;
+            border-color: #ddd;
+            margin-bottom: -1px;
+            color: #222;
+            font-weight: bold;
+        }
+    }
+
+    .sentence-cluster-tab-content {
+        display: none;
+
+        &.active {
+            display: block;
+        }
+    }
+}
+
+/* ============================================================================
    Topics List Page Styles (topics-list.html)
    ============================================================================ */
 

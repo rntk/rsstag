@@ -36,12 +36,23 @@ export default class TopicsMindmap {
     this.resizeHandler = null;
     this.baseColor = '#d7d7af';
     this.nodeColors = ['#c8d0e8', '#d7d7af', '#c8e0c8', '#e0d0c8', '#d8c8e0', '#c8dce0'];
+    this.options = {
+      topicClickAction: 'navigate',
+      countLabel: 'posts',
+      snippetApiBaseUrl: ''
+    };
   }
 
-  render(selector, data) {
+  render(selector, data, options = {}) {
     const container = document.querySelector(selector);
     if (!container) return;
     this.container = container;
+    this.options = {
+      topicClickAction: 'navigate',
+      countLabel: 'posts',
+      snippetApiBaseUrl: '',
+      ...options
+    };
     container.innerHTML = '';
 
     const { width, height } = this._getViewportSize();
@@ -245,10 +256,10 @@ export default class TopicsMindmap {
 
     const topicPosts = d.data._topicPosts;
     const topicPath = d.data._topicPath;
-    if (!topicPosts || !topicPath) return;
+    if (!topicPath) return;
 
-    const postIds = topicPosts.join('_');
-    const url = `/api/topic-snippets/${postIds}?topic=${encodeURIComponent(topicPath)}`;
+    const url = this._buildSnippetUrl(topicPosts, topicPath);
+    if (!url) return;
 
     // Show loading state
     d.data._loading = true;
@@ -301,6 +312,21 @@ export default class TopicsMindmap {
       console.error('Failed to load snippets:', err);
       this._update(d);
     }
+  }
+
+  _buildSnippetUrl(topicPosts, topicPath) {
+    if (this.options.snippetApiBaseUrl) {
+      const url = new URL(this.options.snippetApiBaseUrl, window.location.origin);
+      url.searchParams.set('topic', topicPath);
+      return `${url.pathname}${url.search}`;
+    }
+
+    if (!topicPosts || topicPosts.length === 0) {
+      return '';
+    }
+
+    const postIds = topicPosts.join('_');
+    return `/api/topic-snippets/${postIds}?topic=${encodeURIComponent(topicPath)}`;
   }
 
   _expandSentencesPseudo(d) {
@@ -686,7 +712,7 @@ export default class TopicsMindmap {
       .attr('cursor', 'pointer')
       .on('click', (event, d) => {
         event.stopPropagation();
-        this._navigateToTopic(d);
+        this._handleTopicNodeClick(d);
       });
 
     // Label text
@@ -700,7 +726,7 @@ export default class TopicsMindmap {
       .text((d) => this._displayNodeLabel(d))
       .on('click', (event, d) => {
         event.stopPropagation();
-        this._navigateToTopic(d);
+        this._handleTopicNodeClick(d);
       });
 
     // Title tooltip
@@ -708,7 +734,7 @@ export default class TopicsMindmap {
       if (this._isPseudoOrSource(d)) return d.data.name || '';
       const path = d.data._topicPath || d.data.name || '';
       const count = d.data.value || 0;
-      return `${path} (${count} posts)`;
+      return `${path} (${count} ${this.options.countLabel})`;
     });
 
     // Expand/collapse arrow
@@ -920,6 +946,28 @@ export default class TopicsMindmap {
     });
   }
 
+  _activateTopicNode(d) {
+    if (this._isSentencesPseudo(d)) {
+      this._expandSentencesPseudo(d);
+      return;
+    }
+    if (this._isSourcesPseudo(d)) {
+      this._expandSourcesPseudo(d);
+      return;
+    }
+    if (this._isSourceNode(d)) {
+      this._expandSourceNode(d);
+      return;
+    }
+    if (this._isLeafTopic(d)) {
+      this._loadSnippets(d);
+      return;
+    }
+
+    this._toggleChildren(d);
+    this._update(d);
+  }
+
   _navigateToTopic(d) {
     // Tag search result nodes link to the tag page
     if (this._isTagSearchResult(d)) {
@@ -937,6 +985,20 @@ export default class TopicsMindmap {
       const url = `/post-grouped/${postIds}?topic=${encodeURIComponent(topicPath)}`;
       window.location.href = url;
     }
+  }
+
+  _handleTopicNodeClick(d) {
+    if (this._isTagSearchResult(d)) {
+      this._navigateToTopic(d);
+      return;
+    }
+
+    if (this.options.topicClickAction === 'toggle') {
+      this._activateTopicNode(d);
+      return;
+    }
+
+    this._navigateToTopic(d);
   }
 
   async _searchTagsForNode(d) {
