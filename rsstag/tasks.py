@@ -1,7 +1,7 @@
 import logging
 import time
 import gzip
-from typing import Optional, List, Dict, Any, Set, Tuple
+from typing import Optional, List, Dict, Any, Set, Tuple, Callable
 from rsstag.users import RssTagUsers
 from pymongo import MongoClient, UpdateOne, ReturnDocument
 from bson.objectid import ObjectId
@@ -46,6 +46,19 @@ SUPPORTED_SCOPE_MODES = {
     SCOPE_MODE_FEEDS,
     SCOPE_MODE_CATEGORIES,
     SCOPE_MODE_PROVIDER,
+}
+
+SCOPE_REQUIREMENTS: Dict[str, Tuple[str, str]] = {
+    SCOPE_MODE_POSTS: ("post_ids", "Scope mode 'posts' requires at least one post id."),
+    SCOPE_MODE_FEEDS: ("feed_ids", "Scope mode 'feeds' requires at least one feed id."),
+    SCOPE_MODE_CATEGORIES: (
+        "category_ids",
+        "Scope mode 'categories' requires at least one category id.",
+    ),
+    SCOPE_MODE_PROVIDER: (
+        "provider",
+        "Scope mode 'provider' requires a provider value.",
+    ),
 }
 
 SCOPE_CAPABILITY_GLOBAL_ONLY = "global_only"
@@ -119,6 +132,12 @@ class RssTagTasks:
         self._posts_bath_size = 200
         self._bigrams_bath_size = 1000
         self._tags_bath_size = 1000
+        self._scope_filter_builders: Dict[str, Callable[[str, Dict[str, Any]], Dict[str, Any]]] = {
+            SCOPE_MODE_POSTS: self._scope_filter_for_posts,
+            SCOPE_MODE_FEEDS: self._scope_filter_for_feeds,
+            SCOPE_MODE_CATEGORIES: self._scope_filter_for_categories,
+            SCOPE_MODE_PROVIDER: self._scope_filter_for_provider,
+        }
 
     def prepare(self) -> None:
         for index in self.indexes:
@@ -166,16 +185,27 @@ class RssTagTasks:
                 f"Task {task_type} is global-only and does not support scope mode '{normalized['mode']}'.",
             )
 
-        if normalized["mode"] == SCOPE_MODE_POSTS and not normalized.get("post_ids"):
-            return False, "Scope mode 'posts' requires at least one post id."
-        if normalized["mode"] == SCOPE_MODE_FEEDS and not normalized.get("feed_ids"):
-            return False, "Scope mode 'feeds' requires at least one feed id."
-        if normalized["mode"] == SCOPE_MODE_CATEGORIES and not normalized.get("category_ids"):
-            return False, "Scope mode 'categories' requires at least one category id."
-        if normalized["mode"] == SCOPE_MODE_PROVIDER and not normalized.get("provider"):
-            return False, "Scope mode 'provider' requires a provider value."
+        required_field = SCOPE_REQUIREMENTS.get(normalized["mode"])
+        if required_field and not normalized.get(required_field[0]):
+            return False, required_field[1]
 
         return True, ""
+
+    def _scope_filter_for_posts(self, _owner: str, scope: Dict[str, Any]) -> Dict[str, Any]:
+        return {"pid": {"$in": scope.get("post_ids", [])}}
+
+    def _scope_filter_for_feeds(self, _owner: str, scope: Dict[str, Any]) -> Dict[str, Any]:
+        return {"feed_id": {"$in": list(scope.get("feed_ids", []))}}
+
+    def _scope_filter_for_categories(self, owner: str, scope: Dict[str, Any]) -> Dict[str, Any]:
+        feed_ids = self._resolve_scope_feed_ids(owner, scope)
+        return {"feed_id": {"$in": feed_ids}}
+
+    def _scope_filter_for_provider(self, _owner: str, scope: Dict[str, Any]) -> Dict[str, Any]:
+        provider = scope.get("provider")
+        if not provider:
+            return {}
+        return {"provider": provider}
 
     def mark_task_failed(self, task_id: Any, error: str) -> None:
         self._db.tasks.update_one(
@@ -211,14 +241,9 @@ class RssTagTasks:
         query: Dict[str, Any] = {"owner": owner}
         scope = self._normalize_scope(task_doc.get("scope"))
         mode = scope["mode"]
-
-        if mode == SCOPE_MODE_POSTS:
-            query["pid"] = {"$in": scope.get("post_ids", [])}
-        elif mode in (SCOPE_MODE_FEEDS, SCOPE_MODE_CATEGORIES):
-            feed_ids = self._resolve_scope_feed_ids(owner, scope)
-            query["feed_id"] = {"$in": feed_ids}
-        elif mode == SCOPE_MODE_PROVIDER and scope.get("provider"):
-            query["provider"] = scope["provider"]
+        builder = self._scope_filter_builders.get(mode)
+        if builder:
+            query.update(builder(owner, scope))
 
         return query
 
