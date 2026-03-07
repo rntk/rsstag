@@ -86,7 +86,7 @@ def _build_topics_index(
         "sentences": 1,
     }
     grouped_posts: list[dict] = list(
-        app.db.post_grouping.find({"owner": user["sid"]}, grouped_posts_projection)
+        app.post_grouping.get_all_by_owner(user["sid"], projection=grouped_posts_projection)
     )
 
     all_post_ids: set[int] = set()
@@ -97,9 +97,8 @@ def _build_topics_index(
     if normalized_context_tags:
         posts_projection["content"] = 1
     posts_list: list[dict] = list(
-        app.db.posts.find(
-            {"owner": user["sid"], "pid": {"$in": list(all_post_ids)}},
-            posts_projection,
+        app.posts.get_by_pids(
+            user["sid"], list(all_post_ids), projection=posts_projection
         )
     )
     posts_data: dict[int, dict] = {post["pid"]: post for post in posts_list}
@@ -107,9 +106,8 @@ def _build_topics_index(
     feed_ids: set[int] = {post["feed_id"] for post in posts_data.values()}
     feeds_data: dict[int, str] = {
         feed["feed_id"]: feed.get("title", "Unknown Feed")
-        for feed in app.db.feeds.find(
-            {"owner": user["sid"], "feed_id": {"$in": list(feed_ids)}},
-            {"_id": 0, "feed_id": 1, "title": 1},
+        for feed in app.feeds.get_by_feed_ids(
+            user["sid"], list(feed_ids), projection={"_id": 0, "feed_id": 1, "title": 1}
         )
     }
 
@@ -913,24 +911,19 @@ def on_get_posts_with_tags(
     tags = s_tags.split("-")
     if tags:
         result = {}
-        query = {"owner": user["sid"], "tag": {"$in": tags}}
-        tags_cursor = app.db.tags.find(query, {"_id": 0, "tag": 1, "words": 1})
+        tags_cursor = app.tags.get_by_tags(user["sid"], tags, projection={"_id": 0, "tag": 1, "words": 1})
         for tag in tags_cursor:
             result[tag["tag"]] = {"words": ", ".join(tag["words"]), "posts": []}
 
-        query = {"owner": user["sid"], "tags": {"$in": tags}}
-        if user["settings"]["only_unread"]:
-            query["read"] = False
-        posts_cursor = app.db.posts.find(query, {"content.content": 0})
+        only_unread = user["settings"]["only_unread"] if user["settings"]["only_unread"] else None
+        posts_cursor = app.posts.get_by_tags_list(user["sid"], tags, only_unread=only_unread, projection={"content.content": 0})
         feeds = {}
         posts = {}
         for post in posts_cursor:
             posts[post["id"]] = post
             if post["feed_id"] not in feeds:
                 feeds[post["feed_id"]] = {}
-        feeds_cursor = app.db.feeds.find(
-            {"owner": user["sid"], "feed_id": {"$in": list(feeds.keys())}}
-        )
+        feeds_cursor = app.feeds.get_by_feed_ids(user["sid"], list(feeds.keys()))
         for feed in feeds_cursor:
             feeds[feed["feed_id"]] = feed
         for tag in tags:

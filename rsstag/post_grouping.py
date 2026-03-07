@@ -35,6 +35,10 @@ class RssTagPostGrouping:
             {"owner": owner, "post_ids_hash": post_ids_hash}
         )
 
+    def get_all_by_owner(self, owner: str, projection: Optional[dict] = None) -> Iterator[dict]:
+        """Get all grouped posts data by owner"""
+        return self._db.post_grouping.find({"owner": owner}, projection=projection)
+
     def save_grouped_posts(
         self,
         owner: str,
