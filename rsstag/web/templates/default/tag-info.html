@@ -32,8 +32,8 @@
             {{ g_status.global_status() }}
             {{ menu.settings_menu() }}
         </div>
+        {{ context_filter_bar() }}
     </div>
-    {{ context_filter_bar() }}
     <div class="page">
         <div class="group_title">
             <h3><a href="{{posts_link}}">{{tag['tag']}}</a> ({{tag['unread_count']}} / {{tag['posts_count']}})&nbsp;

@@ -5,7 +5,7 @@
     {% include "head-data.html" %}
 </head>
 
-<body>
+<body style="overflow: hidden;">
     {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}{% from
     'context-filter-bar.html' import context_filter_bar with context %}
 
@@ -22,9 +22,8 @@
             {{ g_status.global_status() }}
             {{ menu.settings_menu() }}
         </div>
+        {{ context_filter_bar() }}
     </div>
-
-    {{ context_filter_bar() }}
     <div class="page topics-mindmap-page">
         <h1>Topics Mindmap</h1>
         <div id="topics_mindmap_chart" class="topics-mindmap-chart"></div>

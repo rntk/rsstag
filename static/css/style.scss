@@ -26,7 +26,7 @@ html {
 
 body {
   font-family: Arial, sans-serif;
-  padding-top: 6.5em; // Increased to accommodate both #global_tools (~3em) and #context_filter_bar (~3.5em total)
+  padding-top: 6.5em;
 }
 
 img {
@@ -3222,21 +3222,14 @@ h3.post_title {
 
 /* Context Filter Bar */
 #context_filter_bar {
-  position: fixed;
-  top: 3em; // Position below #global_tools
-  left: 0;
   width: 100%;
-  z-index: 999; // Below global_tools (which has z-index: 1000), but above content
-  background-color: #ffffff;
-  box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.1);
-  padding: 0.5em 0;
 }
 
 .context-filter-bar {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 15px;
+  padding: 3px 15px;
   background-color: #f5f5f5;
   border: 1px solid #ddd;
   border-radius: 4px;
