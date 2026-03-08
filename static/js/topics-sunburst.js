@@ -8,7 +8,6 @@ import Sunburst from 'sunburst-chart';
  */
 class TopicsSunburst {
   constructor(data, options = {}) {
-
     this.data = data;
     this.base_color = '#d7d7af';
     this.color_range = 20;
@@ -72,7 +71,7 @@ class TopicsSunburst {
 
     // Recursively transform children
     if (transformed.children && Array.isArray(transformed.children)) {
-      transformed.children = transformed.children.map(child => this.transformDataValues(child));
+      transformed.children = transformed.children.map((child) => this.transformDataValues(child));
     }
 
     return transformed;

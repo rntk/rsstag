@@ -24,7 +24,7 @@ export default class ContextFilterBar {
     container.style.display = 'flex';
 
     let html = '<div class="context-filter-bar">';
-    
+
     if (this._state.active && this._state.tags.length > 0) {
       html += '<span class="context-filter-label">Context:</span>';
 
@@ -40,7 +40,7 @@ export default class ContextFilterBar {
 
       html += '<button class="context-filter-clear" title="Clear all filters">Clear</button>';
     }
-    
+
     html += '<button class="context-filter-add" title="Add tag to context">+ Add Tag</button>';
     html += '</div>';
 
@@ -50,7 +50,7 @@ export default class ContextFilterBar {
 
   bindClickHandlers(container) {
     // Remove tag buttons
-    container.querySelectorAll('.context-filter-remove').forEach(btn => {
+    container.querySelectorAll('.context-filter-remove').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         const tag = e.target.dataset.tag;
@@ -150,12 +150,13 @@ export default class ContextFilterBar {
 
       if (data.data && data.data.length > 0) {
         // Filter out tags already in context
-        const filtered = data.data.filter(t => !this._state.tags.includes(t.tag));
+        const filtered = data.data.filter((t) => !this._state.tags.includes(t.tag));
 
         if (filtered.length === 0) {
           this._modalState.suggestions = [];
           this._modalState.selectedIndex = -1;
-          resultsContainer.innerHTML = '<div class="no-results">All matching tags already in context</div>';
+          resultsContainer.innerHTML =
+            '<div class="no-results">All matching tags already in context</div>';
           return;
         }
 
@@ -181,14 +182,18 @@ export default class ContextFilterBar {
 
   renderSuggestions(container) {
     const suggestions = this._modalState.suggestions;
-    container.innerHTML = suggestions.map((tag, index) => `
+    container.innerHTML = suggestions
+      .map(
+        (tag, index) => `
       <div class="context-tag-result${index === this._modalState.selectedIndex ? ' is-active' : ''}" data-index="${index}">
         <span class="context-tag-label">${this.escapeHtml(tag.tag)}</span>
         <span class="tag-counts">(${tag.unread}/${tag.all})</span>
       </div>
-    `).join('');
+    `
+      )
+      .join('');
 
-    container.querySelectorAll('.context-tag-result').forEach(el => {
+    container.querySelectorAll('.context-tag-result').forEach((el) => {
       el.addEventListener('click', () => {
         const index = Number(el.dataset.index);
         const suggestion = this._modalState.suggestions[index];
@@ -260,7 +265,7 @@ export default class ContextFilterBar {
     if (window.context_filter_data) {
       // Extract tags from the filter data structure
       const filterData = window.context_filter_data.tags || window.context_filter_data;
-      const tags = Array.isArray(filterData) ? filterData : (filterData.tags || []);
+      const tags = Array.isArray(filterData) ? filterData : filterData.tags || [];
       this._state = { active: tags.length > 0, tags };
       this.render();
     }

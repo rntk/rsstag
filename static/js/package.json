@@ -32,10 +32,14 @@
     "watch": "webpack --mode development --watch",
     "dev": "webpack serve --mode development --open",
     "clean": "rm -f bundle.js bundle.js.map",
-    "lint": "eslint \"**/*.{js,jsx}\"",
-    "lint:fix": "eslint \"**/*.{js,jsx}\" --fix",
-    "format": "prettier --write \"**/*.{js,jsx,json,md,scss,css}\"",
-    "format:check": "prettier --check \"**/*.{js,jsx,json,md,scss,css}\""
+    "lint": "eslint components/context-filter-bar.js components/load-posts.js components/post-item.js components/posts-list.js storages/context-filter-storage.js storages/posts-storage.js libs/rsstag_utils.js topics-list.js provider-feeds.js tag-feeds.js post-grouped-snippets.js webpack.config.js webpack.dev.config.js eslint.config.js test/**/*.js --max-warnings=0",
+    "lint:all": "eslint \"**/*.{js,jsx}\"",
+    "lint:fix": "npm run lint -- --fix",
+    "format": "prettier --write \"{apps,components,storages,libs}/**/*.{js,jsx}\" \"*.{js,json,md}\" \"test/**/*.js\" \"../css/style.scss\"",
+    "format:check": "prettier --check \"{apps,components,storages,libs}/**/*.{js,jsx}\" \"*.{js,json,md}\" \"test/**/*.js\" \"../css/style.scss\"",
+    "test": "node --loader ./test/es-module-loader.mjs --test test/context-filter-storage.test.js test/posts-storage.test.js test/rsstag_utils.test.js test/topics-list.test.js",
+    "test:watch": "node --loader ./test/es-module-loader.mjs --test --watch test/context-filter-storage.test.js test/posts-storage.test.js test/rsstag_utils.test.js test/topics-list.test.js",
+    "check": "npm run lint && npm run format:check && npm run build:dev && npm run test"
   },
   "keywords": [
     "rss"

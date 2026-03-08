@@ -38,6 +38,8 @@ From `static/js`:
 docker build -t rsstag-js-lint -f Dockerfile.lint .
 ```
 
+There is currently no separate frontend `npm test` script in this repository. The frontend validation checks are ESLint and Prettier.
+
 Run linting:
 
 ```bash
@@ -54,6 +56,13 @@ Check formatting:
 
 ```bash
 docker run --rm -v "$PWD":/workspace rsstag-js-lint npm run format:check
+```
+
+If you prefer to use host networking for Docker-based checks, the commands also work with `--network=host`:
+
+```bash
+docker run --rm --network=host -v "$PWD":/workspace rsstag-js-lint npm run lint
+docker run --rm --network=host -v "$PWD":/workspace rsstag-js-lint npm run format:check
 ```
 
 Apply formatting (optional):
@@ -119,6 +128,20 @@ Run the worker-focused tests:
 
 ```bash
 python3 -m unittest tests.test_worker_bootstrap tests.test_worker_external_loop tests.test_worker_registry_completeness tests.test_worker_dispatcher_init tests.test_worker_task_dispatch tests.test_worker_process_lifecycle tests.test_worker_classes_init
+```
+
+If MongoDB is already running on the host on `127.0.0.1:8765`, you can run the tests in Docker with host networking instead of starting `docker-compose.test.yml`:
+
+```bash
+docker build -t rsstag-test -f Dockerfile.test .
+docker run --rm --network=host -v "$PWD":/work -w /work rsstag-test \
+  python3 -m unittest tests.test_worker_bootstrap tests.test_worker_external_loop tests.test_worker_registry_completeness tests.test_worker_dispatcher_init tests.test_worker_task_dispatch tests.test_worker_process_lifecycle tests.test_worker_classes_init
+```
+
+To run the whole test suite in the same container:
+
+```bash
+docker run --rm --network=host -v "$PWD":/work -w /work rsstag-test
 ```
 
 Stop the test database when finished:

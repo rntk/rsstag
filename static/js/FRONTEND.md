@@ -133,6 +133,8 @@ Build the lint/format container from `static/js`:
 docker build -t rsstag-js-lint -f Dockerfile.lint .
 ```
 
+There is currently no separate frontend `npm test` script in this repository. The frontend validation checks are ESLint and Prettier.
+
 Run linting:
 
 ```bash
@@ -149,6 +151,13 @@ Check formatting:
 
 ```bash
 docker run --rm -v "$PWD":/workspace rsstag-js-lint npm run format:check
+```
+
+If you want the container to use host networking, these commands are equivalent:
+
+```bash
+docker run --rm --network=host -v "$PWD":/workspace rsstag-js-lint npm run lint
+docker run --rm --network=host -v "$PWD":/workspace rsstag-js-lint npm run format:check
 ```
 
 Apply formatting (optional):

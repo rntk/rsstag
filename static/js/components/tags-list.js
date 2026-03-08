@@ -101,9 +101,7 @@ export default class TagsList extends React.Component {
                 <div className="alpha_group_title">
                   <h3>{currentLetter}</h3>
                 </div>
-                <div className="alpha_group_tags">
-                  {currentGroupTags}
-                </div>
+                <div className="alpha_group_tags">{currentGroupTags}</div>
               </div>
             );
           }
@@ -123,9 +121,7 @@ export default class TagsList extends React.Component {
             <div className="alpha_group_title">
               <h3>{currentLetter}</h3>
             </div>
-            <div className="alpha_group_tags">
-              {currentGroupTags}
-            </div>
+            <div className="alpha_group_tags">{currentGroupTags}</div>
           </div>
         );
       }

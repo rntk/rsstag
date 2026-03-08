@@ -103,15 +103,27 @@ export default class SettingsMenu extends React.Component {
       };
 
       const llmOptions = [
-        <option key="llamacpp" value="llamacpp">LlamaCPP</option>,
-        <option key="openai" value="openai">OpenAI</option>,
-        <option key="anthropic" value="anthropic">Anthropic</option>,
-        <option key="cerebras" value="cerebras">Cerebras</option>,
-        <option key="groqcom" value="groqcom">GroqCom</option>
+        <option key="llamacpp" value="llamacpp">
+          LlamaCPP
+        </option>,
+        <option key="openai" value="openai">
+          OpenAI
+        </option>,
+        <option key="anthropic" value="anthropic">
+          Anthropic
+        </option>,
+        <option key="cerebras" value="cerebras">
+          Cerebras
+        </option>,
+        <option key="groqcom" value="groqcom">
+          GroqCom
+        </option>,
       ];
       const batchLlmOptions = [
         ...llmOptions,
-        <option key="nebius" value="nebius">Nebius</option>,
+        <option key="nebius" value="nebius">
+          Nebius
+        </option>,
       ];
 
       return (
@@ -168,7 +180,7 @@ export default class SettingsMenu extends React.Component {
               <select
                 id="batch_llm"
                 name="batch_llm"
-                value={this.state.settings.batch_llm || "openai"}
+                value={this.state.settings.batch_llm || 'openai'}
                 onChange={this.changeStringSettings}
               >
                 {batchLlmOptions}
@@ -180,7 +192,7 @@ export default class SettingsMenu extends React.Component {
               <select
                 id="worker_llm"
                 name="worker_llm"
-                value={this.state.settings.worker_llm || "llamacpp"}
+                value={this.state.settings.worker_llm || 'llamacpp'}
                 onChange={this.changeStringSettings}
               >
                 {llmOptions}
@@ -192,7 +204,7 @@ export default class SettingsMenu extends React.Component {
               <select
                 id="realtime_llm"
                 name="realtime_llm"
-                value={this.state.settings.realtime_llm || "llamacpp"}
+                value={this.state.settings.realtime_llm || 'llamacpp'}
                 onChange={this.changeStringSettings}
               >
                 {llmOptions}

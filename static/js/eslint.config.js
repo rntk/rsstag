@@ -3,6 +3,38 @@ const react = require('eslint-plugin-react');
 const reactHooks = require('eslint-plugin-react-hooks');
 const prettier = require('eslint-config-prettier');
 
+const browserGlobals = {
+  URL: 'readonly',
+  alert: 'readonly',
+  clearInterval: 'readonly',
+  clearTimeout: 'readonly',
+  console: 'readonly',
+  document: 'readonly',
+  fetch: 'readonly',
+  FormData: 'readonly',
+  navigator: 'readonly',
+  setInterval: 'readonly',
+  setTimeout: 'readonly',
+  window: 'readonly',
+};
+
+const nodeGlobals = {
+  __dirname: 'readonly',
+  console: 'readonly',
+  module: 'readonly',
+  process: 'readonly',
+  require: 'readonly',
+};
+
+const testGlobals = {
+  ...browserGlobals,
+  afterEach: 'readonly',
+  beforeEach: 'readonly',
+  describe: 'readonly',
+  expect: 'readonly',
+  it: 'readonly',
+};
+
 module.exports = [
   {
     ignores: [
@@ -13,20 +45,33 @@ module.exports = [
       'Chart.min.js',
       'd3.v6.min.js',
       'google-charts.js',
-      '../css/*.map',
       'libs/cloud.min.js',
+      '../css/*.map',
       '../vis-dist/**',
       '../node_modules/',
-      'package-lock.json',
-      'package.json',
-      '.prettierrc.json',
-      'eslint.config.js',
       '*.md',
+      'package-lock.json',
     ],
   },
   js.configs.recommended,
   {
-    files: ['**/*.{js,jsx}'],
+    files: ['webpack.config.js', 'webpack.dev.config.js', 'eslint.config.js', 'vitest.config.js'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'commonjs',
+      globals: nodeGlobals,
+    },
+  },
+  {
+    files: [
+      'components/context-filter-bar.js',
+      'components/load-posts.js',
+      'components/post-item.js',
+      'components/posts-list.js',
+      'storages/context-filter-storage.js',
+      'storages/posts-storage.js',
+      'libs/rsstag_utils.js',
+    ],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
@@ -35,6 +80,7 @@ module.exports = [
           jsx: true,
         },
       },
+      globals: browserGlobals,
     },
     plugins: {
       react,
@@ -48,6 +94,32 @@ module.exports = [
     rules: {
       ...react.configs.recommended.rules,
       ...reactHooks.configs.recommended.rules,
+      'react/no-deprecated': 'off',
+      'react/prop-types': 'off',
+    },
+  },
+  {
+    files: ['topics-list.js'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: browserGlobals,
+    },
+  },
+  {
+    files: ['provider-feeds.js', 'tag-feeds.js', 'post-grouped-snippets.js'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'script',
+      globals: browserGlobals,
+    },
+  },
+  {
+    files: ['test/**/*.js'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: testGlobals,
     },
   },
   prettier,

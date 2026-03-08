@@ -39,7 +39,7 @@ export default class TopicsMindmap {
     this.options = {
       topicClickAction: 'navigate',
       countLabel: 'posts',
-      snippetApiBaseUrl: ''
+      snippetApiBaseUrl: '',
     };
   }
 
@@ -51,7 +51,7 @@ export default class TopicsMindmap {
       topicClickAction: 'navigate',
       countLabel: 'posts',
       snippetApiBaseUrl: '',
-      ...options
+      ...options,
     };
     container.innerHTML = '';
 
@@ -60,7 +60,7 @@ export default class TopicsMindmap {
     // Build hierarchy: synthetic hidden root wrapping top-level topics
     const hierarchyData = {
       name: '__root__',
-      children: data.children || []
+      children: data.children || [],
     };
 
     this.root = d3.hierarchy(hierarchyData);
@@ -119,7 +119,7 @@ export default class TopicsMindmap {
     if (!this.container) {
       return {
         width: window.innerWidth,
-        height: Math.max(window.innerHeight - 140, 480)
+        height: Math.max(window.innerHeight - 140, 480),
       };
     }
 
@@ -129,7 +129,7 @@ export default class TopicsMindmap {
 
     return {
       width,
-      height: Math.max(Math.floor(availableHeight), 480)
+      height: Math.max(Math.floor(availableHeight), 480),
     };
   }
 
@@ -196,7 +196,8 @@ export default class TopicsMindmap {
   }
 
   _hasSearchButton(d) {
-    if (this._isSnippetNode(d) || this._isPseudoOrSource(d) || this._isTagSearchResult(d)) return false;
+    if (this._isSnippetNode(d) || this._isPseudoOrSource(d) || this._isTagSearchResult(d))
+      return false;
     return !!d.data._topicPath;
   }
 
@@ -206,7 +207,8 @@ export default class TopicsMindmap {
     }
     const name = d.data.name || '';
     const searchExtra = this._hasSearchButton(d) ? this.nodeSearchBtnWidth : 0;
-    const estimatedWidth = name.length * this.nodeCharWidth + this.nodeHorizontalPadding + searchExtra;
+    const estimatedWidth =
+      name.length * this.nodeCharWidth + this.nodeHorizontalPadding + searchExtra;
     return Math.min(Math.max(estimatedWidth, this.nodeMinWidth), this.nodeMaxWidth);
   }
 
@@ -435,8 +437,10 @@ export default class TopicsMindmap {
     const containerMaxHeight = options.containerMaxHeight || `${panelH}px`;
     const includeMaximize = options.includeMaximize !== false;
     const includeClose = options.includeClose === true;
-    const textPreviewLimit = typeof options.textPreviewLimit === 'number' ? options.textPreviewLimit : 200;
-    const sourceTitleLimit = typeof options.sourceTitleLimit === 'number' ? options.sourceTitleLimit : 30;
+    const textPreviewLimit =
+      typeof options.textPreviewLimit === 'number' ? options.textPreviewLimit : 200;
+    const sourceTitleLimit =
+      typeof options.sourceTitleLimit === 'number' ? options.sourceTitleLimit : 30;
 
     let html = `<div class="mindmap-snippet-container" style="width:${containerWidth};max-height:${containerMaxHeight};">`;
     html += `<div class="mindmap-snippet-header">`;
@@ -457,7 +461,10 @@ export default class TopicsMindmap {
       const readClass = s.read ? 'read' : '';
       const btnLabel = s.read ? 'Unread' : 'Read';
       const btnClass = s.read ? 'snippet-tag-read' : 'snippet-tag-unread';
-      const textPreview = textPreviewLimit > 0 && s.text.length > textPreviewLimit ? s.text.slice(0, textPreviewLimit) + '...' : s.text;
+      const textPreview =
+        textPreviewLimit > 0 && s.text.length > textPreviewLimit
+          ? s.text.slice(0, textPreviewLimit) + '...'
+          : s.text;
       html += `<div class="mindmap-snippet-item ${readClass}" data-index="${i}">`;
       html += `<div class="mindmap-snippet-text">${this._escapeHtml(textPreview)}</div>`;
       html += `<div class="mindmap-snippet-meta">`;
@@ -542,7 +549,11 @@ export default class TopicsMindmap {
     });
 
     document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && this.snippetOverlay && this.snippetOverlay.classList.contains('open')) {
+      if (
+        event.key === 'Escape' &&
+        this.snippetOverlay &&
+        this.snippetOverlay.classList.contains('open')
+      ) {
         this._closeSnippetOverlay();
       }
     });
@@ -594,16 +605,23 @@ export default class TopicsMindmap {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           readed: newRead,
-          selections: [{
-            post_id: snippet.post_id,
-            sentence_indices: snippet.indices,
-          }],
+          selections: [
+            {
+              post_id: snippet.post_id,
+              sentence_indices: snippet.indices,
+            },
+          ],
         }),
       });
 
       snippet.read = newRead;
       this._updateSnippetDOM(d, container);
-      if (this.overlaySnippetNode === d && this.snippetOverlay && this.snippetOverlay.classList.contains('open') && container !== this.snippetOverlay) {
+      if (
+        this.overlaySnippetNode === d &&
+        this.snippetOverlay &&
+        this.snippetOverlay.classList.contains('open') &&
+        container !== this.snippetOverlay
+      ) {
         this._updateSnippetDOM(d, this.snippetOverlay);
       }
     } catch (err) {
@@ -627,9 +645,16 @@ export default class TopicsMindmap {
         body: JSON.stringify({ readed: markRead, selections }),
       });
 
-      snippets.forEach((s) => { s.read = markRead; });
+      snippets.forEach((s) => {
+        s.read = markRead;
+      });
       this._updateSnippetDOM(d, container);
-      if (this.overlaySnippetNode === d && this.snippetOverlay && this.snippetOverlay.classList.contains('open') && container !== this.snippetOverlay) {
+      if (
+        this.overlaySnippetNode === d &&
+        this.snippetOverlay &&
+        this.snippetOverlay.classList.contains('open') &&
+        container !== this.snippetOverlay
+      ) {
         this._updateSnippetDOM(d, this.snippetOverlay);
       }
     } catch (err) {
@@ -676,9 +701,7 @@ export default class TopicsMindmap {
     }
 
     // --- NODES ---
-    const node = this.gNodes
-      .selectAll('g.mindmap-node')
-      .data(visibleNodes, (d) => d.id);
+    const node = this.gNodes.selectAll('g.mindmap-node').data(visibleNodes, (d) => d.id);
 
     // Enter
     const nodeEnter = node
@@ -699,15 +722,21 @@ export default class TopicsMindmap {
     // Rounded rect background
     regularEnter
       .append('rect')
-      .attr('class', (d) => 'mindmap-node-rect' + (this._isPseudoOrSource(d) ? ' mindmap-pseudo-rect' : '') + (this._isTagSearchResult(d) ? ' mindmap-tag-search-result-rect' : ''))
+      .attr(
+        'class',
+        (d) =>
+          'mindmap-node-rect' +
+          (this._isPseudoOrSource(d) ? ' mindmap-pseudo-rect' : '') +
+          (this._isTagSearchResult(d) ? ' mindmap-tag-search-result-rect' : '')
+      )
       .attr('x', 0)
       .attr('y', -this.nodeHeight / 2)
       .attr('width', (d) => this._nodeWidth(d))
       .attr('height', this.nodeHeight)
       .attr('rx', 8)
       .attr('ry', 8)
-      .attr('fill', (d) => this._isTagSearchResult(d) ? '#fde8c0' : this._depthColor(d.depth))
-      .attr('stroke', (d) => this._isTagSearchResult(d) ? '#c8963c' : '#999')
+      .attr('fill', (d) => (this._isTagSearchResult(d) ? '#fde8c0' : this._depthColor(d.depth)))
+      .attr('stroke', (d) => (this._isTagSearchResult(d) ? '#c8963c' : '#999'))
       .attr('stroke-width', 1)
       .attr('cursor', 'pointer')
       .on('click', (event, d) => {
@@ -750,7 +779,7 @@ export default class TopicsMindmap {
       .attr('fill', '#555')
       .text((d) => {
         if (d.data._loading) return '...';
-        return (d.children) ? '<' : '>';
+        return d.children ? '<' : '>';
       })
       .on('click', (event, d) => {
         event.stopPropagation();
@@ -839,15 +868,15 @@ export default class TopicsMindmap {
     // Update arrow direction on merge
     nodeUpdate.select('.mindmap-node-arrow').text((d) => {
       if (d.data._loading) return '...';
-      return (d.children) ? '<' : '>';
+      return d.children ? '<' : '>';
     });
 
     // Keep width, colors, and labels in sync on updates
     nodeUpdate
       .select('.mindmap-node-rect')
       .attr('width', (d) => this._nodeWidth(d))
-      .attr('fill', (d) => this._isTagSearchResult(d) ? '#fde8c0' : this._depthColor(d.depth))
-      .attr('stroke', (d) => this._isTagSearchResult(d) ? '#c8963c' : '#999');
+      .attr('fill', (d) => (this._isTagSearchResult(d) ? '#fde8c0' : this._depthColor(d.depth)))
+      .attr('stroke', (d) => (this._isTagSearchResult(d) ? '#c8963c' : '#999'));
 
     nodeUpdate
       .select('.mindmap-node-text')
@@ -882,9 +911,7 @@ export default class TopicsMindmap {
       .x((d) => d[0])
       .y((d) => d[1]);
 
-    const link = this.gLinks
-      .selectAll('path.mindmap-link')
-      .data(visibleLinks, (d) => d.target.id);
+    const link = this.gLinks.selectAll('path.mindmap-link').data(visibleLinks, (d) => d.target.id);
 
     // Enter
     const linkEnter = link

@@ -169,7 +169,7 @@ function handleScroll() {
   }
 }
 
-function initSentenceClusterPage() {
+export function initSentenceClusterPage() {
   const tabsContainer = document.getElementById('sentence_cluster_tabs');
   if (!tabsContainer) {
     return;
@@ -178,7 +178,7 @@ function initSentenceClusterPage() {
   const tabs = tabsContainer.querySelectorAll('.sentence-cluster-tab-btn');
   const contents = {
     snippets: document.getElementById('sentence_cluster_tab_snippets'),
-    'groups-mind-map': document.getElementById('sentence_cluster_tab_groups_mind_map')
+    'groups-mind-map': document.getElementById('sentence_cluster_tab_groups_mind_map'),
   };
   const chartContainer = document.getElementById('sentence_cluster_mindmap_chart');
   let mindmapRendered = false;
@@ -193,7 +193,7 @@ function initSentenceClusterPage() {
     mindmap.render('#sentence_cluster_mindmap_chart', window.sentence_cluster_mindmap_data, {
       topicClickAction: 'toggle',
       countLabel: 'snippets',
-      snippetApiBaseUrl: `/api/sentence-clusters/${encodeURIComponent(clusterId)}/topic-snippets`
+      snippetApiBaseUrl: `/api/sentence-clusters/${encodeURIComponent(clusterId)}/topic-snippets`,
     });
     mindmapRendered = true;
   };
@@ -224,7 +224,88 @@ function initSentenceClusterPage() {
   });
 }
 
-window.onload = () => {
+export function resolvePageType(path) {
+  if (path === '/') {
+    return 'root';
+  }
+  if (/^\/post-grouped\//.test(path)) {
+    return 'post-grouped';
+  }
+  if (/^\/s-tree\//.test(path)) {
+    return 's-tree';
+  }
+  if (/^\/sunburst\//.test(path)) {
+    return 'sunburst';
+  }
+  if (/^\/tree\//.test(path) || /^\/prefixes\/prefix\//.test(path)) {
+    return 'tree';
+  }
+  if (/^\/post-graph\//.test(path)) {
+    return 'post-graph';
+  }
+  if (path === '/group/category') {
+    return 'group-category';
+  }
+  if (
+    /\/group\/(tag|hottag|tags-categories)\/.*/.test(path) ||
+    /\/group\/(rake-dyn|yake-dyn)\/.*/.test(path) ||
+    /\/tags\/category\/.*/.test(path) ||
+    /\/tags\/sentiment\/.*/.test(path) ||
+    /\/tags\/group\/.*/.test(path) ||
+    /\/topics\/[0-9]+/.test(path) ||
+    /\/tfidf-tags/.test(path) ||
+    /\/ba-surprise/.test(path) ||
+    /\/prefixes\/all\/.*/.test(path) ||
+    /\/prefixes\/words\/.*/.test(path)
+  ) {
+    return 'tags-group';
+  }
+  if (/\/group\/(bi-grams|bi-grams-dyn)\/.*/.test(path)) {
+    return 'bigrams-group';
+  }
+  if (
+    /^\/feed*/.test(path) ||
+    /^\/category*/.test(path) ||
+    /^\/tag\/.*/.test(path) ||
+    /^\/posts\/with\/tags\/.*/.test(path) ||
+    /^\/bi-gram\/.*/.test(path) ||
+    /^\/entity\/.*/.test(path) ||
+    /^\/posts\/.*/.test(path)
+  ) {
+    return 'posts-list';
+  }
+  if (/\/tag-info\/.*/.test(path)) {
+    return 'tag-info';
+  }
+  if (/\/context-tags\/.*/.test(path)) {
+    return 'context-tags';
+  }
+  if (/^\/map$/.test(path)) {
+    return 'map';
+  }
+  if (/^\/tag-net$/.test(path)) {
+    return 'tag-net';
+  }
+  if (path === '/clusters-topics-dyn') {
+    return 'clusters-topics-dyn';
+  }
+  if (/^\/topics-mindmap$/.test(path)) {
+    return 'topics-mindmap';
+  }
+  if (/^\/sentence-clusters\/[0-9]+$/.test(path)) {
+    return 'sentence-cluster';
+  }
+  if (/^\/tag-context-tree\//.test(path)) {
+    return 'tag-context-tree';
+  }
+  if (/^\/topics-list(\/[0-9]+)?$/.test(path)) {
+    return 'topics-list';
+  }
+
+  return 'unknown';
+}
+
+export function initApp() {
   if (window.EVSYS === undefined) {
     window.EVSYS = new EventsSystem();
   }
@@ -256,15 +337,17 @@ window.onload = () => {
   if (global_status_container) {
     ReactDOM.render(<GlobalStatus ES={window.EVSYS} />, global_status_container);
   }
-  if (path === '/') {
-  } else if (/^\/post-grouped\//.test(path)) {
+  const pageType = resolvePageType(path);
+
+  if (pageType === 'root') {
+  } else if (pageType === 'post-grouped') {
     const posts_storage = new PostsStorage(window.EVSYS);
     // Mock the data structure expected by PostsStorage if necessary,
     // although PostsStorage mostly uses window.* variables in fetchPosts()
-    window.posts_list = window.posts.map(p => ({
+    window.posts_list = window.posts.map((p) => ({
       pos: p.post_id,
       post: p,
-      showed: true
+      showed: true,
     }));
     window.group = 'tag';
     window.group_title = window.feed_title;
@@ -279,7 +362,7 @@ window.onload = () => {
       ReactDOM.render(<ShowAllButton ES={window.EVSYS} />, show_all_container);
     }
     posts_storage.start();
-  } else if (/^\/s-tree\//.test(path)) {
+  } else if (pageType === 's-tree') {
     // Ensure s_tree_data is available globally for the SentenceTree component
     // This might be set by a script tag in the HTML template
     const s_tree_page_container = document.getElementById('s_tree_page');
@@ -289,13 +372,13 @@ window.onload = () => {
         s_tree_page_container // Ensure this div exists in your HTML
       );
     }
-  } else if (/^\/sunburst\//.test(path)) {
+  } else if (pageType === 'sunburst') {
     let sunburst = new TagSunburst(window.tag_sunburst_initial_root);
     sunburst.render('.page');
-  } else if (/^\/tree\//.test(path) || /^\/prefixes\/prefix\//.test(path)) {
+  } else if (pageType === 'tree') {
     let tree = new TagTree(window.tag_sunburst_initial_root);
     tree.render('.page');
-  } else if (/^\/post-graph\//.test(path)) {
+  } else if (pageType === 'post-graph') {
     if (window.posts_graphs) {
       const treeGraphs = {};
 
@@ -352,23 +435,12 @@ window.onload = () => {
         });
       });
     }
-  } else if (path === '/group/category') {
+  } else if (pageType === 'group-category') {
     const cats_list_container = document.getElementById('cats_list');
     if (cats_list_container) {
       ReactDOM.render(<CategoriesList ES={window.EVSYS} />, cats_list_container);
     }
-  } else if (
-    /\/group\/(tag|hottag|tags-categories)\/.*/.test(path) ||
-    /\/group\/(rake-dyn|yake-dyn)\/.*/.test(path) ||
-    /\/tags\/category\/.*/.test(path) ||
-    /\/tags\/sentiment\/.*/.test(path) ||
-    /\/tags\/group\/.*/.test(path) ||
-    /\/topics\/[0-9]+/.test(path) ||
-    /\/tfidf-tags/.test(path) ||
-    /\/ba-surprise/.test(path) ||
-    /\/prefixes\/all\/.*/.test(path) ||
-    /\/prefixes\/words\/.*/.test(path)
-  ) {
+  } else if (pageType === 'tags-group') {
     const tags_storage = new TagsStorage(window.EVSYS);
     const tags_page_container = document.getElementById('tags_page');
     if (tags_page_container) {
@@ -383,7 +455,7 @@ window.onload = () => {
       ReactDOM.render(<SearchInput ES={window.EVSYS} />, search_tools_container);
     }
     tags_storage.start();
-  } else if (/\/group\/(bi-grams|bi-grams-dyn)\/.*/.test(path)) {
+  } else if (pageType === 'bigrams-group') {
     const bi_grams_storage = new BiGramsStorage(window.EVSYS);
     // Render the tabs controller
     ReactDOM.render(
@@ -401,23 +473,12 @@ window.onload = () => {
       ReactDOM.render(<BigramsTable ES={window.EVSYS} />, bigramsTableContainer);
     }
     bi_grams_storage.start();
-  } else if (
-    /^\/feed*/.test(path) ||
-    /^\/category*/.test(path) ||
-    /^\/tag\/.*/.test(path) ||
-    /^\/posts\/with\/tags\/.*/.test(path) ||
-    /^\/bi-gram\/.*/.test(path) ||
-    /^\/entity\/.*/.test(path) ||
-    /^\/posts\/.*/.test(path)
-  ) {
+  } else if (pageType === 'posts-list') {
     const posts_storage = new PostsStorage(window.EVSYS);
     const hash = window.location.hash;
     const posts_page_container = document.getElementById('posts_page');
     if (posts_page_container) {
-      ReactDOM.render(
-        <PostTabs ES={window.EVSYS} words_from_hash={hash} />,
-        posts_page_container
-      );
+      ReactDOM.render(<PostTabs ES={window.EVSYS} words_from_hash={hash} />, posts_page_container);
     }
     const read_all_container = document.getElementById('read_all');
     if (read_all_container) {
@@ -432,14 +493,14 @@ window.onload = () => {
       ReactDOM.render(<PostsNumbers ES={window.EVSYS} />, posts_stat_container);
     }
     posts_storage.start();
-  } else if (/\/tag-info\/.*/.test(path)) {
+  } else if (pageType === 'tag-info') {
     let tag = window.initial_tag;
     tagWithContextInfoPage(tag);
     tagNoContextInfoPage(tag);
-  } else if (/\/context-tags\/.*/.test(path)) {
+  } else if (pageType === 'context-tags') {
     let tag = window.initial_tag;
     tagWithContextInfoPage(tag);
-  } else if (/^\/map$/.test(path)) {
+  } else if (pageType === 'map') {
     let map_handler = new RssTagYMap('map', window.EVSYS);
     let prom = rsstag_utils.waitFor(map_handler.isReadyToStart);
 
@@ -451,7 +512,7 @@ window.onload = () => {
       geo_tags_storage.start();
       window.EVSYS.trigger(window.EVSYS.END_TASK, 'ajax');
     });
-  } else if (/^\/tag-net$/.test(path)) {
+  } else if (pageType === 'tag-net') {
     let tag_hash = decodeURIComponent(document.location.hash);
     let ES = window.EVSYS;
     let tags_net = new TagsNet('tags_net', ES);
@@ -459,23 +520,25 @@ window.onload = () => {
     ReactDOM.render(<TagNetTools ES={ES} />, document.getElementById('tags_net_tools'));
     tags_net.start();
     tags_net_storage.start();
-  } else if (path === '/clusters-topics-dyn') {
+  } else if (pageType === 'clusters-topics-dyn') {
     const context = document.getElementById('clusters_topics_page_container');
     if (context) {
       ReactDOM.render(<ClustersTopics />, context);
     }
-  } else if (/^\/topics-mindmap$/.test(path)) {
+  } else if (pageType === 'topics-mindmap') {
     const mindmap = new TopicsMindmap();
     mindmap.render('#topics_mindmap_chart', window.mindmap_data);
-  } else if (/^\/sentence-clusters\/[0-9]+$/.test(path)) {
+  } else if (pageType === 'sentence-cluster') {
     initSentenceClusterPage();
-  } else if (/^\/tag-context-tree\//.test(path)) {
+  } else if (pageType === 'tag-context-tree') {
     const mindmap = new TopicsMindmap();
     mindmap.render('#topics_mindmap_chart', window.mindmap_data);
-  } else if (/^\/topics-list(\/[0-9]+)?$/.test(path)) {
+  } else if (pageType === 'topics-list') {
     initTopicsPage();
   }
-};
+}
+
+window.onload = initApp;
 
 function tagNoContextInfoPage(tag) {
   const bigrams_mentions_evsys = new EventsSystem();
@@ -699,7 +762,10 @@ function tagWithContextInfoPage(tag) {
 
   const tag_llm_topics_evsys = new EventsSystem();
   const tag_llm_topics_storage = new TagsStorage(tag_llm_topics_evsys, '/tag-llm-topics');
-  ReactDOM.render(<TagsList ES={tag_llm_topics_evsys} />, document.getElementById('tag_llm_topics'));
+  ReactDOM.render(
+    <TagsList ES={tag_llm_topics_evsys} />,
+    document.getElementById('tag_llm_topics')
+  );
   ReactDOM.render(
     <TagButton ES={tag_llm_topics_evsys} title="LLM topics" tag={tag} />,
     document.getElementById('load_llm_topics')
