@@ -271,14 +271,18 @@ export default class ContextFilterBar {
       const suggestions = (data.data || [])
         .map((item) => {
           if (type === 'tags') {
-            const tagValue = item[typeConfig.field] || item.value || item.name;
-            if (typeof tagValue !== 'string' || !tagValue.trim()) {
+            const rawTagValue = item[typeConfig.field] || item.value || item.name;
+            if (typeof rawTagValue !== 'string') {
+              return null;
+            }
+            const trimmedTagValue = rawTagValue.trim();
+            if (!trimmedTagValue) {
               return null;
             }
             const frequency = Number(item.unread ?? item.all ?? item.count ?? 0);
             return {
-              value: tagValue,
-              label: tagValue,
+              value: trimmedTagValue,
+              label: trimmedTagValue,
               meta: Number.isFinite(frequency) ? `${frequency} posts` : '',
             };
           }
