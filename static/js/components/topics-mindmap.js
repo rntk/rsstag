@@ -380,6 +380,9 @@ export default class TopicsMindmap {
     }
     html += `<button class="mindmap-snippet-batch-btn" data-action="read-all">Read All</button>`;
     html += `<button class="mindmap-snippet-batch-btn" data-action="unread-all">Unread All</button>`;
+    if (options.includeClosePanel) {
+      html += `<button class="mindmap-snippet-batch-btn mindmap-snippet-close-btn" data-action="close-panel">✕</button>`;
+    }
     if (includeClose) {
       html += `<button class="mindmap-snippet-batch-btn mindmap-snippet-close-btn" data-action="close-overlay">Close</button>`;
     }
@@ -430,6 +433,8 @@ export default class TopicsMindmap {
             const action = batchBtn.dataset.action;
             if (action === 'maximize') {
               this._openSnippetOverlay(node);
+            } else if (action === 'close-panel') {
+              this._closeSnippetPanel(node);
             } else if (action === 'read-all' || action === 'unread-all') {
               this._batchToggleRead(node, action === 'read-all', container);
             }
@@ -519,6 +524,16 @@ export default class TopicsMindmap {
     this.snippetOverlay.innerHTML = '';
     this.overlaySnippetNode = null;
     document.body.classList.remove('mindmap-snippet-overlay-open');
+  }
+
+  _closeSnippetPanel(node) {
+    const parent = node.parent;
+    if (!parent) return;
+    if (parent.children) {
+      parent._children = parent.children;
+      parent.children = null;
+    }
+    this._update(parent);
   }
 
   async _toggleSnippetRead(node, snippetIndex, container) {
@@ -965,7 +980,7 @@ export default class TopicsMindmap {
       .attr('width', this.snippetPanelWidth - 8)
       .attr('height', (nodeData) => this._nodeHeightFor(nodeData) - 8)
       .append('xhtml:div')
-      .html((nodeData) => this._buildSnippetHTML(nodeData));
+      .html((nodeData) => this._buildSnippetHTML(nodeData, { includeClosePanel: true }));
 
     this._setupSnippetEvents(snippetEnter);
 
