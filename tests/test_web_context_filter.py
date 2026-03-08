@@ -82,7 +82,7 @@ class TestWebContextFilter(MongoWebTestCase):
         sid = self._seed_filter_fixture()
         client = self.get_authenticated_client(sid)
 
-        feeds = client.post("/api/context-filter/suggestions", data={"type": "feed", "req": "feed-"})
+        feeds = client.post("/api/context-filter/suggestions", data={"type": "feed", "req": "feed one"})
         categories = client.post(
             "/api/context-filter/suggestions", data={"type": "category", "req": "cat-"}
         )
@@ -100,13 +100,18 @@ class TestWebContextFilter(MongoWebTestCase):
 
         self.assertEqual(
             [item["value"] for item in feeds.get_json()["data"]],
-            ["feed-1", "feed-2"],
+            ["feed-1"],
         )
+        self.assertEqual(feeds.get_json()["data"][0]["label"], "Feed One")
+        self.assertEqual(feeds.get_json()["data"][0]["meta"], "feed-1")
         self.assertEqual(
             [item["value"] for item in categories.get_json()["data"]],
             ["cat-1", "cat-2"],
         )
-        self.assertIn("Technology", [item["value"] for item in topics.get_json()["data"]])
+        self.assertEqual(categories.get_json()["data"][0]["meta"], "1 feed")
+        topic_items = topics.get_json()["data"]
+        self.assertIn("Technology", [item["value"] for item in topic_items])
+        self.assertTrue(any(item["meta"].endswith("sentences") for item in topic_items))
         self.assertIn(
             "Technology > AI",
             [item["value"] for item in subtopics.get_json()["data"]],
