@@ -342,6 +342,12 @@ export function initApp() {
   progressbar_storage.start();
 
   // Initialize context filter (available on all pages with the bar)
+  if (window.context_filter_data && !window.context_filter_data.filters) {
+    window.context_filter_data = {
+      active: Boolean(window.context_filter_data.active),
+      filters: window.context_filter_data,
+    };
+  }
   const context_filter_bar = new ContextFilterBar('context_filter_bar', window.EVSYS);
   const context_filter_storage = new ContextFilterStorage(window.EVSYS);
   context_filter_bar.start();

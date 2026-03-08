@@ -2,11 +2,46 @@
 
 import rsstag_utils from '../libs/rsstag_utils.js';
 
+const FILTER_TYPES = [
+  { type: 'tags', label: 'Tags', searchUrl: '/tags-search', field: 'tag' },
+  { type: 'feeds', label: 'Feeds' },
+  { type: 'categories', label: 'Categories' },
+  { type: 'topics', label: 'Topics', searchUrl: '/topics-search', field: 'tag' },
+  { type: 'subtopics', label: 'Subtopics', searchUrl: '/topics-search', field: 'tag' },
+];
+
+const FILTER_TYPE_MAP = FILTER_TYPES.reduce((acc, item) => {
+  acc[item.type] = item;
+  return acc;
+}, {});
+
+function normalizeFilters(filters = {}) {
+  const normalized = {};
+  FILTER_TYPES.forEach(({ type }) => {
+    const values = filters[type];
+    normalized[type] = Array.isArray(values)
+      ? values.filter((value) => typeof value === 'string' && value.trim())
+      : [];
+  });
+  return normalized;
+}
+
+function normalizeState(rawState = {}) {
+  const filters = rawState.filters || rawState;
+  const normalizedFilters = normalizeFilters(filters);
+  const hasFilters = Object.values(normalizedFilters).some((values) => values.length > 0);
+
+  return {
+    active: typeof rawState.active === 'boolean' ? rawState.active : hasFilters,
+    filters: normalizedFilters,
+  };
+}
+
 export default class ContextFilterBar {
   constructor(container_id, event_system) {
     this.ES = event_system;
     this.container_id = container_id;
-    this._state = { active: false, tags: [] };
+    this._state = normalizeState();
     this._modalState = null;
   }
 
@@ -20,28 +55,35 @@ export default class ContextFilterBar {
     const container = document.getElementById(this.container_id);
     if (!container) return;
 
-    // Always show the bar with at least the "+ Add" button
     container.style.display = 'flex';
 
     let html = '<div class="context-filter-bar">';
 
-    if (this._state.active && this._state.tags.length > 0) {
+    if (this._state.active) {
       html += '<span class="context-filter-label">Context:</span>';
+      FILTER_TYPES.forEach(({ type, label }) => {
+        const values = this._state.filters[type];
+        if (!values.length) {
+          return;
+        }
 
-      for (const tag of this._state.tags) {
-        const escaped = this.escapeHtml(tag);
-        html += `
-          <span class="context-filter-tag">
-            ${escaped}
-            <button class="context-filter-remove" data-tag="${escaped}" title="Remove">&times;</button>
-          </span>
-        `;
-      }
+        html += `<span class="context-filter-group"><span class="context-filter-group-label">${this.escapeHtml(label)}:</span>`;
+        values.forEach((value) => {
+          const escaped = this.escapeHtml(value);
+          html += `
+            <span class="context-filter-tag">
+              ${escaped}
+              <button class="context-filter-remove" data-filter-type="${type}" data-filter-value="${encodeURIComponent(value)}" title="Remove">&times;</button>
+            </span>
+          `;
+        });
+        html += '</span>';
+      });
 
       html += '<button class="context-filter-clear" title="Clear all filters">Clear</button>';
     }
 
-    html += '<button class="context-filter-add" title="Add tag to context">+ Add Tag</button>';
+    html += '<button class="context-filter-add" title="Add filter to context">+ Add Filter</button>';
     html += '</div>';
 
     container.innerHTML = html;
@@ -49,16 +91,16 @@ export default class ContextFilterBar {
   }
 
   bindClickHandlers(container) {
-    // Remove tag buttons
     container.querySelectorAll('.context-filter-remove').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         e.preventDefault();
-        const tag = e.target.dataset.tag;
-        this.ES.trigger(this.ES.CONTEXT_FILTER_REMOVE_TAG, tag);
+        this.ES.trigger(this.ES.CONTEXT_FILTER_REMOVE, {
+          type: e.target.dataset.filterType,
+          value: decodeURIComponent(e.target.dataset.filterValue || ''),
+        });
       });
     });
 
-    // Clear all button
     const clearBtn = container.querySelector('.context-filter-clear');
     if (clearBtn) {
       clearBtn.addEventListener('click', (e) => {
@@ -67,22 +109,20 @@ export default class ContextFilterBar {
       });
     }
 
-    // Add tag button
     const addBtn = container.querySelector('.context-filter-add');
     if (addBtn) {
       addBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        this.showAddTagModal();
+        this.showAddFilterModal();
       });
     }
   }
 
-  showAddTagModal() {
-    // Remove existing modal if any
-    const existing = document.querySelector('.context-filter-modal');
-    if (existing) existing.remove();
+  showAddFilterModal() {
+    document.querySelector('.context-filter-modal')?.remove();
 
     this._modalState = {
+      type: 'tags',
       suggestions: [],
       selectedIndex: -1,
     };
@@ -91,23 +131,57 @@ export default class ContextFilterBar {
     modal.className = 'context-filter-modal';
     modal.innerHTML = `
       <div class="context-filter-modal-content">
-        <h3>Add Context Tag</h3>
-        <input type="text" id="context-tag-search" placeholder="Type to search tags..." autocomplete="off" />
-        <div id="context-tag-results"></div>
+        <h3>Add Context Filter</h3>
+        <select id="context-filter-type">
+          ${FILTER_TYPES.map(
+            ({ type, label }) => `<option value="${type}">${this.escapeHtml(label)}</option>`
+          ).join('')}
+        </select>
+        <input type="text" id="context-filter-search" placeholder="Type value..." autocomplete="off" />
+        <div id="context-filter-results"></div>
+        <button class="context-filter-modal-add">Add</button>
         <button class="context-filter-modal-close">Cancel</button>
       </div>
     `;
+
     document.body.appendChild(modal);
 
-    const input = modal.querySelector('#context-tag-search');
-    const results = modal.querySelector('#context-tag-results');
+    const typeSelect = modal.querySelector('#context-filter-type');
+    const input = modal.querySelector('#context-filter-search');
+    const results = modal.querySelector('#context-filter-results');
+    const addBtn = modal.querySelector('.context-filter-modal-add');
     const closeBtn = modal.querySelector('.context-filter-modal-close');
 
     let searchTimeout;
+
+    const renderTypeHint = () => {
+      this._modalState.suggestions = [];
+      this._modalState.selectedIndex = -1;
+      const typeConfig = FILTER_TYPE_MAP[this._modalState.type];
+      input.placeholder = typeConfig.searchUrl
+        ? `Search ${typeConfig.label.toLowerCase()}...`
+        : `Type ${typeConfig.label.toLowerCase()} value...`;
+      this.renderHints(
+        results,
+        typeConfig.searchUrl
+          ? `Start typing to search ${typeConfig.label.toLowerCase()}`
+          : `Enter ${typeConfig.label.toLowerCase()} value and click Add`
+      );
+    };
+
+    typeSelect.addEventListener('change', () => {
+      this._modalState.type = typeSelect.value;
+      input.value = '';
+      renderTypeHint();
+    });
+
     input.addEventListener('input', () => {
       clearTimeout(searchTimeout);
       this._modalState.selectedIndex = -1;
-      searchTimeout = setTimeout(() => this.searchTags(input.value, results), 800);
+      searchTimeout = setTimeout(
+        () => this.searchFilters(this._modalState.type, input.value, results),
+        400
+      );
     });
 
     input.addEventListener('keydown', (event) => {
@@ -122,54 +196,66 @@ export default class ContextFilterBar {
       }
     });
 
+    addBtn.addEventListener('click', () => this.commitSelection(input.value, results));
     closeBtn.addEventListener('click', () => modal.remove());
     modal.addEventListener('click', (e) => {
       if (e.target === modal) modal.remove();
     });
 
-    this.renderHints(results, 'Start typing to search tags');
+    renderTypeHint();
     input.focus();
   }
 
-  async searchTags(query, resultsContainer) {
+  async searchFilters(type, query, resultsContainer) {
+    const typeConfig = FILTER_TYPE_MAP[type];
     const trimmed = query.trim();
+
     if (!trimmed) {
       this._modalState.suggestions = [];
       this._modalState.selectedIndex = -1;
-      this.renderHints(resultsContainer, 'Start typing to search tags');
+      this.renderHints(
+        resultsContainer,
+        typeConfig.searchUrl
+          ? `Start typing to search ${typeConfig.label.toLowerCase()}`
+          : `Enter ${typeConfig.label.toLowerCase()} value and click Add`
+      );
       return;
     }
+
+    if (!typeConfig.searchUrl) {
+      this._modalState.suggestions = [];
+      this._modalState.selectedIndex = -1;
+      resultsContainer.innerHTML = `<div class="context-tag-hint">Press Enter or click Add to use "${this.escapeHtml(trimmed)}"</div>`;
+      return;
+    }
+
     try {
       const form = new FormData();
       form.append('req', trimmed);
-      const data = await rsstag_utils.fetchJSON('/tags-search', {
+      const data = await rsstag_utils.fetchJSON(typeConfig.searchUrl, {
         method: 'POST',
         credentials: 'include',
         body: form,
       });
 
-      if (data.data && data.data.length > 0) {
-        // Filter out tags already in context
-        const filtered = data.data.filter((t) => !this._state.tags.includes(t.tag));
+      const activeValues = this._state.filters[type] || [];
+      const suggestions = (data.data || [])
+        .map((item) => item[typeConfig.field] || item.name || item.value)
+        .filter((value) => typeof value === 'string' && value.trim())
+        .filter((value) => !activeValues.includes(value));
 
-        if (filtered.length === 0) {
-          this._modalState.suggestions = [];
-          this._modalState.selectedIndex = -1;
-          resultsContainer.innerHTML =
-            '<div class="no-results">All matching tags already in context</div>';
-          return;
-        }
-
-        this._modalState.suggestions = filtered.slice(0, 10);
-        this._modalState.selectedIndex = -1;
-        this.renderSuggestions(resultsContainer);
-      } else {
+      if (!suggestions.length) {
         this._modalState.suggestions = [];
         this._modalState.selectedIndex = -1;
-        resultsContainer.innerHTML = '<div class="no-results">No tags found</div>';
+        resultsContainer.innerHTML = '<div class="no-results">No matching values found</div>';
+        return;
       }
+
+      this._modalState.suggestions = suggestions.slice(0, 10);
+      this._modalState.selectedIndex = -1;
+      this.renderSuggestions(resultsContainer);
     } catch (err) {
-      console.error('Tag search failed:', err);
+      console.error('Filter search failed:', err);
       this._modalState.suggestions = [];
       this._modalState.selectedIndex = -1;
       resultsContainer.innerHTML = '<div class="no-results">Search failed</div>';
@@ -184,74 +270,64 @@ export default class ContextFilterBar {
     const suggestions = this._modalState.suggestions;
     container.innerHTML = suggestions
       .map(
-        (tag, index) => `
-      <div class="context-tag-result${index === this._modalState.selectedIndex ? ' is-active' : ''}" data-index="${index}">
-        <span class="context-tag-label">${this.escapeHtml(tag.tag)}</span>
-        <span class="tag-counts">(${tag.unread}/${tag.all})</span>
-      </div>
-    `
+        (value, index) => `
+          <div class="context-tag-suggestion ${index === this._modalState.selectedIndex ? 'selected' : ''}" data-value="${encodeURIComponent(value)}" data-index="${index}">
+            ${this.escapeHtml(value)}
+          </div>
+        `
       )
       .join('');
 
-    container.querySelectorAll('.context-tag-result').forEach((el) => {
-      el.addEventListener('click', () => {
-        const index = Number(el.dataset.index);
-        const suggestion = this._modalState.suggestions[index];
-        if (!suggestion) {
-          return;
-        }
-        this.ES.trigger(this.ES.CONTEXT_FILTER_ADD_TAG, suggestion.tag);
+    container.querySelectorAll('.context-tag-suggestion').forEach((el) => {
+      el.addEventListener('click', (e) => {
+        const value = decodeURIComponent(e.currentTarget.dataset.value || "");
+        this.ES.trigger(this.ES.CONTEXT_FILTER_ADD, {
+          type: this._modalState.type,
+          value,
+        });
         document.querySelector('.context-filter-modal')?.remove();
       });
     });
   }
 
-  moveSelection(direction, resultsContainer) {
-    const total = this._modalState.suggestions.length;
-    if (total === 0) {
+  moveSelection(delta, container) {
+    const suggestions = this._modalState.suggestions;
+    if (!suggestions.length) {
       return;
     }
-    let nextIndex = this._modalState.selectedIndex + direction;
-    if (nextIndex < 0) {
-      nextIndex = total - 1;
-    } else if (nextIndex >= total) {
-      nextIndex = 0;
-    }
-    this._modalState.selectedIndex = nextIndex;
-    this.renderSuggestions(resultsContainer);
+
+    const total = suggestions.length;
+    const current = this._modalState.selectedIndex;
+    const next = current < 0 ? (delta > 0 ? 0 : total - 1) : (current + delta + total) % total;
+    this._modalState.selectedIndex = next;
+
+    container.querySelectorAll('.context-tag-suggestion').forEach((el, index) => {
+      el.classList.toggle('selected', index === next);
+    });
   }
 
-  async commitSelection(rawQuery, resultsContainer) {
-    let suggestions = this._modalState.suggestions;
-    if (suggestions.length === 0) {
-      const trimmed = rawQuery.trim();
-      if (!trimmed) {
-        return;
-      }
-      await this.searchTags(trimmed, resultsContainer);
-      suggestions = this._modalState.suggestions;
-      if (suggestions.length === 0) {
-        return;
-      }
+  commitSelection(inputValue) {
+    const { selectedIndex, suggestions, type } = this._modalState;
+    let value = inputValue.trim();
+
+    if (selectedIndex >= 0 && selectedIndex < suggestions.length) {
+      value = suggestions[selectedIndex];
     }
-    const trimmed = rawQuery.trim();
-    let selectedIndex = this._modalState.selectedIndex;
-    if (selectedIndex < 0 && trimmed) {
-      selectedIndex = suggestions.findIndex(
-        (tag) => tag.tag.toLowerCase() === trimmed.toLowerCase()
-      );
+
+    if (!value) {
+      return;
     }
-    if (selectedIndex < 0 && suggestions.length === 1) {
-      selectedIndex = 0;
+
+    if ((this._state.filters[type] || []).includes(value)) {
+      return;
     }
-    if (selectedIndex >= 0) {
-      this.ES.trigger(this.ES.CONTEXT_FILTER_ADD_TAG, suggestions[selectedIndex].tag);
-      document.querySelector('.context-filter-modal')?.remove();
-    }
+
+    this.ES.trigger(this.ES.CONTEXT_FILTER_ADD, { type, value });
+    document.querySelector('.context-filter-modal')?.remove();
   }
 
   update(state) {
-    this._state = state;
+    this._state = normalizeState(state);
     this.render();
   }
 
@@ -261,12 +337,8 @@ export default class ContextFilterBar {
 
   start() {
     this.bindEvents();
-    // Initial render with any server-provided state
     if (window.context_filter_data) {
-      // Extract tags from the filter data structure
-      const filterData = window.context_filter_data.tags || window.context_filter_data;
-      const tags = Array.isArray(filterData) ? filterData : filterData.tags || [];
-      this._state = { active: tags.length > 0, tags };
+      this._state = normalizeState(window.context_filter_data);
       this.render();
     }
   }
