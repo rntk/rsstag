@@ -38,12 +38,11 @@ From `static/js`:
 docker build -t rsstag-js-lint -f Dockerfile.lint .
 ```
 
-There is currently no separate frontend `npm test` script in this repository. The frontend validation checks are ESLint and Prettier.
-
-Run linting:
+Run linting and tests:
 
 ```bash
 docker run --rm -v "$PWD":/workspace rsstag-js-lint npm run lint
+docker run --rm -v "$PWD":/workspace rsstag-js-lint npm run test
 ```
 
 Apply lint fixes (optional):
@@ -62,6 +61,7 @@ If you prefer to use host networking for Docker-based checks, the commands also 
 
 ```bash
 docker run --rm --network=host -v "$PWD":/workspace rsstag-js-lint npm run lint
+docker run --rm --network=host -v "$PWD":/workspace rsstag-js-lint npm run test
 docker run --rm --network=host -v "$PWD":/workspace rsstag-js-lint npm run format:check
 ```
 

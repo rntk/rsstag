@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "rsstag frontend app",
   "main": "app.js",
+  "type": "module",
   "dependencies": {
     "d3": "^7.9.0",
     "sunburst-chart": "^1.19.2"
@@ -27,18 +28,18 @@
     "webpack-dev-server": "^5.2.0"
   },
   "scripts": {
-    "build": "NODE_ENV=production webpack --mode production",
-    "build:dev": "webpack --mode development",
-    "watch": "webpack --mode development --watch",
-    "dev": "webpack serve --mode development --open",
+    "build": "NODE_ENV=production webpack --config webpack.config.cjs --mode production",
+    "build:dev": "webpack --config webpack.config.cjs --mode development",
+    "watch": "webpack --config webpack.config.cjs --mode development --watch",
+    "dev": "webpack serve --config webpack.dev.config.cjs --mode development --open",
     "clean": "rm -f bundle.js bundle.js.map",
-    "lint": "eslint components/context-filter-bar.js components/load-posts.js components/post-item.js components/posts-list.js storages/context-filter-storage.js storages/posts-storage.js libs/rsstag_utils.js topics-list.js provider-feeds.js tag-feeds.js post-grouped-snippets.js webpack.config.js webpack.dev.config.js eslint.config.js test/**/*.js --max-warnings=0",
-    "lint:all": "eslint \"**/*.{js,jsx}\"",
+    "lint": "eslint components/context-filter-bar.js components/post-item.js storages/context-filter-storage.js storages/posts-storage.js libs/rsstag_utils.js topics-list.js provider-feeds.js tag-feeds.js post-grouped-snippets.js webpack.config.cjs webpack.dev.config.cjs eslint.config.cjs vitest.config.cjs test/**/*.js --max-warnings=0",
+    "lint:all": "eslint \"**/*.{js,jsx,cjs}\"",
     "lint:fix": "npm run lint -- --fix",
-    "format": "prettier --write \"{apps,components,storages,libs}/**/*.{js,jsx}\" \"*.{js,json,md}\" \"test/**/*.js\" \"../css/style.scss\"",
-    "format:check": "prettier --check \"{apps,components,storages,libs}/**/*.{js,jsx}\" \"*.{js,json,md}\" \"test/**/*.js\" \"../css/style.scss\"",
-    "test": "node --loader ./test/es-module-loader.mjs --test test/context-filter-storage.test.js test/posts-storage.test.js test/rsstag_utils.test.js test/topics-list.test.js",
-    "test:watch": "node --loader ./test/es-module-loader.mjs --test --watch test/context-filter-storage.test.js test/posts-storage.test.js test/rsstag_utils.test.js test/topics-list.test.js",
+    "format": "prettier --write \"{apps,components,storages,libs}/**/*.{js,jsx}\" \"*.{js,json,md,cjs}\" \"test/**/*.js\" \"../css/style.scss\"",
+    "format:check": "prettier --check \"{apps,components,storages,libs}/**/*.{js,jsx}\" \"*.{js,json,md,cjs}\" \"test/**/*.js\" \"../css/style.scss\"",
+    "test": "node --loader ./test/es-module-loader.mjs --test test/**/*.test.js",
+    "test:watch": "node --loader ./test/es-module-loader.mjs --test --watch test/**/*.test.js",
     "check": "npm run lint && npm run format:check && npm run build:dev && npm run test"
   },
   "keywords": [

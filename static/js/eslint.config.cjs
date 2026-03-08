@@ -30,9 +30,6 @@ const testGlobals = {
   ...browserGlobals,
   afterEach: 'readonly',
   beforeEach: 'readonly',
-  describe: 'readonly',
-  expect: 'readonly',
-  it: 'readonly',
 };
 
 module.exports = [
@@ -55,7 +52,7 @@ module.exports = [
   },
   js.configs.recommended,
   {
-    files: ['webpack.config.js', 'webpack.dev.config.js', 'eslint.config.js', 'vitest.config.js'],
+    files: ['webpack.config.cjs', 'webpack.dev.config.cjs', 'eslint.config.cjs', 'vitest.config.cjs'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'commonjs',

@@ -17,8 +17,11 @@ static/js/
 ├── components/     # React components
 ├── storages/       # Data management modules
 ├── libs/           # Utility libraries
-├── webpack.config.js       # Production webpack configuration
-├── webpack.dev.config.js   # Development server configuration
+├── test/           # Unit and integration tests
+├── webpack.config.cjs      # Production webpack configuration
+├── webpack.dev.config.cjs  # Development server configuration
+├── eslint.config.cjs       # ESLint configuration
+├── vitest.config.cjs       # Vitest configuration (optional)
 ├── package.json            # Dependencies and scripts
 ├── build.sh               # Docker build script
 └── .nvmrc                 # Node.js version specification
@@ -34,6 +37,7 @@ static/js/
 - ✅ Source maps for both development and production
 - ✅ Build performance optimizations (caching, code splitting ready)
 - ✅ Zero security vulnerabilities in dependencies
+- ✅ ES Module support with Node.js 22
 
 ### Development Workflow
 - Hot Module Replacement (HMR) support via webpack-dev-server
@@ -60,6 +64,8 @@ static/js/
 | `npm run lint:fix` | Run ESLint with auto-fixes |
 | `npm run format` | Format files with Prettier |
 | `npm run format:check` | Check formatting without writing changes |
+| `npm run test` | Run frontend tests using Node.js test runner |
+| `npm run test:watch` | Run frontend tests in watch mode |
 
 ## Building
 
@@ -109,6 +115,22 @@ docker run -it --rm \
   node:22 ./build.sh
 ```
 
+## Testing
+
+The project uses the built-in Node.js test runner for fast, dependency-free testing.
+
+Run tests once:
+```bash
+npm run test
+```
+
+Run tests in watch mode:
+```bash
+npm run test:watch
+```
+
+Tests are located in the `test/` directory and follow the `*.test.js` naming convention.
+
 ## Linting and Formatting
 
 Run linting and formatting locally:
@@ -125,20 +147,24 @@ npm run lint:fix
 npm run format
 ```
 
-### Docker Lint/Format
+### Docker Lint/Format/Test
 
-Build the lint/format container from `static/js`:
+Build the lint container from `static/js`:
 
 ```bash
 docker build -t rsstag-js-lint -f Dockerfile.lint .
 ```
 
-There is currently no separate frontend `npm test` script in this repository. The frontend validation checks are ESLint and Prettier.
-
 Run linting:
 
 ```bash
 docker run --rm -v "$PWD":/workspace rsstag-js-lint npm run lint
+```
+
+Run tests:
+
+```bash
+docker run --rm -v "$PWD":/workspace rsstag-js-lint npm run test
 ```
 
 Apply lint fixes (optional):
@@ -157,6 +183,7 @@ If you want the container to use host networking, these commands are equivalent:
 
 ```bash
 docker run --rm --network=host -v "$PWD":/workspace rsstag-js-lint npm run lint
+docker run --rm --network=host -v "$PWD":/workspace rsstag-js-lint npm run test
 docker run --rm --network=host -v "$PWD":/workspace rsstag-js-lint npm run format:check
 ```
 
@@ -256,6 +283,8 @@ nvm use
 - ⬆️ Upgraded webpack-cli from 4 to 5
 - ➕ Added webpack-dev-server for better DX
 - ➕ Added core-js for optimized polyfills
+- ➕ Added Node.js built-in test runner for frontend
+- ➕ Added ES Module support via `"type": "module"`
 - 🐛 Fixed SASS compilation path (was using absolute `/css/` path)
 - 🐛 Fixed webpack mode configuration
 - 🔒 Fixed all npm security vulnerabilities (4 → 0)
