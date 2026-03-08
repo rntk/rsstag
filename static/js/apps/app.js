@@ -51,20 +51,23 @@ import BiGramsGraph from '../components/bi-grams-graph.js';
 import { BiGramsTabs } from '../components/bigrams-tabs.js';
 import ContextFilterStorage from '../storages/context-filter-storage.js';
 import ContextFilterBar from '../components/context-filter-bar.js';
+import ChatStorage from '../storages/chat-storage.js';
+import GlobalChatPanel from '../components/global-chat.js';
 import ClustersTopics from '../components/ClustersTopics.js';
 import { initTopicsPage } from '../topics-list.js';
 import TopicsMindmap from '../components/topics-mindmap.js';
 
 function handleTextSelection() {
   const menu = document.createElement('div');
-  menu.id = 'rerank-context-menu';
+  menu.id = 'text-context-menu';
   menu.style.display = 'none';
 
   menu.innerHTML = `
-    <div class="menu-title">Open new page with rerank?</div>
+    <div class="menu-title">Selected text</div>
     <div class="menu-actions">
-      <button type="button" data-action="open">Open</button>
-      <button type="button" data-action="cancel">Cancel</button>
+      <button type="button" data-action="rerank">Rerank</button>
+      <button type="button" data-action="chat">Chat</button>
+      <button type="button" data-action="cancel">&times;</button>
     </div>
   `;
 
@@ -95,10 +98,20 @@ function handleTextSelection() {
     if (!action) {
       return;
     }
-    if (action === 'open' && selectedText) {
+    if (action === 'rerank' && selectedText) {
       const currentUrl = new URL(window.location.href);
       currentUrl.searchParams.set('rerank', selectedText);
       window.open(currentUrl.toString(), '_blank');
+    } else if (action === 'chat' && selectedText) {
+      if (window.EVSYS) {
+        window.EVSYS.trigger(window.EVSYS.CHAT_START_WITH_CONTEXT, {
+          type: 'text_selection',
+          text: selectedText,
+          sentences: [],
+          post_ids: [],
+          source_url: window.location.href,
+        });
+      }
     }
     hideMenu();
   });
@@ -352,6 +365,17 @@ export function initApp() {
   const context_filter_storage = new ContextFilterStorage(window.EVSYS);
   context_filter_bar.start();
   context_filter_storage.start();
+
+  // Initialize global chat panel
+  let chatDiv = document.getElementById('global_chat_panel');
+  if (!chatDiv) {
+    chatDiv = document.createElement('div');
+    chatDiv.id = 'global_chat_panel';
+    document.body.appendChild(chatDiv);
+  }
+  ReactDOM.render(<GlobalChatPanel ES={window.EVSYS} />, chatDiv);
+  const chat_storage = new ChatStorage(window.EVSYS);
+  chat_storage.start();
 
   let path = document.location.pathname;
 

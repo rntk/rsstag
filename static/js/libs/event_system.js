@@ -64,6 +64,11 @@ export default class EventsSystem {
     this.CONTEXT_FILTER_REMOVE_TAG = this.CONTEXT_FILTER_REMOVE;
     this.CONTEXT_FILTER_CLEAR = 'context_filter_clear';
 
+    this.CHAT_UPDATED = 'chat_updated';
+    this.CHAT_LIST_UPDATED = 'chat_list_updated';
+    this.CHAT_TOGGLE_PANEL = 'chat_toggle_panel';
+    this.CHAT_START_WITH_CONTEXT = 'chat_start_with_context';
+
     this._events = {};
   }
 

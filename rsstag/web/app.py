@@ -14,6 +14,7 @@ from rsstag.tasks import RssTagTasks
 from rsstag.web.routes import RSSTagRoutes
 from rsstag.utils import get_sorted_dict_by_alphabet, load_config
 from rsstag.posts import RssTagPosts
+from rsstag.chats import RssTagChats
 from rsstag.feeds import RssTagFeeds
 from rsstag.tags import RssTagTags
 from rsstag.letters import RssTagLetters
@@ -39,6 +40,7 @@ import rsstag.web.providers as providers_handlers
 import rsstag.web.feeds as feeds_handlers
 import rsstag.web.metadata as metadata_handlers
 import rsstag.web.context_filter_handlers as context_filter_handlers
+import rsstag.web.chats as chats_handlers
 
 from rsstag.llm.router import LLMRouter
 
@@ -137,6 +139,8 @@ class RSSTagApplication(object):
         self.workers.prepare()
         self.snippet_clusters = RssTagSnippetClusters(self.db)
         self.snippet_clusters.prepare()
+        self.chats = RssTagChats(self.db)
+        self.chats.prepare()
         self.routes = RSSTagRoutes(self.config["settings"]["host_name"], handlers=self)
         self.endpoints = {}
         self.update_endpoints()
@@ -1831,6 +1835,30 @@ class RSSTagApplication(object):
 
     def on_chat_post(self, user: dict, request: Request):
         return chat_handlers.on_chat_post(self, user, request)
+
+    def on_chats_list_get(self, user: dict, request: Request):
+        return chats_handlers.on_chats_list_get(self, user, request)
+
+    def on_chats_create_post(self, user: dict, request: Request):
+        return chats_handlers.on_chats_create_post(self, user, request)
+
+    def on_chats_detail_get(self, user: dict, request: Request, chat_id: str):
+        return chats_handlers.on_chats_detail_get(self, user, request, chat_id)
+
+    def on_chats_message_post(self, user: dict, request: Request, chat_id: str):
+        return chats_handlers.on_chats_message_post(self, user, request, chat_id)
+
+    def on_chats_rename_post(self, user: dict, request: Request, chat_id: str):
+        return chats_handlers.on_chats_rename_post(self, user, request, chat_id)
+
+    def on_chats_delete_post(self, user: dict, request: Request, chat_id: str):
+        return chats_handlers.on_chats_delete_post(self, user, request, chat_id)
+
+    def on_chats_fork_post(self, user: dict, request: Request, chat_id: str):
+        return chats_handlers.on_chats_fork_post(self, user, request, chat_id)
+
+    def on_chats_context_post(self, user: dict, request: Request, chat_id: str):
+        return chats_handlers.on_chats_context_post(self, user, request, chat_id)
 
     def on_prefixes_all_get(self, user: dict, _: Request, prefix_len: int):
         return prefixes_handlers.on_prefixes_all_get(self, user, prefix_len)

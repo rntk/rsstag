@@ -648,6 +648,46 @@ class RSSTagRoutes:
                 "endpoint": "on_tag_context_tree_get",
                 "methods": ["GET"],
             },
+            {
+                "url": "/api/chats",
+                "endpoint": "on_chats_list_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/api/chats",
+                "endpoint": "on_chats_create_post",
+                "methods": ["POST"],
+            },
+            {
+                "url": "/api/chats/<string:chat_id>",
+                "endpoint": "on_chats_detail_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/api/chats/<string:chat_id>/messages",
+                "endpoint": "on_chats_message_post",
+                "methods": ["POST"],
+            },
+            {
+                "url": "/api/chats/<string:chat_id>/rename",
+                "endpoint": "on_chats_rename_post",
+                "methods": ["POST"],
+            },
+            {
+                "url": "/api/chats/<string:chat_id>/delete",
+                "endpoint": "on_chats_delete_post",
+                "methods": ["POST"],
+            },
+            {
+                "url": "/api/chats/<string:chat_id>/fork",
+                "endpoint": "on_chats_fork_post",
+                "methods": ["POST"],
+            },
+            {
+                "url": "/api/chats/<string:chat_id>/context",
+                "endpoint": "on_chats_context_post",
+                "methods": ["POST"],
+            },
         ]
 
         decorated_routes = (
