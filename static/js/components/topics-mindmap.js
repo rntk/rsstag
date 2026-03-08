@@ -114,7 +114,7 @@ export default class TopicsMindmap {
     this._ensureSnippetOverlay();
     this._update(this.root);
     setTimeout(() => this._fitToView(), 100);
-    this._addResetButton(container);
+    this._addControlButtons(container);
 
     if (this.resizeHandler) {
       window.removeEventListener('resize', this.resizeHandler);
@@ -1053,12 +1053,47 @@ export default class TopicsMindmap {
       .call(this.zoom.transform, d3.zoomIdentity.translate(translateX, translateY).scale(scale));
   }
 
-  _addResetButton(container) {
-    const btn = document.createElement('button');
-    btn.className = 'mindmap-reset-btn';
-    btn.textContent = 'Reset View';
-    btn.type = 'button';
-    btn.addEventListener('click', () => this._fitToView());
-    container.appendChild(btn);
+  _foldAll() {
+    if (!this.root || !Array.isArray(this.root.children)) {
+      return;
+    }
+    this.root.children.forEach((child) => this._collapseAll(child));
+    this._update(this.root);
+  }
+
+  _foldCurrentLevel() {
+    if (!this.root) {
+      return;
+    }
+    const expandedNodes = this.root.descendants().filter(
+      (node) => node.depth > 0 && node.children && !this._isSnippetNode(node)
+    );
+    if (expandedNodes.length === 0) {
+      return;
+    }
+    const maxDepth = Math.max(...expandedNodes.map((n) => n.depth));
+    expandedNodes.forEach((node) => {
+      if (node.depth === maxDepth) {
+        node._children = node.children;
+        node.children = null;
+      }
+    });
+    this._update(this.root);
+  }
+
+  _addControlButtons(container) {
+    const btnDefs = [
+      { text: 'Reset View', className: 'mindmap-reset-btn', handler: () => this._fitToView() },
+      { text: 'Fold All', className: 'mindmap-fold-all-btn', handler: () => this._foldAll() },
+      { text: 'Fold Level', className: 'mindmap-fold-level-btn', handler: () => this._foldCurrentLevel() },
+    ];
+    btnDefs.forEach(({ text, className, handler }) => {
+      const btn = document.createElement('button');
+      btn.className = className;
+      btn.textContent = text;
+      btn.type = 'button';
+      btn.addEventListener('click', handler);
+      container.appendChild(btn);
+    });
   }
 }
