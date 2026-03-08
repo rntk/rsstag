@@ -21,6 +21,17 @@ ITEM_TYPE_TO_FILTER_KEY = {
 }
 
 
+def _iter_group_topics(app: "RSSTagApplication", owner: str):
+    for doc in app.post_grouping.get_all_by_owner(owner, projection={"groups": 1, "_id": 0}):
+        groups = doc.get("groups") if isinstance(doc, dict) else None
+        if not isinstance(groups, dict):
+            continue
+        for topic_path in groups.keys():
+            topic = str(topic_path).strip()
+            if topic:
+                yield topic
+
+
 def _extract_tags(filter_data: dict) -> list:
     tags_data = filter_data.get("tags", {})
     if isinstance(tags_data, dict):
@@ -106,7 +117,66 @@ def _validate_item_exists(app: "RSSTagApplication", user: dict, item_type: str, 
                 mimetype="application/json",
                 status=404,
             )
+    elif item_type == "topic":
+        requested = value.strip()
+        if not any(topic == requested for topic in _iter_group_topics(app, user["sid"])):
+            return Response(
+                json.dumps({"error": "Topic not found"}),
+                mimetype="application/json",
+                status=404,
+            )
+    elif item_type == "subtopic":
+        requested = value.strip()
+        if not any(
+            topic == requested and " > " in topic
+            for topic in _iter_group_topics(app, user["sid"])
+        ):
+            return Response(
+                json.dumps({"error": "Subtopic not found"}),
+                mimetype="application/json",
+                status=404,
+            )
     return None
+
+
+def on_context_filter_suggestions(
+    app: "RSSTagApplication", user: dict, request: Request
+) -> Response:
+    item_type = str(request.form.get("type", "")).strip().lower()
+    query = str(request.form.get("req", "")).strip().casefold()
+    if item_type not in {"feed", "category", "topic", "subtopic"}:
+        return Response(
+            json.dumps({"error": "Unknown item type"}),
+            mimetype="application/json",
+            status=400,
+        )
+    if not query:
+        return Response(json.dumps({"data": []}), mimetype="application/json", status=200)
+
+    values = []
+    if item_type == "feed":
+        for feed in app.feeds.get_all(user["sid"], projection={"_id": 0, "feed_id": 1}):
+            feed_id = str(feed.get("feed_id", "")).strip()
+            if feed_id and query in feed_id.casefold():
+                values.append(feed_id)
+    elif item_type == "category":
+        for feed in app.feeds.get_all(user["sid"], projection={"_id": 0, "category_id": 1}):
+            category_id = str(feed.get("category_id", "")).strip()
+            if category_id and query in category_id.casefold():
+                values.append(category_id)
+    else:
+        for topic in _iter_group_topics(app, user["sid"]):
+            if item_type == "subtopic" and " > " not in topic:
+                continue
+            if query in topic.casefold():
+                values.append(topic)
+
+    unique_sorted = sorted(set(values))[:20]
+    return Response(
+        json.dumps({"data": [{"value": value} for value in unique_sorted]}),
+        mimetype="application/json",
+        status=200,
+    )
 
 
 def get_context_filter_manager(user: dict) -> ContextFilterManager:

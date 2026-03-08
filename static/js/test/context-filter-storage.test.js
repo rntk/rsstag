@@ -151,3 +151,40 @@ test('start binds event handlers and kicks off the initial fetch', async () => {
     storage.fetchFilter = originalFetchFilter;
   }
 });
+
+
+test('addFilter maps feed/category/topic/subtopic item types', async () => {
+  const previousFetch = globalThis.fetch;
+  const previousWindow = globalThis.window;
+  const calls = [];
+  const windowStub = createWindowStub();
+  const eventSystem = new FakeEventSystem();
+  const storage = new ContextFilterStorage(eventSystem);
+
+  globalThis.window = windowStub.stub;
+  globalThis.fetch = async (_url, options) => {
+    calls.push(JSON.parse(options.body));
+    return {
+      async json() {
+        return { data: 'ok', state: { active: true, filters: {} } };
+      },
+    };
+  };
+
+  try {
+    await storage.addFilter({ type: 'feeds', value: 'feed-1' });
+    await storage.addFilter({ type: 'categories', value: 'cat-1' });
+    await storage.addFilter({ type: 'topics', value: 'Technology > AI' });
+    await storage.addFilter({ type: 'subtopics', value: 'Technology > AI > Agents' });
+
+    assert.deepEqual(calls, [
+      { type: 'feed', value: 'feed-1' },
+      { type: 'category', value: 'cat-1' },
+      { type: 'topic', value: 'Technology > AI' },
+      { type: 'subtopic', value: 'Technology > AI > Agents' },
+    ]);
+  } finally {
+    globalThis.fetch = previousFetch;
+    globalThis.window = previousWindow;
+  }
+});

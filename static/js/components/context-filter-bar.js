@@ -4,10 +4,10 @@ import rsstag_utils from '../libs/rsstag_utils.js';
 
 const FILTER_TYPES = [
   { type: 'tags', label: 'Tags', searchUrl: '/tags-search', field: 'tag' },
-  { type: 'feeds', label: 'Feeds' },
-  { type: 'categories', label: 'Categories' },
-  { type: 'topics', label: 'Topics', searchUrl: '/topics-search', field: 'tag' },
-  { type: 'subtopics', label: 'Subtopics', searchUrl: '/topics-search', field: 'tag' },
+  { type: 'feeds', label: 'Feeds', searchUrl: '/api/context-filter/suggestions', field: 'value', itemType: 'feed', requireSuggestion: true },
+  { type: 'categories', label: 'Categories', searchUrl: '/api/context-filter/suggestions', field: 'value', itemType: 'category', requireSuggestion: true },
+  { type: 'topics', label: 'Topics', searchUrl: '/api/context-filter/suggestions', field: 'value', itemType: 'topic', requireSuggestion: true },
+  { type: 'subtopics', label: 'Subtopics', searchUrl: '/api/context-filter/suggestions', field: 'value', itemType: 'subtopic', requireSuggestion: true },
 ];
 
 const FILTER_TYPE_MAP = FILTER_TYPES.reduce((acc, item) => {
@@ -232,6 +232,9 @@ export default class ContextFilterBar {
     try {
       const form = new FormData();
       form.append('req', trimmed);
+      if (typeConfig.itemType) {
+        form.append('type', typeConfig.itemType);
+      }
       const data = await rsstag_utils.fetchJSON(typeConfig.searchUrl, {
         method: 'POST',
         credentials: 'include',
@@ -315,6 +318,11 @@ export default class ContextFilterBar {
     }
 
     if (!value) {
+      return;
+    }
+
+    const typeConfig = FILTER_TYPE_MAP[type] || {};
+    if (typeConfig.requireSuggestion && !suggestions.includes(value)) {
       return;
     }
 

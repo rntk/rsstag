@@ -338,6 +338,11 @@ class RSSTagRoutes:
                 "methods": ["POST"],
             },
             {
+                "url": "/api/context-filter/suggestions",
+                "endpoint": "on_context_filter_suggestions",
+                "methods": ["POST"],
+            },
+            {
                 "url": "/tags/sentiment/<string:sentiment>/<int:page_number>",
                 "endpoint": "on_group_by_tags_sentiment",
                 "methods": ["GET"],
