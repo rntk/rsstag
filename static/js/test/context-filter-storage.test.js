@@ -97,15 +97,15 @@ test('addFilter posts JSON, updates state, and reloads the page', async () => {
 
   globalThis.window = windowStub.stub;
   globalThis.fetch = async (url, options) => {
-    assert.equal(url, '/api/context-filter/tag');
+    assert.equal(url, '/api/context-filter/item');
     assert.equal(options.method, 'POST');
     assert.equal(options.credentials, 'include');
     assert.equal(options.headers['Content-Type'], 'application/json');
-    assert.equal(options.body, JSON.stringify({ tag: 'beta' }));
+    assert.equal(options.body, JSON.stringify({ type: 'tag', value: 'beta' }));
 
     return {
       async json() {
-        return { data: 'ok', filters: { tags: ['alpha', 'beta'] } };
+        return { data: 'ok', state: { active: true, filters: { tags: ['alpha', 'beta'] } } };
       },
     };
   };
