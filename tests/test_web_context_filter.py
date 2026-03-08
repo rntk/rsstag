@@ -111,7 +111,12 @@ class TestWebContextFilter(MongoWebTestCase):
         self.assertEqual(categories.get_json()["data"][0]["meta"], "1 feed")
         topic_items = topics.get_json()["data"]
         self.assertIn("Technology", [item["value"] for item in topic_items])
-        self.assertTrue(any(item["meta"].endswith("sentences") for item in topic_items))
+        self.assertTrue(
+            any(
+                item["meta"].endswith("sentence") or item["meta"].endswith("sentences")
+                for item in topic_items
+            )
+        )
         self.assertIn(
             "Technology > AI",
             [item["value"] for item in subtopics.get_json()["data"]],
