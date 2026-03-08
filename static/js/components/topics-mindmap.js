@@ -49,6 +49,19 @@ export default class TopicsMindmap {
       topicClickAction: 'navigate',
       countLabel: 'posts',
     };
+    // UI/UX enhancements
+    this._allRootChildren = null;
+    this._searchFilter = '';
+    this._alphaFilter = '';
+    this._focusedRootIndex = null;
+    this._twoColMode = false;
+    this._minimapEl = null;
+    this._searchInputEl = null;
+    this._focusNavEl = null;
+    this._prevFocusBtn = null;
+    this._nextFocusBtn = null;
+    this._focusLabelEl = null;
+    this._focusExitBtn = null;
   }
 
   render(selector, data, options = {}) {
@@ -66,6 +79,14 @@ export default class TopicsMindmap {
     this.container.innerHTML = '';
     this._closeContextMenu();
     this._closeSnippetOverlay();
+    // Reset enhancement state on each render
+    this._searchFilter = '';
+    this._alphaFilter = '';
+    this._focusedRootIndex = null;
+    this._twoColMode = false;
+    this._minimapEl = null;
+    this._searchInputEl = null;
+    this._focusNavEl = null;
 
     const { width, height } = this._getViewportSize();
     const hierarchyData = {
@@ -89,6 +110,8 @@ export default class TopicsMindmap {
         this._collapseAll(child);
       });
     }
+    // Store full root children list as source of truth for filtering
+    this._allRootChildren = Array.isArray(this.root.children) ? [...this.root.children] : [];
 
     this.svg = d3
       .select(container)
@@ -103,6 +126,7 @@ export default class TopicsMindmap {
       .on('zoom', (event) => {
         this.gMain.attr('transform', event.transform);
         this._closeContextMenu();
+        this._renderMinimapContent();
       });
 
     this.svg.call(this.zoom);
@@ -115,6 +139,8 @@ export default class TopicsMindmap {
     this._update(this.root);
     setTimeout(() => this._fitToView(), 100);
     this._addControlButtons(container);
+    this._addSearchUI(container);
+    this._createMinimap(container);
 
     if (this.resizeHandler) {
       window.removeEventListener('resize', this.resizeHandler);
@@ -798,12 +824,23 @@ export default class TopicsMindmap {
   _update(source) {
     this._closeContextMenu();
 
+    // Apply search/focus/alpha filter to root.children before layout
+    this.root.children = this._getFilteredRootChildren();
+
     const treeLayout = d3.tree().nodeSize([this.nodeHeight + this.nodeSpacingY, 120]);
     treeLayout(this.root);
     this._setHorizontalPosition(this.root, this.margin.left);
 
+    // Two-column layout: shift second half of roots rightward
+    if (this._twoColMode && this.root.children && this.root.children.length >= 6) {
+      this._applyTwoColumnLayout();
+    }
+
     const visibleNodes = this.root.descendants().filter((node) => node.depth > 0);
-    const visibleLinks = this.root.links().filter((link) => link.source.depth >= 0);
+    // In two-col mode, hide the root→child links (root is virtual/invisible)
+    const visibleLinks = this.root.links().filter((link) =>
+      link.source.depth >= 0 && !(this._twoColMode && link.source.depth === 0)
+    );
 
     const node = this.gNodes.selectAll('g.mindmap-node').data(visibleNodes, (d) => d.id);
 
@@ -1021,6 +1058,9 @@ export default class TopicsMindmap {
       nodeData.x0 = nodeData.x;
       nodeData.y0 = nodeData.y;
     });
+
+    this._updateFocusNav();
+    this._renderMinimapContent();
   }
 
   _fitToView() {
@@ -1081,6 +1121,256 @@ export default class TopicsMindmap {
     this._update(this.root);
   }
 
+  // ── Search / filter / focus helpers ──────────────────────────────────────
+
+  _getBaseFilteredChildren() {
+    let children = this._allRootChildren || [];
+    if (this._alphaFilter) {
+      children = children.filter((c) => {
+        const first = (c.data.name || '').charAt(0).toLowerCase();
+        if (this._alphaFilter === '#') return first < 'a' || first > 'z';
+        return first === this._alphaFilter;
+      });
+    }
+    if (this._searchFilter) {
+      const q = this._searchFilter.toLowerCase();
+      children = children.filter((c) => (c.data.name || '').toLowerCase().includes(q));
+    }
+    return children;
+  }
+
+  _getFilteredRootChildren() {
+    const children = this._getBaseFilteredChildren();
+    if (this._focusedRootIndex !== null && children.length > 0) {
+      const idx = Math.max(0, Math.min(this._focusedRootIndex, children.length - 1));
+      this._focusedRootIndex = idx;
+      return [children[idx]];
+    }
+    return children.length > 0 ? children : null;
+  }
+
+  _navigateFocus(delta) {
+    const children = this._getBaseFilteredChildren();
+    if (children.length === 0) return;
+    if (this._focusedRootIndex === null) {
+      this._focusedRootIndex = delta > 0 ? 0 : children.length - 1;
+    } else {
+      this._focusedRootIndex =
+        (this._focusedRootIndex + delta + children.length) % children.length;
+    }
+    this._update(this.root);
+    setTimeout(() => this._fitToView(), 100);
+  }
+
+  _updateFocusNav() {
+    if (!this._focusNavEl) return;
+    const children = this._getBaseFilteredChildren();
+    const total = (this._allRootChildren || []).length;
+    const isFocused = this._focusedRootIndex !== null;
+
+    if (isFocused && this._focusLabelEl) {
+      const idx = Math.max(0, Math.min(this._focusedRootIndex, children.length - 1));
+      const name = children[idx] ? children[idx].data.name || '' : '';
+      this._focusLabelEl.textContent = `${idx + 1}/${children.length}: ${name}`;
+    } else if (this._focusLabelEl) {
+      const shown = children.length;
+      this._focusLabelEl.textContent =
+        shown === total ? `${total} topics` : `${shown}/${total}`;
+    }
+    if (this._focusExitBtn) {
+      this._focusExitBtn.style.display = isFocused ? 'inline-block' : 'none';
+    }
+  }
+
+  // ── Search UI ─────────────────────────────────────────────────────────────
+
+  _addSearchUI(container) {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'mindmap-search-ui';
+
+    // Search input
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.className = 'mindmap-search-input';
+    searchInput.placeholder = 'Search topics...';
+    searchInput.value = this._searchFilter || '';
+    searchInput.addEventListener('input', (e) => {
+      this._searchFilter = e.target.value;
+      this._focusedRootIndex = null;
+      this._update(this.root);
+      setTimeout(() => this._fitToView(), 100);
+    });
+    this._searchInputEl = searchInput;
+    wrapper.appendChild(searchInput);
+
+    // Focus navigation bar
+    const focusNav = document.createElement('div');
+    focusNav.className = 'mindmap-focus-nav';
+
+    const prevBtn = document.createElement('button');
+    prevBtn.className = 'mindmap-focus-nav-btn';
+    prevBtn.textContent = '◀';
+    prevBtn.title = 'Previous topic (focus mode)';
+    prevBtn.addEventListener('click', () => this._navigateFocus(-1));
+
+    const focusLabel = document.createElement('span');
+    focusLabel.className = 'mindmap-focus-label';
+
+    const nextBtn = document.createElement('button');
+    nextBtn.className = 'mindmap-focus-nav-btn';
+    nextBtn.textContent = '▶';
+    nextBtn.title = 'Next topic (focus mode)';
+    nextBtn.addEventListener('click', () => this._navigateFocus(1));
+
+    const exitBtn = document.createElement('button');
+    exitBtn.className = 'mindmap-focus-exit-btn';
+    exitBtn.textContent = '✕';
+    exitBtn.title = 'Exit focus mode';
+    exitBtn.addEventListener('click', () => {
+      this._focusedRootIndex = null;
+      this._update(this.root);
+      setTimeout(() => this._fitToView(), 100);
+    });
+
+    this._prevFocusBtn = prevBtn;
+    this._nextFocusBtn = nextBtn;
+    this._focusLabelEl = focusLabel;
+    this._focusExitBtn = exitBtn;
+    this._focusNavEl = focusNav;
+
+    focusNav.appendChild(prevBtn);
+    focusNav.appendChild(focusLabel);
+    focusNav.appendChild(nextBtn);
+    focusNav.appendChild(exitBtn);
+    wrapper.appendChild(focusNav);
+    container.appendChild(wrapper);
+    this._updateFocusNav();
+  }
+
+  // ── Two-column layout ─────────────────────────────────────────────────────
+
+  _getAllDescendantsDeep(node) {
+    const result = [node];
+    const kids = node.children || node._children || [];
+    kids.forEach((c) => result.push(...this._getAllDescendantsDeep(c)));
+    return result;
+  }
+
+  _applyTwoColumnLayout() {
+    const children = this.root.children;
+    if (!children || children.length < 6) return;
+
+    const mid = Math.ceil(children.length / 2);
+    const col1 = children.slice(0, mid);
+    const col2 = children.slice(mid);
+    if (col2.length === 0) return;
+
+    // Find col1's max horizontal extent (node.y axis = horizontal)
+    let col1MaxY = this.margin.left;
+    col1.forEach((node) => {
+      this._getAllDescendantsDeep(node).forEach((d) => {
+        if (d.y !== undefined) col1MaxY = Math.max(col1MaxY, d.y + this._nodeWidth(d));
+      });
+    });
+
+    // Find col2's topmost vertical position (node.x axis = vertical)
+    let col2MinX = Infinity;
+    col2.forEach((node) => {
+      col2MinX = Math.min(col2MinX, node.x);
+    });
+
+    // Find col1's topmost vertical position
+    let col1MinX = Infinity;
+    col1.forEach((node) => {
+      col1MinX = Math.min(col1MinX, node.x);
+    });
+
+    const yShift = col1MaxY + this.nodeGapX * 2;
+    const xShift = col2MinX - col1MinX;
+
+    col2.forEach((node) => {
+      this._getAllDescendantsDeep(node).forEach((d) => {
+        if (d.y !== undefined) d.y += yShift;
+        if (d.x !== undefined) d.x -= xShift;
+      });
+    });
+  }
+
+  // ── Minimap ───────────────────────────────────────────────────────────────
+
+  _createMinimap(container) {
+    const el = document.createElement('div');
+    el.className = 'mindmap-minimap';
+    el.title = 'Overview minimap';
+    container.appendChild(el);
+    this._minimapEl = el;
+  }
+
+  _renderMinimapContent() {
+    if (!this._minimapEl || !this.root) return;
+
+    const W = 180;
+    const H = 120;
+    const pad = 6;
+
+    // Collect all positioned nodes (depth > 0, have x/y from last layout)
+    const allNodes = this.root.descendants().filter(
+      (n) => n.depth > 0 && n.x !== undefined && n.y !== undefined
+    );
+    if (allNodes.length === 0) {
+      this._minimapEl.innerHTML = '';
+      return;
+    }
+
+    // D3 tree: node.x = vertical screen pos, node.y = horizontal screen pos
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    allNodes.forEach((n) => {
+      minX = Math.min(minX, n.x);
+      maxX = Math.max(maxX, n.x);
+      minY = Math.min(minY, n.y);
+      maxY = Math.max(maxY, n.y + this._nodeWidth(n));
+    });
+
+    const contentW = maxY - minY || 1;
+    const contentH = maxX - minX || 1;
+    const scale = Math.min((W - pad * 2) / contentW, (H - pad * 2) / contentH);
+
+    // minimap x corresponds to node.y (horizontal), minimap y to node.x (vertical)
+    const toMx = (ny) => (ny - minY) * scale + pad;
+    const toMy = (nx) => (nx - minX) * scale + pad;
+
+    let rects = '';
+    allNodes.forEach((n) => {
+      const mx = toMx(n.y);
+      const my = toMy(n.x);
+      const mw = Math.max(this._nodeWidth(n) * scale, 2);
+      const mh = Math.max(this.nodeHeight * scale, 2);
+      const fill = this._depthColor(n.depth);
+      rects += `<rect x="${mx.toFixed(1)}" y="${(my - mh / 2).toFixed(1)}" width="${mw.toFixed(1)}" height="${mh.toFixed(1)}" fill="${fill}" rx="1" opacity="0.85"/>`;
+    });
+
+    // Viewport indicator
+    let vpRect = '';
+    if (this.svg && this.zoom) {
+      try {
+        const t = d3.zoomTransform(this.svg.node());
+        const svgEl = this.svg.node();
+        const svgW = svgEl.clientWidth || 800;
+        const svgH = svgEl.clientHeight || 600;
+        // viewport in content coords: node.y = horizontal, node.x = vertical
+        const vpLeft = -t.x / t.k;
+        const vpTop = -t.y / t.k;
+        const vx = toMx(vpLeft);
+        const vy = toMy(vpTop);
+        const vw = Math.max((svgW / t.k) * scale, 4);
+        const vh = Math.max((svgH / t.k) * scale, 4);
+        vpRect = `<rect x="${vx.toFixed(1)}" y="${vy.toFixed(1)}" width="${vw.toFixed(1)}" height="${vh.toFixed(1)}" fill="rgba(0,100,200,0.08)" stroke="#3a7bd5" stroke-width="1.5" rx="2"/>`;
+      } catch (_) { /* ignore */ }
+    }
+
+    this._minimapEl.innerHTML = `<svg width="${W}" height="${H}" style="display:block">${rects}${vpRect}</svg>`;
+  }
+
   _addControlButtons(container) {
     const btnDefs = [
       { text: 'Reset View', className: 'mindmap-reset-btn', handler: () => this._fitToView() },
@@ -1095,5 +1385,18 @@ export default class TopicsMindmap {
       btn.addEventListener('click', handler);
       container.appendChild(btn);
     });
+
+    const twoColBtn = document.createElement('button');
+    twoColBtn.className = 'mindmap-2col-btn';
+    twoColBtn.textContent = '2-Col';
+    twoColBtn.type = 'button';
+    twoColBtn.title = 'Split roots into two columns';
+    twoColBtn.addEventListener('click', () => {
+      this._twoColMode = !this._twoColMode;
+      twoColBtn.classList.toggle('active', this._twoColMode);
+      this._update(this.root);
+      setTimeout(() => this._fitToView(), 100);
+    });
+    container.appendChild(twoColBtn);
   }
 }

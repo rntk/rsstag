@@ -2704,6 +2704,122 @@ h3.post_title {
   top: 78px;
 }
 
+.mindmap-2col-btn {
+  position: absolute;
+  right: 10px;
+  top: 112px;
+  padding: 6px 14px;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  z-index: 10;
+
+  &:hover {
+    background: #f0f0f0;
+  }
+
+  &.active {
+    background: #d7e8ff;
+    border-color: #7aabdf;
+  }
+}
+
+.mindmap-search-ui {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 280px;
+}
+
+.mindmap-search-input {
+  padding: 5px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 12px;
+  width: 200px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.95);
+
+  &:focus {
+    border-color: #7aabdf;
+    box-shadow: 0 0 0 2px rgba(122, 171, 223, 0.25);
+  }
+}
+
+.mindmap-focus-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 11px;
+}
+
+.mindmap-focus-nav-btn {
+  padding: 2px 7px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  background: #f5f5f5;
+  font-size: 11px;
+  cursor: pointer;
+  line-height: 1.4;
+
+  &:hover {
+    background: #e0e0e0;
+  }
+}
+
+.mindmap-focus-label {
+  flex: 1;
+  text-align: center;
+  color: #444;
+  font-size: 11px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mindmap-focus-exit-btn {
+  padding: 1px 5px;
+  border: 1px solid #d9a29f;
+  border-radius: 3px;
+  background: #fff1f0;
+  font-size: 11px;
+  cursor: pointer;
+  color: #c0392b;
+  display: none;
+
+  &:hover {
+    background: #ffe0de;
+  }
+}
+
+.mindmap-minimap {
+  position: absolute;
+  bottom: 14px;
+  right: 10px;
+  z-index: 10;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  cursor: pointer;
+
+  &:hover {
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+  }
+}
+
 .mindmap-context-menu {
   position: absolute;
   display: flex;
