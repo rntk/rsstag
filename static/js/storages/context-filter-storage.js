@@ -1,6 +1,13 @@
 'use strict';
 
 const FILTER_TYPES = ['tags', 'feeds', 'categories', 'topics', 'subtopics'];
+const FILTER_TYPE_TO_ITEM_TYPE = {
+  tags: 'tag',
+  feeds: 'feed',
+  categories: 'category',
+  topics: 'topic',
+  subtopics: 'subtopic',
+};
 
 function normalizeFilters(filters = {}) {
   const normalized = {};
@@ -24,15 +31,32 @@ function normalizeState(rawState = {}) {
   };
 }
 
+function extractState(responseData = {}) {
+  if (responseData.state) {
+    return responseData.state;
+  }
+  if (responseData.data && typeof responseData.data === 'object') {
+    return responseData.data;
+  }
+  return {
+    active: responseData.active,
+    filters: responseData.filters,
+    tags: responseData.tags,
+    feeds: responseData.feeds,
+    categories: responseData.categories,
+    topics: responseData.topics,
+    subtopics: responseData.subtopics,
+  };
+}
+
 export default class ContextFilterStorage {
   constructor(event_system) {
     this.ES = event_system;
     this._state = normalizeState();
     this.urls = {
       get: '/api/context-filter',
-      add: '/api/context-filter/filter',
-      remove: '/api/context-filter/filter',
-      legacyTag: '/api/context-filter/tag',
+      add: '/api/context-filter/item',
+      remove: '/api/context-filter/item',
       clear: '/api/context-filter/clear',
     };
   }
@@ -56,7 +80,7 @@ export default class ContextFilterStorage {
       });
       const data = await response.json();
       if (data.data) {
-        this.setState(data.data);
+        this.setState(extractState(data));
       }
     } catch (err) {
       console.error('Failed to fetch context filter:', err);
@@ -64,32 +88,30 @@ export default class ContextFilterStorage {
   }
 
   async addFilter(filter) {
+    const itemType = FILTER_TYPE_TO_ITEM_TYPE[filter?.type];
     const payload = {
-      type: filter?.type,
+      type: itemType,
       value: filter?.value,
     };
 
-    const request = {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    };
-
-    const url = payload.type === 'tags' ? this.urls.legacyTag : this.urls.add;
-    if (payload.type === 'tags') {
-      request.body = JSON.stringify({ tag: payload.value });
+    if (!payload.type || !payload.value) {
+      return;
     }
 
     try {
-      const response = await fetch(url, request);
+      const response = await fetch(this.urls.add, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
       const data = await response.json();
       if (data.error) {
         console.error('Failed to add filter:', data.error);
         return;
       }
       if (data.data === 'ok') {
-        this.setState(data);
+        this.setState(extractState(data));
         window.location.reload();
       }
     } catch (err) {
@@ -98,32 +120,30 @@ export default class ContextFilterStorage {
   }
 
   async removeFilter(filter) {
+    const itemType = FILTER_TYPE_TO_ITEM_TYPE[filter?.type];
     const payload = {
-      type: filter?.type,
+      type: itemType,
       value: filter?.value,
     };
 
-    const request = {
-      method: 'DELETE',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    };
-
-    const url = payload.type === 'tags' ? this.urls.legacyTag : this.urls.remove;
-    if (payload.type === 'tags') {
-      request.body = JSON.stringify({ tag: payload.value });
+    if (!payload.type || !payload.value) {
+      return;
     }
 
     try {
-      const response = await fetch(url, request);
+      const response = await fetch(this.urls.remove, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
       const data = await response.json();
       if (data.error) {
         console.error('Failed to remove filter:', data.error);
         return;
       }
       if (data.data === 'ok') {
-        this.setState(data);
+        this.setState(extractState(data));
         window.location.reload();
       }
     } catch (err) {

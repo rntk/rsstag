@@ -323,6 +323,16 @@ class RSSTagRoutes:
                 "methods": ["DELETE"],
             },
             {
+                "url": "/api/context-filter/item",
+                "endpoint": "on_context_filter_add_item",
+                "methods": ["POST"],
+            },
+            {
+                "url": "/api/context-filter/item",
+                "endpoint": "on_context_filter_remove_item",
+                "methods": ["DELETE"],
+            },
+            {
                 "url": "/api/context-filter/clear",
                 "endpoint": "on_context_filter_clear",
                 "methods": ["POST"],

@@ -1853,6 +1853,12 @@ class RSSTagApplication(object):
     def on_context_filter_clear(self, user: dict, request: Request) -> Response:
         return context_filter_handlers.on_context_filter_clear(self, user, request)
 
+    def on_context_filter_add_item(self, user: dict, request: Request) -> Response:
+        return context_filter_handlers.on_context_filter_add_item(self, user, request)
+
+    def on_context_filter_remove_item(self, user: dict, request: Request) -> Response:
+        return context_filter_handlers.on_context_filter_remove_item(self, user, request)
+
     def on_workers_get(self, user: dict, _: Request) -> Response:
         workers = self.workers.get_all_workers()
         page = self.template_env.get_template("workers.html")
