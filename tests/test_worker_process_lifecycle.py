@@ -105,6 +105,18 @@ class TestWorkerProcessLifecycle(MongoWorkerLifecycleTestCase):
         self.assertEqual(worker_ids, {501, 502})
         self.assertNotIn("_id", workers[0])
 
+    def test_heartbeat_deletion_removes_record(self) -> None:
+        """delete_heartbeat removes the worker's heartbeat record from DB."""
+        self.workers.update_heartbeat(601)
+        before: Dict[str, Any] | None = self.db.worker_heartbeats.find_one({"worker_id": 601})
+        self.assertIsNotNone(before)
+
+        deleted: bool = self.workers.delete_heartbeat(601)
+
+        self.assertTrue(deleted)
+        after: Dict[str, Any] | None = self.db.worker_heartbeats.find_one({"worker_id": 601})
+        self.assertIsNone(after)
+
 
 if __name__ == "__main__":
     unittest.main()
