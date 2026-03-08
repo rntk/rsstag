@@ -55,7 +55,9 @@ def _build_state_payload(user: dict) -> dict:
 def _parse_item_payload(request: Request) -> tuple:
     try:
         data = json.loads(request.get_data(as_text=True))
-    except json.JSONDecodeError as e:
+        if not isinstance(data, dict):
+            raise AttributeError("Request body must be a JSON object")
+    except (json.JSONDecodeError, AttributeError) as e:
         logging.warning("Bad context filter request: %s", e)
         return None, Response(
             json.dumps({"error": "Invalid request body"}),
