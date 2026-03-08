@@ -22,14 +22,27 @@ ITEM_TYPE_TO_FILTER_KEY = {
 
 
 def _iter_group_topics(app: "RSSTagApplication", owner: str):
+    for topic in _collect_topic_stats(app, owner):
+        yield topic
+
+
+def _collect_topic_stats(app: "RSSTagApplication", owner: str) -> dict[str, int]:
+    stats: dict[str, int] = {}
     for doc in app.post_grouping.get_all_by_owner(owner, projection={"groups": 1, "_id": 0}):
         groups = doc.get("groups") if isinstance(doc, dict) else None
         if not isinstance(groups, dict):
             continue
-        for topic_path in groups.keys():
+        for topic_path, sentence_indices in groups.items():
             topic = str(topic_path).strip()
-            if topic:
-                yield topic
+            if not topic:
+                continue
+            count = len(sentence_indices) if isinstance(sentence_indices, list) else 0
+            stats[topic] = stats.get(topic, 0) + count
+    return stats
+
+
+def _format_count_label(count: int, singular: str, plural: str) -> str:
+    return f"{count} {singular if count == 1 else plural}"
 
 
 def _extract_tags(filter_data: dict) -> list:
@@ -153,27 +166,72 @@ def on_context_filter_suggestions(
     if not query:
         return Response(json.dumps({"data": []}), mimetype="application/json", status=200)
 
-    values = []
+    suggestions = []
     if item_type == "feed":
-        for feed in app.feeds.get_all(user["sid"], projection={"_id": 0, "feed_id": 1}):
+        for feed in app.feeds.get_all(
+            user["sid"], projection={"_id": 0, "feed_id": 1, "title": 1}
+        ):
             feed_id = str(feed.get("feed_id", "")).strip()
-            if feed_id and query in feed_id.casefold():
-                values.append(feed_id)
+            feed_title = str(feed.get("title", "")).strip()
+            if not feed_id:
+                continue
+            if query not in feed_title.casefold() and query not in feed_id.casefold():
+                continue
+            label = feed_title or feed_id
+            suggestions.append(
+                {
+                    "value": feed_id,
+                    "label": label,
+                    "meta": feed_id if label != feed_id else "",
+                }
+            )
     elif item_type == "category":
-        for feed in app.feeds.get_all(user["sid"], projection={"_id": 0, "category_id": 1}):
+        category_titles = {}
+        category_counts = {}
+        for feed in app.feeds.get_all(
+            user["sid"], projection={"_id": 0, "category_id": 1, "category_title": 1}
+        ):
             category_id = str(feed.get("category_id", "")).strip()
-            if category_id and query in category_id.casefold():
-                values.append(category_id)
+            if not category_id:
+                continue
+            category_counts[category_id] = category_counts.get(category_id, 0) + 1
+            title = str(feed.get("category_title", "")).strip()
+            if title:
+                category_titles[category_id] = title
+
+        for category_id, count in category_counts.items():
+            label = category_titles.get(category_id) or category_id
+            haystack = f"{label} {category_id}".casefold()
+            if query not in haystack:
+                continue
+            suggestions.append(
+                {
+                    "value": category_id,
+                    "label": label,
+                    "meta": _format_count_label(count, "feed", "feeds"),
+                }
+            )
     else:
-        for topic in _iter_group_topics(app, user["sid"]):
+        topic_stats = _collect_topic_stats(app, user["sid"])
+        for topic, count in topic_stats.items():
             if item_type == "subtopic" and " > " not in topic:
                 continue
-            if query in topic.casefold():
-                values.append(topic)
+            if query not in topic.casefold():
+                continue
+            suggestions.append(
+                {
+                    "value": topic,
+                    "label": topic,
+                    "meta": _format_count_label(count, "sentence", "sentences"),
+                }
+            )
 
-    unique_sorted = sorted(set(values))[:20]
+    normalized = {
+        item["value"]: item
+        for item in sorted(suggestions, key=lambda item: item["label"].casefold())
+    }
     return Response(
-        json.dumps({"data": [{"value": value} for value in unique_sorted]}),
+        json.dumps({"data": list(normalized.values())[:20]}),
         mimetype="application/json",
         status=200,
     )

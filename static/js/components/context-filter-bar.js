@@ -37,6 +37,32 @@ function normalizeState(rawState = {}) {
   };
 }
 
+function normalizeSuggestion(rawSuggestion) {
+  if (typeof rawSuggestion === 'string') {
+    const value = rawSuggestion.trim();
+    if (!value) {
+      return null;
+    }
+    return { value, label: value, meta: '' };
+  }
+
+  if (!rawSuggestion || typeof rawSuggestion !== 'object') {
+    return null;
+  }
+
+  const rawValue = rawSuggestion.value ?? rawSuggestion.tag ?? rawSuggestion.name;
+  const value = typeof rawValue === 'string' ? rawValue.trim() : '';
+  if (!value) {
+    return null;
+  }
+
+  const rawLabel = typeof rawSuggestion.label === 'string' ? rawSuggestion.label.trim() : '';
+  const label = rawLabel || value;
+  const rawMeta = typeof rawSuggestion.meta === 'string' ? rawSuggestion.meta.trim() : '';
+
+  return { value, label, meta: rawMeta };
+}
+
 export default class ContextFilterBar {
   constructor(container_id, event_system) {
     this.ES = event_system;
@@ -243,9 +269,26 @@ export default class ContextFilterBar {
 
       const activeValues = this._state.filters[type] || [];
       const suggestions = (data.data || [])
-        .map((item) => item[typeConfig.field] || item.name || item.value)
-        .filter((value) => typeof value === 'string' && value.trim())
-        .filter((value) => !activeValues.includes(value));
+        .map((item) => {
+          if (type === 'tags') {
+            const rawTagValue = item[typeConfig.field] || item.value || item.name;
+            if (typeof rawTagValue !== 'string') {
+              return null;
+            }
+            const trimmedTagValue = rawTagValue.trim();
+            if (!trimmedTagValue) {
+              return null;
+            }
+            const frequency = Number(item.unread ?? item.all ?? item.count ?? 0);
+            return {
+              value: trimmedTagValue,
+              label: trimmedTagValue,
+              meta: Number.isFinite(frequency) ? `${frequency} posts` : '',
+            };
+          }
+          return normalizeSuggestion(item);
+        })
+        .filter((item) => item && !activeValues.includes(item.value));
 
       if (!suggestions.length) {
         this._modalState.suggestions = [];
@@ -273,9 +316,10 @@ export default class ContextFilterBar {
     const suggestions = this._modalState.suggestions;
     container.innerHTML = suggestions
       .map(
-        (value, index) => `
-          <div class="context-tag-suggestion ${index === this._modalState.selectedIndex ? 'selected' : ''}" data-value="${encodeURIComponent(value)}" data-index="${index}">
-            ${this.escapeHtml(value)}
+        (item, index) => `
+          <div class="context-tag-suggestion ${index === this._modalState.selectedIndex ? 'selected' : ''}" data-value="${encodeURIComponent(item.value)}" data-index="${index}">
+            <span class="context-tag-label">${this.escapeHtml(item.label)}</span>
+            ${item.meta ? `<span class="context-tag-meta">${this.escapeHtml(item.meta)}</span>` : ''}
           </div>
         `
       )
@@ -314,7 +358,7 @@ export default class ContextFilterBar {
     let value = inputValue.trim();
 
     if (selectedIndex >= 0 && selectedIndex < suggestions.length) {
-      value = suggestions[selectedIndex];
+      value = suggestions[selectedIndex].value;
     }
 
     if (!value) {
@@ -322,7 +366,7 @@ export default class ContextFilterBar {
     }
 
     const typeConfig = FILTER_TYPE_MAP[type] || {};
-    if (typeConfig.requireSuggestion && !suggestions.includes(value)) {
+    if (typeConfig.requireSuggestion && !suggestions.some((item) => item.value === value)) {
       return;
     }
 
