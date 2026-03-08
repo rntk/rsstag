@@ -106,6 +106,19 @@ class TestEndpointSmoke(MongoWebTestCase):
     def test_topics_list(self) -> None:
         self._get("/topics-list")
 
+    def test_mindmap_node_data(self) -> None:
+        self._post(
+            "/api/mindmap-node-data",
+            json={
+                "action": "sentences",
+                "scope": {
+                    "post_ids": self.data["post_pids"],
+                    "topic_path": "",
+                    "node_kind": "topic",
+                },
+            },
+        )
+
     # ------------------------------------------------------------------
     # Tasks & status
     # ------------------------------------------------------------------

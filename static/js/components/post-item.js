@@ -1,6 +1,6 @@
 'use strict';
 import React from 'react';
-import { stopwords } from '../libs/stopwords';
+import { stopwords } from '../libs/stopwords.js';
 
 export default class PostsItem extends React.Component {
   constructor(props) {

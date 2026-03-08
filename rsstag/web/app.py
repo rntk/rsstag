@@ -628,6 +628,9 @@ class RSSTagApplication(object):
     ) -> Response:
         return posts_handlers.on_topic_snippets_api_get(self, user, request, pids)
 
+    def on_mindmap_node_data_post(self, user: dict, request: Request) -> Response:
+        return posts_handlers.on_mindmap_node_data_post(self, user, request)
+
     def on_sentence_clusters_get(self, user: dict, request: Request) -> Response:
         return posts_handlers.on_sentence_clusters_get(self, user, request)
 

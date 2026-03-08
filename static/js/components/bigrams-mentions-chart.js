@@ -1,6 +1,6 @@
 'use strict';
 
-import { stopwords } from '../libs/stopwords';
+import { stopwords } from '../libs/stopwords.js';
 
 export default class BiGramsMentionsChart {
   constructor(container_id, event_system) {

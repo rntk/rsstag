@@ -53,6 +53,9 @@ module.exports = {
             cacheDirectory: true,
           },
         },
+        resolve: {
+          fullySpecified: false,
+        },
       },
     ],
   },

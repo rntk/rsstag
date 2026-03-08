@@ -63,11 +63,11 @@
                     <div class="snippet-item {{ 'read' if snippet.read else '' }}"
                         id="snippet_{{ snippet.post_id }}_{{ snippet.indices | join('_') }}">
                         <div class="snippet-meta">
-                            <span>
+                            <span class="snippet-primary-meta">
                                 From <span class="source-tag snippet-source-info">{{
                                     snippet.post_title }}</span>
                             </span>
-                            <span class="snippet-actions">
+                            <span class="snippet-actions" aria-label="Snippet actions">
                                 <span
                                     class="source-tag toggle-read-btn {{ 'snippet-tag-read' if snippet.read else 'snippet-tag-unread' }}"
                                     data-post-id="{{ snippet.post_id }}"
@@ -89,7 +89,7 @@
                             </span>
                         </div>
                         <div class="post-content-isolated">
-                            <div class="snippet-text">{{ snippet.text }}</div>
+                            <div class="snippet-text">{{ snippet.html | safe }}</div>
                         </div>
                         <div class="snippet-tags-content hide"></div>
                     </div>

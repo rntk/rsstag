@@ -335,6 +335,7 @@ def _serialize_snippet_for_api(snippet: dict[str, Any]) -> dict[str, Any]:
     """Return the JSON shape expected by the snippets API consumers."""
     return {
         "text": snippet["text"],
+        "html": snippet.get("html", ""),
         "post_id": snippet["post_id"],
         "post_title": snippet["post_title"],
         "indices": snippet["indices"],
@@ -342,6 +343,10 @@ def _serialize_snippet_for_api(snippet: dict[str, Any]) -> dict[str, Any]:
         "url": snippet["url"],
         "feed_id": snippet["feed_id"],
         "feed_title": snippet["feed_title"],
+        "category_id": snippet.get("category_id", ""),
+        "category_title": snippet.get("category_title", ""),
+        "post_tags": list(snippet.get("post_tags", [])),
+        "topic": snippet.get("topic", ""),
     }
 
 
@@ -350,7 +355,12 @@ def _load_posts_for_snippets(
     user: dict,
     post_ids: list[str],
 ) -> tuple[dict[str, dict[str, Any]], str]:
-    projection: dict[str, bool] = {"content": True, "feed_id": True, "url": True}
+    projection: dict[str, bool] = {
+        "content": True,
+        "feed_id": True,
+        "url": True,
+        "tags": True,
+    }
     all_posts: dict[str, dict[str, Any]] = {}
     feed_titles: set[str] = set()
 
@@ -376,12 +386,66 @@ def _load_posts_for_snippets(
             "title": title or f"Post {post_id}",
             "raw_content": raw_content,
             "feed_id": str(post.get("feed_id", "")),
+            "category_id": str(feed.get("category_id", "")) if feed else "",
+            "category_title": str(feed.get("category_title", "")) if feed else "",
+            "post_tags": [str(tag) for tag in post.get("tags", []) if tag],
         }
 
     combined_feed_title: str = (
         " | ".join(sorted(list(feed_titles))) if feed_titles else "Multiple Posts"
     )
     return all_posts, combined_feed_title
+
+
+def _normalize_topic_path(topic_path: Any) -> Optional[str]:
+    """Normalize topic path from list/string payloads."""
+    if isinstance(topic_path, list):
+        parts: list[str] = [str(part).strip() for part in topic_path if str(part).strip()]
+        return " > ".join(parts) if parts else None
+
+    if isinstance(topic_path, str):
+        normalized: str = topic_path.strip()
+        return normalized or None
+
+    return None
+
+
+def _normalize_mindmap_scope(scope: dict[str, Any]) -> dict[str, Any]:
+    """Normalize external scope payload into a consistent internal shape."""
+    post_ids: list[str] = []
+    raw_post_ids: Any = scope.get("post_ids")
+    if isinstance(raw_post_ids, list):
+        post_ids = [str(post_id) for post_id in raw_post_ids if str(post_id).strip()]
+    elif isinstance(raw_post_ids, str):
+        post_ids = [part for part in raw_post_ids.split("_") if part]
+
+    cluster_id: Optional[int] = None
+    raw_cluster_id: Any = scope.get("cluster_id")
+    if raw_cluster_id is not None and raw_cluster_id != "":
+        try:
+            cluster_id = int(raw_cluster_id)
+        except (TypeError, ValueError):
+            cluster_id = None
+
+    tags: list[str] = []
+    raw_tags: Any = scope.get("tags")
+    if isinstance(raw_tags, list):
+        tags = [str(tag).strip() for tag in raw_tags if str(tag).strip()]
+
+    single_tag: str = str(scope.get("tag", "")).strip()
+    if single_tag:
+        tags.append(single_tag)
+
+    normalized: dict[str, Any] = {
+        "node_kind": str(scope.get("node_kind", "topic")).strip() or "topic",
+        "topic_path": _normalize_topic_path(scope.get("topic_path") or scope.get("topic")),
+        "post_ids": post_ids,
+        "cluster_id": cluster_id,
+        "feed_id": str(scope.get("feed_id", "")).strip(),
+        "category_id": str(scope.get("category_id", "")).strip(),
+        "tags": sorted(set(tags)),
+    }
+    return normalized
 
 
 def _build_topics_tree(topic_counts: dict[str, dict]) -> list[dict]:
@@ -2008,6 +2072,9 @@ def _collect_topic_snippets(
                     "url": all_posts[post_id]["url"],
                     "feed_id": all_posts[post_id].get("feed_id", ""),
                     "feed_title": all_posts[post_id].get("feed_title", ""),
+                    "category_id": all_posts[post_id].get("category_id", ""),
+                    "category_title": all_posts[post_id].get("category_title", ""),
+                    "post_tags": all_posts[post_id].get("post_tags", []),
                 },
             )
             for group, snippets in post_topics_data.items():
@@ -2029,6 +2096,301 @@ def _collect_topic_snippets(
                 topics_data[group]["snippets"].extend(snippets)
 
     return topics_data
+
+
+def _filter_snippets_by_scope(
+    snippets: list[dict[str, Any]], scope: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Apply feed/category/tag filters to already topic-filtered snippets."""
+    filtered: list[dict[str, Any]] = snippets
+
+    feed_id: str = str(scope.get("feed_id", "")).strip()
+    if feed_id:
+        filtered = [
+            snippet for snippet in filtered if str(snippet.get("feed_id", "")) == feed_id
+        ]
+
+    category_id: str = str(scope.get("category_id", "")).strip()
+    if category_id:
+        filtered = [
+            snippet
+            for snippet in filtered
+            if str(snippet.get("category_id", "")) == category_id
+        ]
+
+    tags: list[str] = [str(tag).strip() for tag in scope.get("tags", []) if str(tag).strip()]
+    if tags:
+        tag_set: set[str] = set(tags)
+        filtered = [
+            snippet
+            for snippet in filtered
+            if tag_set.issubset(set(str(tag) for tag in snippet.get("post_tags", [])))
+        ]
+
+    return filtered
+
+
+def _get_scope_post_ids_for_cluster(
+    app: "RSSTagApplication", user: dict, cluster_id: int
+) -> list[str]:
+    """Resolve cluster id to the underlying post id list."""
+    cluster_doc: Optional[dict[str, Any]] = app.snippet_clusters.get_by_cluster_id(
+        user["sid"],
+        cluster_id,
+        projection={"post_ids": 1},
+    )
+    if not cluster_doc:
+        return []
+
+    return [str(post_id) for post_id in cluster_doc.get("post_ids", []) if post_id]
+
+
+def _load_scope_snippets(
+    app: "RSSTagApplication",
+    user: dict,
+    scope: dict[str, Any],
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Load snippets and metadata for one mindmap scope payload."""
+    post_ids: list[str] = list(scope.get("post_ids", []))
+    cluster_id: Optional[int] = scope.get("cluster_id")
+    if not post_ids and cluster_id is not None:
+        post_ids = _get_scope_post_ids_for_cluster(app, user, cluster_id)
+
+    if not post_ids:
+        return [], {"post_ids": [], "all_posts": {}, "requested_topic": scope.get("topic_path")}
+
+    requested_topic: Optional[str] = scope.get("topic_path")
+    context_tags: Optional[list[str]] = _get_context_tags(user)
+    normalized_context_tags: Optional[list[str]] = _normalize_context_tags(context_tags)
+    all_posts, _ = _load_posts_for_snippets(app, user, post_ids)
+    topics_data = _collect_topic_snippets(
+        app,
+        user,
+        post_ids,
+        all_posts,
+        requested_topic,
+        normalized_context_tags,
+    )
+    snippets: list[dict[str, Any]] = _flatten_topic_snippets(topics_data)
+    filtered_snippets: list[dict[str, Any]] = _filter_snippets_by_scope(snippets, scope)
+    return filtered_snippets, {
+        "post_ids": post_ids,
+        "all_posts": all_posts,
+        "requested_topic": requested_topic,
+    }
+
+
+def _dedupe_mindmap_result_snippets(
+    snippets: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Deduplicate snippets for result views while preserving topic exploration data."""
+    deduped: list[dict[str, Any]] = []
+    seen_keys: set[str] = set()
+    for snippet in snippets:
+        key: str = "::".join(
+            [
+                str(snippet.get("post_id", "")),
+                ",".join(str(index) for index in snippet.get("indices", [])),
+            ]
+        )
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        deduped.append(snippet)
+    return deduped
+
+
+def _build_available_actions_for_scope(
+    snippets: list[dict[str, Any]], scope: dict[str, Any]
+) -> list[str]:
+    """Return the action set available for this scope."""
+    actions: list[str] = ["tags", "sentences", "sources", "categories"]
+    if _collect_child_subtopics(snippets, scope):
+        actions.append("subtopics")
+    return actions
+
+
+def _build_child_scope(scope: dict[str, Any], **overrides: Any) -> dict[str, Any]:
+    """Create a child scope inheriting current filters."""
+    child_scope: dict[str, Any] = {
+        "node_kind": str(overrides.get("node_kind", scope.get("node_kind", "topic"))),
+        "topic_path": overrides.get("topic_path", scope.get("topic_path")),
+        "post_ids": list(scope.get("post_ids", [])),
+        "cluster_id": scope.get("cluster_id"),
+        "feed_id": overrides.get("feed_id", scope.get("feed_id", "")),
+        "category_id": overrides.get("category_id", scope.get("category_id", "")),
+        "tags": list(overrides.get("tags", scope.get("tags", []))),
+    }
+    return child_scope
+
+
+def _build_scope_actions_payload(has_subtopics: bool) -> list[str]:
+    """Return the stable action list advertised to the frontend."""
+    actions: list[str] = ["tags", "sentences", "sources", "categories"]
+    if has_subtopics:
+        actions.append("subtopics")
+    return actions
+
+
+def _collect_child_subtopics(
+    snippets: list[dict[str, Any]], scope: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Aggregate the next topic level available under the current scope."""
+    requested_topic: Optional[str] = scope.get("topic_path")
+    requested_parts: list[str] = _split_topic_parts(requested_topic or "")
+    child_topics: dict[str, dict[str, Any]] = {}
+
+    for snippet in snippets:
+        topic_name: str = str(snippet.get("topic", "")).strip()
+        topic_parts: list[str] = _split_topic_parts(topic_name)
+        if len(topic_parts) <= len(requested_parts):
+            continue
+        if requested_parts and topic_parts[: len(requested_parts)] != requested_parts:
+            continue
+
+        next_parts: list[str] = topic_parts[: len(requested_parts) + 1]
+        child_path: str = " > ".join(next_parts)
+        child_name: str = next_parts[-1]
+        if child_path not in child_topics:
+            child_topics[child_path] = {"name": child_name, "count": 0}
+        child_topics[child_path]["count"] += 1
+
+    items: list[dict[str, Any]] = []
+    for child_path, child_data in child_topics.items():
+        items.append(
+            {
+                "node_kind": "topic",
+                "name": child_data["name"],
+                "value": int(child_data["count"]),
+                "scope": _build_child_scope(
+                    scope,
+                    node_kind="topic",
+                    topic_path=child_path,
+                ),
+                "available_actions": _build_scope_actions_payload(True),
+            }
+        )
+
+    items.sort(key=lambda item: (-int(item["value"]), str(item["name"]).casefold()))
+    return items
+
+
+def _aggregate_tags_for_scope(
+    snippets: list[dict[str, Any]], scope: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Aggregate distinct tags available for the current scope."""
+    tag_counts: defaultdict[str, int] = defaultdict(int)
+    current_tags: set[str] = set(str(tag) for tag in scope.get("tags", []))
+
+    for snippet in snippets:
+        for tag in snippet.get("post_tags", []):
+            tag_name: str = str(tag).strip()
+            if not tag_name or tag_name in current_tags:
+                continue
+            tag_counts[tag_name] += 1
+
+    items: list[dict[str, Any]] = []
+    for tag_name, count in tag_counts.items():
+        child_tags: list[str] = sorted(current_tags | {tag_name})
+        items.append(
+            {
+                "node_kind": "tag",
+                "name": tag_name,
+                "value": int(count),
+                "scope": _build_child_scope(scope, node_kind="tag", tags=child_tags),
+                "available_actions": _build_scope_actions_payload(True),
+            }
+        )
+
+    items.sort(key=lambda item: (-int(item["value"]), str(item["name"]).casefold()))
+    return items[:50]
+
+
+def _aggregate_sources_for_scope(
+    snippets: list[dict[str, Any]], scope: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Aggregate distinct sources available for the current scope."""
+    source_counts: dict[str, dict[str, Any]] = {}
+
+    for snippet in snippets:
+        feed_id: str = str(snippet.get("feed_id", "")).strip()
+        if not feed_id:
+            continue
+        if feed_id not in source_counts:
+            source_counts[feed_id] = {
+                "name": str(snippet.get("feed_title", feed_id)),
+                "count": 0,
+            }
+        source_counts[feed_id]["count"] += 1
+
+    items: list[dict[str, Any]] = []
+    for feed_id, source_data in source_counts.items():
+        items.append(
+            {
+                "node_kind": "source",
+                "name": source_data["name"],
+                "value": int(source_data["count"]),
+                "scope": _build_child_scope(
+                    scope,
+                    node_kind="source",
+                    feed_id=feed_id,
+                ),
+                "available_actions": _build_scope_actions_payload(True),
+            }
+        )
+
+    items.sort(key=lambda item: (-int(item["value"]), str(item["name"]).casefold()))
+    return items
+
+
+def _aggregate_categories_for_scope(
+    snippets: list[dict[str, Any]], scope: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Aggregate distinct categories available for the current scope."""
+    category_counts: dict[str, dict[str, Any]] = {}
+
+    for snippet in snippets:
+        category_id: str = str(snippet.get("category_id", "")).strip()
+        if not category_id:
+            continue
+        if category_id not in category_counts:
+            category_counts[category_id] = {
+                "name": str(snippet.get("category_title", category_id)),
+                "count": 0,
+            }
+        category_counts[category_id]["count"] += 1
+
+    items: list[dict[str, Any]] = []
+    for category_id, category_data in category_counts.items():
+        items.append(
+            {
+                "node_kind": "category",
+                "name": category_data["name"],
+                "value": int(category_data["count"]),
+                "scope": _build_child_scope(
+                    scope,
+                    node_kind="category",
+                    category_id=category_id,
+                ),
+                "available_actions": _build_scope_actions_payload(True),
+            }
+        )
+
+    items.sort(key=lambda item: (-int(item["value"]), str(item["name"]).casefold()))
+    return items
+
+
+def _build_snippet_panel_item(
+    snippets: list[dict[str, Any]], scope: dict[str, Any]
+) -> dict[str, Any]:
+    """Build a synthetic snippet-panel node payload."""
+    return {
+        "node_kind": "snippet_panel",
+        "name": "__snippets__",
+        "value": len(snippets),
+        "scope": _build_child_scope(scope, node_kind="snippet_panel"),
+        "snippets": [_serialize_snippet_for_api(snippet) for snippet in snippets],
+    }
 
 
 def on_post_grouped_snippets_get(
@@ -2140,6 +2502,79 @@ def on_sentence_cluster_topic_snippets_get(
             }
         ),
         mimetype="application/json",
+    )
+
+
+def on_mindmap_node_data_post(
+    app: "RSSTagApplication", user: dict, request: Request
+) -> Response:
+    """Return scope-aware node data for the topics mind map context menu."""
+    payload: Any = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return Response(
+            json.dumps({"error": "JSON payload is required"}),
+            mimetype="application/json",
+            status=400,
+        )
+
+    action: str = str(payload.get("action", "")).strip().lower()
+    if action not in {"tags", "sentences", "sources", "categories", "subtopics"}:
+        return Response(
+            json.dumps({"error": "Unsupported action"}),
+            mimetype="application/json",
+            status=400,
+        )
+
+    scope_payload: Any = payload.get("scope")
+    if not isinstance(scope_payload, dict):
+        return Response(
+            json.dumps({"error": "scope must be an object"}),
+            mimetype="application/json",
+            status=400,
+        )
+
+    scope: dict[str, Any] = _normalize_mindmap_scope(scope_payload)
+    snippets, scope_meta = _load_scope_snippets(app, user, scope)
+    scope["post_ids"] = list(scope_meta.get("post_ids", scope.get("post_ids", [])))
+    available_actions: list[str] = _build_available_actions_for_scope(snippets, scope)
+    unique_result_snippets: list[dict[str, Any]] = _dedupe_mindmap_result_snippets(snippets)
+
+    items: list[dict[str, Any]]
+    result_type: str
+    if action == "sentences":
+        items = (
+            [_build_snippet_panel_item(unique_result_snippets, scope)]
+            if unique_result_snippets
+            else []
+        )
+        result_type = "snippets"
+    elif action == "tags":
+        items = _aggregate_tags_for_scope(unique_result_snippets, scope)
+        result_type = "nodes"
+    elif action == "sources":
+        items = _aggregate_sources_for_scope(unique_result_snippets, scope)
+        result_type = "nodes"
+    elif action == "categories":
+        items = _aggregate_categories_for_scope(unique_result_snippets, scope)
+        result_type = "nodes"
+    else:
+        items = _collect_child_subtopics(snippets, scope)
+        result_type = "nodes"
+
+    return Response(
+        json.dumps(
+            {
+                "action": action,
+                "result_type": result_type,
+                "items": items,
+                "scope": scope,
+                "available_actions": available_actions,
+                "count": len(items),
+                "snippet_count": len(unique_result_snippets),
+            }
+        ),
+        mimetype="application/json",
+        status=200,
     )
 
 
@@ -2268,7 +2703,13 @@ def _convert_topics_to_sunburst(topics: list[dict]) -> list[dict]:
             "value": topic["count"],
             "text_length": topic.get("text_length", 0),
             "_topicPath": topic["path"],
-            "_topicPosts": topic["posts"]
+            "_topicPosts": topic["posts"],
+            "_nodeKind": "topic",
+            "_mindmapScope": {
+                "node_kind": "topic",
+                "topic_path": topic["path"],
+                "post_ids": topic["posts"],
+            },
         }
         if topic.get("children") and len(topic["children"]) > 0:
             node["children"] = _convert_topics_to_sunburst(topic["children"])

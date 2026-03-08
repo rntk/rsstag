@@ -224,6 +224,16 @@ export function initSentenceClusterPage() {
   });
 }
 
+export function initSnippetHoverCards() {
+  const snippetCards = document.querySelectorAll('.snippet-item');
+  snippetCards.forEach((card) => {
+    if (!card.hasAttribute('tabindex')) {
+      card.setAttribute('tabindex', '0');
+    }
+    card.classList.add('snippet-hover-card');
+  });
+}
+
 export function resolvePageType(path) {
   if (path === '/') {
     return 'root';
@@ -294,6 +304,12 @@ export function resolvePageType(path) {
   }
   if (/^\/sentence-clusters\/[0-9]+$/.test(path)) {
     return 'sentence-cluster';
+  }
+  if (/^\/sentence-clusters$/.test(path)) {
+    return 'sentence-clusters';
+  }
+  if (/^\/post-grouped-snippets\/.+/.test(path)) {
+    return 'post-grouped-snippets';
   }
   if (/^\/tag-context-tree\//.test(path)) {
     return 'tag-context-tree';
@@ -529,7 +545,10 @@ export function initApp() {
     const mindmap = new TopicsMindmap();
     mindmap.render('#topics_mindmap_chart', window.mindmap_data);
   } else if (pageType === 'sentence-cluster') {
+    initSnippetHoverCards();
     initSentenceClusterPage();
+  } else if (pageType === 'post-grouped-snippets') {
+    initSnippetHoverCards();
   } else if (pageType === 'tag-context-tree') {
     const mindmap = new TopicsMindmap();
     mindmap.render('#topics_mindmap_chart', window.mindmap_data);

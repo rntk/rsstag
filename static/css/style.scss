@@ -2040,12 +2040,24 @@ h3.post_title {
     background: white;
     border-radius: 6px;
     border: 1px solid #eee;
-    transition: all 0.2s;
+    transition:
+      box-shadow 0.2s ease,
+      border-color 0.2s ease,
+      transform 0.2s ease;
     overflow: hidden;
     max-width: 100%;
 
     &:hover {
-      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.07);
+      border-color: #d5e3f2;
+      transform: translateY(-1px);
+    }
+
+    &:focus,
+    &:focus-within {
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.14);
+      border-color: #90caf9;
     }
 
     &.read {
@@ -2060,13 +2072,19 @@ h3.post_title {
   .snippet-meta {
     font-size: 11px;
     color: #999;
-    margin-bottom: 4px;
+    margin-bottom: 6px;
     display: flex;
     justify-content: space-between;
+    align-items: flex-start;
     flex-wrap: wrap;
     gap: 8px;
     overflow: hidden;
     overflow-wrap: break-word;
+  }
+
+  .snippet-primary-meta {
+    flex: 1 1 220px;
+    min-width: 0;
   }
 
   .snippet-text {
@@ -2079,6 +2097,27 @@ h3.post_title {
     overflow-y: auto;
     overflow-x: hidden;
     padding-right: 8px;
+  }
+
+  .snippet-text a {
+    color: #1565c0;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    word-break: break-word;
+  }
+
+  .snippet-text p,
+  .snippet-text ul,
+  .snippet-text ol,
+  .snippet-text blockquote {
+    margin: 0 0 0.6em;
+  }
+
+  .snippet-text p:last-child,
+  .snippet-text ul:last-child,
+  .snippet-text ol:last-child,
+  .snippet-text blockquote:last-child {
+    margin-bottom: 0;
   }
 
   .back-nav {
@@ -2114,10 +2153,20 @@ h3.post_title {
 
   .snippet-actions {
     display: flex;
+    justify-content: flex-end;
     gap: 8px;
     flex-wrap: wrap;
+    flex: 0 1 440px;
     max-width: 100%;
     overflow: hidden;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(-4px);
+    transition:
+      opacity 0.15s ease,
+      transform 0.15s ease,
+      visibility 0.15s ease;
 
     .source-tag {
       font-size: 10px;
@@ -2131,9 +2180,30 @@ h3.post_title {
     }
   }
 
+  .snippet-hover-card:hover .snippet-actions,
+  .snippet-hover-card:focus .snippet-actions,
+  .snippet-hover-card:focus-within .snippet-actions,
+  .snippet-item:hover .snippet-actions,
+  .snippet-item:focus .snippet-actions,
+  .snippet-item:focus-within .snippet-actions {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateY(0);
+  }
+
   .toggle-read-btn {
     cursor: pointer;
     user-select: none;
+  }
+
+  @media (hover: none), (pointer: coarse) {
+    .snippet-actions {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: none;
+    }
   }
 }
 
@@ -2587,6 +2657,15 @@ h3.post_title {
   }
 }
 
+.mindmap-node-menu-btn {
+  font-weight: bold;
+  user-select: none;
+
+  &:hover {
+    fill: #263547;
+  }
+}
+
 .mindmap-node-count {
   user-select: none;
 }
@@ -2609,6 +2688,44 @@ h3.post_title {
 
   &:hover {
     background: #f0f0f0;
+  }
+}
+
+.mindmap-context-menu {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  min-width: 160px;
+  padding: 6px;
+  border: 1px solid #c7c7c7;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+  z-index: 30;
+}
+
+.mindmap-context-menu[hidden] {
+  display: none;
+}
+
+.mindmap-context-menu-item {
+  padding: 7px 10px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: #334;
+  text-align: left;
+  font-size: 12px;
+  cursor: pointer;
+
+  &:hover:not(:disabled),
+  &.active {
+    background: #eef3fb;
+  }
+
+  &:disabled {
+    color: #919191;
+    cursor: wait;
   }
 }
 
@@ -3367,5 +3484,9 @@ h3.post_title {
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
+  }
+
+  .snippet-primary-meta .snippet-source-info:first-child {
+    margin-right: 4px;
   }
 }

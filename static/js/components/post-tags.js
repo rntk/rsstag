@@ -1,7 +1,7 @@
 'use strict';
 import React from 'react';
 import TagItem from '../components/tag-item.js';
-import { stopwords } from '../libs/stopwords';
+import { stopwords } from '../libs/stopwords.js';
 
 export function PostsTags(state) {
   if (!state || !state.posts) {

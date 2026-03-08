@@ -534,6 +534,11 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/api/mindmap-node-data",
+                "endpoint": "on_mindmap_node_data_post",
+                "methods": ["POST"],
+            },
+            {
                 "url": "/api/sentence-clusters/<int:cluster_id>/topic-snippets",
                 "endpoint": "on_sentence_cluster_topic_snippets_get",
                 "methods": ["GET"],

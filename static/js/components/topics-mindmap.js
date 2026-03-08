@@ -2,31 +2,38 @@
 
 import * as d3 from 'd3';
 
-/**
- * Topics Mindmap - Interactive collapsible horizontal tree
- * Uses D3 tree layout with zoom/pan and click-to-collapse/expand.
- * Leaf nodes expand to "Sentences" and "Sources" pseudo-nodes.
- */
+const DEFAULT_ACTIONS = ['tags', 'sentences', 'sources', 'categories', 'subtopics'];
+const ACTION_LABELS = {
+  tags: 'Tags',
+  sentences: 'Sentences',
+  sources: 'Sources',
+  categories: 'Categories',
+  subtopics: 'Subtopics',
+};
+
 export default class TopicsMindmap {
   constructor() {
     this.margin = { top: 20, right: 200, bottom: 20, left: 120 };
     this.nodeHeight = 32;
     this.nodeSpacingY = 20;
-    this.nodeMinWidth = 80;
-    this.nodeMaxWidth = 420;
+    this.nodeMinWidth = 96;
+    this.nodeMaxWidth = 440;
     this.nodeCharWidth = 7.5;
-    this.nodeHorizontalPadding = 40;
+    this.nodeHorizontalPadding = 54;
     this.nodeLabelPadding = 10;
     this.nodeArrowWidth = 20;
-    this.nodeSearchBtnWidth = 20;
+    this.nodeMenuBtnWidth = 22;
     this.nodeGapX = 80;
     this.snippetPanelWidth = 420;
     this.snippetItemHeight = 80;
     this.snippetMaxHeight = 500;
     this.snippetOverlay = null;
     this.overlaySnippetNode = null;
+    this.menuElement = null;
+    this.menuNode = null;
+    this.gMain = null;
     this.duration = 400;
-    this.i = 0; // node id counter
+    this.i = 0;
     this.root = null;
     this.svg = null;
     this.gLinks = null;
@@ -34,50 +41,55 @@ export default class TopicsMindmap {
     this.container = null;
     this.zoom = null;
     this.resizeHandler = null;
+    this.documentClickHandler = null;
+    this.escapeHandler = null;
     this.baseColor = '#d7d7af';
     this.nodeColors = ['#c8d0e8', '#d7d7af', '#c8e0c8', '#e0d0c8', '#d8c8e0', '#c8dce0'];
     this.options = {
       topicClickAction: 'navigate',
       countLabel: 'posts',
-      snippetApiBaseUrl: '',
     };
   }
 
   render(selector, data, options = {}) {
     const container = document.querySelector(selector);
-    if (!container) return;
+    if (!container) {
+      return;
+    }
+
     this.container = container;
     this.options = {
       topicClickAction: 'navigate',
       countLabel: 'posts',
-      snippetApiBaseUrl: '',
       ...options,
     };
-    container.innerHTML = '';
+    this.container.innerHTML = '';
+    this._closeContextMenu();
+    this._closeSnippetOverlay();
 
     const { width, height } = this._getViewportSize();
-
-    // Build hierarchy: synthetic hidden root wrapping top-level topics
     const hierarchyData = {
       name: '__root__',
-      children: data.children || [],
+      node_kind: 'root',
+      available_actions: [],
+      children: Array.isArray(data.children) ? data.children : [],
     };
 
     this.root = d3.hierarchy(hierarchyData);
     this.root.x0 = height / 2;
     this.root.y0 = 0;
 
-    // Assign unique ids
-    this.root.descendants().forEach((d) => {
-      d.id = this.i++;
+    this.root.descendants().forEach((node) => {
+      this._normalizeNodeData(node);
+      node.id = this.i++;
     });
 
-    // Collapse beyond depth 1 (root's grandchildren and below)
-    this.root.children.forEach((child) => {
-      this._collapseAll(child);
-    });
+    if (Array.isArray(this.root.children)) {
+      this.root.children.forEach((child) => {
+        this._collapseAll(child);
+      });
+    }
 
-    // Create SVG
     this.svg = d3
       .select(container)
       .append('svg')
@@ -85,27 +97,23 @@ export default class TopicsMindmap {
       .attr('height', height)
       .attr('class', 'topics-mindmap-svg');
 
-    // Add zoom
     this.zoom = d3
       .zoom()
       .scaleExtent([0.1, 4])
       .on('zoom', (event) => {
         this.gMain.attr('transform', event.transform);
+        this._closeContextMenu();
       });
 
     this.svg.call(this.zoom);
-
     this.gMain = this.svg.append('g').attr('class', 'mindmap-main');
     this.gLinks = this.gMain.append('g').attr('class', 'mindmap-links');
     this.gNodes = this.gMain.append('g').attr('class', 'mindmap-nodes');
 
-    // Initial update
+    this._ensureContextMenu();
+    this._ensureSnippetOverlay();
     this._update(this.root);
-
-    // Fit to view after initial render
     setTimeout(() => this._fitToView(), 100);
-
-    // Add reset view button
     this._addResetButton(container);
 
     if (this.resizeHandler) {
@@ -113,6 +121,43 @@ export default class TopicsMindmap {
     }
     this.resizeHandler = () => this._handleResize();
     window.addEventListener('resize', this.resizeHandler);
+  }
+
+  _normalizeNodeData(node) {
+    if (!node || !node.data) {
+      return;
+    }
+
+    const data = node.data;
+    data.node_kind = data.node_kind || data._nodeKind || (data._isSnippetNode ? 'snippet_panel' : 'topic');
+    data.available_actions = Array.isArray(data.available_actions)
+      ? data.available_actions
+      : Array.isArray(data._availableActions)
+        ? data._availableActions
+        : this._defaultActionsForNodeKind(data.node_kind);
+
+    if (!data.scope && data._mindmapScope) {
+      data.scope = { ...data._mindmapScope };
+    }
+
+    if (!data.scope && data._topicPath) {
+      data.scope = {
+        node_kind: data.node_kind,
+        topic_path: data._topicPath,
+        post_ids: Array.isArray(data._topicPosts) ? [...data._topicPosts] : [],
+      };
+    }
+
+    if (data.node_kind === 'snippet_panel') {
+      data._isSnippetNode = true;
+    }
+  }
+
+  _defaultActionsForNodeKind(nodeKind) {
+    if (nodeKind === 'snippet_panel' || nodeKind === 'root') {
+      return [];
+    }
+    return [...DEFAULT_ACTIONS];
   }
 
   _getViewportSize() {
@@ -126,7 +171,6 @@ export default class TopicsMindmap {
     const width = this.container.clientWidth || window.innerWidth;
     const rect = this.container.getBoundingClientRect();
     const availableHeight = window.innerHeight - rect.top - 24;
-
     return {
       width,
       height: Math.max(Math.floor(availableHeight), 480),
@@ -134,307 +178,166 @@ export default class TopicsMindmap {
   }
 
   _handleResize() {
-    if (!this.svg) return;
+    if (!this.svg) {
+      return;
+    }
     const { width, height } = this._getViewportSize();
     this.svg.attr('width', width).attr('height', height);
+    this._closeContextMenu();
     this._fitToView();
   }
 
-  _collapseAll(d) {
-    if (d.children) {
-      d._children = d.children;
-      d._children.forEach((c) => this._collapseAll(c));
-      d.children = null;
+  _collapseAll(node) {
+    if (node.children && node.data.node_kind !== 'snippet_panel') {
+      node._children = node.children;
+      node._children.forEach((child) => this._collapseAll(child));
+      node.children = null;
     }
   }
 
-  _expandOne(d) {
-    if (d._children) {
-      d.children = d._children;
-      d._children = null;
+  _toggleChildren(node) {
+    if (node.children) {
+      node._children = node.children;
+      node.children = null;
+    } else if (node._children) {
+      node.children = node._children;
+      node._children = null;
     }
   }
 
-  _toggleChildren(d) {
-    if (d.children) {
-      d._children = d.children;
-      d.children = null;
-    } else if (d._children) {
-      d.children = d._children;
-      d._children = null;
+  _isSnippetNode(node) {
+    return node?.data?.node_kind === 'snippet_panel' || node?.data?._isSnippetNode === true;
+  }
+
+  _hasMenuButton(node) {
+    return !this._isSnippetNode(node) && (this._getAvailableActions(node).length > 0);
+  }
+
+  _getAvailableActions(node) {
+    if (!node?.data) {
+      return [];
     }
+    return Array.isArray(node.data.available_actions)
+      ? node.data.available_actions
+      : this._defaultActionsForNodeKind(node.data.node_kind);
   }
 
-  _isLeafTopic(d) {
-    const hasOrigChildren = d.data.children && d.data.children.length > 0;
-    const hasPosts = d.data._topicPosts && d.data._topicPosts.length > 0;
-    return !hasOrigChildren && hasPosts;
-  }
-
-  _isSnippetNode(d) {
-    return d.data._isSnippetNode === true;
-  }
-
-  _isSentencesPseudo(d) {
-    return d.data._isSentencesPseudo === true;
-  }
-
-  _isSourcesPseudo(d) {
-    return d.data._isSourcesPseudo === true;
-  }
-
-  _isSourceNode(d) {
-    return d.data._isSourceNode === true;
-  }
-
-  _isTagSearchResult(d) {
-    return d.data._isTagSearchResult === true;
-  }
-
-  _isPseudoOrSource(d) {
-    return this._isSentencesPseudo(d) || this._isSourcesPseudo(d) || this._isSourceNode(d);
-  }
-
-  _hasSearchButton(d) {
-    if (this._isSnippetNode(d) || this._isPseudoOrSource(d) || this._isTagSearchResult(d))
-      return false;
-    return !!d.data._topicPath;
-  }
-
-  _nodeWidth(d) {
-    if (this._isSnippetNode(d)) {
+  _nodeWidth(node) {
+    if (this._isSnippetNode(node)) {
       return this.snippetPanelWidth;
     }
-    const name = d.data.name || '';
-    const searchExtra = this._hasSearchButton(d) ? this.nodeSearchBtnWidth : 0;
+
+    const name = String(node.data.name || '');
+    const arrowSpace = this._hasArrow(node) ? this.nodeArrowWidth : 0;
+    const menuSpace = this._hasMenuButton(node) ? this.nodeMenuBtnWidth : 0;
     const estimatedWidth =
-      name.length * this.nodeCharWidth + this.nodeHorizontalPadding + searchExtra;
+      name.length * this.nodeCharWidth +
+      this.nodeHorizontalPadding +
+      arrowSpace +
+      menuSpace;
     return Math.min(Math.max(estimatedWidth, this.nodeMinWidth), this.nodeMaxWidth);
   }
 
-  _displayNodeLabel(d) {
-    if (this._isSnippetNode(d)) return '';
+  _displayNodeLabel(node) {
+    if (this._isSnippetNode(node)) {
+      return '';
+    }
 
-    const name = d.data.name || '';
-    const width = this._nodeWidth(d);
-    const arrowSpace = this._hasArrow(d) ? this.nodeArrowWidth : 0;
-    const searchSpace = this._hasSearchButton(d) ? this.nodeSearchBtnWidth : 0;
-    const usableWidth = width - this.nodeLabelPadding - arrowSpace - searchSpace - 4;
+    const name = String(node.data.name || '');
+    const width = this._nodeWidth(node);
+    const arrowSpace = this._hasArrow(node) ? this.nodeArrowWidth : 0;
+    const menuSpace = this._hasMenuButton(node) ? this.nodeMenuBtnWidth : 0;
+    const usableWidth = width - this.nodeLabelPadding - arrowSpace - menuSpace - 6;
     const maxChars = Math.max(Math.floor(usableWidth / this.nodeCharWidth), 3);
 
-    if (name.length <= maxChars) return name;
-    if (maxChars <= 3) return '...';
-    return name.slice(0, maxChars - 3) + '...';
+    if (name.length <= maxChars) {
+      return name;
+    }
+    if (maxChars <= 3) {
+      return '...';
+    }
+    return `${name.slice(0, maxChars - 3)}...`;
   }
 
-  _nodeHeightFor(d) {
-    if (this._isSnippetNode(d)) {
-      const snippets = d.data._snippets || [];
+  _nodeHeightFor(node) {
+    if (this._isSnippetNode(node)) {
+      const snippets = Array.isArray(node.data.snippets) ? node.data.snippets : [];
       const multiSentenceExtra = snippets.length > 1 ? 20 : 8;
-      const contentH = 36 + snippets.length * this.snippetItemHeight + multiSentenceExtra;
-      return Math.min(contentH, this.snippetMaxHeight);
+      const contentHeight = 36 + snippets.length * this.snippetItemHeight + multiSentenceExtra;
+      return Math.min(contentHeight, this.snippetMaxHeight);
     }
     return this.nodeHeight;
   }
 
   _depthColor(depth) {
-    return this.nodeColors[(depth - 1) % this.nodeColors.length] || this.baseColor;
+    return this.nodeColors[(Math.max(depth, 1) - 1) % this.nodeColors.length] || this.baseColor;
   }
 
-  _hasArrow(d) {
-    if (this._isSnippetNode(d)) return false;
-    if (this._isTagSearchResult(d)) return false;
-    const hasBranchChildren = d.data.children && d.data.children.length > 0;
-    const isLeaf = this._isLeafTopic(d);
-    return hasBranchChildren || isLeaf || this._isPseudoOrSource(d);
+  _hasArrow(node) {
+    if (this._isSnippetNode(node)) {
+      return false;
+    }
+    return Boolean(node.children || node._children);
   }
 
-  async _loadSnippets(d) {
-    if (d.data._snippetsLoaded) {
-      this._toggleChildren(d);
-      this._update(d);
-      return;
+  _isNavigableNode(node) {
+    const nodeKind = String(node?.data?.node_kind || '');
+    if (!['topic', 'subtopic'].includes(nodeKind)) {
+      return false;
     }
-
-    const topicPosts = d.data._topicPosts;
-    const topicPath = d.data._topicPath;
-    if (!topicPath) return;
-
-    const url = this._buildSnippetUrl(topicPosts, topicPath);
-    if (!url) return;
-
-    // Show loading state
-    d.data._loading = true;
-    this._update(d);
-
-    try {
-      const resp = await fetch(url);
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const data = await resp.json();
-
-      d.data._loading = false;
-      d.data._snippetsLoaded = true;
-
-      const snippets = data.snippets || [];
-      d.data._cachedSnippets = snippets;
-
-      // Count unique feeds
-      const feedSet = new Set(snippets.map((s) => s.feed_id || ''));
-      const feedCount = feedSet.size;
-
-      // Create two pseudo-children: Sentences and Sources
-      const sentencesData = {
-        name: `Sentences (${snippets.length})`,
-        _isSentencesPseudo: true,
-        _cachedSnippets: snippets,
-      };
-
-      const sourcesData = {
-        name: `Sources (${feedCount})`,
-        _isSourcesPseudo: true,
-        _cachedSnippets: snippets,
-      };
-
-      const sentencesNode = d3.hierarchy(sentencesData);
-      sentencesNode.depth = d.depth + 1;
-      sentencesNode.parent = d;
-      sentencesNode.id = this.i++;
-
-      const sourcesNode = d3.hierarchy(sourcesData);
-      sourcesNode.depth = d.depth + 1;
-      sourcesNode.parent = d;
-      sourcesNode.id = this.i++;
-
-      d.children = [sentencesNode, sourcesNode];
-      d._children = null;
-
-      this._update(d);
-    } catch (err) {
-      d.data._loading = false;
-      console.error('Failed to load snippets:', err);
-      this._update(d);
-    }
+    const scope = this._getNodeScope(node);
+    return Boolean(scope.topic_path && Array.isArray(scope.post_ids) && scope.post_ids.length > 0);
   }
 
-  _buildSnippetUrl(topicPosts, topicPath) {
-    if (this.options.snippetApiBaseUrl) {
-      const url = new URL(this.options.snippetApiBaseUrl, window.location.origin);
-      url.searchParams.set('topic', topicPath);
-      return `${url.pathname}${url.search}`;
+  _getNodeScope(node) {
+    const scope = node?.data?.scope || node?.data?._mindmapScope || {};
+    const topicPath = scope.topic_path || node?.data?._topicPath || '';
+    const postIds = Array.isArray(scope.post_ids)
+      ? [...scope.post_ids]
+      : Array.isArray(node?.data?._topicPosts)
+        ? [...node.data._topicPosts]
+        : [];
+
+    const normalizedScope = {
+      node_kind: scope.node_kind || node?.data?.node_kind || 'topic',
+      topic_path: topicPath,
+      post_ids: postIds,
+    };
+
+    for (const key of ['cluster_id', 'feed_id', 'category_id']) {
+      if (scope[key]) {
+        normalizedScope[key] = scope[key];
+      }
     }
 
-    if (!topicPosts || topicPosts.length === 0) {
+    if (Array.isArray(scope.tags) && scope.tags.length > 0) {
+      normalizedScope.tags = [...scope.tags];
+    } else if (scope.tag) {
+      normalizedScope.tag = scope.tag;
+    }
+
+    return normalizedScope;
+  }
+
+  _escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+  }
+
+  _truncate(str, len) {
+    if (!str) {
       return '';
     }
-
-    const postIds = topicPosts.join('_');
-    return `/api/topic-snippets/${postIds}?topic=${encodeURIComponent(topicPath)}`;
+    return str.length > len ? `${str.slice(0, len)}...` : str;
   }
 
-  _expandSentencesPseudo(d) {
-    // Toggle if already expanded
-    if (d.children || d._children) {
-      this._toggleChildren(d);
-      this._update(d);
-      return;
-    }
-
-    const snippets = d.data._cachedSnippets || [];
-
-    const snippetChild = {
-      name: '__snippets__',
-      _isSnippetNode: true,
-      _snippets: snippets,
-      _parentTopicPath: d.parent ? d.parent.data._topicPath : '',
-    };
-
-    const childNode = d3.hierarchy(snippetChild);
-    childNode.depth = d.depth + 1;
-    childNode.parent = d;
-    childNode.id = this.i++;
-
-    d.children = [childNode];
-    d._children = null;
-
-    this._update(d);
-  }
-
-  _expandSourcesPseudo(d) {
-    // Toggle if already expanded
-    if (d.children || d._children) {
-      this._toggleChildren(d);
-      this._update(d);
-      return;
-    }
-
-    const snippets = d.data._cachedSnippets || [];
-
-    // Group snippets by feed_id
-    const feedMap = new Map();
-    snippets.forEach((s) => {
-      const fid = s.feed_id || 'unknown';
-      if (!feedMap.has(fid)) {
-        feedMap.set(fid, { title: s.feed_title || fid, snippets: [] });
-      }
-      feedMap.get(fid).snippets.push(s);
-    });
-
-    const children = [];
-    for (const [feedId, info] of feedMap) {
-      const sourceData = {
-        name: `${info.title} (${info.snippets.length})`,
-        _isSourceNode: true,
-        _feedId: feedId,
-        _sourceSnippets: info.snippets,
-      };
-
-      const childNode = d3.hierarchy(sourceData);
-      childNode.depth = d.depth + 1;
-      childNode.parent = d;
-      childNode.id = this.i++;
-      children.push(childNode);
-    }
-
-    d.children = children;
-    d._children = null;
-
-    this._update(d);
-  }
-
-  _expandSourceNode(d) {
-    // Toggle if already expanded
-    if (d.children || d._children) {
-      this._toggleChildren(d);
-      this._update(d);
-      return;
-    }
-
-    const snippets = d.data._sourceSnippets || [];
-
-    const snippetChild = {
-      name: '__snippets__',
-      _isSnippetNode: true,
-      _snippets: snippets,
-      _parentTopicPath: '',
-    };
-
-    const childNode = d3.hierarchy(snippetChild);
-    childNode.depth = d.depth + 1;
-    childNode.parent = d;
-    childNode.id = this.i++;
-
-    d.children = [childNode];
-    d._children = null;
-
-    this._update(d);
-  }
-
-  _buildSnippetHTML(d, options = {}) {
-    const snippets = d.data._snippets || [];
-    const panelH = options.panelHeight || this._nodeHeightFor(d);
-    const scrollH = options.scrollHeight || panelH - 36;
+  _buildSnippetHTML(node, options = {}) {
+    const snippets = Array.isArray(node.data.snippets) ? node.data.snippets : [];
+    const panelHeight = options.panelHeight || this._nodeHeightFor(node);
+    const scrollHeight = options.scrollHeight || panelHeight - 36;
     const containerWidth = options.containerWidth || `${this.snippetPanelWidth - 16}px`;
-    const containerMaxHeight = options.containerMaxHeight || `${panelH}px`;
+    const containerMaxHeight = options.containerMaxHeight || `${panelHeight}px`;
     const includeMaximize = options.includeMaximize !== false;
     const includeClose = options.includeClose === true;
     const textPreviewLimit =
@@ -455,21 +358,22 @@ export default class TopicsMindmap {
       html += `<button class="mindmap-snippet-batch-btn mindmap-snippet-close-btn" data-action="close-overlay">Close</button>`;
     }
     html += `</div></div>`;
-    html += `<div class="mindmap-snippet-list" style="max-height:${scrollH}px;overflow-y:auto;">`;
+    html += `<div class="mindmap-snippet-list" style="max-height:${scrollHeight}px;overflow-y:auto;">`;
 
-    snippets.forEach((s, i) => {
-      const readClass = s.read ? 'read' : '';
-      const btnLabel = s.read ? 'Unread' : 'Read';
-      const btnClass = s.read ? 'snippet-tag-read' : 'snippet-tag-unread';
+    snippets.forEach((snippet, index) => {
+      const readClass = snippet.read ? 'read' : '';
+      const btnLabel = snippet.read ? 'Unread' : 'Read';
+      const btnClass = snippet.read ? 'snippet-tag-read' : 'snippet-tag-unread';
+      const rawText = snippet.html || snippet.text || '';
       const textPreview =
-        textPreviewLimit > 0 && s.text.length > textPreviewLimit
-          ? s.text.slice(0, textPreviewLimit) + '...'
-          : s.text;
-      html += `<div class="mindmap-snippet-item ${readClass}" data-index="${i}">`;
-      html += `<div class="mindmap-snippet-text">${this._escapeHtml(textPreview)}</div>`;
+        textPreviewLimit > 0 && snippet.text && snippet.text.length > textPreviewLimit
+          ? `${snippet.text.slice(0, textPreviewLimit)}...`
+          : rawText;
+      html += `<div class="mindmap-snippet-item ${readClass}" data-index="${index}">`;
+      html += `<div class="mindmap-snippet-text">${textPreview}</div>`;
       html += `<div class="mindmap-snippet-meta">`;
-      html += `<span class="mindmap-snippet-source" title="${this._escapeHtml(s.post_title)}">${this._escapeHtml(this._truncate(s.post_title, sourceTitleLimit))}</span>`;
-      html += `<button class="mindmap-snippet-toggle-btn ${btnClass}" data-index="${i}">${btnLabel}</button>`;
+      html += `<span class="mindmap-snippet-source" title="${this._escapeHtml(snippet.post_title || '')}">${this._escapeHtml(this._truncate(snippet.post_title || '', sourceTitleLimit))}</span>`;
+      html += `<button class="mindmap-snippet-toggle-btn ${btnClass}" data-index="${index}">${btnLabel}</button>`;
       html += `</div></div>`;
     });
 
@@ -477,24 +381,15 @@ export default class TopicsMindmap {
     return html;
   }
 
-  _escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str || '';
-    return div.innerHTML;
-  }
-
-  _truncate(str, len) {
-    if (!str) return '';
-    return str.length > len ? str.slice(0, len) + '...' : str;
-  }
-
   _setupSnippetEvents(nodeEnter) {
     nodeEnter
-      .filter((d) => this._isSnippetNode(d))
-      .each((d, i, nodes) => {
-        const fo = d3.select(nodes[i]).select('foreignObject');
-        const container = fo.node();
-        if (!container) return;
+      .filter((node) => this._isSnippetNode(node))
+      .each((node, index, nodes) => {
+        const foreignObject = d3.select(nodes[index]).select('foreignObject');
+        const container = foreignObject.node();
+        if (!container) {
+          return;
+        }
 
         container.addEventListener('click', (event) => {
           const btn = event.target.closest('.mindmap-snippet-toggle-btn');
@@ -502,15 +397,15 @@ export default class TopicsMindmap {
 
           if (btn) {
             event.stopPropagation();
-            const idx = parseInt(btn.dataset.index, 10);
-            this._toggleSnippetRead(d, idx, container);
+            const snippetIndex = parseInt(btn.dataset.index, 10);
+            this._toggleSnippetRead(node, snippetIndex, container);
           } else if (batchBtn) {
             event.stopPropagation();
             const action = batchBtn.dataset.action;
             if (action === 'maximize') {
-              this._openSnippetOverlay(d);
+              this._openSnippetOverlay(node);
             } else if (action === 'read-all' || action === 'unread-all') {
-              this._batchToggleRead(d, action === 'read-all', container);
+              this._batchToggleRead(node, action === 'read-all', container);
             }
           }
         });
@@ -518,7 +413,9 @@ export default class TopicsMindmap {
   }
 
   _ensureSnippetOverlay() {
-    if (this.snippetOverlay) return;
+    if (this.snippetOverlay) {
+      return;
+    }
 
     const overlay = document.createElement('div');
     overlay.className = 'mindmap-snippet-overlay';
@@ -531,12 +428,14 @@ export default class TopicsMindmap {
     overlay.addEventListener('click', (event) => {
       const btn = event.target.closest('.mindmap-snippet-toggle-btn');
       const batchBtn = event.target.closest('.mindmap-snippet-batch-btn');
-      if (!this.overlaySnippetNode) return;
+      if (!this.overlaySnippetNode) {
+        return;
+      }
 
       if (btn) {
         event.stopPropagation();
-        const idx = parseInt(btn.dataset.index, 10);
-        this._toggleSnippetRead(this.overlaySnippetNode, idx, overlay);
+        const snippetIndex = parseInt(btn.dataset.index, 10);
+        this._toggleSnippetRead(this.overlaySnippetNode, snippetIndex, overlay);
       } else if (batchBtn) {
         event.stopPropagation();
         const action = batchBtn.dataset.action;
@@ -548,27 +447,29 @@ export default class TopicsMindmap {
       }
     });
 
-    document.addEventListener('keydown', (event) => {
-      if (
-        event.key === 'Escape' &&
-        this.snippetOverlay &&
-        this.snippetOverlay.classList.contains('open')
-      ) {
-        this._closeSnippetOverlay();
-      }
-    });
-
     document.body.appendChild(overlay);
     this.snippetOverlay = overlay;
+
+    if (!this.escapeHandler) {
+      this.escapeHandler = (event) => {
+        if (event.key === 'Escape') {
+          this._closeContextMenu();
+          this._closeSnippetOverlay();
+        }
+      };
+      document.addEventListener('keydown', this.escapeHandler);
+    }
   }
 
-  _openSnippetOverlay(d) {
-    if (!this._isSnippetNode(d)) return;
+  _openSnippetOverlay(node) {
+    if (!this._isSnippetNode(node)) {
+      return;
+    }
 
     this._ensureSnippetOverlay();
-    this.overlaySnippetNode = d;
+    this.overlaySnippetNode = node;
 
-    const html = this._buildSnippetHTML(d, {
+    const html = this._buildSnippetHTML(node, {
       panelHeight: '100%',
       scrollHeight: 'calc(100vh - 170px)',
       containerWidth: 'min(1200px, calc(100vw - 80px))',
@@ -585,16 +486,20 @@ export default class TopicsMindmap {
   }
 
   _closeSnippetOverlay() {
-    if (!this.snippetOverlay) return;
+    if (!this.snippetOverlay) {
+      return;
+    }
     this.snippetOverlay.classList.remove('open');
     this.snippetOverlay.innerHTML = '';
     this.overlaySnippetNode = null;
     document.body.classList.remove('mindmap-snippet-overlay-open');
   }
 
-  async _toggleSnippetRead(d, snippetIndex, container) {
-    const snippets = d.data._snippets;
-    if (!snippets || !snippets[snippetIndex]) return;
+  async _toggleSnippetRead(node, snippetIndex, container) {
+    const snippets = node.data.snippets;
+    if (!Array.isArray(snippets) || !snippets[snippetIndex]) {
+      return;
+    }
 
     const snippet = snippets[snippetIndex];
     const newRead = !snippet.read;
@@ -615,136 +520,328 @@ export default class TopicsMindmap {
       });
 
       snippet.read = newRead;
-      this._updateSnippetDOM(d, container);
+      this._updateSnippetDOM(node, container);
       if (
-        this.overlaySnippetNode === d &&
+        this.overlaySnippetNode === node &&
         this.snippetOverlay &&
-        this.snippetOverlay.classList.contains('open') &&
-        container !== this.snippetOverlay
+        this.snippetOverlay.classList.contains('open')
       ) {
-        this._updateSnippetDOM(d, this.snippetOverlay);
+        this._updateSnippetDOM(node, this.snippetOverlay);
       }
-    } catch (err) {
-      console.error('Failed to toggle snippet read:', err);
+    } catch (error) {
+      console.error('Failed to toggle snippet read state:', error);
     }
   }
 
-  async _batchToggleRead(d, markRead, container) {
-    const snippets = d.data._snippets;
-    if (!snippets || snippets.length === 0) return;
-
-    const selections = snippets.map((s) => ({
-      post_id: s.post_id,
-      sentence_indices: s.indices,
-    }));
+  async _batchToggleRead(node, shouldRead, container) {
+    const snippets = Array.isArray(node.data.snippets) ? node.data.snippets : [];
+    if (snippets.length === 0) {
+      return;
+    }
 
     try {
       await fetch('/read/snippets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ readed: markRead, selections }),
+        body: JSON.stringify({
+          readed: shouldRead,
+          selections: snippets.map((snippet) => ({
+            post_id: snippet.post_id,
+            sentence_indices: snippet.indices,
+          })),
+        }),
       });
 
-      snippets.forEach((s) => {
-        s.read = markRead;
+      snippets.forEach((snippet) => {
+        snippet.read = shouldRead;
       });
-      this._updateSnippetDOM(d, container);
+      this._updateSnippetDOM(node, container);
       if (
-        this.overlaySnippetNode === d &&
+        this.overlaySnippetNode === node &&
         this.snippetOverlay &&
-        this.snippetOverlay.classList.contains('open') &&
-        container !== this.snippetOverlay
+        this.snippetOverlay.classList.contains('open')
       ) {
-        this._updateSnippetDOM(d, this.snippetOverlay);
+        this._updateSnippetDOM(node, this.snippetOverlay);
       }
-    } catch (err) {
-      console.error('Failed to batch toggle read:', err);
+    } catch (error) {
+      console.error('Failed to batch toggle snippets:', error);
     }
   }
 
-  _updateSnippetDOM(d, container) {
-    const snippets = d.data._snippets || [];
-    const items = container.querySelectorAll('.mindmap-snippet-item');
-    items.forEach((item, i) => {
-      if (!snippets[i]) return;
-      const s = snippets[i];
-      if (s.read) {
-        item.classList.add('read');
-      } else {
-        item.classList.remove('read');
+  _updateSnippetDOM(node, container) {
+    const root = container.querySelector('.mindmap-snippet-container') || container;
+    const items = root.querySelectorAll('.mindmap-snippet-item');
+    const snippets = Array.isArray(node.data.snippets) ? node.data.snippets : [];
+
+    items.forEach((item) => {
+      const index = parseInt(item.dataset.index, 10);
+      const snippet = snippets[index];
+      if (!snippet) {
+        return;
       }
+
+      item.classList.toggle('read', Boolean(snippet.read));
       const btn = item.querySelector('.mindmap-snippet-toggle-btn');
       if (btn) {
-        btn.textContent = s.read ? 'Unread' : 'Read';
-        btn.className = `mindmap-snippet-toggle-btn ${s.read ? 'snippet-tag-read' : 'snippet-tag-unread'}`;
+        btn.textContent = snippet.read ? 'Unread' : 'Read';
+        btn.className = `mindmap-snippet-toggle-btn ${snippet.read ? 'snippet-tag-read' : 'snippet-tag-unread'}`;
       }
     });
   }
 
-  _update(source) {
-    const treeLayout = d3.tree().nodeSize([this.nodeHeight + this.nodeSpacingY, 260]);
-    treeLayout(this.root);
-
-    const nodes = this.root.descendants();
-    const links = this.root.links();
-
-    // Filter out the synthetic root from display
-    const visibleNodes = nodes.filter((d) => d.depth > 0);
-    const visibleLinks = links.filter((d) => d.source.depth > 0);
-
-    // Position nodes horizontally using parent width + fixed gap,
-    // so wide nodes do not overlap their children.
-    if (this.root.children) {
-      this.root.children.forEach((child) => {
-        this._setHorizontalPosition(child, 0);
-      });
+  _ensureContextMenu() {
+    if (this.menuElement) {
+      return;
     }
 
-    // --- NODES ---
+    const menu = document.createElement('div');
+    menu.className = 'mindmap-context-menu';
+    menu.hidden = true;
+    menu.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-action]');
+      if (!button || !this.menuNode) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      if (button.disabled) {
+        return;
+      }
+      const action = button.dataset.action;
+      const selectedNode = this.menuNode;
+      this._closeContextMenu();
+      this._loadActionChildren(selectedNode, action);
+    });
+
+    this.container.appendChild(menu);
+    this.menuElement = menu;
+
+    if (!this.documentClickHandler) {
+      this.documentClickHandler = (event) => {
+        if (
+          this.menuElement &&
+          !this.menuElement.hidden &&
+          !this.menuElement.contains(event.target)
+        ) {
+          this._closeContextMenu();
+        }
+      };
+      document.addEventListener('click', this.documentClickHandler);
+    }
+  }
+
+  _openContextMenu(node, event) {
+    if (!this.menuElement || !this.container) {
+      return;
+    }
+
+    event.stopPropagation();
+    this.menuNode = node;
+    const actions = this._getAvailableActions(node);
+    const activeAction = node.data._activeAction || '';
+    const loadingAction = node.data._loadingAction || '';
+
+    this.menuElement.innerHTML = actions
+      .map((action) => {
+        const isLoading = loadingAction === action;
+        const isActive = activeAction === action;
+        return `<button type="button" class="mindmap-context-menu-item${isActive ? ' active' : ''}" data-action="${action}"${isLoading ? ' disabled' : ''}>${ACTION_LABELS[action] || action}${isLoading ? ' ...' : ''}</button>`;
+      })
+      .join('');
+
+    const containerRect = this.container.getBoundingClientRect();
+    const left = event.clientX - containerRect.left + 8;
+    const top = event.clientY - containerRect.top + 8;
+    this.menuElement.style.left = `${left}px`;
+    this.menuElement.style.top = `${top}px`;
+    this.menuElement.hidden = false;
+  }
+
+  _closeContextMenu() {
+    if (!this.menuElement) {
+      return;
+    }
+    this.menuElement.hidden = true;
+    this.menuNode = null;
+  }
+
+  async _loadActionChildren(node, action) {
+    if (!node || !action) {
+      return;
+    }
+
+    if (node.data._loadingAction) {
+      return;
+    }
+
+    const cacheKey = String(action);
+    const hasCachedChildren =
+      Boolean(node.data._actionChildren) &&
+      Object.prototype.hasOwnProperty.call(node.data._actionChildren, cacheKey);
+    const cachedChildren = hasCachedChildren ? node.data._actionChildren[cacheKey] : null;
+    if (hasCachedChildren) {
+      node.children = cachedChildren;
+      node._children = null;
+      node.data._activeAction = action;
+      this._update(node);
+      return;
+    }
+
+    node.data._loadingAction = action;
+    this._update(node);
+
+    try {
+      const response = await fetch('/api/mindmap-node-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action,
+          scope: this._getNodeScope(node),
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const payload = await response.json();
+      const items = Array.isArray(payload.items) ? payload.items : [];
+      const hierarchyChildren = items.map((item) => this._materializeActionChild(node, item));
+
+      node.data._actionChildren = node.data._actionChildren || {};
+      node.data._actionChildren[cacheKey] = hierarchyChildren;
+      node.data._activeAction = action;
+      if (Array.isArray(payload.available_actions) && payload.available_actions.length > 0) {
+        node.data.available_actions = payload.available_actions;
+      }
+      if (payload.scope && Array.isArray(payload.scope.post_ids)) {
+        node.data.scope = payload.scope;
+      }
+
+      node.children = hierarchyChildren;
+      node._children = null;
+      this._update(node);
+    } catch (error) {
+      console.error('Failed to load mindmap node data:', error);
+    } finally {
+      node.data._loadingAction = '';
+      this._update(node);
+    }
+  }
+
+  _materializeActionChild(parent, item) {
+    const nodeData = {
+      name: item.name || '',
+      value: item.value || 0,
+      node_kind: item.node_kind || 'topic',
+      available_actions: Array.isArray(item.available_actions)
+        ? item.available_actions
+        : this._defaultActionsForNodeKind(item.node_kind || 'topic'),
+      scope: item.scope || {},
+      snippets: Array.isArray(item.snippets) ? item.snippets : [],
+    };
+
+    const child = d3.hierarchy(nodeData);
+    child.parent = parent;
+    child.depth = parent.depth + 1;
+    child.id = this.i++;
+    this._normalizeNodeData(child);
+    return child;
+  }
+
+  _activateNode(node) {
+    const topicClickAction = this.options?.topicClickAction || 'navigate';
+
+    if (this._hasArrow(node)) {
+      this._toggleChildren(node);
+      this._update(node);
+      return;
+    }
+
+    if (topicClickAction === 'toggle') {
+      const availableActions = this._getAvailableActions(node);
+      if (availableActions.includes('subtopics')) {
+        this._loadActionChildren(node, 'subtopics');
+        return;
+      }
+      if (availableActions.includes('sentences')) {
+        this._loadActionChildren(node, 'sentences');
+        return;
+      }
+    }
+
+    if (this._isNavigableNode(node)) {
+      this._navigateToTopic(node);
+    }
+  }
+
+  _navigateToTopic(node) {
+    const scope = this._getNodeScope(node);
+    if (!scope.topic_path || !Array.isArray(scope.post_ids) || scope.post_ids.length === 0) {
+      return;
+    }
+    const postIds = scope.post_ids.join('_');
+    window.location.href = `/post-grouped/${postIds}?topic=${encodeURIComponent(scope.topic_path)}`;
+  }
+
+  _setHorizontalPosition(node, y) {
+    node.y = y;
+    const children = node.children || node._children;
+    if (!children || children.length === 0) {
+      return;
+    }
+    const childY = y + this._nodeWidth(node) + this.nodeGapX;
+    children.forEach((child) => {
+      this._setHorizontalPosition(child, childY);
+    });
+  }
+
+  _update(source) {
+    this._closeContextMenu();
+
+    const treeLayout = d3.tree().nodeSize([this.nodeHeight + this.nodeSpacingY, 120]);
+    treeLayout(this.root);
+    this._setHorizontalPosition(this.root, this.margin.left);
+
+    const visibleNodes = this.root.descendants().filter((node) => node.depth > 0);
+    const visibleLinks = this.root.links().filter((link) => link.source.depth >= 0);
+
     const node = this.gNodes.selectAll('g.mindmap-node').data(visibleNodes, (d) => d.id);
 
-    // Enter
     const nodeEnter = node
       .enter()
       .append('g')
-      .attr('class', (d) => {
+      .attr('class', (nodeData) => {
         let cls = 'mindmap-node';
-        if (this._isSnippetNode(d)) cls += ' mindmap-snippet-group';
-        if (this._isPseudoOrSource(d)) cls += ' mindmap-pseudo-node';
+        if (this._isSnippetNode(nodeData)) {
+          cls += ' mindmap-snippet-group';
+        } else {
+          cls += ` mindmap-node-kind-${nodeData.data.node_kind}`;
+        }
         return cls;
       })
       .attr('transform', () => `translate(${source.y0 || 0},${source.x0 || 0})`)
       .attr('opacity', 0);
 
-    // --- Regular nodes (non-snippet) ---
-    const regularEnter = nodeEnter.filter((d) => !this._isSnippetNode(d));
+    const regularEnter = nodeEnter.filter((nodeData) => !this._isSnippetNode(nodeData));
 
-    // Rounded rect background
     regularEnter
       .append('rect')
-      .attr(
-        'class',
-        (d) =>
-          'mindmap-node-rect' +
-          (this._isPseudoOrSource(d) ? ' mindmap-pseudo-rect' : '') +
-          (this._isTagSearchResult(d) ? ' mindmap-tag-search-result-rect' : '')
-      )
+      .attr('class', 'mindmap-node-rect')
       .attr('x', 0)
       .attr('y', -this.nodeHeight / 2)
-      .attr('width', (d) => this._nodeWidth(d))
+      .attr('width', (nodeData) => this._nodeWidth(nodeData))
       .attr('height', this.nodeHeight)
       .attr('rx', 8)
       .attr('ry', 8)
-      .attr('fill', (d) => (this._isTagSearchResult(d) ? '#fde8c0' : this._depthColor(d.depth)))
-      .attr('stroke', (d) => (this._isTagSearchResult(d) ? '#c8963c' : '#999'))
+      .attr('fill', (nodeData) => this._depthColor(nodeData.depth))
+      .attr('stroke', '#999')
       .attr('stroke-width', 1)
       .attr('cursor', 'pointer')
-      .on('click', (event, d) => {
+      .on('click', (event, nodeData) => {
         event.stopPropagation();
-        this._handleTopicNodeClick(d);
+        this._activateNode(nodeData);
       });
 
-    // Label text
     regularEnter
       .append('text')
       .attr('class', 'mindmap-node-text')
@@ -752,93 +849,72 @@ export default class TopicsMindmap {
       .attr('dy', '0.35em')
       .attr('font-size', '12px')
       .attr('cursor', 'pointer')
-      .text((d) => this._displayNodeLabel(d))
-      .on('click', (event, d) => {
+      .text((nodeData) => this._displayNodeLabel(nodeData))
+      .on('click', (event, nodeData) => {
         event.stopPropagation();
-        this._handleTopicNodeClick(d);
+        this._activateNode(nodeData);
       });
 
-    // Title tooltip
-    regularEnter.append('title').text((d) => {
-      if (this._isPseudoOrSource(d)) return d.data.name || '';
-      const path = d.data._topicPath || d.data.name || '';
-      const count = d.data.value || 0;
-      return `${path} (${count} ${this.options.countLabel})`;
-    });
-
-    // Expand/collapse arrow
     regularEnter
-      .filter((d) => this._hasArrow(d))
+      .append('title')
+      .text((nodeData) => {
+        const scope = this._getNodeScope(nodeData);
+        const title = scope.topic_path || nodeData.data.name || '';
+        const count = nodeData.data.value || 0;
+        return `${title} (${count} ${this.options.countLabel})`;
+      });
+
+    regularEnter
+      .filter((nodeData) => this._hasArrow(nodeData))
       .append('text')
       .attr('class', 'mindmap-node-arrow')
-      .attr('x', (d) => this._nodeWidth(d) - this.nodeArrowWidth)
+      .attr('x', (nodeData) => this._nodeWidth(nodeData) - this.nodeArrowWidth)
       .attr('dy', '0.35em')
       .attr('font-size', '14px')
       .attr('text-anchor', 'middle')
       .attr('cursor', 'pointer')
       .attr('fill', '#555')
-      .text((d) => {
-        if (d.data._loading) return '...';
-        return d.children ? '<' : '>';
-      })
-      .on('click', (event, d) => {
+      .text((nodeData) => (nodeData.children ? '<' : '>'))
+      .on('click', (event, nodeData) => {
         event.stopPropagation();
-        if (this._isSentencesPseudo(d)) {
-          this._expandSentencesPseudo(d);
-        } else if (this._isSourcesPseudo(d)) {
-          this._expandSourcesPseudo(d);
-        } else if (this._isSourceNode(d)) {
-          this._expandSourceNode(d);
-        } else if (this._isLeafTopic(d)) {
-          this._loadSnippets(d);
-        } else {
-          this._toggleChildren(d);
-          this._update(d);
-        }
+        this._toggleChildren(nodeData);
+        this._update(nodeData);
       });
 
-    // Search button (⊕) for topic nodes – opens a tag search for the node's word
     regularEnter
-      .filter((d) => this._hasSearchButton(d))
+      .filter((nodeData) => this._hasMenuButton(nodeData))
       .append('text')
-      .attr('class', 'mindmap-node-search-btn')
-      .attr('x', (d) => this._nodeWidth(d) - this.nodeArrowWidth - this.nodeSearchBtnWidth)
+      .attr('class', 'mindmap-node-menu-btn')
+      .attr('x', (nodeData) => this._nodeWidth(nodeData) - this.nodeArrowWidth - this.nodeMenuBtnWidth)
       .attr('dy', '0.35em')
-      .attr('font-size', '13px')
+      .attr('font-size', '14px')
       .attr('text-anchor', 'middle')
       .attr('cursor', 'pointer')
-      .attr('fill', '#5a7fa0')
-      .text((d) => {
-        if (d.data._tagSearchLoading) return '…';
-        if (d.data._tagSearchDone) return '✓';
-        return '⊕';
-      })
-      .on('click', (event, d) => {
-        event.stopPropagation();
-        this._searchTagsForNode(d);
+      .attr('fill', '#5a6775')
+      .text((nodeData) => (nodeData.data._loadingAction ? '...' : '\u2261'))
+      .on('click', (event, nodeData) => {
+        this._openContextMenu(nodeData, event);
       });
 
-    // Count badge
     regularEnter
-      .filter((d) => d.data.value && !this._isPseudoOrSource(d))
+      .filter((nodeData) => nodeData.data.value)
       .append('text')
       .attr('class', 'mindmap-node-count')
-      .attr('x', (d) => this._nodeWidth(d) + 5)
+      .attr('x', (nodeData) => this._nodeWidth(nodeData) + 5)
       .attr('dy', '0.35em')
       .attr('font-size', '10px')
       .attr('fill', '#888')
-      .text((d) => `(${d.data.value})`);
+      .text((nodeData) => `(${nodeData.data.value})`);
 
-    // --- Snippet nodes ---
-    const snippetEnter = nodeEnter.filter((d) => this._isSnippetNode(d));
+    const snippetEnter = nodeEnter.filter((nodeData) => this._isSnippetNode(nodeData));
 
     snippetEnter
       .append('rect')
       .attr('class', 'mindmap-snippet-panel-bg')
       .attr('x', 0)
-      .attr('y', (d) => -this._nodeHeightFor(d) / 2)
+      .attr('y', (nodeData) => -this._nodeHeightFor(nodeData) / 2)
       .attr('width', this.snippetPanelWidth)
-      .attr('height', (d) => this._nodeHeightFor(d))
+      .attr('height', (nodeData) => this._nodeHeightFor(nodeData))
       .attr('rx', 8)
       .attr('ry', 8)
       .attr('fill', '#fff')
@@ -848,55 +924,46 @@ export default class TopicsMindmap {
     snippetEnter
       .append('foreignObject')
       .attr('x', 4)
-      .attr('y', (d) => -this._nodeHeightFor(d) / 2 + 4)
+      .attr('y', (nodeData) => -this._nodeHeightFor(nodeData) / 2 + 4)
       .attr('width', this.snippetPanelWidth - 8)
-      .attr('height', (d) => this._nodeHeightFor(d) - 8)
+      .attr('height', (nodeData) => this._nodeHeightFor(nodeData) - 8)
       .append('xhtml:div')
-      .html((d) => this._buildSnippetHTML(d));
+      .html((nodeData) => this._buildSnippetHTML(nodeData));
 
     this._setupSnippetEvents(snippetEnter);
 
-    // Update + Enter (merge)
     const nodeUpdate = nodeEnter.merge(node);
 
     nodeUpdate
       .transition()
       .duration(this.duration)
-      .attr('transform', (d) => `translate(${d.y},${d.x})`)
+      .attr('transform', (nodeData) => `translate(${nodeData.y},${nodeData.x})`)
       .attr('opacity', 1);
 
-    // Update arrow direction on merge
-    nodeUpdate.select('.mindmap-node-arrow').text((d) => {
-      if (d.data._loading) return '...';
-      return d.children ? '<' : '>';
-    });
-
-    // Keep width, colors, and labels in sync on updates
     nodeUpdate
       .select('.mindmap-node-rect')
-      .attr('width', (d) => this._nodeWidth(d))
-      .attr('fill', (d) => (this._isTagSearchResult(d) ? '#fde8c0' : this._depthColor(d.depth)))
-      .attr('stroke', (d) => (this._isTagSearchResult(d) ? '#c8963c' : '#999'));
+      .attr('width', (nodeData) => this._nodeWidth(nodeData))
+      .attr('fill', (nodeData) => this._depthColor(nodeData.depth));
 
     nodeUpdate
       .select('.mindmap-node-text')
-      .attr('x', this.nodeLabelPadding)
-      .text((d) => this._displayNodeLabel(d));
+      .text((nodeData) => this._displayNodeLabel(nodeData));
 
     nodeUpdate
       .select('.mindmap-node-arrow')
-      .attr('x', (d) => this._nodeWidth(d) - this.nodeArrowWidth);
+      .attr('x', (nodeData) => this._nodeWidth(nodeData) - this.nodeArrowWidth)
+      .text((nodeData) => (nodeData.children ? '<' : '>'));
 
     nodeUpdate
-      .select('.mindmap-node-search-btn')
-      .attr('x', (d) => this._nodeWidth(d) - this.nodeArrowWidth - this.nodeSearchBtnWidth)
-      .text((d) => {
-        if (d.data._tagSearchLoading) return '…';
-        if (d.data._tagSearchDone) return '✓';
-        return '⊕';
-      });
+      .select('.mindmap-node-menu-btn')
+      .attr('x', (nodeData) => this._nodeWidth(nodeData) - this.nodeArrowWidth - this.nodeMenuBtnWidth)
+      .text((nodeData) => (nodeData.data._loadingAction ? '...' : '\u2261'));
 
-    // Exit
+    nodeUpdate
+      .select('.mindmap-node-count')
+      .attr('x', (nodeData) => this._nodeWidth(nodeData) + 5)
+      .text((nodeData) => (nodeData.data.value ? `(${nodeData.data.value})` : ''));
+
     node
       .exit()
       .transition()
@@ -905,7 +972,6 @@ export default class TopicsMindmap {
       .attr('opacity', 0)
       .remove();
 
-    // --- LINKS ---
     const linkGenerator = d3
       .linkHorizontal()
       .x((d) => d[0])
@@ -913,7 +979,6 @@ export default class TopicsMindmap {
 
     const link = this.gLinks.selectAll('path.mindmap-link').data(visibleLinks, (d) => d.target.id);
 
-    // Enter
     const linkEnter = link
       .enter()
       .append('path')
@@ -923,169 +988,55 @@ export default class TopicsMindmap {
       .attr('stroke-opacity', 0.5)
       .attr('stroke-width', 1.5)
       .attr('d', () => {
-        const o = [source.y0 || 0, source.x0 || 0];
-        return linkGenerator({ source: o, target: o });
+        const origin = [source.y0 || 0, source.x0 || 0];
+        return linkGenerator({ source: origin, target: origin });
       });
 
-    // Update + Enter
     linkEnter
       .merge(link)
       .transition()
       .duration(this.duration)
-      .attr('d', (d) => {
-        const sourceX = d.source.y + this._nodeWidth(d.source);
-        const sourceY = d.source.x;
-        const targetX = d.target.y;
-        const targetY = d.target.x;
+      .attr('d', (linkData) => {
+        const sourceX = linkData.source.y + this._nodeWidth(linkData.source);
+        const sourceY = linkData.source.x;
+        const targetX = linkData.target.y;
+        const targetY = linkData.target.x;
         return linkGenerator({
           source: [sourceX, sourceY],
           target: [targetX, targetY],
         });
       });
 
-    // Exit
     link
       .exit()
       .transition()
       .duration(this.duration)
       .attr('d', () => {
-        const o = [source.y || 0, source.x || 0];
-        return linkGenerator({ source: o, target: o });
+        const origin = [source.y || 0, source.x || 0];
+        return linkGenerator({ source: origin, target: origin });
       })
       .remove();
 
-    // Store old positions for transitions
-    visibleNodes.forEach((d) => {
-      d.x0 = d.x;
-      d.y0 = d.y;
+    visibleNodes.forEach((nodeData) => {
+      nodeData.x0 = nodeData.x;
+      nodeData.y0 = nodeData.y;
     });
-  }
-
-  _setHorizontalPosition(d, y) {
-    d.y = y;
-
-    const children = d.children || d._children;
-    if (!children || children.length === 0) return;
-
-    const childY = y + this._nodeWidth(d) + this.nodeGapX;
-    children.forEach((child) => {
-      this._setHorizontalPosition(child, childY);
-    });
-  }
-
-  _activateTopicNode(d) {
-    if (this._isSentencesPseudo(d)) {
-      this._expandSentencesPseudo(d);
-      return;
-    }
-    if (this._isSourcesPseudo(d)) {
-      this._expandSourcesPseudo(d);
-      return;
-    }
-    if (this._isSourceNode(d)) {
-      this._expandSourceNode(d);
-      return;
-    }
-    if (this._isLeafTopic(d)) {
-      this._loadSnippets(d);
-      return;
-    }
-
-    this._toggleChildren(d);
-    this._update(d);
-  }
-
-  _navigateToTopic(d) {
-    // Tag search result nodes link to the tag page
-    if (this._isTagSearchResult(d)) {
-      if (d.data._tagUrl) window.location.href = d.data._tagUrl;
-      return;
-    }
-
-    // No-op for pseudo-nodes and source nodes
-    if (this._isPseudoOrSource(d)) return;
-
-    const topicPath = d.data._topicPath;
-    const topicPosts = d.data._topicPosts;
-    if (topicPath && topicPosts && topicPosts.length > 0) {
-      const postIds = topicPosts.join('_');
-      const url = `/post-grouped/${postIds}?topic=${encodeURIComponent(topicPath)}`;
-      window.location.href = url;
-    }
-  }
-
-  _handleTopicNodeClick(d) {
-    if (this._isTagSearchResult(d)) {
-      this._navigateToTopic(d);
-      return;
-    }
-
-    if (this.options.topicClickAction === 'toggle') {
-      this._activateTopicNode(d);
-      return;
-    }
-
-    this._navigateToTopic(d);
-  }
-
-  async _searchTagsForNode(d) {
-    if (d.data._tagSearchLoading || d.data._tagSearchDone) return;
-
-    const word = (d.data.name || '').trim();
-    if (!word) return;
-
-    d.data._tagSearchLoading = true;
-    this._update(d);
-
-    try {
-      const resp = await fetch(`/api/mindmap-tag-search?word=${encodeURIComponent(word)}`);
-      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-      const data = await resp.json();
-
-      d.data._tagSearchLoading = false;
-      d.data._tagSearchDone = true;
-
-      const tags = data.tags || [];
-
-      if (tags.length > 0) {
-        const tagNodes = tags.map((tag) => {
-          const tagData = {
-            name: tag.tag,
-            value: tag.posts_count,
-            _isTagSearchResult: true,
-            _tagUrl: tag.url,
-          };
-          const node = d3.hierarchy(tagData);
-          node.depth = d.depth + 1;
-          node.parent = d;
-          node.id = this.i++;
-          return node;
-        });
-
-        // Merge with existing children; expand the node so results are visible
-        const base = d.children || d._children || [];
-        d.children = [...base, ...tagNodes];
-        d._children = null;
-      }
-
-      this._update(d);
-    } catch (err) {
-      d.data._tagSearchLoading = false;
-      console.error('Failed to search tags for node:', err);
-      this._update(d);
-    }
   }
 
   _fitToView() {
-    const svgEl = this.svg.node();
-    const gEl = this.gMain.node();
-    if (!svgEl || !gEl) return;
+    const svgElement = this.svg?.node();
+    const graphElement = this.gMain?.node();
+    if (!svgElement || !graphElement) {
+      return;
+    }
 
-    const bounds = gEl.getBBox();
-    if (bounds.width === 0 || bounds.height === 0) return;
+    const bounds = graphElement.getBBox();
+    if (bounds.width === 0 || bounds.height === 0) {
+      return;
+    }
 
-    const svgWidth = svgEl.clientWidth || svgEl.getBoundingClientRect().width;
-    const svgHeight = svgEl.clientHeight || svgEl.getBoundingClientRect().height;
+    const svgWidth = svgElement.clientWidth || svgElement.getBoundingClientRect().width;
+    const svgHeight = svgElement.clientHeight || svgElement.getBoundingClientRect().height;
     const padding = 40;
 
     const scale = Math.min(
@@ -1093,14 +1044,13 @@ export default class TopicsMindmap {
       (svgHeight - padding * 2) / bounds.height,
       1.5
     );
-
-    const tx = padding - bounds.x * scale;
-    const ty = svgHeight / 2 - (bounds.y + bounds.height / 2) * scale;
+    const translateX = padding - bounds.x * scale;
+    const translateY = svgHeight / 2 - (bounds.y + bounds.height / 2) * scale;
 
     this.svg
       .transition()
       .duration(500)
-      .call(this.zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+      .call(this.zoom.transform, d3.zoomIdentity.translate(translateX, translateY).scale(scale));
   }
 
   _addResetButton(container) {

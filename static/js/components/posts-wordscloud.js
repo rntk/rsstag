@@ -1,5 +1,5 @@
 'use strict';
-import cloud from '../libs/cloud.min';
+import cloud from '../libs/cloud.min.js';
 import { stopwords } from '../libs/stopwords.js';
 
 export default class PostsWordsCloud {
