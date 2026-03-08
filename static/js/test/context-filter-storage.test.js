@@ -6,8 +6,8 @@ import ContextFilterStorage from '../storages/context-filter-storage.js';
 class FakeEventSystem {
   constructor() {
     this.CONTEXT_FILTER_UPDATED = 'context_filter_updated';
-    this.CONTEXT_FILTER_ADD_TAG = 'context_filter_add_tag';
-    this.CONTEXT_FILTER_REMOVE_TAG = 'context_filter_remove_tag';
+    this.CONTEXT_FILTER_ADD = 'context_filter_add';
+    this.CONTEXT_FILTER_REMOVE = 'context_filter_remove';
     this.CONTEXT_FILTER_CLEAR = 'context_filter_clear';
     this.boundHandlers = new Map();
     this.triggered = [];
@@ -50,7 +50,7 @@ test('fetchFilter stores API state and emits update', async () => {
 
     return {
       async json() {
-        return { data: { active: true, tags: ['alpha', 'beta'] } };
+        return { data: { active: true, filters: { tags: ['alpha', 'beta'], feeds: [] } } };
       },
     };
   };
@@ -60,14 +60,26 @@ test('fetchFilter stores API state and emits update', async () => {
 
     assert.deepEqual(storage.getState(), {
       active: true,
-      tags: ['alpha', 'beta'],
+      filters: {
+        tags: ['alpha', 'beta'],
+        feeds: [],
+        categories: [],
+        topics: [],
+        subtopics: [],
+      },
     });
     assert.deepEqual(eventSystem.triggered, [
       [
         'context_filter_updated',
         {
           active: true,
-          tags: ['alpha', 'beta'],
+          filters: {
+            tags: ['alpha', 'beta'],
+            feeds: [],
+            categories: [],
+            topics: [],
+            subtopics: [],
+          },
         },
       ],
     ]);
@@ -76,7 +88,7 @@ test('fetchFilter stores API state and emits update', async () => {
   }
 });
 
-test('addTag posts JSON, updates state, and reloads the page', async () => {
+test('addFilter posts JSON, updates state, and reloads the page', async () => {
   const eventSystem = new FakeEventSystem();
   const storage = new ContextFilterStorage(eventSystem);
   const previousFetch = globalThis.fetch;
@@ -93,17 +105,23 @@ test('addTag posts JSON, updates state, and reloads the page', async () => {
 
     return {
       async json() {
-        return { data: 'ok', tags: ['alpha', 'beta'] };
+        return { data: 'ok', filters: { tags: ['alpha', 'beta'] } };
       },
     };
   };
 
   try {
-    await storage.addTag('beta');
+    await storage.addFilter({ type: 'tags', value: 'beta' });
 
     assert.deepEqual(storage.getState(), {
       active: true,
-      tags: ['alpha', 'beta'],
+      filters: {
+        tags: ['alpha', 'beta'],
+        feeds: [],
+        categories: [],
+        topics: [],
+        subtopics: [],
+      },
     });
     assert.equal(windowStub.getReloadCount(), 1);
   } finally {
@@ -125,8 +143,8 @@ test('start binds event handlers and kicks off the initial fetch', async () => {
   try {
     storage.start();
 
-    assert.equal(typeof eventSystem.boundHandlers.get('context_filter_add_tag'), 'function');
-    assert.equal(typeof eventSystem.boundHandlers.get('context_filter_remove_tag'), 'function');
+    assert.equal(typeof eventSystem.boundHandlers.get('context_filter_add'), 'function');
+    assert.equal(typeof eventSystem.boundHandlers.get('context_filter_remove'), 'function');
     assert.equal(typeof eventSystem.boundHandlers.get('context_filter_clear'), 'function');
     assert.equal(fetchFilterCalls, 1);
   } finally {
