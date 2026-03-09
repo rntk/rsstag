@@ -28,6 +28,7 @@ import TagNetTools from '../components/tag-net-tools.js';
 import GlobalStatus from '../components/global-status.js';
 import TagMentionsStorage from '../storages/tag-mentions-storage.js';
 import TagMentionsChart from '../components/tag-mentions-chart.js';
+import TagTopicsRadar from '../components/tag-topics-radar.js';
 import WordTreeStorage from '../storages/wordtree-storage.js';
 import WordTree from '../components/wordtree.js';
 //import PostsWordTree from '../components/posts-wordtree.js';
@@ -820,6 +821,16 @@ function tagWithContextInfoPage(tag) {
     document.getElementById('load_llm_topics')
   );
   tag_llm_topics_storage.start();
+
+  const tag_topics_radar_evsys = new EventsSystem();
+  const tag_topics_radar_storage = new TagsStorage(tag_topics_radar_evsys, '/tag-grouped-topics');
+  const topics_radar = new TagTopicsRadar('#tag_topics_radar', tag_topics_radar_evsys);
+  ReactDOM.render(
+    <TagButton ES={tag_topics_radar_evsys} title="topics radar" tag={tag} />,
+    document.getElementById('load_topics_radar')
+  );
+  topics_radar.start();
+  tag_topics_radar_storage.start();
 
   const tag_mentions_evsys = new EventsSystem();
   const tag_mentions_chart = new TagMentionsChart('#mentions_chart', tag_mentions_evsys);

@@ -975,6 +975,7 @@ def on_tag_grouped_topics_get(
 
     topic_counts = defaultdict(int)
     topic_pids = defaultdict(set)
+    topic_lengths = defaultdict(int)
 
     for post in cursor:
         pid = post["pid"]
@@ -999,7 +1000,8 @@ def on_tag_grouped_topics_get(
                 logging.error("Failed to decompress content for post %s: %s", pid, e)
                 continue
 
-        # Find which sentences contain the tag words
+        # Build sentence number → text length map
+        sentence_lengths: dict = {}
         matching_indices = set()
         for sentence in grouping["sentences"]:
             text = sentence.get("text")
@@ -1008,15 +1010,19 @@ def on_tag_grouped_topics_get(
                 s_end = sentence.get("end")
                 if s_start is not None and s_end is not None:
                     text = content_plain[s_start:s_end]
-
+            num = sentence["number"]
+            sentence_lengths[num] = len(text) if text else 0
             if text and word_re.search(text):
-                matching_indices.add(sentence["number"])
+                matching_indices.add(num)
 
         # Find topics associated with these sentences
         for topic, indices in grouping["groups"].items():
             if any(idx in matching_indices for idx in indices):
                 topic_counts[topic] += 1
                 topic_pids[topic].add(pid)
+                topic_lengths[topic] += sum(
+                    sentence_lengths.get(idx, 0) for idx in indices
+                )
 
     all_topics = []
     for topic, count in topic_counts.items():
@@ -1029,6 +1035,7 @@ def on_tag_grouped_topics_get(
                     params={"pids": pids_str, "topic": topic},
                 ),
                 "count": count,
+                "total_length": topic_lengths[topic],
                 "words": [],
                 "sentiment": [],
             }
