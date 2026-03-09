@@ -2100,7 +2100,16 @@ h3.post_title {
   }
 
   .snippet-context {
-    display: inline;
+    display: block;
+    transition:
+      opacity 0.28s ease,
+      transform 0.28s ease;
+  }
+
+  .snippet-context + .snippet-context {
+    margin-top: 0.85rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #edf2f7;
   }
 
   .snippet-context-before,
@@ -2111,6 +2120,10 @@ h3.post_title {
   .snippet-context-base {
     color: #27323c;
     font-weight: 500;
+  }
+
+  .snippet-context-new {
+    animation: snippet-context-fade-in 0.42s ease-out;
   }
 
   .snippet-text a {
@@ -2230,6 +2243,18 @@ h3.post_title {
       pointer-events: auto;
       transform: none;
     }
+  }
+}
+
+@keyframes snippet-context-fade-in {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 

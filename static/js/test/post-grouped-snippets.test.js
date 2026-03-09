@@ -87,16 +87,16 @@ test('renderExpandedSnippet updates markup, visible indices, and button state', 
 
   renderExpandedSnippet(snippetItem, {
     visible_indices: [1, 2, 3],
-    before: { html: 'Before' },
-    base: { html: 'Base' },
-    after: { html: 'After' },
+    before: { html: 'Before', indices: [1] },
+    base: { html: 'Base', indices: [2] },
+    after: { html: 'After', indices: [3] },
     can_extend_before: false,
     can_extend_after: true,
   });
 
-  assert.match(snippetText.innerHTML, /snippet-context-before/);
-  assert.match(snippetText.innerHTML, /snippet-context-base/);
-  assert.match(snippetText.innerHTML, /snippet-context-after/);
+  assert.match(snippetText.innerHTML, /<div class="snippet-context snippet-context-before snippet-context-new">/);
+  assert.match(snippetText.innerHTML, /<div class="snippet-context snippet-context-base">/);
+  assert.match(snippetText.innerHTML, /<div class="snippet-context snippet-context-after snippet-context-new">/);
   assert.equal(snippetItem.dataset.visibleIndices, '1,2,3');
   assert.equal(snippetItem.dataset.canExtendBefore, '0');
   assert.equal(snippetItem.dataset.canExtendAfter, '1');
@@ -137,9 +137,9 @@ test('renderExpandedSnippet disables the button when no more context exists', ()
 
   renderExpandedSnippet(snippetItem, {
     visible_indices: [1, 2],
-    before: { html: '' },
-    base: { html: 'Base' },
-    after: { html: '' },
+    before: { html: '', indices: [] },
+    base: { html: 'Base', indices: [1, 2] },
+    after: { html: '', indices: [] },
     can_extend_before: false,
     can_extend_after: false,
   });

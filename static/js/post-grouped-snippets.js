@@ -19,7 +19,7 @@ function buildSnippetSegmentMarkup(segment, className) {
     return '';
   }
 
-  return `<span class="snippet-context ${className}">${segment.html}</span>`;
+  return `<div class="snippet-context ${className}">${segment.html}</div>`;
 }
 
 function updateExtendContextButton(button, contextData) {
@@ -40,10 +40,38 @@ function renderExpandedSnippet(snippetItem, contextData) {
     return;
   }
 
+  const previousVisibleIndices = parseIndices(snippetItem.dataset.visibleIndices);
+  const previousFirstIndex = previousVisibleIndices.length ? previousVisibleIndices[0] : null;
+  const previousLastIndex = previousVisibleIndices.length
+    ? previousVisibleIndices[previousVisibleIndices.length - 1]
+    : null;
+  const beforeSegmentClasses = ['snippet-context-before'];
+  const afterSegmentClasses = ['snippet-context-after'];
+
+  if (
+    contextData.before &&
+    contextData.before.indices &&
+    contextData.before.indices.length &&
+    previousFirstIndex !== null &&
+    contextData.before.indices[0] < previousFirstIndex
+  ) {
+    beforeSegmentClasses.push('snippet-context-new');
+  }
+
+  if (
+    contextData.after &&
+    contextData.after.indices &&
+    contextData.after.indices.length &&
+    previousLastIndex !== null &&
+    contextData.after.indices[contextData.after.indices.length - 1] > previousLastIndex
+  ) {
+    afterSegmentClasses.push('snippet-context-new');
+  }
+
   snippetText.innerHTML = [
-    buildSnippetSegmentMarkup(contextData.before, 'snippet-context-before'),
+    buildSnippetSegmentMarkup(contextData.before, beforeSegmentClasses.join(' ')),
     buildSnippetSegmentMarkup(contextData.base, 'snippet-context-base'),
-    buildSnippetSegmentMarkup(contextData.after, 'snippet-context-after'),
+    buildSnippetSegmentMarkup(contextData.after, afterSegmentClasses.join(' ')),
   ]
     .filter(Boolean)
     .join(' ');
@@ -73,6 +101,29 @@ function loadSnippetContext(postId, baseIndices, visibleIndices) {
       step: CONTEXT_STEP,
     }),
   }).then((response) => response.json());
+}
+
+function preserveBaseSnippetPosition(snippetItem, renderFn) {
+  const baseSegment = snippetItem.querySelector('.snippet-context-base');
+  const beforeTop = baseSegment ? baseSegment.getBoundingClientRect().top : null;
+
+  renderFn();
+
+  if (beforeTop === null) {
+    return;
+  }
+
+  window.requestAnimationFrame(() => {
+    const nextBaseSegment = snippetItem.querySelector('.snippet-context-base');
+    if (!nextBaseSegment) {
+      return;
+    }
+    const afterTop = nextBaseSegment.getBoundingClientRect().top;
+    const delta = afterTop - beforeTop;
+    if (delta !== 0) {
+      window.scrollBy(0, delta);
+    }
+  });
 }
 
 document.addEventListener('click', (event) => {
@@ -173,7 +224,9 @@ document.addEventListener('click', (event) => {
     loadSnippetContext(postId, baseIndices, visibleIndices.length ? visibleIndices : baseIndices)
       .then((payload) => {
         if (payload && payload.data) {
-          renderExpandedSnippet(snippetItem, payload.data);
+          preserveBaseSnippetPosition(snippetItem, () => {
+            renderExpandedSnippet(snippetItem, payload.data);
+          });
         } else {
           throw new Error('Missing snippet context payload');
         }
