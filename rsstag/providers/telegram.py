@@ -340,6 +340,7 @@ class TelegramProvider:
             all_repeats += 1
             r = self._tlg.request(query)
             if r.update is not None:
+                empty_repeats = 0
                 return r
             if not r.error:
                 empty_repeats += 1
@@ -347,8 +348,14 @@ class TelegramProvider:
                     logging.warning(
                         "Max empty repeats reached for telegram request: %s", query
                     )
+                    r.error = {
+                        "@type": "error",
+                        "code": 598,
+                        "message": "Max empty repeats reached",
+                    }
                     return r
             if r.error:
+                empty_repeats = 0
                 # example: {'@type': 'error', 'code': 429, 'message': 'Too Many Requests: retry after 77616', '@extra': {'req_id': '1643864060.31774_9523'}, '@client_id': 1}
                 if "code" in r.error:
                     code = r.error["code"]
