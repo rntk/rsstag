@@ -83,6 +83,23 @@ class TestContextFilterManager(unittest.TestCase):
             combined,
         )
 
+
+    def test_from_dict_accepts_canonical_shapes(self):
+        restored = ContextFilterManager.from_dict(
+            {
+                "tags": {"type": "tags", "tags": ["python"]},
+                "feeds": {"type": "feeds", "feed_ids": ["feed-1"]},
+                "categories": {"type": "categories", "category_ids": ["cat-1"]},
+                "topic": {"type": "topic", "topic_path": "Root > Child"},
+                "subtopic": {"type": "subtopic", "topic_path": "Root > Child > Node"},
+            }
+        )
+
+        self.assertEqual(["python"], restored.get_tag_filter().tags)
+        self.assertEqual(["feed-1"], restored.get_feed_filter().feed_ids)
+        self.assertEqual(["cat-1"], restored.get_category_filter().category_ids)
+        self.assertEqual("Root > Child", restored.get_topic_filter().topic_path)
+        self.assertEqual("Root > Child > Node", restored.get_subtopic_filter().topic_path)
     def test_serialization_roundtrip_supports_all_filter_types(self):
         manager = ContextFilterManager(
             {
