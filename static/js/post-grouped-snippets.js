@@ -1,6 +1,79 @@
 // Post Grouped Snippets functionality
 
 const tagsCache = {};
+const CONTEXT_STEP = 1;
+
+function parseIndices(value) {
+  if (!value) {
+    return [];
+  }
+
+  const parts = Array.isArray(value) ? value : String(value).split(',');
+  return parts
+    .map((item) => Number.parseInt(String(item).trim(), 10))
+    .filter((item) => Number.isInteger(item));
+}
+
+function buildSnippetSegmentMarkup(segment, className) {
+  if (!segment || !segment.html) {
+    return '';
+  }
+
+  return `<span class="snippet-context ${className}">${segment.html}</span>`;
+}
+
+function updateExtendContextButton(button, contextData) {
+  const canExtend =
+    Boolean(contextData && contextData.can_extend_before) ||
+    Boolean(contextData && contextData.can_extend_after);
+
+  button.disabled = !canExtend;
+  button.textContent = canExtend ? 'Extend context' : 'Full context shown';
+  button.title = canExtend
+    ? 'Load more adjacent sentences from this post'
+    : 'All available adjacent sentences are already shown';
+}
+
+function renderExpandedSnippet(snippetItem, contextData) {
+  const snippetText = snippetItem.querySelector('.snippet-text');
+  if (!snippetText || !contextData || !contextData.base) {
+    return;
+  }
+
+  snippetText.innerHTML = [
+    buildSnippetSegmentMarkup(contextData.before, 'snippet-context-before'),
+    buildSnippetSegmentMarkup(contextData.base, 'snippet-context-base'),
+    buildSnippetSegmentMarkup(contextData.after, 'snippet-context-after'),
+  ]
+    .filter(Boolean)
+    .join(' ');
+
+  snippetItem.dataset.visibleIndices = (contextData.visible_indices || []).join(',');
+  snippetItem.dataset.canExtendBefore = contextData.can_extend_before ? '1' : '0';
+  snippetItem.dataset.canExtendAfter = contextData.can_extend_after ? '1' : '0';
+
+  const visibleIndicesLabel = snippetItem.querySelector('.snippet-visible-indices');
+  if (visibleIndicesLabel) {
+    visibleIndicesLabel.textContent = (contextData.visible_indices || []).join(', ');
+  }
+
+  const button = snippetItem.querySelector('.extend-snippet-context-btn');
+  if (button) {
+    updateExtendContextButton(button, contextData);
+  }
+}
+
+function loadSnippetContext(postId, baseIndices, visibleIndices) {
+  return fetch(`/post-snippet-context/${postId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      base_indices: baseIndices,
+      visible_indices: visibleIndices,
+      step: CONTEXT_STEP,
+    }),
+  }).then((response) => response.json());
+}
 
 document.addEventListener('click', (event) => {
   // Show tags button
@@ -80,13 +153,47 @@ document.addEventListener('click', (event) => {
     return;
   }
 
+  const extendBtn = event.target.closest('.extend-snippet-context-btn');
+  if (extendBtn) {
+    const snippetItem = extendBtn.closest('.snippet-item');
+    if (!snippetItem || extendBtn.disabled) {
+      return;
+    }
+
+    const postId = snippetItem.dataset.postId || extendBtn.dataset.postId;
+    const baseIndices = parseIndices(snippetItem.dataset.baseIndices);
+    const visibleIndices = parseIndices(snippetItem.dataset.visibleIndices);
+    if (!postId || !baseIndices.length) {
+      return;
+    }
+
+    extendBtn.disabled = true;
+    extendBtn.textContent = 'Loading...';
+
+    loadSnippetContext(postId, baseIndices, visibleIndices.length ? visibleIndices : baseIndices)
+      .then((payload) => {
+        if (payload && payload.data) {
+          renderExpandedSnippet(snippetItem, payload.data);
+        } else {
+          throw new Error('Missing snippet context payload');
+        }
+      })
+      .catch((err) => {
+        console.error(err);
+        alert('Failed to load more context');
+        updateExtendContextButton(extendBtn, {
+          can_extend_before: snippetItem.dataset.canExtendBefore !== '0',
+          can_extend_after: snippetItem.dataset.canExtendAfter !== '0',
+        });
+      });
+    return;
+  }
+
   // Individual toggle
   const toggleBtn = event.target.closest('.toggle-read-btn');
   if (toggleBtn) {
     const postId = toggleBtn.dataset.postId;
-    const indices = toggleBtn.dataset.indices
-      ? toggleBtn.dataset.indices.split(',').filter(Boolean).map(Number)
-      : [];
+    const indices = parseIndices(toggleBtn.dataset.indices);
     const currentlyRead = toggleBtn.dataset.read === '1';
 
     const selections = [
@@ -140,9 +247,7 @@ function getAllDisplayedSelections() {
   const elements = document.querySelectorAll('.toggle-read-btn');
   elements.forEach((el) => {
     const postId = el.dataset.postId;
-    const indices = el.dataset.indices
-      ? el.dataset.indices.split(',').filter(Boolean).map(Number)
-      : [];
+    const indices = parseIndices(el.dataset.indices);
     if (postId && indices.length) {
       selections.push({
         post_id: postId,

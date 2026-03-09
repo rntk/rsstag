@@ -559,6 +559,11 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/post-snippet-context/<string:post_id>",
+                "endpoint": "on_post_snippet_context_post",
+                "methods": ["POST"],
+            },
+            {
                 "url": "/read/snippets",
                 "endpoint": "on_read_snippets_post",
                 "methods": ["POST"],

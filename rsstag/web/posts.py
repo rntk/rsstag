@@ -13,6 +13,7 @@ from jinja2 import Template
 if TYPE_CHECKING:
     from rsstag.web.app import RSSTagApplication
 from rsstag.snippets import (
+    build_expanded_snippet_context,
     merge_grouped_snippets,
     snippet_text_from_sentence,
     strip_html_markup,
@@ -379,6 +380,20 @@ def _serialize_snippet_for_api(snippet: dict[str, Any]) -> dict[str, Any]:
         "post_tags": list(snippet.get("post_tags", [])),
         "topic": snippet.get("topic", ""),
     }
+
+
+def _parse_snippet_indices(value: Any) -> list[int]:
+    """Normalize snippet index payloads from JSON requests."""
+    if not isinstance(value, list):
+        return []
+
+    indices: list[int] = []
+    for item in value:
+        try:
+            indices.append(int(item))
+        except (TypeError, ValueError):
+            continue
+    return indices
 
 
 def _load_posts_for_snippets(
@@ -2533,6 +2548,76 @@ def on_sentence_cluster_topic_snippets_get(
             }
         ),
         mimetype="application/json",
+    )
+
+
+def on_post_snippet_context_post(
+    app: "RSSTagApplication", user: dict, request: Request, post_id: str
+) -> Response:
+    """Return progressively expanded context for one snippet in one post."""
+    payload: Any = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return Response(
+            json.dumps({"error": "JSON payload is required"}),
+            mimetype="application/json",
+            status=400,
+        )
+
+    base_indices: list[int] = _parse_snippet_indices(payload.get("base_indices"))
+    if not base_indices:
+        return Response(
+            json.dumps({"error": "base_indices must be a non-empty list"}),
+            mimetype="application/json",
+            status=400,
+        )
+
+    visible_indices: list[int] = _parse_snippet_indices(payload.get("visible_indices"))
+    try:
+        step: int = max(int(payload.get("step", 1)), 1)
+    except (TypeError, ValueError):
+        step = 1
+
+    grouped_post: Optional[dict[str, Any]] = app.post_grouping.get_grouped_posts(
+        user["sid"], [post_id]
+    )
+    if (
+        not grouped_post
+        or not isinstance(grouped_post.get("sentences"), list)
+        or not grouped_post.get("sentences")
+    ):
+        return Response(
+            json.dumps({"error": "Grouped post sentences not found"}),
+            mimetype="application/json",
+            status=404,
+        )
+
+    all_posts, _ = _load_posts_for_snippets(app, user, [post_id])
+    post_data: Optional[dict[str, Any]] = all_posts.get(post_id)
+    if not post_data:
+        return Response(
+            json.dumps({"error": "Post not found"}),
+            mimetype="application/json",
+            status=404,
+        )
+
+    context_payload: Optional[dict[str, Any]] = build_expanded_snippet_context(
+        post_data["raw_content"],
+        list(grouped_post.get("sentences", [])),
+        base_indices=base_indices,
+        visible_indices=visible_indices,
+        step=step,
+    )
+    if not context_payload:
+        return Response(
+            json.dumps({"error": "Snippet context not found"}),
+            mimetype="application/json",
+            status=404,
+        )
+
+    return Response(
+        json.dumps({"data": context_payload}),
+        mimetype="application/json",
+        status=200,
     )
 
 

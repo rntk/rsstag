@@ -142,6 +142,32 @@ class TestWebSentenceClusters(MongoWebTestCase):
         self.assertIn("Another sentence Another follow up", all_texts)
         self.assertNotIn("Sentence three", all_texts)
 
+    def test_post_snippet_context_api_expands_visible_sentence_window(self) -> None:
+        _, sid = self._seed_sentence_cluster_fixture()
+        client = self.get_authenticated_client(sid)
+
+        response = client.post(
+            "/post-snippet-context/p1",
+            json={
+                "base_indices": [1, 2],
+                "visible_indices": [1, 2],
+                "step": 1,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        assert payload is not None
+
+        context_payload = payload["data"]
+        self.assertEqual(context_payload["base"]["indices"], [1, 2])
+        self.assertEqual(context_payload["visible_indices"], [1, 2, 3])
+        self.assertEqual(context_payload["before"]["indices"], [])
+        self.assertEqual(context_payload["after"]["indices"], [3])
+        self.assertEqual(context_payload["after"]["text"], "Sentence three")
+        self.assertFalse(context_payload["can_extend_before"])
+        self.assertFalse(context_payload["can_extend_after"])
+
     def test_mindmap_node_data_returns_scope_aware_cluster_actions(self) -> None:
         _, sid = self._seed_sentence_cluster_fixture()
         client = self.get_authenticated_client(sid)
@@ -339,6 +365,20 @@ class TestWebSentenceClusters(MongoWebTestCase):
         self.assertIn("Another sentence Another follow up", texts)
         self.assertNotIn("Sentence three", texts)
 
+        context_response = client.post(
+            "/post-snippet-context/p1",
+            json={
+                "base_indices": [1, 2],
+                "visible_indices": [1, 2],
+                "step": 1,
+            },
+        )
+        self.assertEqual(context_response.status_code, 200)
+        context_payload = context_response.get_json()
+        assert context_payload is not None
+        self.assertEqual(context_payload["data"]["after"]["indices"], [3])
+        self.assertEqual(context_payload["data"]["after"]["text"], "Sentence three")
+
     def test_snippet_pages_render_sanitized_html(self) -> None:
         user, sid = self.seed_test_user("snippethtml")
         self.test_db.feeds.insert_one(
@@ -419,3 +459,22 @@ class TestWebSentenceClusters(MongoWebTestCase):
         self.assertNotIn("<script>", grouped_html)
         self.assertNotIn("onclick=", cluster_html)
         self.assertNotIn("<script>", cluster_html)
+
+    def test_snippet_pages_render_extend_context_controls(self) -> None:
+        _, sid = self._seed_sentence_cluster_fixture()
+        client = self.get_authenticated_client(sid)
+
+        grouped_response = client.get("/post-grouped-snippets/p1")
+        cluster_response = client.get("/sentence-clusters/5")
+
+        grouped_html = grouped_response.get_data(as_text=True)
+        cluster_html = cluster_response.get_data(as_text=True)
+
+        self.assertEqual(grouped_response.status_code, 200)
+        self.assertEqual(cluster_response.status_code, 200)
+        self.assertIn("extend-snippet-context-btn", grouped_html)
+        self.assertIn('data-base-indices="1,2"', grouped_html)
+        self.assertIn('data-visible-indices="1,2"', grouped_html)
+        self.assertIn("snippet-context-base", grouped_html)
+        self.assertIn("extend-snippet-context-btn", cluster_html)
+        self.assertIn("Visible:", cluster_html)

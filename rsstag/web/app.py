@@ -650,6 +650,13 @@ class RSSTagApplication(object):
             self, user, request, cluster_id
         )
 
+    def on_post_snippet_context_post(
+        self, user: dict, request: Request, post_id: str
+    ) -> Response:
+        return posts_handlers.on_post_snippet_context_post(
+            self, user, request, post_id
+        )
+
     def on_topics_mindmap_get(self, user: dict, request: Request) -> Response:
         return posts_handlers.on_topics_mindmap_get(self, user, request)
 

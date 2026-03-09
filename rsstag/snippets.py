@@ -3,7 +3,7 @@
 import html
 import re
 from html.parser import HTMLParser
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
 ALLOWED_SNIPPET_TAGS: set[str] = {
@@ -240,3 +240,114 @@ def merge_grouped_snippets(
             topics_data[topic] = snippets
 
     return topics_data
+
+
+def _normalize_sentence_numbers(
+    values: List[int], available_numbers: set[int]
+) -> List[int]:
+    """Return unique sentence numbers preserving numeric order."""
+    normalized_values: set[int] = set()
+    for value in values:
+        try:
+            normalized_value: int = int(value)
+        except (TypeError, ValueError):
+            continue
+        if normalized_value in available_numbers:
+            normalized_values.add(normalized_value)
+
+    return sorted(normalized_values)
+
+
+def _build_snippet_segment(
+    raw_content: str,
+    sentences_map: Dict[int, Dict[str, Any]],
+    indices: List[int],
+) -> Dict[str, Any]:
+    """Build one snippet segment payload from concrete sentence indices."""
+    html_parts: List[str] = []
+    text_parts: List[str] = []
+
+    for index in indices:
+        sentence: Optional[Dict[str, Any]] = sentences_map.get(index)
+        if not sentence:
+            continue
+
+        sentence_text: str = snippet_text_from_sentence(raw_content, sentence)
+        sentence_html: str = snippet_html_from_sentence(raw_content, sentence)
+        if sentence_text:
+            text_parts.append(sentence_text)
+        if sentence_html:
+            html_parts.append(sentence_html)
+        elif sentence_text:
+            html_parts.append(html.escape(sentence_text))
+
+    return {
+        "indices": indices,
+        "text": " ".join(text_parts).strip(),
+        "html": " ".join(html_parts).strip(),
+    }
+
+
+def build_expanded_snippet_context(
+    raw_content: str,
+    sentences: List[Dict[str, Any]],
+    base_indices: List[int],
+    visible_indices: Optional[List[int]] = None,
+    step: int = 1,
+) -> Optional[Dict[str, Any]]:
+    """Expand one snippet window by adjacent sentences on each side."""
+    sentences_map: Dict[int, Dict[str, Any]] = {
+        int(sentence["number"]): sentence
+        for sentence in sentences
+        if "number" in sentence
+    }
+    if not sentences_map:
+        return None
+
+    ordered_numbers: List[int] = sorted(sentences_map.keys())
+    positions_by_number: Dict[int, int] = {
+        sentence_number: position
+        for position, sentence_number in enumerate(ordered_numbers)
+    }
+    available_numbers: set[int] = set(ordered_numbers)
+    normalized_base: List[int] = _normalize_sentence_numbers(base_indices, available_numbers)
+    if not normalized_base:
+        return None
+
+    normalized_visible: List[int] = _normalize_sentence_numbers(
+        visible_indices or normalized_base, available_numbers
+    )
+    if not normalized_visible:
+        normalized_visible = list(normalized_base)
+
+    base_positions: List[int] = [positions_by_number[index] for index in normalized_base]
+    visible_positions: List[int] = [
+        positions_by_number[index]
+        for index in normalized_visible
+        if index in positions_by_number
+    ]
+    if not visible_positions:
+        visible_positions = list(base_positions)
+
+    step_value: int = max(int(step), 1)
+    current_start: int = min(visible_positions)
+    current_end: int = max(visible_positions)
+    next_start: int = max(0, current_start - step_value)
+    next_end: int = min(len(ordered_numbers) - 1, current_end + step_value)
+
+    expanded_indices: List[int] = ordered_numbers[next_start : next_end + 1]
+    base_start: int = min(base_positions)
+    base_end: int = max(base_positions)
+
+    before_indices: List[int] = ordered_numbers[next_start:base_start]
+    after_indices: List[int] = ordered_numbers[base_end + 1 : next_end + 1]
+
+    return {
+        "base_indices": normalized_base,
+        "visible_indices": expanded_indices,
+        "before": _build_snippet_segment(raw_content, sentences_map, before_indices),
+        "base": _build_snippet_segment(raw_content, sentences_map, normalized_base),
+        "after": _build_snippet_segment(raw_content, sentences_map, after_indices),
+        "can_extend_before": next_start > 0,
+        "can_extend_after": next_end < len(ordered_numbers) - 1,
+    }

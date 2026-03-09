@@ -61,7 +61,10 @@
                 <div class="snippets-list">
                     {% for snippet in data.snippets %}
                     <div class="snippet-item {{ 'read' if snippet.read else '' }}"
-                        id="snippet_{{ snippet.post_id }}_{{ snippet.indices | join('_') }}">
+                        id="snippet_{{ snippet.post_id }}_{{ snippet.indices | join('_') }}"
+                        data-post-id="{{ snippet.post_id }}"
+                        data-base-indices="{{ snippet.indices | join(',') }}"
+                        data-visible-indices="{{ snippet.indices | join(',') }}">
                         <div class="snippet-meta">
                             <span class="snippet-primary-meta">
                                 From <span class="source-tag snippet-source-info">{{
@@ -85,11 +88,16 @@
                                 <a href="{{ snippet.url }}" target="_blank" class="source-tag snippet-tag-original"
                                     title="Go to source article">Original &nearr;</a>
                                 {% endif %}
+                                <button type="button" class="source-tag source-tag-button extend-snippet-context-btn"
+                                    data-post-id="{{ snippet.post_id }}"
+                                    title="Load more adjacent sentences from this post">Extend context</button>
                                 <span class="source-tag show-snippet-tags-btn" data-post-id="{{ snippet.post_id }}">Show tags</span>
                             </span>
                         </div>
                         <div class="post-content-isolated">
-                            <div class="snippet-text">{{ snippet.html | safe }}</div>
+                            <div class="snippet-text">
+                                <span class="snippet-context snippet-context-base">{{ snippet.html | safe }}</span>
+                            </div>
                         </div>
                         <div class="snippet-tags-content hide"></div>
                     </div>
