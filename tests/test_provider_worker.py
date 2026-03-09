@@ -236,6 +236,35 @@ def test_handle_mark_success(
     provider.mark.assert_called_once_with(task["data"], {"token": "abc"})
 
 
+def test_handle_mark_gmail_persists_refreshed_token(
+    worker: ProviderWorker,
+    mock_users: MagicMock,
+    mock_providers: Dict[str, MagicMock],
+) -> None:
+    task: Dict[str, Any] = {
+        "user": {"sid": "123"},
+        "data": {"provider": data_providers.GMAIL, "mark": "read"},
+    }
+    provider_user = {
+        "token": "new-token",
+        "access_token": "new-token",
+        "refresh_token": "refresh-1",
+        "token_refreshed": True,
+    }
+    mock_users.get_provider_user.return_value = provider_user
+
+    provider = mock_providers[data_providers.GMAIL]
+    provider.mark.return_value = True
+
+    assert worker.handle_mark(task) is True
+
+    mock_users.update_provider.assert_called_once_with(
+        "123",
+        data_providers.GMAIL,
+        {"token": "new-token", "retoken": False, "refresh_token": "refresh-1"},
+    )
+
+
 def test_handle_mark_unknown_provider_marks_task_failed(
     worker: ProviderWorker, mock_users: MagicMock, mock_tasks: MagicMock
 ) -> None:
