@@ -12,7 +12,8 @@ export default class EventsSystem {
 
     this.SETTINGS_UPDATED = 'settings_updated';
     this.UPDATE_SETTINGS = 'update_settings';
-    this.SETTINGS_ERROR_MESSSAGE = 'settings_error_message';
+    this.SETTINGS_ERROR_MESSAGE = 'settings_error_message';
+    this.SETTINGS_ERROR_MESSSAGE = this.SETTINGS_ERROR_MESSAGE;
 
     this.CHANGE_SETTINGS_WINDOW_STATE = 'change_settings_window_state';
 
