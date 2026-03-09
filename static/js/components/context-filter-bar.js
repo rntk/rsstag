@@ -297,7 +297,7 @@ export default class ContextFilterBar {
         return;
       }
 
-      this._modalState.suggestions = suggestions.slice(0, 10);
+      this._modalState.suggestions = suggestions.slice(0, 50);
       this._modalState.selectedIndex = -1;
       this.renderSuggestions(resultsContainer);
     } catch (err) {
@@ -349,7 +349,11 @@ export default class ContextFilterBar {
     this._modalState.selectedIndex = next;
 
     container.querySelectorAll('.context-tag-suggestion').forEach((el, index) => {
-      el.classList.toggle('selected', index === next);
+      const isSelected = index === next;
+      el.classList.toggle('selected', isSelected);
+      if (isSelected) {
+        el.scrollIntoView({ block: 'nearest' });
+      }
     });
   }
 
