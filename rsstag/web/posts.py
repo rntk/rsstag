@@ -98,6 +98,37 @@ def _build_topics_index(
     for post_data in grouped_posts:
         all_post_ids.update(post_data.get("post_ids", []))
 
+    # Filter posts by non-tag context filters (feed, category, topic, subtopic)
+    manager = get_context_filter_manager(user)
+    non_tag_filters_active = any(
+        f.is_active() for key, f in manager._filters.items() if key != "tags"
+    )
+    if non_tag_filters_active:
+        clauses: list[dict] = [{"owner": user["sid"]}]
+        for key, f in manager._filters.items():
+            if key == "tags" or not f.is_active():
+                continue
+            query_part = f.get_filter_query(user["sid"])
+            if query_part:
+                clauses.append(query_part)
+        if only_unread:
+            clauses.append({"read": False})
+        clauses.append({"pid": {"$in": list(all_post_ids)}})
+        filter_query: dict = {"$and": clauses} if len(clauses) > 1 else clauses[0]
+        matching = app.posts._db.posts.find(filter_query, {"pid": 1, "_id": 0})
+        allowed_pids: set[int] = {doc["pid"] for doc in matching}
+        filtered_grouped: list[dict] = []
+        for gp in grouped_posts:
+            matching_pids = [pid for pid in gp.get("post_ids", []) if pid in allowed_pids]
+            if matching_pids:
+                if len(matching_pids) < len(gp.get("post_ids", [])):
+                    gp = dict(gp, post_ids=matching_pids)
+                filtered_grouped.append(gp)
+        grouped_posts = filtered_grouped
+        all_post_ids = set()
+        for post_data in grouped_posts:
+            all_post_ids.update(post_data.get("post_ids", []))
+
     posts_projection: dict[str, int] = {"_id": 0, "pid": 1, "feed_id": 1}
     if normalized_context_tags:
         posts_projection["content"] = 1
