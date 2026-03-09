@@ -36,10 +36,11 @@ from sklearn.metrics import pairwise_distances
 import numpy as np
 
 
-def _get_scoped_tag_counts(app: "RSSTagApplication", user: dict) -> dict[str, int]:
+def _get_scoped_tag_counts(app: "RSSTagApplication", user: dict) -> tuple[bool, dict[str, int]]:
     manager = get_context_filter_manager(user)
-    if not manager.has_active_filters():
-        return {}
+    context_filter_active = manager.has_active_filters()
+    if not context_filter_active:
+        return False, {}
 
     query = manager.get_combined_query(user["sid"])
     if user["settings"].get("only_unread"):
@@ -53,14 +54,17 @@ def _get_scoped_tag_counts(app: "RSSTagApplication", user: dict) -> dict[str, in
         {"$unwind": "$tags"},
         {"$group": {"_id": "$tags", "counter": {"$sum": 1}}},
     ]
-    return {row["_id"]: row["counter"] for row in app.posts._db.posts.aggregate(pipeline)}
+    return (
+        True,
+        {row["_id"]: row["counter"] for row in app.posts._db.posts.aggregate(pipeline)},
+    )
 
 
 def on_group_by_tags_get(
     app: "RSSTagApplication", user: dict, page_number: int = 1
 ) -> Response:
-    scoped_counts = _get_scoped_tag_counts(app, user)
-    if scoped_counts:
+    context_filter_active, scoped_counts = _get_scoped_tag_counts(app, user)
+    if context_filter_active:
         tags_count = len(scoped_counts)
     else:
         tags_count = app.tags.count(user["sid"], user["settings"]["only_unread"])
@@ -79,7 +83,7 @@ def on_group_by_tags_get(
         p_number, page_count, user["settings"]["tags_on_page"], "on_group_by_tags_get"
     )
     sorted_tags = []
-    if scoped_counts:
+    if context_filter_active:
         sorted_scoped = sorted(scoped_counts.items(), key=lambda item: item[1], reverse=True)
         paged_scoped = sorted_scoped[
             start_tags_range : start_tags_range + user["settings"]["tags_on_page"]
@@ -1813,8 +1817,8 @@ def on_group_by_tags_categories_get(
     app: "RSSTagApplication", user: dict, page_number: int = 1
 ) -> Response:
     only_unread = user["settings"].get("only_unread", False)
-    scoped_counts = _get_scoped_tag_counts(app, user)
-    if scoped_counts:
+    context_filter_active, scoped_counts = _get_scoped_tag_counts(app, user)
+    if context_filter_active:
         categories = defaultdict(int)
         for tag_doc in app.tags.get_by_tags(user["sid"], list(scoped_counts.keys())):
             for classification in tag_doc.get("classifications", []):
@@ -1873,9 +1877,9 @@ def on_group_by_tags_by_category_get(
 ) -> Response:
     category = quoted_category
     only_unread = user["settings"].get("only_unread", False)
-    scoped_counts = _get_scoped_tag_counts(app, user)
+    context_filter_active, scoped_counts = _get_scoped_tag_counts(app, user)
     scoped_category_tags = []
-    if scoped_counts:
+    if context_filter_active:
         for tag_doc in app.tags.get_by_tags(user["sid"], list(scoped_counts.keys())):
             if any(cl.get("category") == category for cl in tag_doc.get("classifications", [])):
                 scoped_category_tags.append(tag_doc)
@@ -1903,7 +1907,7 @@ def on_group_by_tags_by_category_get(
     )
 
     sorted_tags = []
-    if scoped_counts:
+    if context_filter_active:
         scoped_category_tags.sort(
             key=lambda tag_doc: scoped_counts.get(tag_doc.get("tag", ""), 0),
             reverse=True,

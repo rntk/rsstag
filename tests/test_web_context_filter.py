@@ -277,6 +277,24 @@ class TestWebContextFilter(MongoWebTestCase):
         self.assertEqual(scoped_counts.get("shared"), 1)
         self.assertNotIn("beta", scoped_counts)
 
+
+    def test_context_filter_active_with_no_matching_posts_returns_empty_tag_lists(self):
+        sid = self._seed_feed_scoped_tag_fixture()
+        client = self.get_authenticated_client(sid)
+
+        add_filter_response = client.post(
+            "/api/context-filter/item",
+            data=json.dumps({"type": "feed", "value": "feed-missing"}),
+            content_type="application/json",
+        )
+        self.assertEqual(add_filter_response.status_code, 200)
+
+        scoped_tags = self._extract_tags_from_group_page(client.get("/group/tag/1"))
+        self.assertEqual(scoped_tags, {})
+
+        scoped_categories = self._extract_tags_from_group_page(client.get("/group/tags-categories/1"))
+        self.assertEqual(scoped_categories, {})
+
     def test_context_filter_feed_scopes_tag_categories(self):
         sid = self._seed_feed_scoped_tag_fixture()
         client = self.get_authenticated_client(sid)
