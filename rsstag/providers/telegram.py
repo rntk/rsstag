@@ -307,15 +307,23 @@ class TelegramProvider:
                         get_message_link(post["chat_id"], post["id"])
                     )
                     frw_q = tlg_forward_to_query(post)
-                    post_l = resp.update["link"]
-                    if frw_q:
-                        # resp = self.__requests_repeater(get_message_link(frw_q["chat_id"], frw_q["message_id"]))
-                        # if resp.update:
-                        # TODO: refactor may be add link as additional field
-                        #    post_l += "\n" + resp.update["link"]
-                        post_l += "\n" + "https://t.me/{}/{}".format(
-                            frw_q["chat_id"], frw_q["message_id"]
+                    post_l = ""
+                    if resp.update and resp.update.get("link"):
+                        post_l = resp.update["link"]
+                    else:
+                        logging.warning(
+                            "No message link for chat_id=%s msg_id=%s. Error: %s",
+                            post.get("chat_id"),
+                            post.get("id"),
+                            resp.error,
                         )
+                    if frw_q:
+                        frw_resp = self.__requests_repeater(
+                            get_message_link(frw_q["chat_id"], frw_q["message_id"])
+                        )
+                        if frw_resp.update and frw_resp.update.get("link"):
+                            # TODO: refactor may be add link as additional field
+                            post_l += "\n" + frw_resp.update["link"]
 
                     posts_links.append(post_l)
 
@@ -328,7 +336,9 @@ class TelegramProvider:
 
     def __requests_repeater(self, query: Dict[str, Any]) -> TelegramResult:
         on_error_repeats = 3
+        on_empty_repeats = 10
         repeats = 0
+        empty_repeats = 0
         all_repeats = 0
         r = None
         while True:
@@ -339,8 +349,22 @@ class TelegramProvider:
             all_repeats += 1
             r = self._tlg.request(query)
             if r.update is not None:
+                empty_repeats = 0
                 return r
+            if not r.error:
+                empty_repeats += 1
+                if empty_repeats > on_empty_repeats:
+                    logging.warning(
+                        "Max empty repeats reached for telegram request: %s", query
+                    )
+                    r.error = {
+                        "@type": "error",
+                        "code": 598,
+                        "message": "Max empty repeats reached",
+                    }
+                    return r
             if r.error:
+                empty_repeats = 0
                 # example: {'@type': 'error', 'code': 429, 'message': 'Too Many Requests: retry after 77616', '@extra': {'req_id': '1643864060.31774_9523'}, '@client_id': 1}
                 if "code" in r.error:
                     code = r.error["code"]
@@ -456,174 +480,175 @@ class TelegramProvider:
         if not self._tlg.login(tlg_code.get_code, tlg_code.get_password):
             raise Exception("Telegram login failed")
         self._tlg.run()
-        time.sleep(120)
-        # Pre-load chats into TDLib memory to avoid flood waits on getChat
-        self.__requests_repeater(load_chats(limit=1000))
-        channels = []
-        if selected_channels:
-            for channel_id in selected_channels:
-                try:
-                    channel_id_int = int(channel_id)
-                except (TypeError, ValueError):
-                    logging.warning("Skip invalid channel id: %s", channel_id)
-                    continue
-                r = self.__requests_repeater(get_chat(channel_id_int))
-                time.sleep(randint(1, 3))
-                if not r.update:
-                    continue
-                channels.append(r.update)
-        elif all_channels:
-            uniq_chat_ids = set()
-            r = self.__requests_repeater(get_chats(limit=1000))
-            ids = r.update
-            if ids and ids["chat_ids"]:
-                for c_id in ids["chat_ids"]:
-                    if c_id in uniq_chat_ids:
+        try:
+            time.sleep(120)
+            # Pre-load chats into TDLib memory to avoid flood waits on getChat
+            self.__requests_repeater(load_chats(limit=1000))
+            channels = []
+            if selected_channels:
+                for channel_id in selected_channels:
+                    try:
+                        channel_id_int = int(channel_id)
+                    except (TypeError, ValueError):
+                        logging.warning("Skip invalid channel id: %s", channel_id)
                         continue
-                    uniq_chat_ids.add(c_id)
-                    r = self.__requests_repeater(get_chat(c_id))
+                    r = self.__requests_repeater(get_chat(channel_id_int))
                     time.sleep(randint(1, 3))
                     if not r.update:
                         continue
-                    logging.info("Loading chat data: %d", c_id)
                     channels.append(r.update)
-        else:
-            telegram_channels = user["telegram_channel"].split(",")
-            for telegram_channel in telegram_channels:
-                telegram_channel = telegram_channel.strip()
-                if not telegram_channel:
-                    continue
-                channel_req = self.__requests_repeater(search_channel(telegram_channel))
-                if not channel_req.update:
-                    logging.warning(
-                        "No channel: %s. %s", telegram_channel, channel_req.error
-                    )
-                    continue
-                    # self._tlg.close()
-                    # return ([], [])
-                channels.append(channel_req.update)
-        tasks_q = Queue()
-        results_q = Queue()
-        max_limit = user["settings"]["telegram_limit"]
-        feeds = {}
-        routes = RSSTagRoutes(self._config["settings"]["host_name"])
-        for channel in channels:
-            tasks_q.put_nowait((all_channels, max_limit, channel))
-            stream_id = str(channel["id"])
-            if stream_id not in feeds:
-                feeds[stream_id] = {
-                    "createdAt": datetime.utcnow(),
-                    "title": channel["title"],
-                    "owner": user["sid"],
-                    "category_id": self.no_category_name,
-                    "feed_id": stream_id,
-                    "origin_feed_id": channel["id"],
-                    "category_title": self.no_category_name,
-                    "category_local_url": routes.get_url_by_endpoint(
-                        endpoint="on_category_get",
-                        params={"quoted_category": self.no_category_name},
-                    ),
-                    "local_url": routes.get_url_by_endpoint(
-                        endpoint="on_feed_get", params={"quoted_feed": stream_id}
-                    ),
-                    "favicon": "",
-                }
-        workers = []
-        workers_n = 1  # int(self._config["settings"]["downloaders_count"])
-        if not workers_n:
-            workers_n = 1
-        if len(channels) == 1:
-            workers_n = 1
-        for i in range(workers_n):
-            t = Thread(target=self._fetch, args=(tasks_q, results_q))
-            t.start()
-            workers.append(t)
-
-        posts = []
-        while True:
-            try:
-                data = results_q.get(timeout=1)
-                stream_id, posts_data, posts_links = data
-                results_q.task_done()
-            except Empty:
-                if tasks_q.empty():
-                    if results_q.empty():
-                        has_worker = False
-                        for w in workers:
-                            if w.is_alive():
-                                has_worker = True
-                                break
-
-                        if has_worker:
+            elif all_channels:
+                uniq_chat_ids = set()
+                r = self.__requests_repeater(get_chats(limit=1000))
+                ids = r.update
+                if ids and ids["chat_ids"]:
+                    for c_id in ids["chat_ids"]:
+                        if c_id in uniq_chat_ids:
                             continue
-                        if results_q.empty():
-                            break
-                continue
-            for post_i, post in enumerate(posts_data["messages"]):
-                p_date = date.fromtimestamp(int(post["date"])).strftime("%x")
-                pu_date = post["date"]
-
-                attachments_list = []
-                entities = []
-                t_link = posts_links[post_i]
-                if "\n" in t_link:
-                    # TODO: refactor may be add link as additional field
-                    parts = t_link.split("\n")
-                    t_link = parts[0]
-                    attachments_list.append(parts[1])
-                try:
-                    post_text = tlg_post_to_html(post)
-                    if "caption" in post["content"]:
-                        entities = post["content"]["caption"]["entities"]
-                    elif "text" in post["content"]:
-                        t = post["content"].get("@type", "")
-                        if t != "messageCustomServiceAction":
-                            entities = post["content"]["text"]["entities"]
-                except Exception as e:
-                    logging.error(
-                        "tlg_post_to_html: {}. {}. {}".format(
-                            post, e, traceback.format_exc()
+                        uniq_chat_ids.add(c_id)
+                        r = self.__requests_repeater(get_chat(c_id))
+                        time.sleep(randint(1, 3))
+                        if not r.update:
+                            continue
+                        logging.info("Loading chat data: %d", c_id)
+                        channels.append(r.update)
+            else:
+                telegram_channels = user["telegram_channel"].split(",")
+                for telegram_channel in telegram_channels:
+                    telegram_channel = telegram_channel.strip()
+                    if not telegram_channel:
+                        continue
+                    channel_req = self.__requests_repeater(search_channel(telegram_channel))
+                    if not channel_req.update:
+                        logging.warning(
+                            "No channel: %s. %s", telegram_channel, channel_req.error
                         )
-                    )
-                    continue
-                for entity in entities:
-                    if "type" in entity and "url" in entity["type"]:
-                        attachments_list.append(entity["type"]["url"])
-
-                posts.append(
-                    {
-                        "content": {
-                            "title": "",
-                            "content": gzip.compress(
-                                post_text.encode("utf-8", "replace")
-                            ),
-                        },
-                        "feed_id": str(stream_id),
-                        "category_id": self.no_category_name,
-                        "id": post["id"],
-                        "url": t_link,
-                        "date": p_date,
-                        "unix_date": pu_date,
-                        "read": False,
-                        "favorite": False,
-                        "attachments": attachments_list,
-                        "tags": [],
-                        "bi_grams": [],
-                        "pid": generate_post_pid(
-                            TELEGRAM, str(stream_id), str(post["id"])
-                        ),
+                        continue
+                        # self._tlg.close()
+                        # return ([], [])
+                    channels.append(channel_req.update)
+            tasks_q = Queue()
+            results_q = Queue()
+            max_limit = user["settings"]["telegram_limit"]
+            feeds = {}
+            routes = RSSTagRoutes(self._config["settings"]["host_name"])
+            for channel in channels:
+                tasks_q.put_nowait((all_channels, max_limit, channel))
+                stream_id = str(channel["id"])
+                if stream_id not in feeds:
+                    feeds[stream_id] = {
+                        "createdAt": datetime.utcnow(),
+                        "title": channel["title"],
                         "owner": user["sid"],
-                        "processing": POST_NOT_IN_PROCESSING,
+                        "category_id": self.no_category_name,
+                        "feed_id": stream_id,
+                        "origin_feed_id": channel["id"],
+                        "category_title": self.no_category_name,
+                        "category_local_url": routes.get_url_by_endpoint(
+                            endpoint="on_category_get",
+                            params={"quoted_category": self.no_category_name},
+                        ),
+                        "local_url": routes.get_url_by_endpoint(
+                            endpoint="on_feed_get", params={"quoted_feed": stream_id}
+                        ),
+                        "favicon": "",
                     }
-                )
-            if len(posts) > 5000:
-                yield (posts, list(feeds.values()))
-                posts = []
-            time.sleep(randint(1, 3))
+            workers = []
+            workers_n = 1  # int(self._config["settings"]["downloaders_count"])
+            if not workers_n:
+                workers_n = 1
+            if len(channels) == 1:
+                workers_n = 1
+            for i in range(workers_n):
+                t = Thread(target=self._fetch, args=(tasks_q, results_q))
+                t.start()
+                workers.append(t)
+    
+            posts = []
+            while True:
+                try:
+                    data = results_q.get(timeout=1)
+                    stream_id, posts_data, posts_links = data
+                    results_q.task_done()
+                except Empty:
+                    if tasks_q.empty():
+                        if results_q.empty():
+                            has_worker = False
+                            for w in workers:
+                                if w.is_alive():
+                                    has_worker = True
+                                    break
+    
+                            if has_worker:
+                                continue
+                            if results_q.empty():
+                                break
+                    continue
+                for post_i, post in enumerate(posts_data["messages"]):
+                    p_date = date.fromtimestamp(int(post["date"])).strftime("%x")
+                    pu_date = post["date"]
+    
+                    attachments_list = []
+                    entities = []
+                    t_link = posts_links[post_i]
+                    if "\n" in t_link:
+                        # TODO: refactor may be add link as additional field
+                        parts = t_link.split("\n")
+                        t_link = parts[0]
+                        attachments_list.append(parts[1])
+                    try:
+                        post_text = tlg_post_to_html(post)
+                        if "caption" in post["content"]:
+                            entities = post["content"]["caption"]["entities"]
+                        elif "text" in post["content"]:
+                            t = post["content"].get("@type", "")
+                            if t != "messageCustomServiceAction":
+                                entities = post["content"]["text"]["entities"]
+                    except Exception as e:
+                        logging.error(
+                            "tlg_post_to_html: {}. {}. {}".format(
+                                post, e, traceback.format_exc()
+                            )
+                        )
+                        continue
+                    for entity in entities:
+                        if "type" in entity and "url" in entity["type"]:
+                            attachments_list.append(entity["type"]["url"])
+    
+                    posts.append(
+                        {
+                            "content": {
+                                "title": "",
+                                "content": gzip.compress(
+                                    post_text.encode("utf-8", "replace")
+                                ),
+                            },
+                            "feed_id": str(stream_id),
+                            "category_id": self.no_category_name,
+                            "id": post["id"],
+                            "url": t_link,
+                            "date": p_date,
+                            "unix_date": pu_date,
+                            "read": False,
+                            "favorite": False,
+                            "attachments": attachments_list,
+                            "tags": [],
+                            "bi_grams": [],
+                            "pid": generate_post_pid(
+                                TELEGRAM, str(stream_id), str(post["id"])
+                            ),
+                            "owner": user["sid"],
+                            "processing": POST_NOT_IN_PROCESSING,
+                        }
+                    )
+                if len(posts) > 5000:
+                    yield (posts, list(feeds.values()))
+                    posts = []
+                time.sleep(randint(1, 3))
 
-        self._tlg.close()
-
-        yield (posts, list(feeds.values()))
+            yield (posts, list(feeds.values()))
+        finally:
+            self._tlg.close()
 
     def _tlg_sync(self, phone: str, sid: str, sync_ids: List[Tuple[int, int]]) -> None:
         if not sync_ids:
