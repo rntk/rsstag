@@ -36,10 +36,34 @@ from sklearn.metrics import pairwise_distances
 import numpy as np
 
 
+def _get_scoped_tag_counts(app: "RSSTagApplication", user: dict) -> dict[str, int]:
+    manager = get_context_filter_manager(user)
+    if not manager.has_active_filters():
+        return {}
+
+    query = manager.get_combined_query(user["sid"])
+    if user["settings"].get("only_unread"):
+        if "$and" in query:
+            query = {"$and": [*query["$and"], {"read": False}]}
+        else:
+            query = {"$and": [query, {"read": False}]}
+
+    pipeline = [
+        {"$match": query},
+        {"$unwind": "$tags"},
+        {"$group": {"_id": "$tags", "counter": {"$sum": 1}}},
+    ]
+    return {row["_id"]: row["counter"] for row in app.posts._db.posts.aggregate(pipeline)}
+
+
 def on_group_by_tags_get(
     app: "RSSTagApplication", user: dict, page_number: int = 1
 ) -> Response:
-    tags_count = app.tags.count(user["sid"], user["settings"]["only_unread"])
+    scoped_counts = _get_scoped_tag_counts(app, user)
+    if scoped_counts:
+        tags_count = len(scoped_counts)
+    else:
+        tags_count = app.tags.count(user["sid"], user["settings"]["only_unread"])
     page_count = app.get_page_count(tags_count, user["settings"]["tags_on_page"])
     p_number = page_number
     if page_number <= 0:
@@ -55,25 +79,42 @@ def on_group_by_tags_get(
         p_number, page_count, user["settings"]["tags_on_page"], "on_group_by_tags_get"
     )
     sorted_tags = []
-    tags = app.tags.get_all(
-        user["sid"],
-        user["settings"]["only_unread"],
-        user["settings"]["hot_tags"],
-        opts={"offset": start_tags_range, "limit": user["settings"]["tags_on_page"]},
-    )
-
-    for t in tags:
-        sorted_tags.append(
-            {
-                "tag": t["tag"],
-                "url": t["local_url"],
-                "words": t["words"],
-                "count": t["unread_count"]
-                if user["settings"]["only_unread"]
-                else t["posts_count"],
-                "sentiment": t["sentiment"] if "sentiment" in t else [],
-            }
+    if scoped_counts:
+        sorted_scoped = sorted(scoped_counts.items(), key=lambda item: item[1], reverse=True)
+        paged_scoped = sorted_scoped[
+            start_tags_range : start_tags_range + user["settings"]["tags_on_page"]
+        ]
+        for tag_name, count in paged_scoped:
+            tag_doc = app.tags.get_by_tag(user["sid"], tag_name) or {}
+            sorted_tags.append(
+                {
+                    "tag": tag_name,
+                    "url": tag_doc.get("local_url", f"/entity/{quote(tag_name)}"),
+                    "words": tag_doc.get("words", [tag_name]),
+                    "count": count,
+                    "sentiment": tag_doc.get("sentiment", []),
+                }
+            )
+    else:
+        tags = app.tags.get_all(
+            user["sid"],
+            user["settings"]["only_unread"],
+            user["settings"]["hot_tags"],
+            opts={"offset": start_tags_range, "limit": user["settings"]["tags_on_page"]},
         )
+
+        for t in tags:
+            sorted_tags.append(
+                {
+                    "tag": t["tag"],
+                    "url": t["local_url"],
+                    "words": t["words"],
+                    "count": t["unread_count"]
+                    if user["settings"]["only_unread"]
+                    else t["posts_count"],
+                    "sentiment": t["sentiment"] if "sentiment" in t else [],
+                }
+            )
     db_letters = app.letters.get(user["sid"], make_sort=True)
     if db_letters:
         letters = app.letters.to_list(db_letters, user["settings"]["only_unread"])
@@ -1772,7 +1813,16 @@ def on_group_by_tags_categories_get(
     app: "RSSTagApplication", user: dict, page_number: int = 1
 ) -> Response:
     only_unread = user["settings"].get("only_unread", False)
-    categories = app.tags.get_categories(user["sid"], only_unread)
+    scoped_counts = _get_scoped_tag_counts(app, user)
+    if scoped_counts:
+        categories = defaultdict(int)
+        for tag_doc in app.tags.get_by_tags(user["sid"], list(scoped_counts.keys())):
+            for classification in tag_doc.get("classifications", []):
+                category = classification.get("category")
+                if category:
+                    categories[category] += 1
+    else:
+        categories = app.tags.get_categories(user["sid"], only_unread)
     sorted_categories = []
     for category, count in categories.items():
         sorted_categories.append(
@@ -1823,7 +1873,15 @@ def on_group_by_tags_by_category_get(
 ) -> Response:
     category = quoted_category
     only_unread = user["settings"].get("only_unread", False)
-    tags_count = app.tags.count_by_category(user["sid"], category, only_unread)
+    scoped_counts = _get_scoped_tag_counts(app, user)
+    scoped_category_tags = []
+    if scoped_counts:
+        for tag_doc in app.tags.get_by_tags(user["sid"], list(scoped_counts.keys())):
+            if any(cl.get("category") == category for cl in tag_doc.get("classifications", [])):
+                scoped_category_tags.append(tag_doc)
+        tags_count = len(scoped_category_tags)
+    else:
+        tags_count = app.tags.count_by_category(user["sid"], category, only_unread)
     page_count = app.get_page_count(tags_count, user["settings"]["tags_on_page"])
     p_number = page_number
     if page_number <= 0:
@@ -1844,25 +1902,44 @@ def on_group_by_tags_by_category_get(
         quoted_category=category,
     )
 
-    tags = app.tags.get_by_category(
-        user["sid"],
-        category,
-        only_unread,
-        user["settings"]["hot_tags"],
-        opts={"offset": start_tags_range, "limit": user["settings"]["tags_on_page"]},
-    )
-
     sorted_tags = []
-    for t in tags:
-        sorted_tags.append(
-            {
-                "tag": t["tag"],
-                "url": t["local_url"],
-                "words": t["words"],
-                "count": t["unread_count"] if only_unread else t["posts_count"],
-                "sentiment": t["sentiment"] if "sentiment" in t else [],
-            }
+    if scoped_counts:
+        scoped_category_tags.sort(
+            key=lambda tag_doc: scoped_counts.get(tag_doc.get("tag", ""), 0),
+            reverse=True,
         )
+        paged = scoped_category_tags[
+            start_tags_range : start_tags_range + user["settings"]["tags_on_page"]
+        ]
+        for t in paged:
+            sorted_tags.append(
+                {
+                    "tag": t["tag"],
+                    "url": t["local_url"],
+                    "words": t.get("words", []),
+                    "count": scoped_counts.get(t["tag"], 0),
+                    "sentiment": t["sentiment"] if "sentiment" in t else [],
+                }
+            )
+    else:
+        tags = app.tags.get_by_category(
+            user["sid"],
+            category,
+            only_unread,
+            user["settings"]["hot_tags"],
+            opts={"offset": start_tags_range, "limit": user["settings"]["tags_on_page"]},
+        )
+
+        for t in tags:
+            sorted_tags.append(
+                {
+                    "tag": t["tag"],
+                    "url": t["local_url"],
+                    "words": t["words"],
+                    "count": t["unread_count"] if only_unread else t["posts_count"],
+                    "sentiment": t["sentiment"] if "sentiment" in t else [],
+                }
+            )
 
     db_letters = app.letters.get(user["sid"], make_sort=True)
     if db_letters:
