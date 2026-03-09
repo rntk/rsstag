@@ -307,7 +307,16 @@ class TelegramProvider:
                         get_message_link(post["chat_id"], post["id"])
                     )
                     frw_q = tlg_forward_to_query(post)
-                    post_l = resp.update["link"]
+                    post_l = ""
+                    if resp.update and resp.update.get("link"):
+                        post_l = resp.update["link"]
+                    else:
+                        logging.warning(
+                            "No message link for chat_id=%s msg_id=%s. Error: %s",
+                            post.get("chat_id"),
+                            post.get("id"),
+                            resp.error,
+                        )
                     if frw_q:
                         frw_resp = self.__requests_repeater(
                             get_message_link(frw_q["chat_id"], frw_q["message_id"])
