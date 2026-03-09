@@ -122,8 +122,9 @@ def on_group_by_tags_get(
     manager = get_context_filter_manager(user)
     only_unread = user["settings"]["only_unread"]
 
+    context_sorted_tags = None
     if manager.has_active_filters():
-        tags_count, _ = _get_filtered_tag_stats(
+        tags_count, context_sorted_tags = _get_filtered_tag_stats(
             app, user, manager, only_unread, user["settings"]["hot_tags"]
         )
     else:
@@ -144,15 +145,9 @@ def on_group_by_tags_get(
         p_number, page_count, user["settings"]["tags_on_page"], "on_group_by_tags_get"
     )
     if manager.has_active_filters():
-        _, sorted_tags = _get_filtered_tag_stats(
-            app,
-            user,
-            manager,
-            only_unread,
-            user["settings"]["hot_tags"],
-            offset=start_tags_range,
-            limit=user["settings"]["tags_on_page"],
-        )
+        sorted_tags = context_sorted_tags[
+            start_tags_range : start_tags_range + user["settings"]["tags_on_page"]
+        ]
     else:
         sorted_tags = []
         tags = app.tags.get_all(
@@ -343,14 +338,21 @@ def on_group_by_tags_sentiment(
     sentiment = sentiment.replace("|", "/")
     only_unread = user["settings"]["only_unread"]
 
+    context_sorted_tags = None
+    sentiment_tag_query = {
+        "$and": [
+            {"sentiment": {"$exists": True}},
+            {"sentiment": {"$all": [sentiment]}},
+        ]
+    }
     if manager.has_active_filters():
-        tags_count, _ = _get_filtered_tag_stats(
+        tags_count, context_sorted_tags = _get_filtered_tag_stats(
             app,
             user,
             manager,
             only_unread,
             user["settings"]["hot_tags"],
-            tag_query={"$and": [{"sentiment": {"$exists": True}}, {"sentiment": {"$all": [sentiment]}}]},
+            tag_query=sentiment_tag_query,
         )
     else:
         tags_count = app.tags.count(user["sid"], only_unread, sentiments=[sentiment])
@@ -373,16 +375,9 @@ def on_group_by_tags_sentiment(
         sentiment=sentiment,
     )
     if manager.has_active_filters():
-        _, sorted_tags = _get_filtered_tag_stats(
-            app,
-            user,
-            manager,
-            only_unread,
-            user["settings"]["hot_tags"],
-            offset=start_tags_range,
-            limit=user["settings"]["tags_on_page"],
-            tag_query={"$and": [{"sentiment": {"$exists": True}}, {"sentiment": {"$all": [sentiment]}}]},
-        )
+        sorted_tags = context_sorted_tags[
+            start_tags_range : start_tags_range + user["settings"]["tags_on_page"]
+        ]
     else:
         sorted_tags = []
         tags = app.tags.get_by_sentiment(
@@ -447,14 +442,16 @@ def on_group_by_tags_startwith_get(
     manager = get_context_filter_manager(user)
     only_unread = user["settings"]["only_unread"]
 
+    context_sorted_tags = None
+    letter_tag_query = {"tag": {"$regex": "^{}".format(letter), "$options": "i"}}
     if manager.has_active_filters():
-        tags_count, _ = _get_filtered_tag_stats(
+        tags_count, context_sorted_tags = _get_filtered_tag_stats(
             app,
             user,
             manager,
             only_unread,
             user["settings"]["hot_tags"],
-            tag_query={"tag": {"$regex": "^{}".format(letter), "$options": "i"}},
+            tag_query=letter_tag_query,
         )
     else:
         tags_count = app.tags.count(user["sid"], only_unread, "^{}".format(letter))
@@ -477,16 +474,9 @@ def on_group_by_tags_startwith_get(
         letter=letter,
     )
     if manager.has_active_filters():
-        _, sorted_tags = _get_filtered_tag_stats(
-            app,
-            user,
-            manager,
-            only_unread,
-            user["settings"]["hot_tags"],
-            offset=start_tags_range,
-            limit=user["settings"]["tags_on_page"],
-            tag_query={"tag": {"$regex": "^{}".format(letter), "$options": "i"}},
-        )
+        sorted_tags = context_sorted_tags[
+            start_tags_range : start_tags_range + user["settings"]["tags_on_page"]
+        ]
     else:
         sorted_tags = []
         tags = app.tags.get_all(
@@ -547,14 +537,18 @@ def on_group_by_tags_group(
     manager = get_context_filter_manager(user)
     only_unread = user["settings"]["only_unread"]
 
+    context_sorted_tags = None
+    group_tag_query = {
+        "$and": [{"groups": {"$exists": True}}, {"groups": {"$all": [group]}}]
+    }
     if manager.has_active_filters():
-        tags_count, _ = _get_filtered_tag_stats(
+        tags_count, context_sorted_tags = _get_filtered_tag_stats(
             app,
             user,
             manager,
             only_unread,
             user["settings"]["hot_tags"],
-            tag_query={"$and": [{"groups": {"$exists": True}}, {"groups": {"$all": [group]}}]},
+            tag_query=group_tag_query,
         )
     else:
         tags_count = app.tags.count(user["sid"], only_unread, groups=[group])
@@ -577,16 +571,9 @@ def on_group_by_tags_group(
         group=group,
     )
     if manager.has_active_filters():
-        _, sorted_tags = _get_filtered_tag_stats(
-            app,
-            user,
-            manager,
-            only_unread,
-            user["settings"]["hot_tags"],
-            offset=start_tags_range,
-            limit=user["settings"]["tags_on_page"],
-            tag_query={"$and": [{"groups": {"$exists": True}}, {"groups": {"$all": [group]}}]},
-        )
+        sorted_tags = context_sorted_tags[
+            start_tags_range : start_tags_range + user["settings"]["tags_on_page"]
+        ]
     else:
         sorted_tags = []
         tags = app.tags.get_by_group(
@@ -2005,14 +1992,16 @@ def on_group_by_tags_by_category_get(
     only_unread = user["settings"].get("only_unread", False)
     manager = get_context_filter_manager(user)
 
+    context_sorted_tags = None
+    category_tag_query = {"classifications.category": category}
     if manager.has_active_filters():
-        tags_count, _ = _get_filtered_tag_stats(
+        tags_count, context_sorted_tags = _get_filtered_tag_stats(
             app,
             user,
             manager,
             only_unread,
             user["settings"]["hot_tags"],
-            tag_query={"classifications.category": category},
+            tag_query=category_tag_query,
         )
     else:
         tags_count = app.tags.count_by_category(user["sid"], category, only_unread)
@@ -2037,16 +2026,9 @@ def on_group_by_tags_by_category_get(
     )
 
     if manager.has_active_filters():
-        _, sorted_tags = _get_filtered_tag_stats(
-            app,
-            user,
-            manager,
-            only_unread,
-            user["settings"]["hot_tags"],
-            offset=start_tags_range,
-            limit=user["settings"]["tags_on_page"],
-            tag_query={"classifications.category": category},
-        )
+        sorted_tags = context_sorted_tags[
+            start_tags_range : start_tags_range + user["settings"]["tags_on_page"]
+        ]
     else:
         tags = app.tags.get_by_category(
             user["sid"],
