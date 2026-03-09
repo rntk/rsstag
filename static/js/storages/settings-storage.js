@@ -54,7 +54,7 @@ export default class SettingsStorage {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(this._state.settings),
+      body: JSON.stringify(settings),
     })
       .then((response) => {
         response.json().then((data) => {
@@ -63,12 +63,12 @@ export default class SettingsStorage {
 
             state.settings = settings;
             this.setState(state);
+            this.changeSettingsWindowState();
           } else {
             this.ES.trigger(this.ES.SETTINGS_UPDATED, this.getState());
             this.errorMessage('Error. Try later');
           }
         });
-        this.changeSettingsWindowState();
       })
       .catch((err) => {
         this.errorMessage('Error. Try later');
@@ -107,7 +107,7 @@ export default class SettingsStorage {
 
   errorMessage(msg) {
     console.log(msg);
-    this.ES.trigger(this.SETTINGS_ERROR_MESSAGE, msg);
+    this.ES.trigger(this.ES.SETTINGS_ERROR_MESSAGE, msg);
   }
 
   start() {
