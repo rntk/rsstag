@@ -1,6 +1,6 @@
 import unittest
 import json
-from rsstag.providers import tlg_forward_to_query
+from rsstag.providers.telegram import tlg_forward_to_query
 
 
 class TestTlgPollToHTML(unittest.TestCase):
