@@ -59,6 +59,7 @@ class ProviderWorker:
         selection = None
         if task.get("data"):
             selection = task["data"].get("selection")
+        success = False
         try:
             for posts, feeds in provider.download(provider_user, selection):
                 posts_n += len(posts)
@@ -94,8 +95,7 @@ class ProviderWorker:
                 if n_feeds:
                     self._db.feeds.insert_many(n_feeds)
                     self._record_bulk_write("feeds", len(n_feeds))
-            self._save_refreshed_gmail_token(task, provider_user, provider_name)
-            return True
+            success = True
         except Exception as e:
             logging.error(
                 "Can`t save in db for user %s. Info: %s. %s",
@@ -104,7 +104,10 @@ class ProviderWorker:
                 traceback.format_exc(),
             )
             logging.info("Saved posts: %s.", posts_n)
-            return False
+        finally:
+            self._save_refreshed_gmail_token(task, provider_user, provider_name)
+
+        return success
 
     def handle_mark(self, task: Dict[str, Any]) -> bool:
         provider_name = task["data"].get("provider") or task["user"].get("provider")
