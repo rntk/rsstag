@@ -636,8 +636,8 @@ class TelegramProvider:
                     yield (posts, list(feeds.values()))
                     posts = []
                 time.sleep(randint(1, 3))
-    
-                yield (posts, list(feeds.values()))
+
+            yield (posts, list(feeds.values()))
         finally:
             self._tlg.close()
 
