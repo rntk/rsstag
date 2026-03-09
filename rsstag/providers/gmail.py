@@ -104,10 +104,13 @@ class GmailProvider:
                         return None
                     token_data = await resp.json()
                     access_token = token_data.get("access_token")
+                    refreshed_refresh_token = token_data.get("refresh_token")
                     if access_token:
                         # Keep both keys in sync for compatibility across the app
                         user["token"] = access_token
                         user["access_token"] = access_token
+                    if refreshed_refresh_token:
+                        user["refresh_token"] = refreshed_refresh_token
                     return access_token
             except aiohttp.ClientError as e:
                 logging.error(f"Error refreshing token: {e}")

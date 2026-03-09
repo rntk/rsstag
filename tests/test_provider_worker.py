@@ -108,6 +108,57 @@ def test_handle_download_success(
     record_bulk_write.assert_called_once_with("posts", 1)
 
 
+def test_handle_download_persists_refreshed_gmail_token(
+    worker: ProviderWorker,
+    mock_users: MagicMock,
+    mock_providers: Dict[str, MagicMock],
+) -> None:
+    task: Dict[str, Any] = {"user": {"sid": "123"}, "data": {"provider": data_providers.GMAIL}}
+    provider_user = {
+        "token": "new-token",
+        "access_token": "new-token",
+        "refresh_token": "refresh-1",
+        "token_refreshed": True,
+    }
+    mock_users.get_provider_user.return_value = provider_user
+
+    mock_providers[data_providers.GMAIL].download.return_value = [([], [])]
+
+    assert worker.handle_download(task) is True
+
+    mock_users.update_provider.assert_called_once_with(
+        "123",
+        data_providers.GMAIL,
+        {"token": "new-token", "retoken": False, "refresh_token": "refresh-1"},
+    )
+
+
+def test_handle_gmail_sort_persists_refreshed_token(
+    worker: ProviderWorker,
+    mock_users: MagicMock,
+    mock_providers: Dict[str, MagicMock],
+) -> None:
+    task: Dict[str, Any] = {"user": {"sid": "123"}, "type": TASK_GMAIL_SORT, "data": {}}
+    provider_user = {
+        "token": "new-token",
+        "access_token": "new-token",
+        "refresh_token": "refresh-1",
+        "token_refreshed": True,
+    }
+    mock_users.get_provider_user.return_value = provider_user
+
+    provider = mock_providers[data_providers.GMAIL]
+    provider.sort_emails_by_domain.return_value = True
+
+    assert worker.handle_gmail_sort(task) is True
+
+    mock_users.update_provider.assert_called_once_with(
+        "123",
+        data_providers.GMAIL,
+        {"token": "new-token", "retoken": False, "refresh_token": "refresh-1"},
+    )
+
+
 def test_handle_download_duplicate_post_errors_are_ignored(
     worker: ProviderWorker,
     mock_users: MagicMock,
