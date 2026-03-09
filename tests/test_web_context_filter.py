@@ -316,6 +316,98 @@ class TestWebContextFilter(MongoWebTestCase):
         self.assertEqual(scoped_categories["Cross Domain"], 1)
         self.assertNotIn("Beta Domain", scoped_categories)
 
+    def test_context_filter_item_roundtrip_persists_canonical_schema(self):
+        sid = self._seed_filter_fixture()
+        client = self.get_authenticated_client(sid)
+
+        for item_type, value in [
+            ("feed", "feed-1"),
+            ("category", "cat-1"),
+            ("topic", "Technology > AI"),
+            ("subtopic", "Technology > AI > Agents"),
+        ]:
+            add_response = client.post(
+                "/api/context-filter/item",
+                data=json.dumps({"type": item_type, "value": value}),
+                content_type="application/json",
+            )
+            self.assertEqual(add_response.status_code, 200)
+
+        persisted = self.app.users.get_by_sid(sid)["settings"]["context_filter"]
+        self.assertEqual(
+            {
+                "type": "feeds",
+                "feed_ids": ["feed-1"],
+            },
+            persisted.get("feeds"),
+        )
+        self.assertEqual(
+            {
+                "type": "categories",
+                "category_ids": ["cat-1"],
+            },
+            persisted.get("categories"),
+        )
+        self.assertEqual(
+            {
+                "type": "topic",
+                "topic_path": "Technology > AI",
+            },
+            persisted.get("topic"),
+        )
+        self.assertEqual(
+            {
+                "type": "subtopic",
+                "topic_path": "Technology > AI > Agents",
+            },
+            {k: v for k, v in persisted.get("subtopic", {}).items() if k in {"type", "topic_path"}},
+        )
+
+        for item_type, value in [
+            ("feed", "feed-1"),
+            ("category", "cat-1"),
+            ("topic", "Technology > AI"),
+            ("subtopic", "Technology > AI > Agents"),
+        ]:
+            remove_response = client.delete(
+                "/api/context-filter/item",
+                data=json.dumps({"type": item_type, "value": value}),
+                content_type="application/json",
+            )
+            self.assertEqual(remove_response.status_code, 200)
+
+        state = client.get("/api/context-filter").get_json()["data"]
+        self.assertEqual([], state["filters"]["feeds"])
+        self.assertEqual([], state["filters"]["categories"])
+        self.assertEqual([], state["filters"]["topics"])
+        self.assertEqual([], state["filters"]["subtopics"])
+
+    def test_context_filter_legacy_shapes_are_normalized_for_api_and_group_pages(self):
+        sid = self._seed_feed_scoped_tag_fixture()
+        self.app.users.update_settings(
+            sid,
+            {
+                "context_filter": {
+                    "feeds": ["feed-alpha"],
+                    "categories": ["cat-alpha"],
+                    "topics": ["Technology > AI"],
+                    "subtopics": ["Technology > AI > Agents"],
+                }
+            },
+        )
+
+        client = self.get_authenticated_client(sid)
+        state = client.get("/api/context-filter").get_json()["data"]["filters"]
+        self.assertEqual(["feed-alpha"], state["feeds"])
+        self.assertEqual(["cat-alpha"], state["categories"])
+        self.assertEqual(["Technology > AI"], state["topics"])
+        self.assertEqual(["Technology > AI > Agents"], state["subtopics"])
+
+        scoped_counts = self._extract_tags_from_group_page(client.get("/group/tag/1"))
+        self.assertEqual(2, scoped_counts.get("alpha"))
+        self.assertEqual(1, scoped_counts.get("shared"))
+        self.assertNotIn("beta", scoped_counts)
+
 
 if __name__ == "__main__":
     import unittest

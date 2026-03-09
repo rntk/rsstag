@@ -16,8 +16,8 @@ ITEM_TYPE_TO_FILTER_KEY = {
     "tag": "tags",
     "feed": "feeds",
     "category": "categories",
-    "topic": "topics",
-    "subtopic": "subtopics",
+    "topic": "topic",
+    "subtopic": "subtopic",
 }
 
 
@@ -45,22 +45,113 @@ def _format_count_label(count: int, singular: str, plural: str) -> str:
     return f"{count} {singular if count == 1 else plural}"
 
 
-def _extract_tags(filter_data: dict) -> list:
+def _normalize_string_list(values) -> list[str]:
+    normalized: list[str] = []
+    for value in values or []:
+        item = str(value).strip()
+        if item and item not in normalized:
+            normalized.append(item)
+    return normalized
+
+
+def _normalize_single_path(value) -> str:
+    if not value:
+        return ""
+    return " > ".join(part.strip() for part in str(value).split(">") if part.strip())
+
+
+def _extract_tags(filter_data: dict) -> list[str]:
     tags_data = filter_data.get("tags", {})
     if isinstance(tags_data, dict):
-        return tags_data.get("tags", [])
+        return _normalize_string_list(tags_data.get("tags", []))
     if isinstance(tags_data, list):
-        return tags_data
+        return _normalize_string_list(tags_data)
     return []
 
 
+def _normalize_context_filter_data(filter_data: dict) -> dict:
+    if not isinstance(filter_data, dict):
+        return {}
+
+    tags = _extract_tags(filter_data)
+
+    feeds_data = filter_data.get("feeds", {})
+    if isinstance(feeds_data, dict):
+        feed_ids = _normalize_string_list(feeds_data.get("feed_ids") or feeds_data.get("feeds") or [])
+    elif isinstance(feeds_data, list):
+        feed_ids = _normalize_string_list(feeds_data)
+    else:
+        feed_ids = []
+
+    categories_data = filter_data.get("categories", {})
+    if isinstance(categories_data, dict):
+        category_ids = _normalize_string_list(
+            categories_data.get("category_ids") or categories_data.get("categories") or []
+        )
+    elif isinstance(categories_data, list):
+        category_ids = _normalize_string_list(categories_data)
+    else:
+        category_ids = []
+
+    topic_data = filter_data.get("topic", {})
+    topic_path = ""
+    if isinstance(topic_data, dict):
+        topic_path = _normalize_single_path(topic_data.get("topic_path") or topic_data.get("topic"))
+    elif isinstance(topic_data, str):
+        topic_path = _normalize_single_path(topic_data)
+    if not topic_path:
+        topics_legacy = filter_data.get("topics", [])
+        if isinstance(topics_legacy, list):
+            topic_path = _normalize_single_path(topics_legacy[0] if topics_legacy else "")
+
+    subtopic_data = filter_data.get("subtopic", {})
+    subtopic_path = ""
+    parent_topic_path = ""
+    node = ""
+    if isinstance(subtopic_data, dict):
+        subtopic_path = _normalize_single_path(
+            subtopic_data.get("topic_path") or subtopic_data.get("subtopic_path")
+        )
+        parent_topic_path = _normalize_single_path(subtopic_data.get("parent_topic_path"))
+        node = str(subtopic_data.get("node") or subtopic_data.get("subtopic_node") or "").strip()
+    elif isinstance(subtopic_data, str):
+        subtopic_path = _normalize_single_path(subtopic_data)
+    if not subtopic_path:
+        subtopics_legacy = filter_data.get("subtopics", [])
+        if isinstance(subtopics_legacy, list):
+            subtopic_path = _normalize_single_path(subtopics_legacy[0] if subtopics_legacy else "")
+
+    normalized = {}
+    if tags:
+        normalized["tags"] = {"type": "tags", "tags": tags}
+    if feed_ids:
+        normalized["feeds"] = {"type": "feeds", "feed_ids": feed_ids}
+    if category_ids:
+        normalized["categories"] = {"type": "categories", "category_ids": category_ids}
+    if topic_path:
+        normalized["topic"] = {"type": "topic", "topic_path": topic_path}
+    if subtopic_path or parent_topic_path or node:
+        normalized["subtopic"] = {
+            "type": "subtopic",
+            "topic_path": subtopic_path,
+            "parent_topic_path": parent_topic_path,
+            "node": node,
+        }
+    return normalized
+
+
 def _get_unified_filters(filter_data: dict) -> dict:
+    normalized = _normalize_context_filter_data(filter_data)
+    feeds = normalized.get("feeds", {})
+    categories = normalized.get("categories", {})
+    topic = normalized.get("topic", {})
+    subtopic = normalized.get("subtopic", {})
     return {
-        "tags": _extract_tags(filter_data),
-        "feeds": filter_data.get("feeds", []),
-        "categories": filter_data.get("categories", []),
-        "topics": filter_data.get("topics", []),
-        "subtopics": filter_data.get("subtopics", []),
+        "tags": _extract_tags(normalized),
+        "feeds": _normalize_string_list(feeds.get("feed_ids", [])),
+        "categories": _normalize_string_list(categories.get("category_ids", [])),
+        "topics": [topic.get("topic_path")] if topic.get("topic_path") else [],
+        "subtopics": [subtopic.get("topic_path")] if subtopic.get("topic_path") else [],
     }
 
 
@@ -243,7 +334,7 @@ def get_context_filter_manager(user: dict) -> ContextFilterManager:
     This is a helper function used by both handlers and other modules.
     """
     filter_data = user.get("settings", {}).get("context_filter", {})
-    return ContextFilterManager.from_dict(filter_data)
+    return ContextFilterManager.from_dict(_normalize_context_filter_data(filter_data))
 
 
 def on_context_filter_get(
@@ -285,7 +376,7 @@ def on_context_filter_add_tag(
             status=404,
         )
 
-    filter_data = user.get("settings", {}).get("context_filter", {}).copy()
+    filter_data = _normalize_context_filter_data(user.get("settings", {}).get("context_filter", {}))
     manager = ContextFilterManager.from_dict(filter_data)
     tag_filter = manager.get_tag_filter()
     tag_filter.add_tag(tag)
@@ -314,7 +405,7 @@ def on_context_filter_remove_tag(
             status=400,
         )
 
-    filter_data = user.get("settings", {}).get("context_filter", {}).copy()
+    filter_data = _normalize_context_filter_data(user.get("settings", {}).get("context_filter", {}))
     manager = ContextFilterManager.from_dict(filter_data)
     tag_filter = manager.get_filter("tags")
     tags = []
@@ -356,7 +447,7 @@ def on_context_filter_add_item(
     if validation_error:
         return validation_error
 
-    filter_data = user.get("settings", {}).get("context_filter", {}).copy()
+    filter_data = _normalize_context_filter_data(user.get("settings", {}).get("context_filter", {}))
     filter_key = ITEM_TYPE_TO_FILTER_KEY[item_type]
 
     if filter_key == "tags":
@@ -364,11 +455,20 @@ def on_context_filter_add_item(
         tag_filter = manager.get_tag_filter()
         tag_filter.add_tag(value)
         filter_data["tags"] = tag_filter.to_dict()
-    else:
-        values = list(filter_data.get(filter_key, []))
+    elif filter_key == "feeds":
+        values = _normalize_string_list(filter_data.get("feeds", {}).get("feed_ids", []))
         if value not in values:
             values.append(value)
-        filter_data[filter_key] = values
+        filter_data["feeds"] = {"type": "feeds", "feed_ids": values}
+    elif filter_key == "categories":
+        values = _normalize_string_list(filter_data.get("categories", {}).get("category_ids", []))
+        if value not in values:
+            values.append(value)
+        filter_data["categories"] = {"type": "categories", "category_ids": values}
+    elif filter_key == "topic":
+        filter_data["topic"] = {"type": "topic", "topic_path": _normalize_single_path(value)}
+    elif filter_key == "subtopic":
+        filter_data["subtopic"] = {"type": "subtopic", "topic_path": _normalize_single_path(value)}
 
     app.users.update_settings(user["sid"], {"context_filter": filter_data})
     user.setdefault("settings", {})["context_filter"] = filter_data
@@ -388,7 +488,7 @@ def on_context_filter_remove_item(
         return error
     item_type, value = parsed
 
-    filter_data = user.get("settings", {}).get("context_filter", {}).copy()
+    filter_data = _normalize_context_filter_data(user.get("settings", {}).get("context_filter", {}))
     filter_key = ITEM_TYPE_TO_FILTER_KEY[item_type]
 
     if filter_key == "tags":
@@ -397,11 +497,24 @@ def on_context_filter_remove_item(
         if tag_filter:
             tag_filter.remove_tag(value)
             filter_data["tags"] = tag_filter.to_dict()
-    else:
-        values = list(filter_data.get(filter_key, []))
+    elif filter_key == "feeds":
+        values = _normalize_string_list(filter_data.get("feeds", {}).get("feed_ids", []))
         if value in values:
             values.remove(value)
-        filter_data[filter_key] = values
+        filter_data["feeds"] = {"type": "feeds", "feed_ids": values}
+    elif filter_key == "categories":
+        values = _normalize_string_list(filter_data.get("categories", {}).get("category_ids", []))
+        if value in values:
+            values.remove(value)
+        filter_data["categories"] = {"type": "categories", "category_ids": values}
+    elif filter_key == "topic":
+        topic_path = _normalize_single_path(filter_data.get("topic", {}).get("topic_path"))
+        if _normalize_single_path(value) == topic_path:
+            filter_data.pop("topic", None)
+    elif filter_key == "subtopic":
+        subtopic_path = _normalize_single_path(filter_data.get("subtopic", {}).get("topic_path"))
+        if _normalize_single_path(value) == subtopic_path:
+            filter_data.pop("subtopic", None)
 
     app.users.update_settings(user["sid"], {"context_filter": filter_data})
     user.setdefault("settings", {})["context_filter"] = filter_data
