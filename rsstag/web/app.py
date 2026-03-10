@@ -15,6 +15,7 @@ from rsstag.web.routes import RSSTagRoutes
 from rsstag.utils import get_sorted_dict_by_alphabet, load_config
 from rsstag.posts import RssTagPosts
 from rsstag.chats import RssTagChats
+from rsstag.paths import RssTagPaths
 from rsstag.feeds import RssTagFeeds
 from rsstag.tags import RssTagTags
 from rsstag.letters import RssTagLetters
@@ -41,6 +42,7 @@ import rsstag.web.feeds as feeds_handlers
 import rsstag.web.metadata as metadata_handlers
 import rsstag.web.context_filter_handlers as context_filter_handlers
 import rsstag.web.chats as chats_handlers
+import rsstag.web.paths_handlers as paths_handlers
 
 from rsstag.llm.router import LLMRouter
 
@@ -141,6 +143,8 @@ class RSSTagApplication(object):
         self.snippet_clusters.prepare()
         self.chats = RssTagChats(self.db)
         self.chats.prepare()
+        self.paths = RssTagPaths(self.db)
+        self.paths.prepare()
         self.routes = RSSTagRoutes(self.config["settings"]["host_name"], handlers=self)
         self.endpoints = {}
         self.update_endpoints()
@@ -1866,6 +1870,27 @@ class RSSTagApplication(object):
 
     def on_chats_context_post(self, user: dict, request: Request, chat_id: str):
         return chats_handlers.on_chats_context_post(self, user, request, chat_id)
+
+    def on_paths_page_get(self, user: dict, request: Request):
+        return paths_handlers.on_paths_page_get(self, user, request)
+
+    def on_paths_list_get(self, user: dict, request: Request):
+        return paths_handlers.on_paths_list_get(self, user, request)
+
+    def on_paths_create_post(self, user: dict, request: Request):
+        return paths_handlers.on_paths_create_post(self, user, request)
+
+    def on_paths_detail_get(self, user: dict, request: Request, path_id: str):
+        return paths_handlers.on_paths_detail_get(self, user, request, path_id)
+
+    def on_paths_delete(self, user: dict, request: Request, path_id: str):
+        return paths_handlers.on_paths_delete(self, user, request, path_id)
+
+    def on_path_posts_get(self, user: dict, request: Request, path_id: str):
+        return paths_handlers.on_path_posts_get(self, user, request, path_id)
+
+    def on_path_sentences_get(self, user: dict, request: Request, path_id: str):
+        return paths_handlers.on_path_sentences_get(self, user, request, path_id)
 
     def on_prefixes_all_get(self, user: dict, _: Request, prefix_len: int):
         return prefixes_handlers.on_prefixes_all_get(self, user, prefix_len)

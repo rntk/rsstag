@@ -51,6 +51,8 @@ import BiGramsGraphSimple from '../components/bi-grams-graph-simple.js';
 import BiGramsGraph from '../components/bi-grams-graph.js';
 import { BiGramsTabs } from '../components/bigrams-tabs.js';
 import ContextFilterStorage from '../storages/context-filter-storage.js';
+import PathStorage from '../storages/path-storage.js';
+import PathManager from '../components/path-manager.js';
 import ContextFilterBar from '../components/context-filter-bar.js';
 import ChatStorage from '../storages/chat-storage.js';
 import GlobalChatPanel from '../components/global-chat.js';
@@ -331,6 +333,12 @@ export function resolvePageType(path) {
   if (/^\/topics-list(\/[0-9]+)?$/.test(path)) {
     return 'topics-list';
   }
+  if (/^\/paths\/sentences\//.test(path)) {
+    return 'path-sentences';
+  }
+  if (/^\/paths\/posts\//.test(path)) {
+    return 'path-posts';
+  }
 
   return 'unknown';
 }
@@ -585,6 +593,11 @@ export function initApp() {
     mindmap.render('#topics_mindmap_chart', window.mindmap_data);
   } else if (pageType === 'topics-list') {
     initTopicsPage();
+  } else if (pageType === 'path-sentences') {
+    initSnippetHoverCards();
+  } else if (pageType === 'path-posts') {
+    const posts_storage = new PostsStorage(window.EVSYS);
+    posts_storage.start();
   }
 }
 
@@ -630,6 +643,11 @@ function tagNoContextInfoPage(tag) {
 }
 
 function tagWithContextInfoPage(tag) {
+  // Instantiate PathManager so radar chart clicks can create paths
+  const path_storage = new PathStorage(window.EVSYS);
+  path_storage.start();
+  window.pathManager = new PathManager(path_storage);
+
   const similar_w2v_evsys = new EventsSystem();
   const similar_w2v_storage = new TagsStorage(similar_w2v_evsys, '/tag-similar/w2v');
   ReactDOM.render(<TagsList ES={similar_w2v_evsys} />, document.getElementById('similar_w2v_tags'));

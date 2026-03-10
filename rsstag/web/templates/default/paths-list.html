@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Paths | RSSTag</title>
+    {% include 'head-data.html' %}
+</head>
+
+<body>
+    {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
+
+    <div id="global_tools">
+        {% include "logo.html" %}
+        <div class="panel right_half">
+            <span class="login_button global_tools_button">
+                <a href="/">main</a>
+            </span>
+            {{ g_status.global_status() }}
+            {{ menu.settings_menu() }}
+        </div>
+    </div>
+
+    <div class="page screen_middle">
+        <h1>Saved Paths</h1>
+
+        {% if paths %}
+        <table class="paths-table">
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Type</th>
+                    <th>Filters</th>
+                    <th>Created</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for p in paths %}
+                <tr class="path-row" data-path-id="{{ p.path_id }}">
+                    <td>
+                        <a href="/paths/{{ p.content_type }}/{{ p.path_id }}">{{ p.title }}</a>
+                    </td>
+                    <td class="path-content-type">{{ p.content_type }}</td>
+                    <td class="path-filters-cell">
+                        {% for dim, spec in p.filterset.items() %}
+                        <span class="filter-chip filter-chip-{{ dim }}">
+                            <span class="filter-chip-dim">{{ dim }}:</span>
+                            {{ spec.values | join(', ') }}
+                        </span>
+                        {% endfor %}
+                        {% if p.exclude %}
+                        {% for dim, spec in p.exclude.items() %}
+                        <span class="filter-chip filter-chip-exclude">
+                            <span class="filter-chip-dim">NOT {{ dim }}:</span>
+                            {{ spec.values | join(', ') }}
+                        </span>
+                        {% endfor %}
+                        {% endif %}
+                    </td>
+                    <td class="path-created-at">{{ p.created_at | timestamp_to_datetime }}</td>
+                    <td class="path-actions">
+                        <button class="path-delete-btn" data-path-id="{{ p.path_id }}" type="button">Delete</button>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="paths-empty">No saved paths yet. Paths are created by clicking topics in the tag radar chart.</p>
+        {% endif %}
+    </div>
+
+    <div id="progressbar"></div>
+    <script>
+    (function () {
+        document.querySelectorAll('.path-delete-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var pathId = btn.dataset.pathId;
+                if (!confirm('Delete this path?')) return;
+                fetch('/api/paths/' + pathId, { method: 'DELETE' })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        if (data.data === 'ok') {
+                            var row = btn.closest('.path-row');
+                            if (row) row.remove();
+                        } else {
+                            alert('Failed to delete path');
+                        }
+                    });
+            });
+        });
+    })();
+    </script>
+</body>
+
+</html>

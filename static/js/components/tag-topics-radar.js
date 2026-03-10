@@ -1,5 +1,7 @@
 'use strict';
 
+import PathManager from './path-manager.js';
+
 export default class TagTopicsRadar {
   constructor(container_id, event_system) {
     this.ES = event_system;
@@ -89,9 +91,17 @@ export default class TagTopicsRadar {
         onClick: (evt, elements) => {
           if (!elements || !elements.length) return;
           const idx = elements[0]._index;
-          const url = urls[idx];
-          if (url) {
-            window.location.href = url;
+          const topic = labels[idx];
+          const tag = window.initial_tag && window.initial_tag.tag;
+
+          if (window.pathManager && tag) {
+            const filterset = PathManager.makeFilterset({ tags: [tag], topics: [topic] });
+            window.pathManager.createAndNavigate('sentences', filterset);
+          } else {
+            const url = urls[idx];
+            if (url) {
+              window.location.href = url;
+            }
           }
         },
         tooltips: {

@@ -65,6 +65,10 @@ export default class EventsSystem {
     this.CONTEXT_FILTER_REMOVE_TAG = this.CONTEXT_FILTER_REMOVE;
     this.CONTEXT_FILTER_CLEAR = 'context_filter_clear';
 
+    this.PATH_CREATED = 'path_created';
+    this.PATH_DELETED = 'path_deleted';
+    this.PATHS_UPDATED = 'paths_updated';
+
     this.CHAT_UPDATED = 'chat_updated';
     this.CHAT_LIST_UPDATED = 'chat_list_updated';
     this.CHAT_TOGGLE_PANEL = 'chat_toggle_panel';
