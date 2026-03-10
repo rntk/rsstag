@@ -46,14 +46,14 @@
                 {% for dim, spec in path.filterset.items() %}
                 <span class="filter-chip filter-chip-{{ dim }}">
                     <span class="filter-chip-dim">{{ dim }}:</span>
-                    {{ spec.values | join(', ') }}
+                    {{ spec['values'] | join(', ') }}
                 </span>
                 {% endfor %}
                 {% if path.exclude %}
                 {% for dim, spec in path.exclude.items() %}
                 <span class="filter-chip filter-chip-exclude">
                     <span class="filter-chip-dim">NOT {{ dim }}:</span>
-                    {{ spec.values | join(', ') }}
+                    {{ spec['values'] | join(', ') }}
                 </span>
                 {% endfor %}
                 {% endif %}

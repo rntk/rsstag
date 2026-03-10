@@ -9,6 +9,7 @@ export default class TagTopicsRadar {
     this._chart = null;
 
     this.updateChart = this.updateChart.bind(this);
+    this.navigateToTopic = this.navigateToTopic.bind(this);
   }
 
   updateChart(state) {
@@ -30,6 +31,56 @@ export default class TagTopicsRadar {
     this.renderChart(labels, counts, lengths, urls);
   }
 
+  getCurrentTag() {
+    return window.initial_tag && window.initial_tag.tag ? window.initial_tag.tag : '';
+  }
+
+  async navigateToTopic(topic, url, event = null) {
+    if (event) {
+      event.preventDefault();
+    }
+
+    const tag = this.getCurrentTag();
+    if (window.pathManager && tag) {
+      const filterset = PathManager.makeFilterset({ tags: [tag], topics: [topic] });
+      await window.pathManager.createAndNavigate('sentences', filterset);
+      return;
+    }
+
+    if (url) {
+      window.location.href = url;
+    }
+  }
+
+  renderTopicLinks(labels, counts, lengths, urls) {
+    const tag = this.getCurrentTag();
+    const list = document.createElement('div');
+    list.className = 'tag-topics-radar-links';
+
+    labels.forEach((topic, index) => {
+      const link = document.createElement('a');
+      link.className = 'tag-topics-radar-link';
+      link.href = urls[index] || '#';
+      link.textContent = topic;
+      link.title = tag ? `Open path for ${tag} + ${topic}` : topic;
+      link.addEventListener('click', (event) => {
+        void this.navigateToTopic(topic, urls[index], event);
+      });
+
+      const meta = document.createElement('span');
+      meta.className = 'tag-topics-radar-link-meta';
+      meta.textContent = `${counts[index]} posts · ${lengths[index]} chars`;
+
+      const item = document.createElement('div');
+      item.className = 'tag-topics-radar-link-item';
+      item.appendChild(link);
+      item.appendChild(meta);
+      list.appendChild(item);
+    });
+
+    this._container.appendChild(list);
+  }
+
   renderChart(labels, counts, lengths, urls) {
     if (this._chart) {
       this._chart.destroy();
@@ -38,11 +89,13 @@ export default class TagTopicsRadar {
     this._container.innerHTML = '';
 
     const wrapper = document.createElement('div');
-    wrapper.style.cssText = 'position:relative;width:100%;max-width:900px;height:700px;margin:0 auto;';
+    wrapper.style.cssText =
+      'position:relative;width:100%;max-width:900px;height:700px;margin:0 auto;';
 
     const canvas = document.createElement('canvas');
     wrapper.appendChild(canvas);
     this._container.appendChild(wrapper);
+    this.renderTopicLinks(labels, counts, lengths, urls);
 
     // Normalize lengths to the same scale as counts for visual comparison
     const maxCount = Math.max(...counts, 1);
@@ -92,17 +145,7 @@ export default class TagTopicsRadar {
           if (!elements || !elements.length) return;
           const idx = elements[0]._index;
           const topic = labels[idx];
-          const tag = window.initial_tag && window.initial_tag.tag;
-
-          if (window.pathManager && tag) {
-            const filterset = PathManager.makeFilterset({ tags: [tag], topics: [topic] });
-            window.pathManager.createAndNavigate('sentences', filterset);
-          } else {
-            const url = urls[idx];
-            if (url) {
-              window.location.href = url;
-            }
-          }
+          void this.navigateToTopic(topic, urls[idx]);
         },
         tooltips: {
           callbacks: {
