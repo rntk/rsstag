@@ -40,6 +40,7 @@
         <div class="back-nav">
             <a href="/post-grouped/{{post_id}}" class="back-btn">&larr; Back to Full Posts Grouped View</a>
             {% if current_topic %}
+            <a href="/post-compare/{{post_id}}?topic={{ current_topic|url_encode }}" class="back-btn">Compare Side by Side</a>
             <a href="/post-grouped-snippets/{{post_id}}" class="back-btn">Show All Topics</a>
             {% endif %}
         </div>

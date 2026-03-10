@@ -626,6 +626,9 @@ class RSSTagApplication(object):
     def on_post_grouped_get(self, user: dict, request: Request, pids: str) -> Response:
         return posts_handlers.on_post_grouped_get(self, user, request, pids)
 
+    def on_post_compare_get(self, user: dict, request: Request, pids: str) -> Response:
+        return posts_handlers.on_post_compare_get(self, user, request, pids)
+
     def on_post_grouped_snippets_get(
         self, user: dict, request: Request, pids: str
     ) -> Response:

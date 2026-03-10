@@ -171,6 +171,7 @@ def _build_topics_index(
         }
         topics_for_post: list[str] = []
         topic_text_lengths: dict[str, int] = {}
+        topic_sentences_counts: dict[str, int] = {}
         for topic, indices in post_data.get("groups", {}).items():
             topic_indices = indices
             if only_unread:
@@ -220,6 +221,7 @@ def _build_topics_index(
                         if txt:
                             tl += len(str(txt))
                 topic_text_lengths[topic] = tl
+                topic_sentences_counts[topic] = len(topic_indices)
 
         if not topics_for_post:
             continue
@@ -231,10 +233,11 @@ def _build_topics_index(
 
         for topic in topics_for_post:
             if topic not in topic_counts:
-                topic_counts[topic] = {"count": 0, "posts": [], "text_length": 0}
+                topic_counts[topic] = {"count": 0, "posts": [], "text_length": 0, "sentences_count": 0}
             topic_counts[topic]["count"] += 1
             topic_counts[topic]["posts"].append(post_id_str)
             topic_counts[topic]["text_length"] += topic_text_lengths.get(topic, 0)
+            topic_counts[topic]["sentences_count"] += topic_sentences_counts.get(topic, 0)
 
     return topic_counts, post_topic_mapping
 
@@ -507,6 +510,7 @@ def _build_topics_tree(topic_counts: dict[str, dict]) -> list[dict]:
             continue
         topic_count: int = int(topic_data.get("count", len(topic_posts)))
         topic_text_length: int = int(topic_data.get("text_length", 0))
+        topic_sentences_count: int = int(topic_data.get("sentences_count", 0))
 
         current_children: dict[str, dict] = raw_roots
         current_path: list[str] = []
@@ -518,12 +522,14 @@ def _build_topics_tree(topic_counts: dict[str, dict]) -> list[dict]:
                     "path": " > ".join(current_path),
                     "count": 0,
                     "text_length": 0,
+                    "sentences_count": 0,
                     "posts": set(),
                     "children": {},
                 }
             node: dict = current_children[part]
             node["count"] += topic_count
             node["text_length"] += topic_text_length
+            node["sentences_count"] += topic_sentences_count
             node["posts"].update(topic_posts)
             current_children = node["children"]
 
@@ -538,6 +544,7 @@ def _build_topics_tree(topic_counts: dict[str, dict]) -> list[dict]:
                     "path": node["path"],
                     "count": node["count"],
                     "text_length": node.get("text_length", 0),
+                    "sentences_count": node.get("sentences_count", 0),
                     "posts": posts,
                     "children": children,
                 }
@@ -1786,7 +1793,28 @@ def on_cluster_get(app: "RSSTagApplication", user: dict, cluster: int) -> Respon
 def on_post_grouped_get(
     app: "RSSTagApplication", user: dict, request: Request, pids: str
 ) -> Response:
-    """Handler for grouped posts view with server-side highlighting"""
+    """Handler for grouped posts view with server-side highlighting."""
+    page_context: Optional[dict[str, Any]] = _build_grouped_posts_page_context(
+        app, user, request, pids
+    )
+    if page_context is None:
+        return app.on_error(user, request, NotFound())
+
+    page = app.template_env.get_template("post-grouped.html")
+    return Response(
+        page.render(
+            **page_context,
+            user_settings=user["settings"],
+            provider=user["provider"],
+        ),
+        mimetype="text/html",
+    )
+
+
+def _build_grouped_posts_page_context(
+    app: "RSSTagApplication", user: dict, request: Request, pids: str
+) -> Optional[dict[str, Any]]:
+    """Build shared page context for grouped-post based pages."""
     requested_topic: Optional[str] = request.args.get("topic")
     if requested_topic:
         requested_topic = unquote(requested_topic)
@@ -1802,7 +1830,7 @@ def on_post_grouped_get(
     }
     post_ids: list[str] = [pid for pid in pids.split("_") if pid]
     if not post_ids:
-        return app.on_error(user, request, NotFound())
+        return None
 
     # 1. Fetch posts and their raw content
     posts_info: list[dict] = []
@@ -2055,20 +2083,36 @@ def on_post_grouped_get(
             all_groups[group_name] = [post["post_id"]]
             all_group_colors[group_name] = _group_color(group_name)
 
-    page = app.template_env.get_template("post-grouped.html")
+    return {
+        "post_id": pids,
+        "posts": final_posts,
+        "sentences": all_sentences_data,
+        "groups": all_groups,
+        "group_colors": all_group_colors,
+        "hierarchical_segments": [],
+        "feed_title": combined_feed_title,
+        "post_to_index_map": post_to_index_map,
+        "has_grouped_data": has_grouped_data,
+        "current_topic": requested_topic,
+    }
+
+
+def on_post_compare_get(
+    app: "RSSTagApplication", user: dict, request: Request, pids: str
+) -> Response:
+    """Handler for side-by-side topic comparison view."""
+    page_context: Optional[dict[str, Any]] = _build_grouped_posts_page_context(
+        app, user, request, pids
+    )
+    if page_context is None:
+        return app.on_error(user, request, NotFound())
+
+    page = app.template_env.get_template("post-compare.html")
     return Response(
         page.render(
-            post_id=pids,
-            posts=final_posts,
-            sentences=all_sentences_data,
-            groups=all_groups,
-            group_colors=all_group_colors,
-            hierarchical_segments=[],
-            feed_title=combined_feed_title,
+            **page_context,
             user_settings=user["settings"],
             provider=user["provider"],
-            post_to_index_map=post_to_index_map,
-            has_grouped_data=has_grouped_data,
         ),
         mimetype="text/html",
     )
@@ -2818,6 +2862,7 @@ def _convert_topics_to_sunburst(topics: list[dict]) -> list[dict]:
             "name": topic["name"],
             "value": topic["count"],
             "text_length": topic.get("text_length", 0),
+            "sentences_count": topic.get("sentences_count", 0),
             "_topicPath": topic["path"],
             "_topicPosts": topic["posts"],
             "_nodeKind": "topic",
@@ -2960,6 +3005,10 @@ def on_topics_search(
             "on_post_grouped_get", {"pids": all_post_ids}
         )
         grouped_url = f"{grouped_url}?topic={quote_plus(topic_name)}"
+        compare_base_url: str = app.routes.get_url_by_endpoint(
+            "on_post_compare_get", {"pids": all_post_ids}
+        )
+        compare_url: str = f"{compare_base_url}?topic={quote_plus(topic_name)}"
         snippets_base_url: str = app.routes.get_url_by_endpoint(
             "on_post_grouped_snippets_get", {"pids": all_post_ids}
         )
@@ -2969,6 +3018,7 @@ def on_topics_search(
                 "topic": topic_name,
                 "count": int(topic_data.get("count", 0)),
                 "url": grouped_url,
+                "compare_url": compare_url,
                 "snippets_url": snippets_url,
             }
         )

@@ -53,6 +53,8 @@
                                 <span class="topic-link" title="{{ node.path }}">{{ node.name }}</span>
                                 <a href="/post-grouped/{{ all_post_ids }}?topic={{ node.path|url_encode }}" class="snippet-link"
                                     title="Grouped posts">G</a>
+                                <a href="/post-compare/{{ all_post_ids }}?topic={{ node.path|url_encode }}" class="snippet-link"
+                                    title="Compare posts">C</a>
                                 <a href="/post-grouped-snippets/{{ all_post_ids }}?topic={{ node.path|url_encode }}" class="snippet-link"
                                     title="Grouped snippets">S</a>
                                 <span class="topic-count">({{ node.count }})</span>
@@ -68,6 +70,8 @@
                             <span class="topic-link" title="{{ node.path }}">{{ node.name }}</span>
                             <a href="/post-grouped/{{ all_post_ids }}?topic={{ node.path|url_encode }}" class="snippet-link"
                                 title="Grouped posts">G</a>
+                            <a href="/post-compare/{{ all_post_ids }}?topic={{ node.path|url_encode }}" class="snippet-link"
+                                title="Compare posts">C</a>
                             <a href="/post-grouped-snippets/{{ all_post_ids }}?topic={{ node.path|url_encode }}" class="snippet-link"
                                 title="Grouped snippets">S</a>
                             <span class="topic-count">({{ node.count }})</span>

@@ -254,6 +254,9 @@ export function resolvePageType(path) {
   if (path === '/') {
     return 'root';
   }
+  if (/^\/post-compare\//.test(path)) {
+    return 'post-compare';
+  }
   if (/^\/post-grouped\//.test(path)) {
     return 'post-grouped';
   }
@@ -395,7 +398,7 @@ export function initApp() {
   const pageType = resolvePageType(path);
 
   if (pageType === 'root') {
-  } else if (pageType === 'post-grouped') {
+  } else if (pageType === 'post-grouped' || pageType === 'post-compare') {
     const posts_storage = new PostsStorage(window.EVSYS);
     // Mock the data structure expected by PostsStorage if necessary,
     // although PostsStorage mostly uses window.* variables in fetchPosts()

@@ -96,6 +96,21 @@ class TestWebFrontendContracts(MongoWebTestCase):
             ],
         )
 
+    def test_post_compare_page_contract(self) -> None:
+        html = self._get_html(f"/post-compare/{self.post_ids}")
+        self.assertContainsAll(
+            html,
+            [
+                'id="compare_scroll"',
+                'id="compare_posts"',
+                'window.post_id =',
+                'window.groups =',
+                'window.posts =',
+                'window.current_topic =',
+                "import PostComparePage from '/static/js/components/post-compare.js';",
+            ],
+        )
+
     def test_post_graph_page_contract(self) -> None:
         html = self._get_html(f"/post-graph/{self.post_ids}")
         self.assertContainsAll(

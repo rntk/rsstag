@@ -35,6 +35,9 @@
         <h2>Posts - {{feed_title}}</h2>
 
         <div class="graph-link">
+            {% if current_topic %}
+            <a href="/post-compare/{{post_id}}?topic={{ current_topic|url_encode }}" class="topic-btn">Compare Side by Side</a>
+            {% endif %}
             <a href="/post-graph/{{post_id}}" class="topic-btn">View Topics Graph</a>
         </div>
 
@@ -144,6 +147,7 @@
         window.hierarchical_segments = {{ hierarchical_segments |default ([]) | tojson | safe }};
         window.post_to_index_map = {{ post_to_index_map |default ({}) | tojson | safe }};
         window.has_grouped_data = {{ has_grouped_data |default (false) | tojson | safe }};
+        window.current_topic = {{ current_topic |default (none) | tojson | safe }};
     </script>
     <div id="progressbar"></div>
     <script type="module">

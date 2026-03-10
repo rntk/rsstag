@@ -188,6 +188,11 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/post-compare/<string:pids>",
+                "endpoint": "on_post_compare_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/post-graph/<string:pids>",
                 "endpoint": "on_post_graph_get",
                 "methods": ["GET"],

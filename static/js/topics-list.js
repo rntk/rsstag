@@ -260,6 +260,13 @@ function initTopicsSearch() {
       link.href = item.url;
       link.textContent = `${item.topic} (${item.count})`;
       row.appendChild(link);
+      if (item.compare_url) {
+        row.appendChild(document.createTextNode(' '));
+        const compareLink = document.createElement('a');
+        compareLink.href = item.compare_url;
+        compareLink.textContent = 'compare';
+        row.appendChild(compareLink);
+      }
       if (item.snippets_url) {
         row.appendChild(document.createTextNode(' '));
         const snippetsLink = document.createElement('a');

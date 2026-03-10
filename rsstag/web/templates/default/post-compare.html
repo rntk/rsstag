@@ -1,0 +1,143 @@
+<!DOCTYPE html />
+<html>
+
+<head>
+    <title>Compare Posts | {{feed_title}}</title>
+    {% include "head-data.html" %}
+</head>
+
+<body>
+    {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}{% from 'context-filter-bar.html' import context_filter_bar with context %}
+
+    <div id="global_tools">
+        <div class="left_half">
+            <div id="link_on_root" class="global_tools_button">
+                <a href="/">main</a>
+            </div>
+            <div id="help_button" class="global_tools_button">
+                <a href="#">help</a>
+            </div>
+        </div>
+        <div class="right_half">
+            <div id="player_block" class="global_tools_button"></div>
+            <div id="posts_stat" class="global_tools_button"></div>
+            <div id="read_all" class="global_tools_button"></div>
+            <div id="show_all" class="global_tools_button"></div>
+            {{ g_status.global_status() }}
+            {{ menu.settings_menu() }}
+        </div>
+        {{ context_filter_bar() }}
+    </div>
+
+    <div class="page post-grouped-page post-compare-page">
+        <div class="compare-page-header">
+            <div>
+                <h2>Compare Posts - {{feed_title}}</h2>
+                {% if current_topic %}
+                <p class="compare-topic-summary">Topic: {{ current_topic }}</p>
+                {% endif %}
+            </div>
+            <div class="compare-header-actions">
+                <a href="/post-grouped/{{post_id}}{% if current_topic %}?topic={{ current_topic|url_encode }}{% endif %}" class="topic-btn">Sentences</a>
+                <a href="/post-grouped-snippets/{{post_id}}{% if current_topic %}?topic={{ current_topic|url_encode }}{% endif %}" class="topic-btn">Snippets</a>
+                <a href="/post-graph/{{post_id}}" class="topic-btn">Topic Graph</a>
+            </div>
+        </div>
+
+        {% if feed_title and feed_title != "Processing..." %}
+        <div class="combined-view-info">
+            <p>
+                <strong>Comparison view:</strong> {{ feed_title }}
+                {% if current_topic %}
+                <span class="stats">filtered by {{ current_topic }}</span>
+                {% elif groups|length > 0 %}
+                <span class="stats">default topic selected automatically</span>
+                {% endif %}
+            </p>
+        </div>
+        {% endif %}
+
+        <div class="main-content-wrapper compare-content-wrapper">
+            <div class="sidebar-column compare-sidebar-column">
+                <div class="sticky-sidebar">
+                    <div class="section-header">Topics</div>
+                    <div id="topics_list"></div>
+
+                    {% if posts|length > 1 %}
+                    <div class="section-header posts-header">Posts</div>
+                    <div id="posts_list"></div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="posts-column compare-posts-column">
+                <div id="compare_scroll" class="compare-scroll-shell">
+                    <div id="compare_posts" class="compare-posts-grid">
+                        {% if posts|length > 0 %}
+                        {% for post in posts %}
+                        <section class="post-section compare-post-column" id="post_{{ post.post_id }}" data-post-id="{{ post.post_id }}">
+                            <header class="post-header compare-post-header">
+                                <div class="compare-post-title-row">
+                                    <span class="post-label">Post {{ post.post_id }}</span>
+                                    <span class="post-read-status read-button {{ 'read' if post.read else 'unread' }}"
+                                        data-post-id="{{ post.post_id }}">
+                                        {{ 'read' if post.read else 'unread' }}
+                                    </span>
+                                    <a href="/download/posts/{{ post.post_id }}" class="download-button" download>Download</a>
+                                </div>
+                                {% if post.feed_title %}
+                                <div class="post-feed">from {{ post.feed_title }}</div>
+                                {% endif %}
+                                {% if post.url %}
+                                <div class="compare-post-source">
+                                    <a href="{{ post.url }}" target="_blank" rel="noopener noreferrer">Original</a>
+                                </div>
+                                {% endif %}
+                            </header>
+                            <div class="compare-post-body">
+                                <div class="compare-anchor-guide" aria-hidden="true"></div>
+                                <div class="compare-no-match" hidden>No matches for the active topic in this post.</div>
+                                <div class="post-content">
+                                    <div class="post-content-isolated">
+                                        <div class="post-text" data-post-id="{{ post.post_id }}">{{ post.content|safe }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                        {% endfor %}
+                        {% else %}
+                        <div class="no-posts-message">
+                            No posts found or posts are still being processed.
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        window.post_id = {{ post_id | tojson | safe }};
+        window.feed_title = {{ feed_title | tojson | safe }};
+        window.groups = {{ groups |default ({}) | tojson | safe }};
+        window.group_colors = {{ group_colors |default ({}) | tojson | safe }};
+        window.posts = {{ posts |default ([]) | tojson | safe }};
+        window.sentences = {{ sentences |default ([]) | tojson | safe }};
+        window.rss_settings = {{ user_settings |default ({}) | tojson | safe }};
+        window.hierarchical_segments = {{ hierarchical_segments |default ([]) | tojson | safe }};
+        window.post_to_index_map = {{ post_to_index_map |default ({}) | tojson | safe }};
+        window.has_grouped_data = {{ has_grouped_data |default (false) | tojson | safe }};
+        window.current_topic = {{ current_topic |default (none) | tojson | safe }};
+    </script>
+    <div id="progressbar"></div>
+    <script type="module">
+        import PostComparePage from '/static/js/components/post-compare.js';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const page = new PostComparePage();
+            page.init();
+        });
+    </script>
+</body>
+
+</html>

@@ -190,6 +190,35 @@ export default class PostGroupedPage {
     return this.colorFromString(topicPath);
   }
 
+  getTopicLinks(topicPath) {
+    const topicParam = encodeURIComponent(topicPath);
+    return [
+      {
+        className: 'topic-link topic-link-grouped',
+        href: `/post-grouped/${window.post_id}?topic=${topicParam}`,
+        text: 'Sentences',
+      },
+      {
+        className: 'topic-link topic-link-compare',
+        href: `/post-compare/${window.post_id}?topic=${topicParam}`,
+        text: 'Compare',
+      },
+      {
+        className: 'topic-link topic-link-snippets',
+        href: `/post-grouped-snippets/${window.post_id}?topic=${topicParam}`,
+        text: 'Snippets',
+      },
+    ];
+  }
+
+  handleTopicSelection(topicPath) {
+    this.setActiveTopic(topicPath);
+    const state = this.topicState[topicPath];
+    if (state) {
+      state.index = 0;
+    }
+  }
+
   buildTopicsTree() {
     const groups = window.groups || {};
     const roots = [];
@@ -279,20 +308,13 @@ export default class PostGroupedPage {
 
     const linksWrap = document.createElement('div');
     linksWrap.className = 'topic-links';
-    const topicParam = encodeURIComponent(topicPath);
-
-    const groupedLink = document.createElement('a');
-    groupedLink.className = 'topic-link topic-link-grouped';
-    groupedLink.href = `/post-grouped/${window.post_id}?topic=${topicParam}`;
-    groupedLink.textContent = 'Sentences';
-
-    const snippetsLink = document.createElement('a');
-    snippetsLink.className = 'topic-link topic-link-snippets';
-    snippetsLink.href = `/post-grouped-snippets/${window.post_id}?topic=${topicParam}`;
-    snippetsLink.textContent = 'Snippets';
-
-    linksWrap.appendChild(groupedLink);
-    linksWrap.appendChild(snippetsLink);
+    this.getTopicLinks(topicPath).forEach((linkConfig) => {
+      const link = document.createElement('a');
+      link.className = linkConfig.className;
+      link.href = linkConfig.href;
+      link.textContent = linkConfig.text;
+      linksWrap.appendChild(link);
+    });
     titleWrap.appendChild(linksWrap);
 
     const controls = document.createElement('div');
@@ -330,11 +352,7 @@ export default class PostGroupedPage {
       if (!this.isContentReady) {
         return;
       }
-      this.setActiveTopic(topicPath);
-      const state = this.topicState[topicPath];
-      if (state) {
-        state.index = 0;
-      }
+      this.handleTopicSelection(topicPath);
     });
 
     prevBtn.addEventListener('click', (ev) => {
@@ -590,7 +608,10 @@ export default class PostGroupedPage {
         if (topicName) {
           topicElement = this.topicElements.get(topicName);
           if (topicElement) {
-            topicElement.click();
+            const topicLine = topicElement.querySelector('.topic-line');
+            if (topicLine) {
+              topicLine.click();
+            }
           }
         }
       });
