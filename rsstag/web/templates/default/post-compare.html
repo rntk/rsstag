@@ -57,60 +57,60 @@
         </div>
         {% endif %}
 
-        <div class="main-content-wrapper compare-content-wrapper">
-            <div class="sidebar-column compare-sidebar-column">
-                <div class="sticky-sidebar">
-                    <div class="section-header">Topics</div>
-                    <div id="topics_list"></div>
-
-                    {% if posts|length > 1 %}
-                    <div class="section-header posts-header">Posts</div>
-                    <div id="posts_list"></div>
-                    {% endif %}
-                </div>
+        <div class="compare-toolbar">
+            <div class="compare-control-panel">
+                <div class="section-header">Topics</div>
+                <div id="topics_list" class="compare-topics-list"></div>
             </div>
 
-            <div class="posts-column compare-posts-column">
-                <div id="compare_scroll" class="compare-scroll-shell">
-                    <div id="compare_posts" class="compare-posts-grid">
-                        {% if posts|length > 0 %}
-                        {% for post in posts %}
-                        <section class="post-section compare-post-column" id="post_{{ post.post_id }}" data-post-id="{{ post.post_id }}">
-                            <header class="post-header compare-post-header">
-                                <div class="compare-post-title-row">
-                                    <span class="post-label">Post {{ post.post_id }}</span>
-                                    <span class="post-read-status read-button {{ 'read' if post.read else 'unread' }}"
-                                        data-post-id="{{ post.post_id }}">
-                                        {{ 'read' if post.read else 'unread' }}
-                                    </span>
-                                    <a href="/download/posts/{{ post.post_id }}" class="download-button" download>Download</a>
-                                </div>
-                                {% if post.feed_title %}
-                                <div class="post-feed">from {{ post.feed_title }}</div>
-                                {% endif %}
-                                {% if post.url %}
-                                <div class="compare-post-source">
-                                    <a href="{{ post.url }}" target="_blank" rel="noopener noreferrer">Original</a>
-                                </div>
-                                {% endif %}
-                            </header>
-                            <div class="compare-post-body">
-                                <div class="compare-anchor-guide" aria-hidden="true"></div>
-                                <div class="compare-no-match" hidden>No matches for the active topic in this post.</div>
-                                <div class="post-content">
-                                    <div class="post-content-isolated">
-                                        <div class="post-text" data-post-id="{{ post.post_id }}">{{ post.content|safe }}</div>
-                                    </div>
+            {% if posts|length > 1 %}
+            <div class="compare-control-panel">
+                <div class="section-header">Posts</div>
+                <div id="posts_list" class="compare-posts-list"></div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="compare-posts-column">
+            <div id="compare_scroll" class="compare-scroll-shell">
+                <div id="compare_posts" class="compare-posts-grid">
+                    {% if posts|length > 0 %}
+                    {% for post in posts %}
+                    <section class="post-section compare-post-column" id="post_{{ post.post_id }}" data-post-id="{{ post.post_id }}">
+                        <header class="post-header compare-post-header">
+                            <div class="compare-post-title-row">
+                                <span class="post-label">Post {{ post.post_id }}</span>
+                                <span class="post-read-status read-button {{ 'read' if post.read else 'unread' }}"
+                                    data-post-id="{{ post.post_id }}">
+                                    {{ 'read' if post.read else 'unread' }}
+                                </span>
+                                <a href="/download/posts/{{ post.post_id }}" class="download-button" download>Download</a>
+                            </div>
+                            {% if post.feed_title %}
+                            <div class="post-feed">from {{ post.feed_title }}</div>
+                            {% endif %}
+                            {% if post.url %}
+                            <div class="compare-post-source">
+                                <a href="{{ post.url }}" target="_blank" rel="noopener noreferrer">Original</a>
+                            </div>
+                            {% endif %}
+                        </header>
+                        <div class="compare-post-body">
+                            <div class="compare-anchor-guide" aria-hidden="true"></div>
+                            <div class="compare-no-match" hidden>No matches for the active topic in this post.</div>
+                            <div class="post-content">
+                                <div class="post-content-isolated">
+                                    <div class="post-text" data-post-id="{{ post.post_id }}">{{ post.content|safe }}</div>
                                 </div>
                             </div>
-                        </section>
-                        {% endfor %}
-                        {% else %}
-                        <div class="no-posts-message">
-                            No posts found or posts are still being processed.
                         </div>
-                        {% endif %}
+                    </section>
+                    {% endfor %}
+                    {% else %}
+                    <div class="no-posts-message">
+                        No posts found or posts are still being processed.
                     </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
