@@ -15,10 +15,27 @@ export default class PostComparePage extends PostGroupedPage {
     this.buildTopicsList();
     this.buildPostsList();
     this.attachSentenceGroupHandlers();
+    this.attachHeaderToggleHandlers();
     this.attachReadButtonHandlers();
     this.setInitialReadStatus();
     this.bindGlobalEvents();
     this.activateInitialTopic();
+  }
+
+  attachHeaderToggleHandlers() {
+    document.querySelectorAll('.compare-post-header').forEach((header) => {
+      const toggle = header.querySelector('.compare-header-toggle');
+      if (!toggle) {
+        return;
+      }
+
+      toggle.addEventListener('click', () => {
+        const isExpanded = header.getAttribute('data-header-state') === 'expanded';
+        const nextState = isExpanded ? 'collapsed' : 'expanded';
+        header.setAttribute('data-header-state', nextState);
+        toggle.setAttribute('aria-expanded', String(nextState === 'expanded'));
+      });
+    });
   }
 
   buildPostsList() {

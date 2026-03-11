@@ -77,23 +77,35 @@
                     {% if posts|length > 0 %}
                     {% for post in posts %}
                     <section class="post-section compare-post-column" id="post_{{ post.post_id }}" data-post-id="{{ post.post_id }}">
-                        <header class="post-header compare-post-header">
-                            <div class="compare-post-title-row">
-                                <span class="post-label">Post {{ post.post_id }}</span>
-                                <span class="post-read-status read-button {{ 'read' if post.read else 'unread' }}"
-                                    data-post-id="{{ post.post_id }}">
-                                    {{ 'read' if post.read else 'unread' }}
-                                </span>
-                                <a href="/download/posts/{{ post.post_id }}" class="download-button" download>Download</a>
-                            </div>
-                            {% if post.feed_title %}
-                            <div class="post-feed">from {{ post.feed_title }}</div>
+                        <header class="post-header compare-post-header" data-header-state="collapsed">
+                            {% if post.title %}
+                            <div class="compare-post-title">{{ post.title }}</div>
                             {% endif %}
-                            {% if post.url %}
-                            <div class="compare-post-source">
-                                <a href="{{ post.url }}" target="_blank" rel="noopener noreferrer">Original</a>
+                            <button class="compare-header-toggle" type="button" aria-expanded="false" aria-label="Toggle article details">
+                                <span class="compare-header-toggle-arrow" aria-hidden="true"></span>
+                            </button>
+                            <div class="compare-post-header-content">
+                                <div class="compare-post-meta">
+                                    <div class="compare-post-id">
+                                        <a href="/post-grouped/{{ post.post_id }}">Post {{ post.post_id }}</a>
+                                    </div>
+                                    {% if post.feed_title %}
+                                    <div class="post-feed compare-post-feed">from {{ post.feed_title }}</div>
+                                    {% endif %}
+                                </div>
+                                <div class="compare-post-actions">
+                                    <span class="post-read-status read-button {{ 'read' if post.read else 'unread' }}"
+                                        data-post-id="{{ post.post_id }}">
+                                        {{ 'read' if post.read else 'unread' }}
+                                    </span>
+                                    <a href="/download/posts/{{ post.post_id }}" class="download-button" download>Download</a>
+                                    {% if post.url %}
+                                    <div class="compare-post-source">
+                                        <a href="{{ post.url }}" target="_blank" rel="noopener noreferrer">Original</a>
+                                    </div>
+                                    {% endif %}
+                                </div>
                             </div>
-                            {% endif %}
                         </header>
                         <div class="compare-post-body">
                             <div class="compare-anchor-guide" aria-hidden="true"></div>
