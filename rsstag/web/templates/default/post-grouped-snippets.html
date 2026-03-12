@@ -38,16 +38,16 @@
 
     <div class="page post-grouped-snippets-page">
         <div class="back-nav">
-            <a href="/post-grouped/{{post_id}}" class="back-btn">&larr; Back to Full Posts Grouped View</a>
-            {% if current_topic %}
-            <a href="/post-compare/{{post_id}}?topic={{ current_topic|url_encode }}" class="back-btn">Compare Side by Side</a>
+            <a href="/post-grouped/{{post_id}}{{ current_topic_query }}" class="back-btn">&larr; Back to Full Posts Grouped View</a>
+            {% if current_topic_label %}
+            <a href="/post-compare/{{post_id}}{{ current_topic_query }}" class="back-btn">Compare Side by Side</a>
             <a href="/post-grouped-snippets/{{post_id}}" class="back-btn">Show All Topics</a>
             {% endif %}
         </div>
 
         <h2>Grouped Snippets: {{feed_title}}</h2>
-        {% if current_topic %}
-        <h3 class="filter-title">Filter: {{ current_topic }}</h3>
+        {% if current_topic_label %}
+        <h3 class="filter-title">Filter: {{ current_topic_label }}</h3>
         {% endif %}
 
         <div id="snippets_container">

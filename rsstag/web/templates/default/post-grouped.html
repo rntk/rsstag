@@ -35,8 +35,8 @@
         <h2>Posts - {{feed_title}}</h2>
 
         <div class="graph-link">
-            {% if current_topic %}
-            <a href="/post-compare/{{post_id}}?topic={{ current_topic|url_encode }}" class="topic-btn">Compare Side by Side</a>
+            {% if current_topic_label %}
+            <a href="/post-compare/{{post_id}}{{ current_topic_query }}" class="topic-btn">Compare Side by Side</a>
             {% endif %}
             <a href="/post-graph/{{post_id}}" class="topic-btn">View Topics Graph</a>
         </div>
@@ -45,7 +45,9 @@
         <div class="combined-view-info">
             <p>
                 <strong>Combined view:</strong> {{ feed_title }}
-                {% if sentences|length > 0 %}
+                {% if current_topic_label %}
+                <span class="stats">filtered by {{ current_topic_label }}</span>
+                {% elif sentences|length > 0 %}
                 <span class="stats">
                     ({{ sentences|length }} sentences from {{ groups|length }} topics)
                 </span>

@@ -1036,6 +1036,7 @@ def on_tag_grouped_topics_get(
                 ),
                 "count": count,
                 "total_length": topic_lengths[topic],
+                "post_ids": sorted(str(pid) for pid in topic_pids[topic]),
                 "words": [],
                 "sentiment": [],
             }

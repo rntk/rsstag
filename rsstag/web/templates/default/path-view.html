@@ -43,17 +43,17 @@
                 <span class="path-id">id: {{ path.path_id }}</span>
             </div>
             <div class="path-filters">
-                {% for dim, spec in path.filterset.items() %}
-                <span class="filter-chip filter-chip-{{ dim }}">
-                    <span class="filter-chip-dim">{{ dim }}:</span>
-                    {{ spec['values'] | join(', ') }}
+                {% for chip in filter_chips %}
+                <span class="filter-chip filter-chip-{{ chip.dim }}">
+                    <span class="filter-chip-dim">{{ chip.dim }}:</span>
+                    {{ chip.labels | join(', ') }}
                 </span>
                 {% endfor %}
-                {% if path.exclude %}
-                {% for dim, spec in path.exclude.items() %}
+                {% if exclude_chips %}
+                {% for chip in exclude_chips %}
                 <span class="filter-chip filter-chip-exclude">
-                    <span class="filter-chip-dim">NOT {{ dim }}:</span>
-                    {{ spec['values'] | join(', ') }}
+                    <span class="filter-chip-dim">NOT {{ chip.dim }}:</span>
+                    {{ chip.labels | join(', ') }}
                 </span>
                 {% endfor %}
                 {% endif %}

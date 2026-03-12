@@ -2,7 +2,7 @@
 
 import json
 import logging
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from werkzeug.exceptions import NotFound
 from werkzeug.wrappers import Request, Response
@@ -13,6 +13,8 @@ if TYPE_CHECKING:
 from rsstag.web.posts import (
     _collect_topic_snippets,
     _load_posts_for_snippets,
+    _normalize_topic_filter,
+    _topic_filter_label,
     _topic_matches_requested,
 )
 
@@ -23,13 +25,87 @@ def _json_response(data, status=200):
     return Response(json.dumps(data, default=str), mimetype="application/json", status=status)
 
 
+def _normalize_filter_values(dim: str, values: list[Any]) -> list[Any]:
+    """Normalize filter values before storing them in a path document."""
+    normalized_values: list[Any] = []
+    for value in values:
+        if dim == "topics":
+            normalized_topic_value: Optional[dict[str, Any]] = _normalize_topic_filter(value)
+            if not normalized_topic_value:
+                continue
+            if normalized_topic_value["mode"] == "topic":
+                normalized_values.append(normalized_topic_value["topic"])
+            else:
+                normalized_values.append(normalized_topic_value)
+            continue
+
+        normalized_value: str = str(value).strip()
+        if normalized_value:
+            normalized_values.append(normalized_value)
+    return normalized_values
+
+
+def _normalize_filterset(filterset: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Normalize a path filterset into a consistent storage shape."""
+    normalized_filterset: dict[str, dict[str, Any]] = {}
+    for dim, spec in filterset.items():
+        if not isinstance(spec, dict):
+            continue
+        values: list[Any] = spec.get("values", [])
+        if not isinstance(values, list):
+            continue
+        normalized_values: list[Any] = _normalize_filter_values(dim, values)
+        if not normalized_values:
+            continue
+        normalized_filterset[dim] = {
+            "values": normalized_values,
+            "logic": spec.get("logic", "and"),
+        }
+    return normalized_filterset
+
+
+def _format_filter_value(dim: str, value: Any) -> str:
+    """Render a filter value for titles and chips."""
+    if dim == "topics":
+        label: Optional[str] = _topic_filter_label(value)
+        if label:
+            return label
+    return str(value)
+
+
+def _build_filter_chips(filterset: dict[str, Any]) -> list[dict[str, Any]]:
+    """Prepare filter chips for the path template."""
+    chips: list[dict[str, Any]] = []
+    for dim, spec in filterset.items():
+        values: list[Any] = spec.get("values", []) if isinstance(spec, dict) else []
+        labels: list[str] = [_format_filter_value(dim, value) for value in values if value]
+        if not labels:
+            continue
+        chips.append({"dim": dim, "labels": labels})
+    return chips
+
+
+def _decorate_paths_for_display(paths: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Attach pre-rendered filter chips to path docs for list/detail templates."""
+    decorated_paths: list[dict[str, Any]] = []
+    for path in paths:
+        filterset: dict[str, Any] = path.get("filterset", {})
+        exclude: dict[str, Any] = path.get("exclude", {})
+        decorated_path: dict[str, Any] = dict(path)
+        decorated_path["filter_chips"] = _build_filter_chips(filterset)
+        decorated_path["exclude_chips"] = _build_filter_chips(exclude)
+        decorated_paths.append(decorated_path)
+    return decorated_paths
+
+
 def _auto_title(filterset: dict, exclude: Optional[dict]) -> str:
     """Generate a human-readable title from a filterset."""
-    parts = []
+    parts: list[str] = []
     for dim in ("tags", "topics", "feeds", "categories"):
-        spec = filterset.get(dim)
+        spec: Optional[dict[str, Any]] = filterset.get(dim)
         if spec and spec.get("values"):
-            parts.append(" & ".join(spec["values"]))
+            labels: list[str] = [_format_filter_value(dim, value) for value in spec["values"]]
+            parts.append(" & ".join(labels))
     title = " + ".join(parts) if parts else "Path"
     if len(title) > 120:
         title = title[:117] + "..."
@@ -82,7 +158,7 @@ def on_paths_list_get(app: "RSSTagApplication", user: dict, request: Request) ->
 
 
 def on_paths_page_get(app: "RSSTagApplication", user: dict, request: Request) -> Response:
-    paths = app.paths.list_paths(user["sid"], limit=200, skip=0)
+    paths = _decorate_paths_for_display(app.paths.list_paths(user["sid"], limit=200, skip=0))
     page = app.template_env.get_template("paths-list.html")
     return Response(
         page.render(
@@ -106,8 +182,14 @@ def on_paths_create_post(app: "RSSTagApplication", user: dict, request: Request)
     filterset = data.get("filterset")
     if not isinstance(filterset, dict) or not filterset:
         return _json_response({"error": "filterset is required"}, 400)
+    filterset = _normalize_filterset(filterset)
+    if not filterset:
+        return _json_response({"error": "filterset is required"}, 400)
 
-    exclude = data.get("exclude") or {}
+    raw_exclude: Any = data.get("exclude") or {}
+    exclude: dict[str, dict[str, Any]] = (
+        _normalize_filterset(raw_exclude) if isinstance(raw_exclude, dict) else {}
+    )
     title = str(data.get("title", "")).strip() or _auto_title(filterset, exclude)
 
     doc = app.paths.create_or_get(user["sid"], content_type, filterset, exclude, title)
@@ -196,6 +278,8 @@ def on_path_sentences_get(
             content_type="sentences",
             topics=sorted_topics,
             feed_title=combined_feed_title,
+            filter_chips=_build_filter_chips(filterset),
+            exclude_chips=_build_filter_chips(exclude),
             user_settings=user["settings"],
             provider=user["provider"],
         ),
@@ -262,6 +346,8 @@ def on_path_posts_get(
             path=doc,
             content_type="posts",
             posts=posts_list,
+            filter_chips=_build_filter_chips(filterset),
+            exclude_chips=_build_filter_chips(exclude),
             user_settings=user["settings"],
             provider=user["provider"],
         ),

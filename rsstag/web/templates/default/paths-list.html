@@ -42,17 +42,17 @@
                     </td>
                     <td class="path-content-type">{{ p.content_type }}</td>
                     <td class="path-filters-cell">
-                        {% for dim, spec in p.filterset.items() %}
-                        <span class="filter-chip filter-chip-{{ dim }}">
-                            <span class="filter-chip-dim">{{ dim }}:</span>
-                            {{ spec['values'] | join(', ') }}
+                        {% for chip in p.filter_chips %}
+                        <span class="filter-chip filter-chip-{{ chip.dim }}">
+                            <span class="filter-chip-dim">{{ chip.dim }}:</span>
+                            {{ chip.labels | join(', ') }}
                         </span>
                         {% endfor %}
-                        {% if p.exclude %}
-                        {% for dim, spec in p.exclude.items() %}
+                        {% if p.exclude_chips %}
+                        {% for chip in p.exclude_chips %}
                         <span class="filter-chip filter-chip-exclude">
-                            <span class="filter-chip-dim">NOT {{ dim }}:</span>
-                            {{ spec['values'] | join(', ') }}
+                            <span class="filter-chip-dim">NOT {{ chip.dim }}:</span>
+                            {{ chip.labels | join(', ') }}
                         </span>
                         {% endfor %}
                         {% endif %}

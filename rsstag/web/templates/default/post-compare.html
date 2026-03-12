@@ -33,13 +33,13 @@
         <div class="compare-page-header">
             <div>
                 <h2>Compare Posts - {{feed_title}}</h2>
-                {% if current_topic %}
-                <p class="compare-topic-summary">Topic: {{ current_topic }}</p>
+                {% if current_topic_label %}
+                <p class="compare-topic-summary">Topic: {{ current_topic_label }}</p>
                 {% endif %}
             </div>
             <div class="compare-header-actions">
-                <a href="/post-grouped/{{post_id}}{% if current_topic %}?topic={{ current_topic|url_encode }}{% endif %}" class="topic-btn">Sentences</a>
-                <a href="/post-grouped-snippets/{{post_id}}{% if current_topic %}?topic={{ current_topic|url_encode }}{% endif %}" class="topic-btn">Snippets</a>
+                <a href="/post-grouped/{{post_id}}{{ current_topic_query }}" class="topic-btn">Sentences</a>
+                <a href="/post-grouped-snippets/{{post_id}}{{ current_topic_query }}" class="topic-btn">Snippets</a>
                 <a href="/post-graph/{{post_id}}" class="topic-btn">Topic Graph</a>
             </div>
         </div>
@@ -48,8 +48,8 @@
         <div class="combined-view-info">
             <p>
                 <strong>Comparison view:</strong> {{ feed_title }}
-                {% if current_topic %}
-                <span class="stats">filtered by {{ current_topic }}</span>
+                {% if current_topic_label %}
+                <span class="stats">filtered by {{ current_topic_label }}</span>
                 {% elif groups|length > 0 %}
                 <span class="stats">default topic selected automatically</span>
                 {% endif %}

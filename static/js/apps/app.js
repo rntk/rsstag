@@ -845,7 +845,10 @@ function tagWithContextInfoPage(tag) {
 
   const tag_topics_radar_evsys = new EventsSystem();
   const tag_topics_radar_storage = new TagsStorage(tag_topics_radar_evsys, '/tag-grouped-topics');
-  const topics_radar = new TagTopicsRadar('#tag_topics_radar', tag_topics_radar_evsys);
+  const topics_radar = new TagTopicsRadar('#tag_topics_radar', tag_topics_radar_evsys, {
+    maxTopics: 30,
+    defaultLevel: 'deepest',
+  });
   ReactDOM.render(
     <TagButton ES={tag_topics_radar_evsys} title="topics radar" tag={tag} />,
     document.getElementById('load_topics_radar')

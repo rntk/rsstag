@@ -247,18 +247,114 @@ def _split_topic_parts(topic_name: str) -> list[str]:
     return [part.strip() for part in topic_name.split(">") if part.strip()]
 
 
-def _topic_matches_requested(group_name: str, requested_topic: Optional[str]) -> bool:
-    """Check whether group belongs to requested topic subtree."""
-    if not requested_topic:
+def _normalize_topic_filter(topic_filter: Any) -> Optional[dict[str, Any]]:
+    """Normalize supported topic filters into a consistent internal shape."""
+    if isinstance(topic_filter, str):
+        normalized_topic: str = topic_filter.strip()
+        if normalized_topic:
+            return {"mode": "topic", "topic": normalized_topic}
+        return None
+
+    if not isinstance(topic_filter, dict):
+        return None
+
+    mode: str = str(topic_filter.get("mode", "")).strip()
+    if mode == "topic":
+        normalized_topic = str(topic_filter.get("topic", "")).strip()
+        if normalized_topic:
+            return {"mode": "topic", "topic": normalized_topic}
+        return None
+
+    if mode == "level":
+        try:
+            level: int = int(topic_filter.get("level"))
+        except (TypeError, ValueError):
+            return None
+        value: str = str(topic_filter.get("value", "")).strip()
+        if level > 0 and value:
+            return {"mode": "level", "level": level, "value": value}
+        return None
+
+    return None
+
+
+def _parse_topic_filter_from_request(request: Request) -> Optional[dict[str, Any]]:
+    """Parse exact-topic or level-based topic filters from query params."""
+    requested_topic: Optional[str] = request.args.get("topic")
+    if requested_topic:
+        return _normalize_topic_filter(unquote(requested_topic))
+
+    raw_level: Optional[str] = request.args.get("topic_level")
+    raw_value: Optional[str] = request.args.get("topic_value")
+    if raw_level is None or raw_value is None:
+        return None
+
+    return _normalize_topic_filter(
+        {
+            "mode": "level",
+            "level": raw_level,
+            "value": unquote(raw_value),
+        }
+    )
+
+
+def _topic_filter_label(topic_filter: Any) -> Optional[str]:
+    """Convert a topic filter to a human-readable label."""
+    normalized_filter: Optional[dict[str, Any]] = _normalize_topic_filter(topic_filter)
+    if not normalized_filter:
+        return None
+
+    if normalized_filter["mode"] == "topic":
+        return str(normalized_filter["topic"])
+
+    return f"Level {normalized_filter['level']}: {normalized_filter['value']}"
+
+
+def _topic_filter_query_string(topic_filter: Any) -> str:
+    """Build a query string preserving the active topic filter."""
+    normalized_filter: Optional[dict[str, Any]] = _normalize_topic_filter(topic_filter)
+    if not normalized_filter:
+        return ""
+
+    if normalized_filter["mode"] == "topic":
+        return f"?topic={quote_plus(str(normalized_filter['topic']))}"
+
+    return (
+        f"?topic_level={normalized_filter['level']}"
+        f"&topic_value={quote_plus(str(normalized_filter['value']))}"
+    )
+
+
+def _topic_filter_exact_topic(topic_filter: Any) -> Optional[str]:
+    """Return the exact topic path only for legacy exact-topic filters."""
+    normalized_filter: Optional[dict[str, Any]] = _normalize_topic_filter(topic_filter)
+    if not normalized_filter or normalized_filter["mode"] != "topic":
+        return None
+    return str(normalized_filter["topic"])
+
+
+def _topic_matches_requested(group_name: str, requested_topic: Any) -> bool:
+    """Check whether a group matches the active topic filter."""
+    normalized_filter: Optional[dict[str, Any]] = _normalize_topic_filter(requested_topic)
+    if not normalized_filter:
         return True
 
-    requested_parts: list[str] = _split_topic_parts(requested_topic)
     group_parts: list[str] = _split_topic_parts(group_name)
-    if not requested_parts:
+    if not group_parts:
         return True
-    if len(group_parts) < len(requested_parts):
+
+    if normalized_filter["mode"] == "topic":
+        requested_parts: list[str] = _split_topic_parts(str(normalized_filter["topic"]))
+        if not requested_parts:
+            return True
+        if len(group_parts) < len(requested_parts):
+            return False
+        return group_parts[: len(requested_parts)] == requested_parts
+
+    level: int = int(normalized_filter["level"])
+    if len(group_parts) < level:
         return False
-    return group_parts[: len(requested_parts)] == requested_parts
+    return group_parts[level - 1] == str(normalized_filter["value"])
 
 
 def _strip_html_markup(value: str) -> str:
@@ -1815,9 +1911,7 @@ def _build_grouped_posts_page_context(
     app: "RSSTagApplication", user: dict, request: Request, pids: str
 ) -> Optional[dict[str, Any]]:
     """Build shared page context for grouped-post based pages."""
-    requested_topic: Optional[str] = request.args.get("topic")
-    if requested_topic:
-        requested_topic = unquote(requested_topic)
+    topic_filter: Optional[dict[str, Any]] = _parse_topic_filter_from_request(request)
 
     context_tags = _get_context_tags(user)
     normalized_context_tags = _normalize_context_tags(context_tags)
@@ -1903,7 +1997,7 @@ def _build_grouped_posts_page_context(
                 )
 
             for group_name, sentence_indices in post_grouped_data["groups"].items():
-                if not _topic_matches_requested(group_name, requested_topic):
+                if not _topic_matches_requested(group_name, topic_filter):
                     continue
                 if normalized_context_tags:
                     pt = plain_text_cache.get(post_id)
@@ -1955,7 +2049,7 @@ def _build_grouped_posts_page_context(
                 s["number"]: s for s in post_grouped_data.get("sentences", [])
             }
             for group_name, indices in post_grouped_data["groups"].items():
-                if not _topic_matches_requested(group_name, requested_topic):
+                if not _topic_matches_requested(group_name, topic_filter):
                     continue
                 if normalized_context_tags:
                     pt = plain_text_cache.get(post_id)
@@ -2093,7 +2187,9 @@ def _build_grouped_posts_page_context(
         "feed_title": combined_feed_title,
         "post_to_index_map": post_to_index_map,
         "has_grouped_data": has_grouped_data,
-        "current_topic": requested_topic,
+        "current_topic": _topic_filter_exact_topic(topic_filter),
+        "current_topic_label": _topic_filter_label(topic_filter),
+        "current_topic_query": _topic_filter_query_string(topic_filter),
     }
 
 
@@ -2492,16 +2588,14 @@ def on_post_grouped_snippets_get(
     if not post_ids:
         return app.on_error(user, request, NotFound())
 
-    requested_topic: Optional[str] = request.args.get("topic")
-    if requested_topic:
-        requested_topic = unquote(requested_topic)
+    topic_filter: Optional[dict[str, Any]] = _parse_topic_filter_from_request(request)
 
     context_tags = _get_context_tags(user)
     normalized_context_tags = _normalize_context_tags(context_tags)
     all_posts, combined_feed_title = _load_posts_for_snippets(app, user, post_ids)
 
     topics_data = _collect_topic_snippets(
-        app, user, post_ids, all_posts, requested_topic, normalized_context_tags
+        app, user, post_ids, all_posts, topic_filter, normalized_context_tags
     )
 
     # Sort topics by name or maybe by number of snippets?
@@ -2513,7 +2607,9 @@ def on_post_grouped_snippets_get(
             topics=sorted_topics,
             post_id=pids,
             feed_title=combined_feed_title,
-            current_topic=requested_topic,
+            current_topic=_topic_filter_exact_topic(topic_filter),
+            current_topic_label=_topic_filter_label(topic_filter),
+            current_topic_query=_topic_filter_query_string(topic_filter),
             user_settings=user["settings"],
             provider=user["provider"],
         ),
@@ -2533,14 +2629,12 @@ def on_topic_snippets_api_get(
             status=400,
         )
 
-    requested_topic: Optional[str] = request.args.get("topic")
-    if requested_topic:
-        requested_topic = unquote(requested_topic)
+    topic_filter: Optional[dict[str, Any]] = _parse_topic_filter_from_request(request)
 
     all_posts, _ = _load_posts_for_snippets(app, user, post_ids)
 
     topics_data = _collect_topic_snippets(
-        app, user, post_ids, all_posts, requested_topic, None
+        app, user, post_ids, all_posts, topic_filter, None
     )
 
     # Flatten all snippets across topics
@@ -2571,16 +2665,14 @@ def on_sentence_cluster_topic_snippets_get(
             status=404,
         )
 
-    requested_topic: Optional[str] = request.args.get("topic")
-    if requested_topic:
-        requested_topic = unquote(requested_topic)
+    topic_filter: Optional[dict[str, Any]] = _parse_topic_filter_from_request(request)
 
     only_unread: bool = bool(user.get("settings", {}).get("only_unread", False))
     snippets, _ = _load_sentence_cluster_snippets(app, user, cluster_doc, only_unread)
     filtered_snippets: list[dict[str, Any]] = [
         snippet
         for snippet in snippets
-        if _topic_matches_requested(str(snippet.get("topic", "")), requested_topic)
+        if _topic_matches_requested(str(snippet.get("topic", "")), topic_filter)
     ]
 
     return Response(
