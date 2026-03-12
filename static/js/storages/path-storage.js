@@ -62,4 +62,21 @@ export default class PathStorage {
       return false;
     }
   }
+
+  async getPathRecommendations(pathId) {
+    try {
+      const response = await fetch(`/api/paths/${pathId}/recommendations`, {
+        credentials: 'include',
+      });
+      const data = await response.json();
+      if (!response.ok || data.error) {
+        console.error('Failed to load path recommendations:', data.error || response.statusText);
+        return null;
+      }
+      return data.data || { path_id: pathId, groups: [] };
+    } catch (err) {
+      console.error('Failed to load path recommendations:', err);
+      return null;
+    }
+  }
 }

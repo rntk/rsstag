@@ -707,6 +707,11 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/api/paths/<string:path_id>/recommendations",
+                "endpoint": "on_path_recommendations_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/api/paths/<string:path_id>",
                 "endpoint": "on_paths_delete",
                 "methods": ["DELETE"],

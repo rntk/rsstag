@@ -83,10 +83,21 @@ test('renders topic links and creates a sentences path for tag + topic clicks', 
 
   try {
     const radar = new TagTopicsRadar('#radar', { bind() {} });
-    radar.renderChart(['AI > NLP'], [4], [200], ['/fallback']);
+    radar.renderChart(2, ['AI > NLP'], [4], [200], [
+      {
+        label: 'AI > NLP',
+        count: 4,
+        totalLength: 200,
+        postIds: ['1'],
+        level: 2,
+        snippetsUrl: '/fallback',
+        compareUrl: '/compare',
+        filter: 'AI > NLP',
+      },
+    ]);
 
-    assert.equal(container.children.length, 2);
-    const linksList = container.children[1];
+    assert.equal(container.children.length, 3);
+    const linksList = container.children[2];
     assert.equal(linksList.className, 'tag-topics-radar-links');
     assert.equal(linksList.children.length, 1);
 
@@ -96,7 +107,7 @@ test('renders topic links and creates a sentences path for tag + topic clicks', 
 
     assert.equal(link.textContent, 'AI > NLP');
     assert.equal(link.href, '/fallback');
-    assert.equal(meta.textContent, '4 posts · 200 chars');
+    assert.equal(meta.textContent, '4 posts · 200 chars · 1 articles');
 
     let prevented = false;
     link.dispatch('click', {

@@ -14,6 +14,14 @@ class TestWebFrontendContracts(MongoWebTestCase):
         cls.auth_client = cls.get_authenticated_client(sid)
         cls.data = cls.seed_minimal_data(sid)
         cls.post_ids = "_".join(cls.data["post_pids"])
+        path = cls.app.paths.create_or_get(
+            sid,
+            "sentences",
+            {"tags": {"values": [cls.data["tag"]], "logic": "and"}},
+            {},
+            "Frontend Contract Path",
+        )
+        cls.path_id = path["path_id"]
 
     def _get_html(self, path: str) -> str:
         response = self.auth_client.get(path)
@@ -120,6 +128,17 @@ class TestWebFrontendContracts(MongoWebTestCase):
                 'class="tab-button active"',
                 'window.posts_graphs =',
                 'window.user_settings =',
+            ],
+        )
+
+    def test_path_page_contract(self) -> None:
+        html = self._get_html(f"/paths/sentences/{self.path_id}")
+        self.assertContainsAll(
+            html,
+            [
+                '/static/js/bundle.js',
+                'id="path_recommendations"',
+                "window.path_data =",
             ],
         )
 

@@ -207,6 +207,109 @@ def on_paths_detail_get(
     return _json_response({"data": doc})
 
 
+def _get_matching_post_ids(
+    app: "RSSTagApplication",
+    owner: str,
+    filterset: dict[str, Any],
+    exclude: dict[str, Any],
+) -> list[str]:
+    filterset_no_topics = {key: value for key, value in filterset.items() if key != "topics"}
+    query = filterset_to_mongo_query(owner, filterset_no_topics, exclude)
+    post_ids: list[str] = []
+    for post in app.db.posts.find(query, projection={"_id": 0, "pid": 1}):
+        pid: str = str(post.get("pid") or "").strip()
+        if pid:
+            post_ids.append(pid)
+
+    requested_topics: list[Any] = filterset.get("topics", {}).get("values", [])
+    if not requested_topics or not post_ids:
+        return post_ids
+
+    matched_post_ids: list[str] = []
+    for pid in post_ids:
+        grouped = app.post_grouping.get_grouped_posts(owner, [pid])
+        if not grouped or not grouped.get("groups"):
+            continue
+        for group_name in grouped["groups"]:
+            if any(_topic_matches_requested(group_name, requested) for requested in requested_topics):
+                matched_post_ids.append(pid)
+                break
+
+    return matched_post_ids
+
+
+def _count_path_content(
+    app: "RSSTagApplication",
+    owner: str,
+    filterset: dict[str, Any],
+    exclude: dict[str, Any],
+) -> dict[str, int]:
+    post_ids: list[str] = _get_matching_post_ids(app, owner, filterset, exclude)
+    requested_topics: list[Any] = filterset.get("topics", {}).get("values", [])
+    sentences_count: int = 0
+
+    for pid in post_ids:
+        grouped = app.post_grouping.get_grouped_posts(owner, [pid])
+        if not grouped or not grouped.get("groups"):
+            continue
+
+        matched_indices: set[int] = set()
+        for topic_name, indices in grouped.get("groups", {}).items():
+            if requested_topics and not any(
+                _topic_matches_requested(topic_name, requested) for requested in requested_topics
+            ):
+                continue
+            matched_indices.update(int(index) for index in indices)
+
+        if not requested_topics and not matched_indices:
+            continue
+        sentences_count += len(matched_indices)
+
+    return {
+        "posts_count": len(post_ids),
+        "sentences_count": sentences_count,
+    }
+
+
+def on_path_recommendations_get(
+    app: "RSSTagApplication", user: dict, request: Request, path_id: str
+) -> Response:
+    doc = app.paths.get_by_path_id(user["sid"], path_id)
+    if not doc:
+        return _json_response({"error": "Path not found"}, 404)
+
+    groups: list[dict[str, Any]] = app.paths.get_recommendations(user["sid"], doc)
+    for group in groups:
+        items: list[dict[str, Any]] = group.get("items", [])
+        filtered_items: list[dict[str, Any]] = []
+        for item in items:
+            counts: dict[str, int] = _count_path_content(
+                app,
+                user["sid"],
+                item.get("filterset", {}),
+                item.get("exclude", {}),
+            )
+            item["posts_count"] = counts["posts_count"]
+            item["sentences_count"] = counts["sentences_count"]
+
+            content_type: str = str(item.get("content_type", "sentences")).strip()
+            if content_type == "sentences" and item["sentences_count"] <= 0:
+                continue
+            if content_type == "posts" and item["posts_count"] <= 0:
+                continue
+
+            item["title"] = _auto_title(
+                item.get("filterset", {}),
+                item.get("exclude", {}),
+            )
+            filtered_items.append(item)
+        group["items"] = filtered_items
+
+    groups = [group for group in groups if group.get("items")]
+
+    return _json_response({"data": {"path_id": path_id, "groups": groups}})
+
+
 def on_paths_delete(
     app: "RSSTagApplication", user: dict, request: Request, path_id: str
 ) -> Response:

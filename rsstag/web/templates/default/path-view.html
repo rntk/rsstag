@@ -61,92 +61,101 @@
             <div id="path_controls" data-path-id="{{ path.path_id }}" data-content-type="{{ content_type }}"></div>
         </div>
 
-        {% if content_type == 'sentences' %}
-        <div id="snippets_container">
-            {% if topics %}
-            {% for topic_name, data in topics %}
-            <div class="topic-card" style="border-left-color: {{ data.color }};">
-                <div class="topic-header">
-                    <span class="topic-title">{{ topic_name }}</span>
-                    <span class="topic-count">{{ data.snippets|length }} snippets</span>
-                </div>
-                <div class="snippets-list">
-                    {% for snippet in data.snippets %}
-                    <div class="snippet-item {{ 'read' if snippet.read else '' }}"
-                        id="snippet_{{ snippet.post_id }}_{{ snippet.indices | join('_') }}"
-                        data-post-id="{{ snippet.post_id }}"
-                        data-base-indices="{{ snippet.indices | join(',') }}"
-                        data-visible-indices="{{ snippet.indices | join(',') }}">
-                        <div class="snippet-meta">
-                            <span class="snippet-primary-meta">
-                                From <span class="source-tag snippet-source-info">{{ snippet.post_title }}</span>
-                            </span>
-                            <span class="snippet-actions" aria-label="Snippet actions">
-                                <span
-                                    class="source-tag toggle-read-btn {{ 'snippet-tag-read' if snippet.read else 'snippet-tag-unread' }}"
-                                    data-post-id="{{ snippet.post_id }}"
-                                    data-indices="{{ snippet.indices | join(',') }}"
-                                    data-read="{{ 1 if snippet.read else 0 }}"
-                                    title="Mark as {{ 'unread' if snippet.read else 'read' }}">
-                                    {{ 'Mark Unread' if snippet.read else 'Mark Read' }}
-                                </span>
-                                <a href="/posts/{{ snippet.post_id }}" class="source-tag snippet-tag-context"
-                                    title="Show full post">Show full post</a>
-                                {% if snippet.url %}
-                                <a href="{{ snippet.url }}" target="_blank" class="source-tag snippet-tag-original"
-                                    title="Go to source article">Original &nearr;</a>
-                                {% endif %}
-                                <button type="button" class="source-tag source-tag-button extend-snippet-context-btn"
-                                    data-post-id="{{ snippet.post_id }}"
-                                    title="Load more adjacent sentences">Extend context</button>
-                                <span class="source-tag show-snippet-tags-btn" data-post-id="{{ snippet.post_id }}">Show tags</span>
-                            </span>
+        <div class="path-layout">
+            <div class="path-main">
+                {% if content_type == 'sentences' %}
+                <div id="snippets_container">
+                    {% if topics %}
+                    {% for topic_name, data in topics %}
+                    <div class="topic-card" style="border-left-color: {{ data.color }};">
+                        <div class="topic-header">
+                            <span class="topic-title">{{ topic_name }}</span>
+                            <span class="topic-count">{{ data.snippets|length }} snippets</span>
                         </div>
-                        <div class="post-content-isolated">
-                            <div class="snippet-text">
-                                <div class="snippet-context snippet-context-base">{{ snippet.html | safe }}</div>
+                        <div class="snippets-list">
+                            {% for snippet in data.snippets %}
+                            <div class="snippet-item {{ 'read' if snippet.read else '' }}"
+                                id="snippet_{{ snippet.post_id }}_{{ snippet.indices | join('_') }}"
+                                data-post-id="{{ snippet.post_id }}"
+                                data-base-indices="{{ snippet.indices | join(',') }}"
+                                data-visible-indices="{{ snippet.indices | join(',') }}">
+                                <div class="snippet-meta">
+                                    <span class="snippet-primary-meta">
+                                        From <span class="source-tag snippet-source-info">{{ snippet.post_title }}</span>
+                                    </span>
+                                    <span class="snippet-actions" aria-label="Snippet actions">
+                                        <span
+                                            class="source-tag toggle-read-btn {{ 'snippet-tag-read' if snippet.read else 'snippet-tag-unread' }}"
+                                            data-post-id="{{ snippet.post_id }}"
+                                            data-indices="{{ snippet.indices | join(',') }}"
+                                            data-read="{{ 1 if snippet.read else 0 }}"
+                                            title="Mark as {{ 'unread' if snippet.read else 'read' }}">
+                                            {{ 'Mark Unread' if snippet.read else 'Mark Read' }}
+                                        </span>
+                                        <a href="/posts/{{ snippet.post_id }}" class="source-tag snippet-tag-context"
+                                            title="Show full post">Show full post</a>
+                                        {% if snippet.url %}
+                                        <a href="{{ snippet.url }}" target="_blank" class="source-tag snippet-tag-original"
+                                            title="Go to source article">Original &nearr;</a>
+                                        {% endif %}
+                                        <button type="button" class="source-tag source-tag-button extend-snippet-context-btn"
+                                            data-post-id="{{ snippet.post_id }}"
+                                            title="Load more adjacent sentences">Extend context</button>
+                                        <span class="source-tag show-snippet-tags-btn" data-post-id="{{ snippet.post_id }}">Show tags</span>
+                                    </span>
+                                </div>
+                                <div class="post-content-isolated">
+                                    <div class="snippet-text">
+                                        <div class="snippet-context snippet-context-base">{{ snippet.html | safe }}</div>
+                                    </div>
+                                </div>
+                                <div class="snippet-tags-content hide"></div>
                             </div>
+                            {% endfor %}
                         </div>
-                        <div class="snippet-tags-content hide"></div>
                     </div>
                     {% endfor %}
-                </div>
-            </div>
-            {% endfor %}
-            {% else %}
-            <div class="no-snippets-message">
-                No snippets found for this path. The posts might not be processed yet or no posts match the filters.
-            </div>
-            {% endif %}
-        </div>
-
-        {% else %}
-        <div id="posts_container">
-            {% if posts %}
-            {% for p in posts %}
-            <div class="post" data-feed="{{ p.feed_id }}" id="p{{ p.pid }}" data-pos="{{ p.pid }}">
-                <a name="p{{ p.pid }}"></a>
-                <h3 class="post_title">
-                    <a class="post_title_link" href="{{ p.url }}" target="_blank">{{ p.content.title }}</a>
-                </h3>
-                <div class="post_meta">
-                    {{ p.category_title }} | <b class="post_feed_title">{{ p.feed_title }}</b> | {{ p.date }}
-                </div>
-                <div class="post_tools">
-                    <a href="#p{{ p.pid }}" class="post_show_content">Show post</a>
-                    {% if p.read %}
-                    <span class="read_button read" data-pos="{{ p.pid }}">read</span>
                     {% else %}
-                    <span class="read_button unread" data-pos="{{ p.pid }}">unread</span>
+                    <div class="no-snippets-message">
+                        No snippets found for this path. The posts might not be processed yet or no posts match the filters.
+                    </div>
                     {% endif %}
                 </div>
+
+                {% else %}
+                <div id="posts_container">
+                    {% if posts %}
+                    {% for p in posts %}
+                    <div class="post" data-feed="{{ p.feed_id }}" id="p{{ p.pid }}" data-pos="{{ p.pid }}">
+                        <a name="p{{ p.pid }}"></a>
+                        <h3 class="post_title">
+                            <a class="post_title_link" href="{{ p.url }}" target="_blank">{{ p.content.title }}</a>
+                        </h3>
+                        <div class="post_meta">
+                            {{ p.category_title }} | <b class="post_feed_title">{{ p.feed_title }}</b> | {{ p.date }}
+                        </div>
+                        <div class="post_tools">
+                            <a href="#p{{ p.pid }}" class="post_show_content">Show post</a>
+                            {% if p.read %}
+                            <span class="read_button read" data-pos="{{ p.pid }}">read</span>
+                            {% else %}
+                            <span class="read_button unread" data-pos="{{ p.pid }}">unread</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <p>No posts found for this path.</p>
+                    {% endif %}
+                </div>
+                {% endif %}
             </div>
-            {% endfor %}
-            {% else %}
-            <p>No posts found for this path.</p>
-            {% endif %}
+
+            <aside id="path_recommendations" class="path-recommendations-panel">
+                <h3 class="path-recommendations-title">Suggested paths</h3>
+                <div class="path-recommendations-state path-recommendations-state-loading">Loading suggestions...</div>
+            </aside>
         </div>
-        {% endif %}
     </div>
 
     <div id="progressbar"></div>

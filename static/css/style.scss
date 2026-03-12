@@ -210,6 +210,100 @@ h3.post_title {
   border-bottom: 1px solid $my_gray;
 }
 
+.path-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.2em;
+}
+
+.path-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.path-recommendations-panel {
+  width: 19rem;
+  flex: 0 0 19rem;
+  position: sticky;
+  top: 7.5em;
+  align-self: flex-start;
+  padding: 0.9em;
+  border: 1px solid $my_gray;
+  border-radius: 0.6em;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.path-recommendations-title {
+  margin-bottom: 0.7em;
+  color: #666666;
+  font-weight: normal;
+}
+
+.path-recommendations-state {
+  color: #666666;
+  font-size: 10.5pt;
+}
+
+.path-recommendations-group + .path-recommendations-group {
+  margin-top: 1em;
+}
+
+.path-recommendations-group-title {
+  margin-bottom: 0.45em;
+  color: #777777;
+  font-size: 10.5pt;
+  font-weight: normal;
+}
+
+.path-recommendations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55em;
+}
+
+.path-recommendation-item {
+  width: 100%;
+  text-align: left;
+  border: 1px solid #d2d2d2;
+  border-radius: 0.5em;
+  background: #ffffff;
+  padding: 0.7em 0.75em;
+  cursor: pointer;
+}
+
+.path-recommendation-item:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.path-recommendation-item-title,
+.path-recommendation-item-meta {
+  display: block;
+}
+
+.path-recommendation-item-title {
+  color: #1f3f5b;
+  font-size: 10.5pt;
+  margin-bottom: 0.3em;
+}
+
+.path-recommendation-item-meta {
+  color: #7a7a7a;
+  font-size: 9.5pt;
+}
+
+@media (max-width: 960px) {
+  .path-layout {
+    flex-direction: column;
+  }
+
+  .path-recommendations-panel {
+    width: auto;
+    flex: 1 1 auto;
+    position: static;
+  }
+}
+
 .current_post {
   outline: 1px solid $my_gray;
 }

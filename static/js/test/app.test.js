@@ -129,6 +129,8 @@ test('resolvePageType handles expected routes and fallback', () => {
     ['/sentence-clusters/123', 'sentence-cluster'],
     ['/topics-list', 'topics-list'],
     ['/topics-list/123', 'topics-list'],
+    ['/paths/sentences/demo', 'path-sentences'],
+    ['/paths/posts/demo', 'path-posts'],
     ['/unknown/path', 'unknown'],
   ];
 

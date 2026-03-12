@@ -250,6 +250,19 @@ export function initSnippetHoverCards() {
   });
 }
 
+function initPathRecommendationsPage() {
+  const container = document.getElementById('path_recommendations');
+  const pathData = window.path_data;
+  if (!container || !pathData || !pathData.path_id) {
+    return;
+  }
+
+  const pathStorage = new PathStorage(window.EVSYS);
+  pathStorage.start();
+  window.pathManager = new PathManager(pathStorage);
+  window.pathManager.loadRecommendations(pathData.path_id, container);
+}
+
 export function resolvePageType(path) {
   if (path === '/') {
     return 'root';
@@ -598,9 +611,11 @@ export function initApp() {
     initTopicsPage();
   } else if (pageType === 'path-sentences') {
     initSnippetHoverCards();
+    initPathRecommendationsPage();
   } else if (pageType === 'path-posts') {
     const posts_storage = new PostsStorage(window.EVSYS);
     posts_storage.start();
+    initPathRecommendationsPage();
   }
 }
 
