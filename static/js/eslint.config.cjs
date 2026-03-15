@@ -93,6 +93,7 @@ module.exports = [
       ...reactHooks.configs.recommended.rules,
       'react/no-deprecated': 'off',
       'react/prop-types': 'off',
+      'react/react-in-jsx-scope': 'off',
     },
   },
   {
