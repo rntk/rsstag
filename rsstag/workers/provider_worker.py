@@ -79,19 +79,46 @@ class ProviderWorker:
                     fee["provider"] = provider_name
                     n_feeds.append(fee)
                 if posts:
+                    # 1. Local deduplication of incoming posts by 'id'
+                    unique_incoming_posts = {}
                     for post in posts:
-                        post["provider"] = provider_name
-                    try:
-                        self._db.posts.insert_many(posts, ordered=False)
-                        self._record_bulk_write("posts", len(posts))
-                    except BulkWriteError as bulk_err:
-                        # Ignore duplicate key errors (code 11000), re-raise others
-                        non_dup = [
-                            e for e in bulk_err.details.get("writeErrors", [])
-                            if e.get("code") != 11000
+                        p_id = post.get("id")
+                        if p_id and p_id not in unique_incoming_posts:
+                            post["provider"] = provider_name
+                            unique_incoming_posts[p_id] = post
+                    
+                    if unique_incoming_posts:
+                        p_ids = list(unique_incoming_posts.keys())
+                        
+                        # 2. Query DB to find existing posts by owner and 'id'
+                        # We exclude 'provider' from filter to be more robust
+                        # against missing or differently-cased provider fields.
+                        existing_posts = self._db.posts.find(
+                            {
+                                "owner": task["user"]["sid"],
+                                "id": {"$in": p_ids},
+                            },
+                            projection={"id": True, "_id": False},
+                        )
+                        skip_p_ids = {pc["id"] for pc in existing_posts}
+
+                        n_posts = [
+                            post for p_id, post in unique_incoming_posts.items()
+                            if p_id not in skip_p_ids
                         ]
-                        if non_dup:
-                            raise
+
+                        if n_posts:
+                            try:
+                                self._db.posts.insert_many(n_posts, ordered=False)
+                                self._record_bulk_write("posts", len(n_posts))
+                            except BulkWriteError as bulk_err:
+                                # Ignore duplicate key errors (code 11000), re-raise others
+                                non_dup = [
+                                    e for e in bulk_err.details.get("writeErrors", [])
+                                    if e.get("code") != 11000
+                                ]
+                                if non_dup:
+                                    raise
                 if n_feeds:
                     self._db.feeds.insert_many(n_feeds)
                     self._record_bulk_write("feeds", len(n_feeds))
