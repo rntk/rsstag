@@ -3,7 +3,7 @@
 import time
 import gzip
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from random import randint, uniform
 from typing import Tuple, List, Optional, Dict, Any
 from collections import defaultdict
@@ -537,7 +537,7 @@ class TelegramProvider:
                 stream_id = str(channel["id"])
                 if stream_id not in feeds:
                     feeds[stream_id] = {
-                        "createdAt": datetime.utcnow(),
+                        "createdAt": datetime.now(timezone.utc),
                         "title": channel["title"],
                         "owner": user["sid"],
                         "category_id": self.no_category_name,

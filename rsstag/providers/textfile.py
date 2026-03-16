@@ -1,5 +1,5 @@
 from typing import Tuple, List, Optional
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 import time
 import gzip
 import logging
@@ -30,7 +30,7 @@ class TextFileProvider:
         routes = RSSTagRoutes(self._config["settings"]["host_name"])
         if stream_id not in feeds:
             feeds[stream_id] = {
-                "createdAt": datetime.utcnow(),
+                "createdAt": datetime.now(timezone.utc),
                 "title": "textfile",
                 "owner": user["sid"],
                 "category_id": self.no_category_name,

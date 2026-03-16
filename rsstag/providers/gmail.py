@@ -3,7 +3,7 @@ import asyncio
 import logging
 import re
 from typing import Tuple, List, Optional, Iterator
-from datetime import datetime
+from datetime import datetime, timezone
 from hashlib import md5
 import gzip
 
@@ -283,7 +283,7 @@ class GmailProvider:
                     stream_id = md5(from_.encode("utf-8")).hexdigest()
                     if stream_id not in feeds:
                         feeds[stream_id] = {
-                            "createdAt": datetime.utcnow(),
+                            "createdAt": datetime.now(timezone.utc),
                             "title": from_,
                             "owner": user["sid"],
                             "category_id": self.no_category_name,

@@ -1,6 +1,6 @@
 from random import randint
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 import gzip
 import asyncio
 from hashlib import md5
@@ -231,7 +231,7 @@ class BazquxProvider:
                     ).hexdigest()
                     if stream_id not in feeds:
                         feeds[stream_id] = {
-                            "createdAt": datetime.utcnow(),
+                            "createdAt": datetime.now(timezone.utc),
                             "title": post["origin"]["title"],
                             "owner": user["sid"],
                             "category_id": category,

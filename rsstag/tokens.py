@@ -1,6 +1,6 @@
 import logging
 from typing import Optional, Iterator
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import os
 from random import randint
@@ -25,7 +25,7 @@ class RssTagTokens:
 
     def create(self, owner: str, expires_days: int = 30) -> str:
         token = sha256(os.urandom(randint(80, 200))).hexdigest()
-        created = datetime.utcnow()
+        created = datetime.now(timezone.utc)
         expires = created + timedelta(days=expires_days)
         
         self._db.tokens.insert_one({
@@ -49,7 +49,7 @@ class RssTagTokens:
         if not token_doc:
             return None
         
-        if token_doc["expires"] < datetime.utcnow():
+        if token_doc["expires"] < datetime.now(timezone.utc):
             return None
         
         return token_doc
