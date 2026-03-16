@@ -2465,6 +2465,41 @@ h3.post_title {
     font-weight: 700;
   }
 
+  .compare-sync-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 32px;
+    margin-top: 8px;
+    padding: 6px 14px;
+    border: 1px solid #d0d8e1;
+    border-radius: 999px;
+    background: #f6f8fa;
+    color: #4a5a6b;
+    font-size: 13px;
+    cursor: pointer;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      color 0.2s ease;
+
+    &:hover {
+      background: #eef3f7;
+      border-color: #b8c6d4;
+    }
+
+    &.active {
+      background: #1a7f4e;
+      border-color: #156640;
+      color: #fff;
+
+      &:hover {
+        background: #156640;
+      }
+    }
+  }
+
   .topic-btn-prev,
   .topic-btn-next {
     display: none;

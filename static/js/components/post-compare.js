@@ -5,6 +5,8 @@ export default class PostComparePage extends PostGroupedPage {
     super();
     this.currentTopic = null;
     this.anchorRatio = 0.3;
+    this.syncScroll = false;
+    this.isSyncingScroll = false;
   }
 
   init() {
@@ -20,6 +22,53 @@ export default class PostComparePage extends PostGroupedPage {
     this.setInitialReadStatus();
     this.bindGlobalEvents();
     this.activateInitialTopic();
+    this.initSyncScrollToggle();
+    this.attachScrollSync();
+  }
+
+  initSyncScrollToggle() {
+    const btn = document.getElementById('sync_scroll_toggle');
+    if (!btn) {
+      return;
+    }
+    btn.addEventListener('click', () => {
+      this.syncScroll = !this.syncScroll;
+      btn.classList.toggle('active', this.syncScroll);
+      btn.textContent = this.syncScroll ? 'Scroll: Synced' : 'Scroll: Independent';
+    });
+  }
+
+  attachScrollSync() {
+    const bodies = document.querySelectorAll('.compare-post-body');
+    if (bodies.length < 2) {
+      return;
+    }
+    let syncTimer = null;
+    let guardTimer = null;
+    bodies.forEach((source) => {
+      source.addEventListener('scroll', () => {
+        if (!this.syncScroll || this.isSyncingScroll) {
+          return;
+        }
+        clearTimeout(syncTimer);
+        syncTimer = setTimeout(() => {
+          this.isSyncingScroll = true;
+          const maxScroll = source.scrollHeight - source.clientHeight;
+          const ratio = maxScroll > 0 ? source.scrollTop / maxScroll : 0;
+          bodies.forEach((target) => {
+            if (target === source) {
+              return;
+            }
+            const targetMax = target.scrollHeight - target.clientHeight;
+            target.scrollTo({ top: ratio * targetMax, behavior: 'instant' });
+          });
+          clearTimeout(guardTimer);
+          guardTimer = setTimeout(() => {
+            this.isSyncingScroll = false;
+          }, 150);
+        }, 180);
+      });
+    });
   }
 
   attachHeaderToggleHandlers() {
