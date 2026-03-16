@@ -2,6 +2,7 @@
 import json
 import unittest
 from typing import Any, Dict, Optional
+from unittest.mock import patch
 
 from werkzeug.test import Client
 from werkzeug.wrappers import Response
@@ -136,6 +137,62 @@ class TestWebMutations(MongoWebTestCase):
         self.assertNotEqual(resp.status_code, 500)
         after = self.test_db.worker_commands.count_documents({"command": "spawn"})
         self.assertGreater(after, before)
+
+    def test_x_oauth_callback_preserves_existing_refresh_token(self) -> None:
+        self.app.users.update_by_sid(
+            self.user_sid,
+            {
+                "x_oauth_state": "state-1",
+                "x_code_verifier": "verifier-1",
+            },
+        )
+        self.app.users.add_provider(
+            self.user_sid,
+            "x",
+            {
+                "login": "olduser",
+                "token": "old-token",
+                "access_token": "old-token",
+                "refresh_token": "keep-me",
+                "retoken": False,
+            },
+        )
+
+        with patch(
+            "rsstag.web.users._exchange_x_code_for_token",
+            return_value={"access_token": "new-token", "expires_in": 3600},
+        ), patch(
+            "rsstag.web.users._get_x_user_info",
+            return_value={"id": "42", "username": "newuser"},
+        ):
+            resp = self.auth_client.get("/x/oauth2callback?code=abc&state=state-1")
+
+        self.assertIn(resp.status_code, (301, 302))
+        updated_user = self.app.users.get_by_sid(self.user_sid)
+        provider_data = updated_user["providers"]["x"]
+        self.assertEqual(provider_data["refresh_token"], "keep-me")
+        self.assertEqual(updated_user.get("x_oauth_state", ""), "")
+        self.assertEqual(updated_user.get("x_code_verifier", ""), "")
+
+    def test_x_oauth_callback_clears_pkce_state_on_failure(self) -> None:
+        self.app.users.update_by_sid(
+            self.user_sid,
+            {
+                "x_oauth_state": "state-2",
+                "x_code_verifier": "verifier-2",
+            },
+        )
+
+        with patch(
+            "rsstag.web.users._exchange_x_code_for_token",
+            return_value=None,
+        ):
+            resp = self.auth_client.get("/x/oauth2callback?code=abc&state=state-2")
+
+        self.assertEqual(resp.status_code, 200)
+        updated_user = self.app.users.get_by_sid(self.user_sid)
+        self.assertEqual(updated_user.get("x_oauth_state", ""), "")
+        self.assertEqual(updated_user.get("x_code_verifier", ""), "")
 
 
 if __name__ == "__main__":

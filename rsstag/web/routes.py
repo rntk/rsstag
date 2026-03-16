@@ -53,8 +53,18 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/login/x/auth",
+                "endpoint": "on_login_x_auth_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/oauth2callback",
                 "endpoint": "on_oauth2callback_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/x/oauth2callback",
+                "endpoint": "on_x_oauth2callback_get",
                 "methods": ["GET"],
             },
             {

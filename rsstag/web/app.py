@@ -166,6 +166,8 @@ class RSSTagApplication(object):
             "on_refresh_get_post",
             "on_login_google_auth_get",
             "on_oauth2callback_get",
+            "on_login_x_auth_get",
+            "on_x_oauth2callback_get",
             "on_external_workers_claim_post",
             "on_external_workers_submit_post",
         )
@@ -326,6 +328,16 @@ class RSSTagApplication(object):
 
     def on_oauth2callback_get(self, user: Optional[dict], request: Request) -> Response:
         return users_handlers.on_oauth2callback_get(self, user, request)
+
+    def on_login_x_auth_get(
+        self, user: Optional[dict], request: Request
+    ) -> Response:
+        return users_handlers.on_login_x_auth_get(self, user, request)
+
+    def on_x_oauth2callback_get(
+        self, user: Optional[dict], request: Request
+    ) -> Response:
+        return users_handlers.on_x_oauth2callback_get(self, user, request)
 
     def on_login_post(self, _: Optional[dict], request: Request) -> Response:
         return users_handlers.on_login_post(self, request)
@@ -1997,13 +2009,13 @@ class RSSTagApplication(object):
         )
 
     def on_tokens_get(self, user: dict, _: Request) -> Response:
-        from datetime import datetime
+        from datetime import datetime, timezone
         tokens = list(self.tokens.get_all(user["sid"]))
         page = self.template_env.get_template("tokens.html")
         return Response(
             page.render(
                 tokens=tokens,
-                now=datetime.utcnow,
+                now=lambda: datetime.now(timezone.utc),
                 user_settings=user["settings"],
                 provider=user["provider"],
             ),

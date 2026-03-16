@@ -1,13 +1,13 @@
 import os
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from random import randint
 from typing import Optional
 from hashlib import sha256
 from pymongo import MongoClient
 
-from rsstag.providers.providers import TELEGRAM, TEXT_FILE, GMAIL
+from rsstag.providers.providers import TELEGRAM, TEXT_FILE, GMAIL, X
 
 TELEGRAM_CODE_FIELD = "telegram_code"
 TELEGRAM_PASSWORD_FIELD = "telegram_password"
@@ -27,6 +27,7 @@ class RssTagUsers:
             "similar_posts": True,
             "context_n": 5,
             "telegram_limit": 1000,
+            "x_max_results": 50,
             "batch_llm": "openai",
             "worker_llm": "llamacpp",
             "realtime_llm": "llamacpp",
@@ -48,7 +49,7 @@ class RssTagUsers:
     def create_account(self, username: str, password: str) -> Optional[str]:
         lp = self.hash_login_password(username, password)
         sid = sha256(os.urandom(randint(80, 200))).hexdigest()
-        created = datetime.utcnow()
+        created = datetime.now(timezone.utc)
         user = {
             "sid": sid,
             "username": username,
@@ -92,7 +93,7 @@ class RssTagUsers:
             data["telegram_channel"] = login
         if provider == TEXT_FILE:
             data["text_file"] = login
-        if provider == GMAIL:
+        if provider in (GMAIL, X):
             data["login"] = login
         return data
 
@@ -152,6 +153,11 @@ class RssTagUsers:
                 legacy["text_file"] = user.get("text_file", "")
             if provider == GMAIL:
                 legacy["refresh_token"] = user.get("refresh_token", "")
+            if provider == X:
+                legacy["refresh_token"] = user.get("refresh_token", "")
+                legacy["access_token"] = user.get("access_token", "")
+                legacy["x_user_id"] = user.get("x_user_id", "")
+                legacy["x_username"] = user.get("x_username", "")
             return legacy
         return None
 

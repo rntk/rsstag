@@ -53,6 +53,8 @@ class TestWebAppInit(MongoWebTestCase):
         self.assertIn("on_root_get", self.app.endpoints)
         self.assertIn("on_login_get", self.app.endpoints)
         self.assertIn("on_login_post", self.app.endpoints)
+        self.assertIn("on_login_x_auth_get", self.app.endpoints)
+        self.assertIn("on_x_oauth2callback_get", self.app.endpoints)
 
     def test_wsgi_callable_is_available(self) -> None:
         self.assertTrue(callable(self.app.set_response))

@@ -5,6 +5,7 @@ import pytest
 from pymongo.errors import BulkWriteError
 
 from rsstag.providers import providers as data_providers
+from rsstag.providers.x import XProviderError
 from rsstag.tasks import TASK_GMAIL_SORT, TASK_MARK, TASK_MARK_TELEGRAM
 from rsstag.workers.provider_worker import ProviderWorker
 
@@ -29,6 +30,7 @@ def mock_providers() -> Dict[str, MagicMock]:
     return {
         data_providers.TELEGRAM: MagicMock(),
         data_providers.GMAIL: MagicMock(),
+        data_providers.X: MagicMock(),
         "test_provider": MagicMock(),
     }
 
@@ -129,7 +131,12 @@ def test_handle_download_persists_refreshed_gmail_token(
     mock_users.update_provider.assert_called_once_with(
         "123",
         data_providers.GMAIL,
-        {"token": "new-token", "retoken": False, "refresh_token": "refresh-1"},
+        {
+            "token": "new-token",
+            "access_token": "new-token",
+            "retoken": False,
+            "refresh_token": "refresh-1",
+        },
     )
 
 
@@ -155,7 +162,12 @@ def test_handle_gmail_sort_persists_refreshed_token(
     mock_users.update_provider.assert_called_once_with(
         "123",
         data_providers.GMAIL,
-        {"token": "new-token", "retoken": False, "refresh_token": "refresh-1"},
+        {
+            "token": "new-token",
+            "access_token": "new-token",
+            "retoken": False,
+            "refresh_token": "refresh-1",
+        },
     )
 
 
@@ -182,7 +194,111 @@ def test_handle_download_failure_still_persists_refreshed_gmail_token(
     mock_users.update_provider.assert_called_once_with(
         "123",
         data_providers.GMAIL,
-        {"token": "new-token", "retoken": False, "refresh_token": "refresh-1"},
+        {
+            "token": "new-token",
+            "access_token": "new-token",
+            "retoken": False,
+            "refresh_token": "refresh-1",
+        },
+    )
+
+
+def test_handle_download_persists_x_token_and_provider_updates(
+    worker: ProviderWorker,
+    mock_users: MagicMock,
+    mock_providers: Dict[str, MagicMock],
+) -> None:
+    task: Dict[str, Any] = {"user": {"sid": "123"}, "data": {"provider": data_providers.X}}
+    provider_user = {
+        "token": "new-x-token",
+        "access_token": "new-x-token",
+        "refresh_token": "x-refresh",
+        "token_refreshed": True,
+        "provider_updates": {
+            "x_home_since_id": "200",
+            "x_follow_since_ids": {"42": "300"},
+        },
+    }
+    mock_users.get_provider_user.return_value = provider_user
+
+    mock_providers[data_providers.X].download.return_value = [([], [])]
+
+    assert worker.handle_download(task) is True
+
+    assert mock_users.update_provider.call_count == 2
+    mock_users.update_provider.assert_any_call(
+        "123",
+        data_providers.X,
+        {
+            "token": "new-x-token",
+            "access_token": "new-x-token",
+            "retoken": False,
+            "refresh_token": "x-refresh",
+        },
+    )
+    mock_users.update_provider.assert_any_call(
+        "123",
+        data_providers.X,
+        {
+            "x_home_since_id": "200",
+            "x_follow_since_ids": {"42": "300"},
+        },
+    )
+
+
+def test_handle_download_x_provider_error_sets_user_visible_message(
+    worker: ProviderWorker,
+    mock_users: MagicMock,
+    mock_providers: Dict[str, MagicMock],
+    mock_tasks: MagicMock,
+) -> None:
+    task: Dict[str, Any] = {
+        "_id": "task-x-1",
+        "user": {"sid": "123"},
+        "type": 1,
+        "data": {"provider": data_providers.X},
+    }
+    mock_users.get_provider_user.return_value = {"token": "abc"}
+    mock_providers[data_providers.X].download.side_effect = XProviderError(
+        "403 forbidden",
+        "X API access denied. Check app permissions or reconnect X.",
+    )
+
+    assert worker.handle_download(task) is False
+
+    mock_tasks.mark_task_failed.assert_called_once_with("task-x-1", "403 forbidden")
+    mock_users.update_by_sid.assert_called_once_with(
+        "123", {"message": "X API access denied. Check app permissions or reconnect X."}
+    )
+
+
+def test_handle_download_x_provider_retoken_freezes_tasks(
+    worker: ProviderWorker,
+    mock_users: MagicMock,
+    mock_providers: Dict[str, MagicMock],
+    mock_tasks: MagicMock,
+) -> None:
+    task: Dict[str, Any] = {
+        "_id": "task-x-2",
+        "user": {"sid": "123"},
+        "type": 1,
+        "data": {"provider": data_providers.X},
+    }
+    mock_users.get_provider_user.return_value = {"token": "abc"}
+    mock_providers[data_providers.X].download.side_effect = XProviderError(
+        "401 unauthorized",
+        "X authentication expired. Reconnect X.",
+        retoken=True,
+    )
+
+    assert worker.handle_download(task) is False
+
+    mock_tasks.freeze_tasks.assert_called_once_with(task["user"], task["type"])
+    mock_users.update_provider.assert_called_once_with(
+        "123", data_providers.X, {"retoken": True}
+    )
+    mock_users.update_by_sid.assert_called_once_with(
+        "123", {"message": "X authentication expired. Reconnect X."}
     )
 
 
@@ -261,7 +377,12 @@ def test_handle_mark_gmail_persists_refreshed_token(
     mock_users.update_provider.assert_called_once_with(
         "123",
         data_providers.GMAIL,
-        {"token": "new-token", "retoken": False, "refresh_token": "refresh-1"},
+        {
+            "token": "new-token",
+            "access_token": "new-token",
+            "retoken": False,
+            "refresh_token": "refresh-1",
+        },
     )
 
 

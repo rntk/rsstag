@@ -79,6 +79,7 @@ class TestWorkerDispatcherInit(unittest.TestCase):
         self.assertIn("settings", dispatcher._config)
         self.assertIn("telegram", dispatcher._config)
         self.assertIn("gmail", dispatcher._config)
+        self.assertIn("x", dispatcher._config)
         self.assertEqual(self.test_db_name, dispatcher._config["settings"]["db_name"])
 
     def test_worker_function_is_callable(self) -> None:
@@ -104,4 +105,3 @@ class TestWorkerDispatcherInit(unittest.TestCase):
             kwargs["filename"],
         )
         self.assertEqual(logging.INFO, kwargs["level"])
-

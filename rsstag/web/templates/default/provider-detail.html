@@ -36,6 +36,8 @@
 
     {% if provider == "gmail" %}
         <a href="{{ google_auth_url }}" class="link_in_form">Connect Gmail</a>
+    {% elif provider == "x" %}
+        <a href="{{ x_auth_url }}" class="link_in_form">Connect X</a>
     {% else %}
         <form action="{{ login_url }}" method="POST" id="provider_login_form">
             <label for="login">Login</label><br /><input type="text" name="login" id="login" /><br /><br />
@@ -56,7 +58,7 @@
         </form>
     {% endif %}
 
-    {% if provider == "telegram" or provider == "bazqux" %}
+    {% if provider == "telegram" or provider == "bazqux" or provider == "x" %}
         <div class="root_item"><a href="{{ feeds_url }}">Select channels/feeds</a></div>
     {% endif %}
     <div class="root_item"><a href="{{ data_sources_url }}">Back to data sources</a></div>

@@ -25,7 +25,7 @@ def create_worker_test_config(
         "templates": "default",
         "downloaders_count": "1",
         "workers_count": "2",
-        "providers": "bazqux,telegram,gmail,textfile",
+        "providers": "bazqux,telegram,gmail,x,textfile",
         "db_host": db_host,
         "db_port": str(db_port),
         "db_login": "",
@@ -63,6 +63,13 @@ def create_worker_test_config(
         "client_secret": "",
         "mark_label": "rsstag_mark",
     }
+    config["x"] = {
+        "client_id": "x-client-id",
+        "client_secret": "",
+        "api_base": "https://api.x.com",
+        "auth_base": "https://x.com",
+        "max_results": "50",
+    }
     config["openai"] = {
         "token": "",
         "model": "gpt-5-mini",
@@ -93,6 +100,7 @@ def create_mock_providers() -> Dict[str, MagicMock]:
         "telegram": MagicMock(name="telegram_provider"),
         "textfile": MagicMock(name="textfile_provider"),
         "gmail": MagicMock(name="gmail_provider"),
+        "x": MagicMock(name="x_provider"),
     }
 
 

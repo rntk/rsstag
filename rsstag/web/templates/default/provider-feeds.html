@@ -82,6 +82,36 @@
             {% endif %}
             {% endif %}
 
+            {% if provider == "x" %}
+            <h3>Home timeline</h3>
+            <ul>
+                <li>
+                    <label>
+                        <input class="selection-item" type="checkbox" name="channels" value="home"
+                            {% if "home" in selected.channels %}checked{% endif %} />
+                        Home timeline
+                    </label>
+                </li>
+            </ul>
+
+            <h3>Followed accounts</h3>
+            {% if feeds %}
+            <ul>
+                {% for feed in feeds %}
+                <li>
+                    <label>
+                        <input class="selection-item" type="checkbox" name="feeds" value="{{ feed.id }}"
+                            {% if feed.id in selected.feeds %}checked{% endif %} />
+                        {{ feed.title }}
+                    </label>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p>No followed accounts loaded. Click refresh to load the list.</p>
+            {% endif %}
+            {% endif %}
+
             <div class="root_item">
                 <button type="submit" name="action" value="refresh">Refresh list</button>
                 <button type="submit" name="action" value="download">Download</button>

@@ -17,6 +17,7 @@ from rsstag.providers.bazqux import BazquxProvider
 from rsstag.providers.gmail import GmailProvider
 from rsstag.providers.telegram import TelegramProvider
 from rsstag.providers.textfile import TextFileProvider
+from rsstag.providers.x import XProvider
 from rsstag.tasks import (
     TASK_BIGRAMS_RANK,
     TASK_CLEAN_BIGRAMS,
@@ -229,6 +230,7 @@ def worker(config: Dict[str, Any]) -> None:
         data_providers.TELEGRAM: TelegramProvider(config, db),
         data_providers.TEXT_FILE: TextFileProvider(config),
         data_providers.GMAIL: GmailProvider(config),
+        data_providers.X: XProvider(config),
     }
     users = RssTagUsers(db)
     tasks = RssTagTasks(db)

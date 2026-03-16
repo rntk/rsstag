@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from typing import Dict, List, Optional
 
 from werkzeug.wrappers import Request, Response
@@ -7,6 +8,7 @@ from werkzeug.utils import redirect
 import rsstag.providers.providers as data_providers
 from rsstag.providers.bazqux import BazquxProvider
 from rsstag.providers.telegram import TelegramProvider
+from rsstag.providers.x import XProvider
 from rsstag.tasks import TASK_DOWNLOAD
 
 
@@ -26,7 +28,7 @@ def on_provider_feeds_get_post(
     app, user: dict, request: Request, provider: Optional[str] = None
 ) -> Response:
     provider = provider or user.get("provider")
-    if provider not in (data_providers.TELEGRAM, data_providers.BAZQUX):
+    if provider not in (data_providers.TELEGRAM, data_providers.BAZQUX, data_providers.X):
         return redirect(app.routes.get_url_by_endpoint(endpoint="on_root_get"))
 
     provider_user = app.users.get_provider_user(user, provider)
@@ -41,6 +43,16 @@ def on_provider_feeds_get_post(
     selection = (
         _get_selection(request) if request.method == "POST" else _empty_selection()
     )
+    if request.method != "POST" and provider == data_providers.X:
+        selection = {
+            "channels": ["home"] if provider_user.get("x_home_enabled", True) else [],
+            "feeds": [
+                str(feed_id)
+                for feed_id in provider_user.get("x_selected_feeds", [])
+                if feed_id
+            ],
+            "categories": [],
+        }
     error = None
     channels = []
     categories = []
@@ -50,6 +62,15 @@ def on_provider_feeds_get_post(
         if not (selection["channels"] or selection["feeds"] or selection["categories"]):
             error = "Select at least one channel, feed, or category."
         else:
+            if provider == data_providers.X:
+                app.users.update_provider(
+                    user["sid"],
+                    provider,
+                    {
+                        "x_home_enabled": "home" in selection["channels"],
+                        "x_selected_feeds": selection["feeds"],
+                    },
+                )
             if not user["in_queue"]:
                 added = app.tasks.add_task(
                     {
@@ -100,6 +121,13 @@ def on_provider_feeds_get_post(
                 data = bazqux.list_subscriptions(provider_user)
                 categories = data["categories"]
                 feeds = data["feeds"]
+            elif provider == data_providers.X:
+                x_provider = XProvider(app.config)
+                feeds = asyncio.run(x_provider.list_following(provider_user))
+                if provider_user.get("provider_updates"):
+                    app.users.update_provider(
+                        user["sid"], provider, provider_user["provider_updates"]
+                    )
         except Exception as exc:
             logging.error("Failed to refresh provider list: %s", exc)
             error = "Failed to refresh the list. Please try again later."

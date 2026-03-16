@@ -160,7 +160,7 @@ class Telegram:
         if self._stopped:
             return Result(None, error={"error": "client is stopped"})
 
-        r_id = "{}_{}".format(datetime.datetime.utcnow().timestamp(), randint(0, 99999))
+        r_id = "{}_{}".format(datetime.datetime.now(datetime.timezone.utc).timestamp(), randint(0, 99999))
         query["@extra"] = {"req_id": r_id}
         ev = ResponseEvent(r_id)
         self._queue.put_nowait(ev)

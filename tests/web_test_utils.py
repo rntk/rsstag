@@ -31,7 +31,7 @@ def create_test_config(
         "templates": "default",
         "downloaders_count": "1",
         "workers_count": "1",
-        "providers": "bazqux,telegram,gmail,textfile",
+        "providers": "bazqux,telegram,gmail,x,textfile",
         "db_host": db_host,
         "db_port": str(db_port),
         "db_login": "",
@@ -68,6 +68,13 @@ def create_test_config(
         "client_id": "",
         "client_secret": "",
         "mark_label": "rsstag_mark",
+    }
+    config["x"] = {
+        "client_id": "x-client-id",
+        "client_secret": "",
+        "api_base": "https://api.x.com",
+        "auth_base": "https://x.com",
+        "max_results": "50",
     }
     config["openai"] = {
         "token": "",

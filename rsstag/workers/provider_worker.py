@@ -20,21 +20,49 @@ class ProviderWorker:
         self._tasks = tasks
         self._record_bulk_write = record_bulk_write
 
-    def _save_refreshed_gmail_token(self, task: Dict[str, Any], provider_user: Dict[str, Any], provider_name: str) -> None:
-        if provider_name != data_providers.GMAIL:
+    def _save_refreshed_oauth_token(self, task: Dict[str, Any], provider_user: Dict[str, Any], provider_name: str) -> None:
+        if provider_name not in (data_providers.GMAIL, data_providers.X):
             return
         if not provider_user.get("token_refreshed"):
             return
 
         update_data = {
             "token": provider_user.get("token") or provider_user.get("access_token"),
+            "access_token": provider_user.get("access_token") or provider_user.get("token"),
             "retoken": False,
         }
         refresh_token = provider_user.get("refresh_token")
         if refresh_token:
             update_data["refresh_token"] = refresh_token
+        token_expires_at = provider_user.get("token_expires_at")
+        if token_expires_at:
+            update_data["token_expires_at"] = token_expires_at
 
         self._users.update_provider(task["user"]["sid"], provider_name, update_data)
+
+    def _save_provider_updates(self, task: Dict[str, Any], provider_user: Dict[str, Any], provider_name: str) -> None:
+        provider_updates = provider_user.get("provider_updates")
+        if not provider_updates:
+            return
+        self._users.update_provider(task["user"]["sid"], provider_name, provider_updates)
+
+    def _handle_provider_error(
+        self,
+        task: Dict[str, Any],
+        provider_name: str,
+        error: Exception,
+    ) -> None:
+        error_text = str(error)
+        user_message = getattr(error, "user_message", "") or error_text
+        retoken = bool(getattr(error, "retoken", False))
+        if retoken:
+            self._tasks.freeze_tasks(task["user"], task["type"])
+            self._users.update_provider(
+                task["user"]["sid"], provider_name, {"retoken": True}
+            )
+        else:
+            self._tasks.mark_task_failed(task.get("_id"), error_text)
+        self._users.update_by_sid(task["user"]["sid"], {"message": user_message})
 
     def handle_download(self, task: Dict[str, Any]) -> bool:
         logging.info("Start downloading for user")
@@ -131,8 +159,12 @@ class ProviderWorker:
                 traceback.format_exc(),
             )
             logging.info("Saved posts: %s.", posts_n)
+            self._handle_provider_error(task, provider_name, e)
         finally:
-            self._save_refreshed_gmail_token(task, provider_user, provider_name)
+            self._save_refreshed_oauth_token(task, provider_user, provider_name)
+
+        if success:
+            self._save_provider_updates(task, provider_user, provider_name)
 
         return success
 
@@ -160,7 +192,7 @@ class ProviderWorker:
                 task["user"]["sid"], provider_name, {"retoken": True}
             )
             return False
-        self._save_refreshed_gmail_token(task, provider_user, provider_name)
+        self._save_refreshed_oauth_token(task, provider_user, provider_name)
         return marked
 
     def handle_mark_telegram(self, task: Dict[str, Any]) -> bool:
@@ -219,5 +251,5 @@ class ProviderWorker:
                 {"retoken": True},
             )
             return False
-        self._save_refreshed_gmail_token(task, provider_user, data_providers.GMAIL)
+        self._save_refreshed_oauth_token(task, provider_user, data_providers.GMAIL)
         return sorted_emails
