@@ -252,15 +252,22 @@ export function initSnippetHoverCards() {
 
 function initPathRecommendationsPage() {
   const container = document.getElementById('path_recommendations');
+  const clusterContainer = document.getElementById('path_cluster_recommendations');
   const pathData = window.path_data;
-  if (!container || !pathData || !pathData.path_id) {
+  if (!pathData || !pathData.path_id) {
     return;
   }
 
   const pathStorage = new PathStorage(window.EVSYS);
   pathStorage.start();
   window.pathManager = new PathManager(pathStorage);
-  window.pathManager.loadRecommendations(pathData.path_id, container);
+
+  if (container) {
+    window.pathManager.loadRecommendations(pathData.path_id, container);
+  }
+  if (clusterContainer) {
+    window.pathManager.loadClusterRecommendations(pathData.path_id, clusterContainer);
+  }
 }
 
 export function resolvePageType(path) {

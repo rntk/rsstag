@@ -310,6 +310,47 @@ def on_path_recommendations_get(
     return _json_response({"data": {"path_id": path_id, "groups": groups}})
 
 
+def on_path_cluster_recommendations_get(
+    app: "RSSTagApplication", user: dict, request: Request, path_id: str
+) -> Response:
+    doc = app.paths.get_by_path_id(user["sid"], path_id)
+    if not doc:
+        return _json_response({"error": "Path not found"}, 404)
+
+    path_post_ids: set[str] = set(
+        _get_matching_post_ids(app, user["sid"], doc.get("filterset", {}), doc.get("exclude", {}))
+    )
+
+    projection: dict[str, int] = {
+        "_id": 0,
+        "cluster_id": 1,
+        "title": 1,
+        "post_ids": 1,
+        "item_count": 1,
+    }
+    clusters_raw = app.snippet_clusters.get_all_by_owner(user["sid"], projection=projection)
+
+    matches: list[dict[str, Any]] = []
+    for cluster in clusters_raw:
+        overlap: int = len(set(cluster.get("post_ids", [])) & path_post_ids)
+        if overlap <= 0:
+            continue
+        matches.append(
+            {
+                "cluster_id": cluster["cluster_id"],
+                "title": cluster.get("title", f"Cluster {cluster['cluster_id']}"),
+                "item_count": cluster.get("item_count", 0),
+                "overlap_count": overlap,
+                "link": f"/sentence-clusters/{cluster['cluster_id']}",
+            }
+        )
+
+    matches.sort(key=lambda c: c["overlap_count"], reverse=True)
+    matches = matches[:10]
+
+    return _json_response({"data": {"path_id": path_id, "clusters": matches}})
+
+
 def on_paths_delete(
     app: "RSSTagApplication", user: dict, request: Request, path_id: str
 ) -> Response:

@@ -221,12 +221,18 @@ h3.post_title {
   min-width: 0;
 }
 
-.path-recommendations-panel {
+.path-sidebar {
   width: 19rem;
   flex: 0 0 19rem;
   position: sticky;
   top: 7.5em;
   align-self: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 1em;
+}
+
+.path-recommendations-panel {
   padding: 0.9em;
   border: 1px solid $my_gray;
   border-radius: 0.6em;
@@ -292,12 +298,32 @@ h3.post_title {
   font-size: 9.5pt;
 }
 
+.path-cluster-recommendations-panel {
+  /* stacking handled by .path-sidebar gap */
+}
+
+.path-cluster-recommendation-item {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  box-sizing: border-box;
+  width: 100%;
+  border: 1px solid #d2d2d2;
+  border-radius: 0.5em;
+  background: #ffffff;
+  padding: 0.7em 0.75em;
+}
+
+.path-cluster-recommendation-item:hover {
+  background: #f5f5f5;
+}
+
 @media (max-width: 960px) {
   .path-layout {
     flex-direction: column;
   }
 
-  .path-recommendations-panel {
+  .path-sidebar {
     width: auto;
     flex: 1 1 auto;
     position: static;

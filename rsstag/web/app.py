@@ -1889,6 +1889,9 @@ class RSSTagApplication(object):
     def on_path_recommendations_get(self, user: dict, request: Request, path_id: str):
         return paths_handlers.on_path_recommendations_get(self, user, request, path_id)
 
+    def on_path_cluster_recommendations_get(self, user: dict, request: Request, path_id: str):
+        return paths_handlers.on_path_cluster_recommendations_get(self, user, request, path_id)
+
     def on_paths_delete(self, user: dict, request: Request, path_id: str):
         return paths_handlers.on_paths_delete(self, user, request, path_id)
 

@@ -171,6 +171,78 @@ export default class PathManager {
     return parts.join(' · ');
   }
 
+  async loadClusterRecommendations(pathId, container) {
+    if (!pathId || !container) {
+      return null;
+    }
+
+    this._renderClusterState(container, 'loading');
+    const payload = await this.storage.getPathClusterRecommendations(pathId);
+    if (!payload) {
+      this._renderClusterState(container, 'error');
+      return null;
+    }
+
+    const clusters = Array.isArray(payload.clusters) ? payload.clusters : [];
+    if (!clusters.length) {
+      this._renderClusterState(container, 'empty');
+      return payload;
+    }
+
+    this._renderClusters(container, clusters);
+    return payload;
+  }
+
+  _renderClusterState(container, state) {
+    container.innerHTML = '';
+    const title = document.createElement('h3');
+    title.className = 'path-recommendations-title';
+    title.textContent = 'Related clusters';
+    container.appendChild(title);
+
+    const message = document.createElement('div');
+    message.className = `path-recommendations-state path-recommendations-state-${state}`;
+    if (state === 'loading') {
+      message.textContent = 'Loading clusters...';
+    } else if (state === 'empty') {
+      message.textContent = 'No related clusters found.';
+    } else {
+      message.textContent = 'Failed to load clusters.';
+    }
+    container.appendChild(message);
+  }
+
+  _renderClusters(container, clusters) {
+    container.innerHTML = '';
+    const title = document.createElement('h3');
+    title.className = 'path-recommendations-title';
+    title.textContent = 'Related clusters';
+    container.appendChild(title);
+
+    const list = document.createElement('div');
+    list.className = 'path-recommendations-list';
+
+    clusters.forEach((cluster) => {
+      const link = document.createElement('a');
+      link.href = cluster.link;
+      link.className = 'path-cluster-recommendation-item';
+
+      const titleEl = document.createElement('span');
+      titleEl.className = 'path-recommendation-item-title';
+      titleEl.textContent = cluster.title;
+      link.appendChild(titleEl);
+
+      const meta = document.createElement('span');
+      meta.className = 'path-recommendation-item-meta';
+      meta.textContent = `${cluster.overlap_count} shared posts, ${cluster.item_count} total snippets`;
+      link.appendChild(meta);
+
+      list.appendChild(link);
+    });
+
+    container.appendChild(list);
+  }
+
   formatFilterValue(value) {
     if (typeof value === 'string') {
       return value;

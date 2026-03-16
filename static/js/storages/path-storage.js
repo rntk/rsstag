@@ -79,4 +79,21 @@ export default class PathStorage {
       return null;
     }
   }
+
+  async getPathClusterRecommendations(pathId) {
+    try {
+      const response = await fetch(`/api/paths/${pathId}/cluster-recommendations`, {
+        credentials: 'include',
+      });
+      const data = await response.json();
+      if (!response.ok || data.error) {
+        console.error('Failed to load cluster recommendations:', data.error || response.statusText);
+        return null;
+      }
+      return data.data || { path_id: pathId, clusters: [] };
+    } catch (err) {
+      console.error('Failed to load cluster recommendations:', err);
+      return null;
+    }
+  }
 }
