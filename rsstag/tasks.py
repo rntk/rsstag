@@ -5,6 +5,7 @@ from typing import Optional, List, Dict, Any, Set, Tuple, Callable
 from rsstag.users import RssTagUsers
 from pymongo import MongoClient, UpdateOne, ReturnDocument
 from bson.objectid import ObjectId
+from rsstag.llm.batch import BatchTaskStatus
 from rsstag.post_grouping import RssTagPostGrouping
 from rsstag.tags import RssTagTags
 
@@ -842,12 +843,15 @@ class RssTagTasks:
                     )
                 self._db.tags.bulk_write(updates, ordered=False)
             elif task["type"] == TASK_POST_GROUPING_BATCH:
-                remove_task = False
                 batch_state = task.get("batch", {}) or {}
                 batch_status = batch_state.get("status", "")
+                if batch_status == BatchTaskStatus.COMPLETED.value:
+                    remove_task = True
+                else:
+                    remove_task = False
                 updates = []
                 for post in task["data"]:
-                    if batch_status == "failed":
+                    if batch_status == BatchTaskStatus.FAILED.value:
                         # Batch failed - only reset processing, don't mark as grouped
                         updates.append(
                             UpdateOne(
@@ -870,7 +874,12 @@ class RssTagTasks:
                 if updates:
                     self._db.posts.bulk_write(updates, ordered=False)
             elif task["type"] == TASK_TAG_CLASSIFICATION_BATCH:
-                remove_task = False
+                batch_state = task.get("batch", {}) or {}
+                batch_status = batch_state.get("status", "")
+                if batch_status == BatchTaskStatus.COMPLETED.value:
+                    remove_task = True
+                else:
+                    remove_task = False
                 updates = []
                 for tag in task["data"]:
                     updates.append(
