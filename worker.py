@@ -28,6 +28,7 @@ def _configure_logging(config: Dict[str, Any], log_file: Optional[str] = None) -
         filename=target_log_file,
         filemode="a",
         level=getattr(logging, config["settings"]["log_level"].upper()),
+        force=True,
     )
 
 

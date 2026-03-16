@@ -67,6 +67,7 @@ class RSSTagWorkerDispatcher:
             filename=target_log,
             filemode="a",
             level=getattr(logging, self._config["settings"]["log_level"].upper()),
+            force=True,
         )
         cl = MongoClient(
             self._config["settings"]["db_host"],

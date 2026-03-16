@@ -79,6 +79,7 @@ class RSSTagApplication(object):
                 filename=target_log,
                 filemode="a",
                 level=getattr(logging, self.config["settings"]["log_level"].upper()),
+                force=True,
             )
         except Exception as e:
             logging.critical("Error in logging configuration: %s", e)
