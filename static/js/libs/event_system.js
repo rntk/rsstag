@@ -75,12 +75,17 @@ export default class EventsSystem {
     this.CHAT_START_WITH_CONTEXT = 'chat_start_with_context';
 
     this._events = {};
+    this._last_events = {};
   }
 
   bind(event, fct) {
     this._events = this._events || {};
     this._events[event] = this._events[event] || [];
     this._events[event].push(fct);
+
+    if (this._last_events && this._last_events[event] !== undefined) {
+      fct.apply(undefined, this._last_events[event]);
+    }
   }
 
   unbind(event, fct) {
@@ -93,9 +98,13 @@ export default class EventsSystem {
 
   trigger(event /* , args... */) {
     this._events = this._events || {};
+    this._last_events = this._last_events || {};
+    var args = Array.prototype.slice.call(arguments, 1);
+    this._last_events[event] = args;
+
     if (event in this._events === false) return;
     for (var i = 0; i < this._events[event].length; i++) {
-      this._events[event][i].apply(undefined, Array.prototype.slice.call(arguments, 1));
+      this._events[event][i].apply(undefined, args);
     }
   }
 }
