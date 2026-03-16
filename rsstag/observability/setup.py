@@ -48,8 +48,8 @@ def _setup(service_name: str, auto_instrument: bool = True) -> None:
 
     # Logs SDK
     from opentelemetry._logs import set_logger_provider
-    from opentelemetry.sdk._logs import LoggerProvider
-    from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+    from opentelemetry.sdk.logs import LoggerProvider
+    from opentelemetry.sdk.logs.export import BatchLogRecordProcessor
 
     # OTel logging bridge
     from opentelemetry.instrumentation.logging import LoggingInstrumentor
@@ -106,7 +106,7 @@ def _setup(service_name: str, auto_instrument: bool = True) -> None:
     logger_provider = LoggerProvider(resource=resource)
     if endpoint:
         try:
-            from opentelemetry.exporter.otlp.proto.grpc._log_exporter import (
+            from opentelemetry.exporter.otlp.proto.grpc.log_exporter import (
                 OTLPLogExporter,
             )
             logger_provider.add_log_record_processor(
@@ -114,7 +114,7 @@ def _setup(service_name: str, auto_instrument: bool = True) -> None:
             )
         except ImportError:
             try:
-                from opentelemetry.exporter.otlp.proto.http._log_exporter import (
+                from opentelemetry.exporter.otlp.proto.http.log_exporter import (
                     OTLPLogExporter,
                 )
                 logger_provider.add_log_record_processor(

@@ -1,7 +1,7 @@
 from typing import List, Optional
 import logging
 
-from openai import OpenAI, Completion
+from openai import OpenAI
 
 
 class ROpenAI:
@@ -39,7 +39,7 @@ class ROpenAI:
         }
 
         try:
-            resp: Completion = self.client.responses.create(**call_kwargs)
+            resp = self.client.responses.create(**call_kwargs)
         except Exception as e:
             logging.error("OpenAI error: %s", e)
             return f"OpenAI error {e}"

@@ -37,14 +37,14 @@ class BazquxProvider:
         }
 
     async def fetch(
-        self, data: dict, loop: Optional[asyncio.AbstractEventLoop]
+        self, data: dict
     ) -> Tuple[dict, str]:
         posts = []
         max_repetitions = 5
         repetitions = 0
         again = True
         url = data["url"]
-        async with aiohttp.ClientSession(loop=loop) as session:
+        async with aiohttp.ClientSession() as session:
             while again:
                 try:
                     async with session.get(url, headers=data["headers"]) as resp:
@@ -165,7 +165,6 @@ class BazquxProvider:
                                         ),
                                         "category": category_name,
                                     },
-                                    loop,
                                 )
                             )
                     if (feed_selected and not category_selected) or (
@@ -183,7 +182,6 @@ class BazquxProvider:
                                         ),
                                         "category": category_name,
                                     },
-                                    loop,
                                 )
                             )
                 else:
@@ -200,7 +198,6 @@ class BazquxProvider:
                                         ),
                                         "category": category_name,
                                     },
-                                    loop,
                                 )
                             )
                     if category_name not in by_category:
@@ -216,7 +213,6 @@ class BazquxProvider:
                                         ),
                                         "category": category_name,
                                     },
-                                    loop,
                                 )
                             )
             future = asyncio.gather(*futures)
