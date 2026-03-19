@@ -2011,6 +2011,14 @@ class RSSTagApplication(object):
     def on_tokens_get(self, user: dict, _: Request) -> Response:
         from datetime import datetime, timezone
         tokens = list(self.tokens.get_all(user["sid"]))
+        
+        # Ensure token.expires is offset-aware (UTC) to match now()
+        for token in tokens:
+            if "expires" in token and token["expires"].tzinfo is None:
+                token["expires"] = token["expires"].replace(tzinfo=timezone.utc)
+            if "created" in token and token["created"].tzinfo is None:
+                token["created"] = token["created"].replace(tzinfo=timezone.utc)
+                
         page = self.template_env.get_template("tokens.html")
         return Response(
             page.render(
