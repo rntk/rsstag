@@ -5,88 +5,152 @@
     {% include "head-data.html" %}
 </head>
 
-<body>
+<body class="font-body selection:bg-secondary-container bg-background">
     {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}{% from
     'context-filter-bar.html' import context_filter_bar with context %}
-    <div id="global_tools">
-        <div class="left_half">
-            <div id="link_on_root" class="global_tools_button">
-                <a href="/">main</a>
+
+    <!-- Top Navigation Bar -->
+    <header class="sticky top-0 z-40 bg-surface/80 backdrop-blur-xl border-b border-outline-variant/10">
+        <div class="px-10 h-20 flex justify-between items-center w-full max-w-[1600px] mx-auto">
+            <div class="flex items-center space-x-10">
+                <a href="/" class="font-headline font-extrabold text-primary text-xl tracking-tight">RSSTag</a>
+                <nav class="hidden md:flex items-center space-x-1">
+                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/">
+                        <span class="material-symbols-outlined text-lg">dashboard</span>
+                        <span class="text-sm">Dashboard</span>
+                    </a>
+                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/group/category">
+                        <span class="material-symbols-outlined text-lg">category</span>
+                        <span class="text-sm">Categories</span>
+                    </a>
+                    <a class="sidebar-item-active flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/group/tag/1">
+                        <span class="material-symbols-outlined text-lg">sell</span>
+                        <span class="text-sm">Tags</span>
+                    </a>
+                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/topics/1">
+                        <span class="material-symbols-outlined text-lg">topic</span>
+                        <span class="text-sm">Topics</span>
+                    </a>
+                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/map">
+                        <span class="material-symbols-outlined text-lg">map</span>
+                        <span class="text-sm">Map</span>
+                    </a>
+                </nav>
             </div>
-            <div id="help_button" class="global_tools_button">
-                <a href="#">help</a>
-            </div>
-            <div id="sotr_by" class="global_tools_button">
-                <a href="{{sort_by_link}}">group by tag</a>
-            </div>
-            <div id="group_by" class="global_tools_button">
-                <a href="{{group_by_link}}">group by category</a>
-            </div>
-            <div id="tags_group_by" class="global_tools_button">
-                <a href="{{tags_categories_link}}">group by tags categories</a>
+            
+            <div class="flex items-center space-x-4">
+                {{ g_status.global_status() }}
+                {{ menu.settings_menu() }}
+                <button onclick="document.getElementById('help_window').classList.remove('hidden')" class="p-2 hover:bg-surface-container-high rounded-full transition-colors">
+                    <span class="material-symbols-outlined">help</span>
+                </button>
+                <a class="text-on-surface-variant hover:text-primary p-2 transition-colors" href="/logout" title="Log Out">
+                    <span class="material-symbols-outlined">logout</span>
+                </a>
             </div>
         </div>
-        <div class="right_half">
-            {{ g_status.global_status() }}
-            {{ menu.settings_menu() }}
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="min-h-screen">
+        <div class="max-w-[1600px] mx-auto">
+
+            <!-- Filter Bar -->
+            <div class="sticky top-20 z-30 bg-surface/50 backdrop-blur-md px-10 py-2 border-b border-outline-variant/5">
+                {{ context_filter_bar() }}
+            </div>
+
+            <!-- Content -->
+            <div class="p-10 space-y-10">
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <h2 class="text-3xl font-headline font-extrabold text-primary">Tags</h2>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <a href="{{sort_by_link}}" class="text-xs font-bold text-on-surface-variant hover:text-primary bg-surface-container-high px-4 py-2 rounded-full transition-all flex items-center space-x-2">
+                            <span class="material-symbols-outlined text-sm">sort</span>
+                            <span>Sort by {{sort_by_title}}</span>
+                        </a>
+                        <a href="{{group_by_link}}" class="text-xs font-bold text-on-surface-variant hover:text-primary bg-surface-container-high px-4 py-2 rounded-full transition-all flex items-center space-x-2">
+                            <span class="material-symbols-outlined text-sm">category</span>
+                            <span>Group by Category</span>
+                        </a>
+                        <a href="{{tags_categories_link}}" class="text-xs font-bold text-on-surface-variant hover:text-primary bg-surface-container-high px-4 py-2 rounded-full transition-all flex items-center space-x-2">
+                            <span class="material-symbols-outlined text-sm">folder</span>
+                            <span>Tags Categories</span>
+                        </a>
+                    </div>
+                </div>
+                <div id="letters_list" class="flex flex-wrap gap-2"></div>
+                <div id="search_tools" class="max-w-md"></div>
+                <div id="bigrams_tabs_page"></div>
+                <div id="bigrams_table_page"></div>
+                <div class="page" id="tags_page"></div>
+
+                <!-- Paginator -->
+                <div id="global_tools_bottom" class="pt-10">
+                    <ul id="paginator" class="flex items-center justify-center space-x-2">
+                        {% if pages_map['start'] %}
+                        {% for number in pages_map['start'] %}
+                        {% if number['p'] == current_page %}
+                        <li class="w-10 h-10 flex items-center justify-center bg-primary text-on-primary rounded-xl text-sm font-bold shadow-sm">{{number['p']}}</li>
+                        {% else %}
+                        <li class="w-10 h-10 flex items-center justify-center bg-surface-container-high hover:bg-surface-container-highest rounded-xl text-sm font-medium transition-all active:scale-95">
+                            <a href="{{number['url']}}" class="w-full h-full flex items-center justify-center">{{number['p']}}</a>
+                        </li>
+                        {% endif %}
+                        {% endfor %}
+                        {% if pages_map['middle'] %}
+                        <li class="text-on-surface-variant px-2">...</li>
+                        {% endif %}
+                        {% endif %}
+                        
+                        {% if pages_map['middle'] %}
+                        {% for number in pages_map['middle'] %}
+                        {% if number['p'] == current_page %}
+                        <li class="w-10 h-10 flex items-center justify-center bg-primary text-on-primary rounded-xl text-sm font-bold shadow-sm">{{number['p']}}</li>
+                        {% else %}
+                        <li class="w-10 h-10 flex items-center justify-center bg-surface-container-high hover:bg-surface-container-highest rounded-xl text-sm font-medium transition-all active:scale-95">
+                            <a href="{{number['url']}}" class="w-full h-full flex items-center justify-center">{{number['p']}}</a>
+                        </li>
+                        {% endif %}
+                        {% endfor %}
+                        {% endif %}
+                        
+                        {% if pages_map['end'] %}
+                        <li class="text-on-surface-variant px-2">...</li>
+                        {% for number in pages_map['end'] %}
+                        {% if number['p'] == current_page %}
+                        <li class="w-10 h-10 flex items-center justify-center bg-primary text-on-primary rounded-xl text-sm font-bold shadow-sm">{{number['p']}}</li>
+                        {% else %}
+                        <li class="w-10 h-10 flex items-center justify-center bg-surface-container-high hover:bg-surface-container-highest rounded-xl text-sm font-medium transition-all active:scale-95">
+                            <a href="{{number['url']}}" class="w-full h-full flex items-center justify-center">{{number['p']}}</a>
+                        </li>
+                        {% endif %}
+                        {% endfor %}
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
         </div>
-        {{ context_filter_bar() }}
+    </main>
+
+    <div id="help_window" class="fixed inset-0 z-[100] bg-surface/90 backdrop-blur-sm hidden flex items-center justify-center p-6">
+        <div class="bg-surface-container-lowest p-8 rounded-2xl border border-outline-variant/10 shadow-2xl max-w-lg w-full relative">
+            <button onclick="document.getElementById('help_window').classList.add('hidden')" class="absolute top-4 right-4 p-2 hover:bg-surface-container-high rounded-full transition-colors">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+            <h3 class="text-xl font-headline font-bold mb-6 flex items-center space-x-2">
+                <span class="material-symbols-outlined">info</span>
+                <span>Tag Selection</span>
+            </h3>
+            <p class="text-on-surface-variant text-sm leading-relaxed">
+                Click/tap on one tag and then click/tap on another tag to open a page showing all posts that contain both selected tags.
+            </p>
+        </div>
     </div>
-    <div id="letters_list"></div>
-    <div id="search_tools"></div>
-    {{ menu.settings_menu() }}
-    <div id="bigrams_tabs_page"></div>
-    <div id="bigrams_table_page"></div>
-    <div class="page" id="tags_page"></div>
-    <div id="global_tools_bottom">
-        <ul id="paginator">
-            {% if pages_map['start'] %}
-            {% for number in pages_map['start'] %}
-            {% if number['p'] == current_page %}
-            <li class="current_page">{{number['p']}}</li>
-            {% else %}
-            <li><a href="{{number['url']}}">{{number['p']}}</a></li>
-            {% endif %}
-            {% endfor %}
-            {% if pages_map['middle'] %}
-            <li>....</li>
-            {% endif %}
-            {% endif %}
-            {% if pages_map['middle'] %}
-            {% for number in pages_map['middle'] %}
-            {% if number['p'] == current_page %}
-            <li class="current_page">{{number['p']}}</li>
-            {% else %}
-            <li><a href="{{number['url']}}">{{number['p']}}</a></li>
-            {% endif %}
-            {% endfor %}
-            {% endif %}
-            {% if pages_map['end'] %}
-            <li>....</li>
-            {% for number in pages_map['end'] %}
-            {% if number['p'] == current_page %}
-            <li class="current_page">{{number['p']}}</li>
-            {% else %}
-            <li><a href="{{number['url']}}">{{number['p']}}</a></li>
-            {% endif %}
-            {% endfor %}
-            {% endif %}
-        </ul>
-    </div>
-    <!--script language="javascript" type="application/javascript">
-    var count = document.getElementById('cloud_items_count');
-    count.innerHTML = document.getElementsByTagName('li').length;
-</script-->
     <script type="text/javascript">
         var initial_tags_list = {{ tags| json}};
         var initial_letters_list = {{ letters| json}};
     </script>
-    <div id="help_window">
-        <ul>
-            <li>Click/tap on one tag and then click/tap on other tag, will open the page with posts have selected tags
-            </li>
-        </ul>
-    </div>
     <div id="progressbar"></div>
 </body>
 

@@ -6,114 +6,155 @@
     {% include 'head-data.html' %}
 </head>
 
-<body>
+<body class="font-body selection:bg-secondary-container bg-background">
     {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
     <noscript>
-        <h1>Please enable javascript in your browser</h1>
+        <div class="fixed inset-0 z-[100] bg-white flex items-center justify-center p-6 text-center">
+            <h1 class="text-2xl font-headline font-bold">Please enable javascript in your browser</h1>
+        </div>
     </noscript>
-    <div id="global_tools">
-        {% include "logo.html" %}
-        <div class="panel right_half">
-            <span class="login_button global_tools_button">
-                <a href="/data-sources">
-                    {% if provider %}
-                        {{provider}}: tags: {{posts['tags']}} posts: ({{posts['unread']}} / {{posts['read']}})
-                    {% else %}
-                        No data source linked
-                    {% endif %}
-                </a>
-            </span>
-            <span class="sync_telegram_button global_tools_button">
-                {% if provider == "telegram" %}
-                <form action="/telegram-mark" method="post">
-                    <input type="submit" value="Sync">
-                </form>
-                {% endif %}
-            </span>
-            <span class="sort_gmail_button global_tools_button">
-                {% if provider == "gmail" %}
-                <form action="/gmail-sort" method="post">
-                    <input type="submit" value="Sort">
-                </form>
-                {% endif %}
-            </span>
-            {{ g_status.global_status() }}
-            {{ menu.settings_menu() }}
-            <span class="login_button global_tools_button">
-                <a href="/logout">Logout</a>
-            </span>
-        </div>
-    </div>
-    <div class="page screen_middle">
-        {% for e in err %}
-        <p id="error">{{e}}</p>
-        {% endfor %}
 
-        <div class="root_columns">
-            <!-- Column 1: Content -->
-            <div class="root_column">
-                <div class="root_group">
-                    <div class="root_group_title">Content</div>
-                    <div class="root_group_item"><a href="/group/category">Posts by category</a></div>
-                    <div class="root_group_item"><a href="/group/tag/1">Posts by tag</a></div>
-                    <div class="root_group_item"><a href="/group/bi-grams/1">Posts by bi-grams</a></div>
-                    <div class="root_group_item"><a href="/groups/1">Tags groups</a></div>
-                    <div class="root_group_item"><a href="/topics/1">Topics</a></div>
-                    <div class="root_group_item"><a href="/topics-list">Topics/Chapters List</a></div>
-                    <div class="root_group_item"><a href="/paths">Saved Paths</a></div>
-                    <div class="root_group_item"><a href="/topics-mindmap">Topics Mindmap</a></div>
-                    {% for sent in sentiments %}
-                    <div class="root_group_item"><a href="/tags/sentiment/{{sent|replace('/', '|')}}/1">Tags - {{sent}}</a></div>
-                    {% endfor %}
-                </div>
+    <!-- Top Navigation Bar -->
+    <header class="sticky top-0 z-40 bg-surface/80 backdrop-blur-xl border-b border-outline-variant/10">
+        <div class="px-10 h-20 flex justify-between items-center w-full max-w-[1600px] mx-auto">
+            <div class="flex items-center space-x-10">
+                <a href="/" class="font-headline font-extrabold text-primary text-xl tracking-tight">RSSTag</a>
+                <nav class="hidden md:flex items-center space-x-1">
+                    <a class="sidebar-item-active flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/">
+                        <span class="material-symbols-outlined text-lg">dashboard</span>
+                        <span class="text-sm">Dashboard</span>
+                    </a>
+                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/group/category">
+                        <span class="material-symbols-outlined text-lg">category</span>
+                        <span class="text-sm">Categories</span>
+                    </a>
+                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/group/tag/1">
+                        <span class="material-symbols-outlined text-lg">sell</span>
+                        <span class="text-sm">Tags</span>
+                    </a>
+                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/topics/1">
+                        <span class="material-symbols-outlined text-lg">topic</span>
+                        <span class="text-sm">Topics</span>
+                    </a>
+                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/map">
+                        <span class="material-symbols-outlined text-lg">map</span>
+                        <span class="text-sm">Map</span>
+                    </a>
+                </nav>
             </div>
 
-            <!-- Column 2: Dynamic Content -->
-            <div class="root_column">
-                <div class="root_group">
-                    <div class="root_group_title">Dynamic</div>
-                    <div class="root_group_item"><a href="/group/bi-grams-dyn/1">Bi-grams dynamic</a></div>
-                    <div class="root_group_item"><a href="/group/rake-dyn/1">RAKE dynamic</a></div>
-                    <div class="root_group_item"><a href="/group/yake-dyn/1">YAKE dynamic</a></div>
-                    <div class="root_group_item"><a href="/clusters">Clusters</a></div>
-                    <div class="root_group_item"><a href="/sentence-clusters">Sentence Clusters</a></div>
-                    <div class="root_group_item"><a href="/clusters-dyn">Clusters dynamic</a></div>
-                    <div class="root_group_item"><a href="/clusters-topics-dyn">Clusters Topics dynamic</a></div>
-                    <div class="root_group_item"><a href="/tfidf-tags?min_tags=10">TF IDF</a></div>
-                    <div class="root_group_item"><a href="/ba-surprise">Bayesian Surprise</a></div>
-                    <div class="root_group_item"><a href="/map">News on map</a></div>
-                </div>
-            </div>
-
-            <!-- Column 3: Service/Options -->
-            <div class="root_column">
-                <div class="root_group">
-                    <div class="root_group_title">Settings</div>
-                    {% if not provider %}
-                    <div class="root_group_item"><a href="/data-sources">Connect data source</a></div>
-                    {% endif %}
-                    <div class="root_group_item"><a href="/data-sources">Data sources</a></div>
-                    {% if provider == "telegram" or provider == "bazqux" or provider == "x" %}
-                    <div class="root_group_item"><a href="/provider/{{provider}}/feeds">Select channels/feeds</a></div>
-                    {% endif %}
-                    <div class="root_group_item"><a href="/download/posts">Download Posts</a></div>
-                    <div class="root_group_item"><a href="/tasks">Tasks Queue</a></div>
-                    <div class="root_group_item"><a href="/metadata">Metadata Tasks</a></div>
-                    <div class="root_group_item"><a href="/workers">Workers Status</a></div>
-                    <div class="root_group_item"><a href="/processing">Processing Items</a></div>
-                    <div class="root_group_item"><a href="/statistics">Statistics</a></div>
-                    <div class="root_group_item"><a href="/tokens">API Tokens</a></div>
-                    {% if provider %}
-                    <div class="root_group_item"><a href="/refresh">Refresh posts</a></div>
-                    {% endif %}
+            <div class="flex items-center space-x-6">
+                <div class="flex items-center space-x-3">
+                    <div class="text-right hidden lg:block">
+                        <p class="text-xs font-bold text-primary">
+                            {% if provider %}
+                                {{provider}}
+                            {% else %}
+                                No source
+                            {% endif %}
+                        </p>
+                        <p class="text-[10px] text-on-surface-variant">
+                            {% if provider %}
+                                {{posts['unread']}} unread
+                            {% endif %}
+                        </p>
+                    </div>
+                    {{ g_status.global_status() }}
+                    {{ menu.settings_menu() }}
+                    <div class="relative">
+                        <span class="material-symbols-outlined text-on-surface cursor-pointer p-2 hover:bg-surface-container-high rounded-full transition-colors">notifications</span>
+                        {% if posts and posts['unread'] > 0 %}
+                        <span class="absolute top-2 right-2 w-2 h-2 bg-error rounded-full border-2 border-surface"></span>
+                        {% endif %}
+                    </div>
+                    <a class="text-on-surface-variant hover:text-primary p-2 transition-colors" href="/logout" title="Log Out">
+                        <span class="material-symbols-outlined">logout</span>
+                    </a>
                 </div>
             </div>
         </div>
-    </div>
+    </header>
 
-    <div id="status"><span></span></div>
-    {% include "root-footer.html" %}
-    <div id="progressbar"></div>
+    <!-- Dashboard Content -->
+    <main class="min-h-screen">
+        <div class="max-w-[1600px] mx-auto p-10 space-y-10">
+            {% for e in err %}
+                <div class="bg-error-container text-on-error-container p-4 rounded-xl text-sm font-medium border border-error/10">
+                    {{e}}
+                </div>
+            {% endfor %}
+
+            <section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Column 1: Content -->
+                <div class="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant/10 shadow-sm space-y-4">
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-on-surface-variant flex items-center space-x-2">
+                        <span class="material-symbols-outlined text-lg">article</span>
+                        <span>Content</span>
+                    </h3>
+                    <div class="space-y-1">
+                        <a href="/group/category" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Posts by category</a>
+                        <a href="/group/tag/1" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Posts by tag</a>
+                        <a href="/group/bi-grams/1" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Posts by bi-grams</a>
+                        <a href="/groups/1" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Tags groups</a>
+                        <a href="/topics/1" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Topics</a>
+                        <a href="/topics-list" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Topics/Chapters List</a>
+                        <a href="/paths" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Saved Paths</a>
+                        <a href="/topics-mindmap" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Topics Mindmap</a>
+                        {% for sent in sentiments %}
+                        <a href="/tags/sentiment/{{sent|replace('/', '|')}}/1" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Tags - {{sent}}</a>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Column 2: Dynamic Content -->
+                <div class="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant/10 shadow-sm space-y-4">
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-on-surface-variant flex items-center space-x-2">
+                        <span class="material-symbols-outlined text-lg">auto_awesome</span>
+                        <span>Dynamic</span>
+                    </h3>
+                    <div class="space-y-1">
+                        <a href="/group/bi-grams-dyn/1" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Bi-grams dynamic</a>
+                        <a href="/group/rake-dyn/1" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">RAKE dynamic</a>
+                        <a href="/group/yake-dyn/1" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">YAKE dynamic</a>
+                        <a href="/clusters" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Clusters</a>
+                        <a href="/sentence-clusters" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Sentence Clusters</a>
+                        <a href="/clusters-dyn" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Clusters dynamic</a>
+                        <a href="/clusters-topics-dyn" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Clusters Topics dynamic</a>
+                        <a href="/tfidf-tags?min_tags=10" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">TF IDF</a>
+                        <a href="/ba-surprise" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Bayesian Surprise</a>
+                        <a href="/map" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">News on map</a>
+                    </div>
+                </div>
+
+                <!-- Column 3: Service/Options -->
+                <div class="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant/10 shadow-sm space-y-4">
+                    <h3 class="text-sm font-bold uppercase tracking-wider text-on-surface-variant flex items-center space-x-2">
+                        <span class="material-symbols-outlined text-lg">settings</span>
+                        <span>Settings</span>
+                    </h3>
+                    <div class="space-y-1">
+                        <a href="/data-sources" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors font-semibold text-primary">Data sources</a>
+                        {% if provider == "telegram" or provider == "bazqux" or provider == "x" %}
+                        <a href="/provider/{{provider}}/feeds" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Select channels/feeds</a>
+                        {% endif %}
+                        <a href="/download/posts" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Download Posts</a>
+                        <a href="/tasks" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Tasks Queue</a>
+                        <a href="/metadata" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Metadata Tasks</a>
+                        <a href="/workers" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Workers Status</a>
+                        <a href="/processing" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Processing Items</a>
+                        <a href="/statistics" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Statistics</a>
+                        <a href="/tokens" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">API Tokens</a>
+                        {% if provider %}
+                        <a href="/refresh" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors text-primary font-bold">Refresh posts</a>
+                        {% endif %}
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <div id="status" class="fixed bottom-10 right-10 z-50"><span></span></div>
+    <div id="progressbar" class="fixed bottom-0 left-0 h-1 bg-primary transition-all duration-300"></div>
 </body>
 
 </html>

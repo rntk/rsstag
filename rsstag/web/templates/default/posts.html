@@ -8,57 +8,114 @@
     <script type="text/javascript" src="/static/js/d3.v6.min.js"></script>
 </head>
 
-<body>
+<body class="font-body selection:bg-secondary-container bg-background">
     {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}{% from
     'context-filter-bar.html' import context_filter_bar with context %}
 
-    <div id="global_tools">
-        <div class="left_half">
-            <div id="link_on_root" class="global_tools_button">
-                <a href="/">main</a>
+    <!-- Top Navigation Bar -->
+    <header class="sticky top-0 z-40 bg-surface/80 backdrop-blur-xl border-b border-outline-variant/10">
+        <div class="px-10 h-20 flex justify-between items-center w-full max-w-[1600px] mx-auto">
+            <div class="flex items-center space-x-10">
+                <a href="/" class="font-headline font-extrabold text-primary text-xl tracking-tight">RSSTag</a>
+                <nav class="hidden md:flex items-center space-x-1">
+                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/">
+                        <span class="material-symbols-outlined text-lg">dashboard</span>
+                        <span class="text-sm">Dashboard</span>
+                    </a>
+                    <a class="{% if group == 'category' %}sidebar-item-active{% else %}text-on-surface-variant hover:bg-surface-container-high{% endif %} flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/group/category">
+                        <span class="material-symbols-outlined text-lg">category</span>
+                        <span class="text-sm">Categories</span>
+                    </a>
+                    <a class="{% if group == 'tag' %}sidebar-item-active{% else %}text-on-surface-variant hover:bg-surface-container-high{% endif %} flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/group/tag/1">
+                        <span class="material-symbols-outlined text-lg">sell</span>
+                        <span class="text-sm">Tags</span>
+                    </a>
+                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/topics/1">
+                        <span class="material-symbols-outlined text-lg">topic</span>
+                        <span class="text-sm">Topics</span>
+                    </a>
+                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/map">
+                        <span class="material-symbols-outlined text-lg">map</span>
+                        <span class="text-sm">Map</span>
+                    </a>
+                </nav>
             </div>
-            <div id="help_button" class="global_tools_button">
-                <a href="#">help</a>
+            
+            <div class="flex items-center space-x-4">
+                <div id="player_block" class="flex items-center"></div>
+                <div id="read_all" class="flex items-center"></div>
+                <div id="show_all" class="flex items-center"></div>
+                
+                {{ g_status.global_status() }}
+                {{ menu.settings_menu() }}
+                <a class="text-on-surface-variant hover:text-primary p-2 transition-colors" href="/logout" title="Log Out">
+                    <span class="material-symbols-outlined">logout</span>
+                </a>
             </div>
         </div>
-        <div class="right_half">
-            <div id="player_block" class="global_tools_button"></div>
-            <div id="posts_stat" class="global_tools_button"></div>
-            <div id="read_all" class="global_tools_button"></div>
-            <div id="show_all" class="global_tools_button"></div>
-            {{ g_status.global_status() }}
-            {{ menu.settings_menu() }}
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="min-h-screen">
+        <div class="max-w-[1600px] mx-auto">
+
+            <!-- Filter Bar -->
+            <div class="sticky top-20 z-30 bg-surface/50 backdrop-blur-md px-10 py-2 border-b border-outline-variant/5">
+                {{ context_filter_bar() }}
+            </div>
+
+            <!-- Content -->
+            <div class="p-10">
+                <div class="flex items-center justify-between mb-6">
+                    <div class="flex items-center space-x-4">
+                        <h2 class="text-2xl font-headline font-bold text-primary truncate max-w-2xl">{{tag}}</h2>
+                        <div id="posts_stat" class="text-sm text-on-surface-variant font-medium"></div>
+                    </div>
+                    <button id="help_trigger" class="p-2 hover:bg-surface-container-high rounded-full transition-colors text-on-surface-variant" title="Hotkeys">
+                        <span class="material-symbols-outlined">keyboard</span>
+                    </button>
+                </div>
+                <div id="posts_page" class="space-y-6"></div>
+                <div id="posts_page1" class="mt-6"></div>
+            </div>
         </div>
-        {{ context_filter_bar() }}
+    </main>
+
+    <div id="help_window" class="fixed inset-0 z-[100] bg-surface/90 backdrop-blur-sm hidden flex items-center justify-center p-6">
+        <div class="bg-surface-container-lowest p-8 rounded-2xl border border-outline-variant/10 shadow-2xl max-w-lg w-full relative">
+            <button onclick="document.getElementById('help_window').classList.add('hidden')" class="absolute top-4 right-4 p-2 hover:bg-surface-container-high rounded-full transition-colors">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+            <h3 class="text-xl font-headline font-bold mb-6 flex items-center space-x-2">
+                <span class="material-symbols-outlined">keyboard</span>
+                <span>Keyboard Shortcuts</span>
+            </h3>
+            <ul class="space-y-3">
+                <li class="flex justify-between items-center"><span class="text-sm">Mark all read/unread</span><kbd class="px-2 py-1 bg-surface-container-high rounded text-xs font-bold">Shift+A</kbd></li>
+                <li class="flex justify-between items-center"><span class="text-sm">Show/hide all content</span><kbd class="px-2 py-1 bg-surface-container-high rounded text-xs font-bold">Shift+S</kbd></li>
+                <li class="flex justify-between items-center"><span class="text-sm">Go level up</span><kbd class="px-2 py-1 bg-surface-container-high rounded text-xs font-bold">Ctrl+Up</kbd></li>
+                <li class="flex justify-between items-center"><span class="text-sm">Next post</span><kbd class="px-2 py-1 bg-surface-container-high rounded text-xs font-bold">N</kbd></li>
+                <li class="flex justify-between items-center"><span class="text-sm">Previous post</span><kbd class="px-2 py-1 bg-surface-container-high rounded text-xs font-bold">B</kbd></li>
+                <li class="flex justify-between items-center"><span class="text-sm">Show/hide post</span><kbd class="px-2 py-1 bg-surface-container-high rounded text-xs font-bold">S</kbd></li>
+                <li class="flex justify-between items-center"><span class="text-sm">Mark read/unread</span><kbd class="px-2 py-1 bg-surface-container-high rounded text-xs font-bold">M</kbd></li>
+                <li class="flex justify-between items-center"><span class="text-sm">Close help</span><kbd class="px-2 py-1 bg-surface-container-high rounded text-xs font-bold">H</kbd></li>
+            </ul>
+        </div>
     </div>
-    <div id="help_window">
-        <ul>
-            <li><b>Shift+A</b> - mark all posts as read/unread</li>
-            <li><b>Shift+S</b> - show/hide content of all posts</li>
-            <li><b>Ctrl+Up</b> - go on level up (page: group by category or group by tag)</li>
-            <li><b>Ctrl+Down</b> - load and show page "level up" (page: group by category or group by tag) in current
-                page</li>
-            <li><b>N</b> - next post</li>
-            <li><b>B</b> - previous post</li>
-            <li><b>S</b> (or <b>click\tap</b> on <b>Show post</b>, or <b>horizontal swipe</b> on post body) - show/hide
-                content of current post</li>
-            <li><b>M</b> (or <b>click\tap</b> on read/unread label) - mark current post as read/unread</li>
-            <li><b>H</b> - show\hide this window</li>
-        </ul>
-    </div>
-    <div class="page">
-        <div id="posts_page"></div>
-        <div id="posts_page1"></div>
-    </div>
-    <!--div id="show_tags"><a href="#tags">Show "level up"</a><a name="tags"></div-->
+    
     <script type="text/javascript">
         window.posts_list = {{ posts | json }};
         window.group = '{{group}}';
         window.group_title = '{{tag}}';
         window.words = {{ words | json }};
         window.rss_settings = {{ user_settings | json }};
+        
+        document.getElementById('help_trigger')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            document.getElementById('help_window').classList.remove('hidden');
+        });
     </script>
-    <div id="progressbar"></div>
+    <div id="progressbar" class="fixed bottom-0 left-0 h-1 bg-primary transition-all duration-300"></div>
 </body>
 
 </html>

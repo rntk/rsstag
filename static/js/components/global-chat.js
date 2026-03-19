@@ -12,17 +12,17 @@ function ChatContext({ context, chatId, ES }) {
   if (!context || context.type === 'empty' || !context.text) return null;
 
   return (
-    <div className="chat-context">
-      <div className="chat-context-header" onClick={() => setCollapsed(!collapsed)}>
-        <span className="chat-context-toggle">{collapsed ? '▶' : '▼'}</span>
-        <span className="chat-context-label">Context ({context.type})</span>
+    <div className="p-3 border-b border-outline-variant/10 bg-surface-container-low/50">
+      <div className="flex items-center gap-2 cursor-pointer select-none" onClick={() => setCollapsed(!collapsed)}>
+        <span className="material-symbols-outlined text-sm text-on-surface-variant transition-transform duration-200" style={{ transform: collapsed ? 'none' : 'rotate(90deg)' }}>chevron_right</span>
+        <span className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-wider">Context ({context.type})</span>
       </div>
       {!collapsed && (
-        <div className="chat-context-body">
-          <div className="chat-context-text">{context.text}</div>
+        <div className="mt-2 space-y-2">
+          <div className="text-sm text-on-surface-variant leading-relaxed bg-surface-container-lowest p-2 rounded border border-outline-variant/10 italic font-body">{context.text}</div>
           {context.source_url && (
-            <div className="chat-context-source">
-              Source: <a href={context.source_url} target="_blank" rel="noopener noreferrer">{context.source_url}</a>
+            <div className="text-xs text-primary hover:text-primary-container truncate">
+              Source: <a href={context.source_url} target="_blank" rel="noopener noreferrer" className="underline font-medium">{context.source_url}</a>
             </div>
           )}
         </div>
@@ -34,16 +34,18 @@ function ChatContext({ context, chatId, ES }) {
 function MessageBubble({ message, index, onFork }) {
   const isUser = message.role === 'user';
   return (
-    <div className={`chat-message ${isUser ? 'user' : 'assistant'}`}>
-      <div className="chat-message-content">{message.content}</div>
-      <div className="chat-message-meta">
-        <span className="chat-message-time">{formatDate(message.timestamp)}</span>
+    <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} mb-4 group font-body`}>
+      <div className={`max-w-[85%] px-4 py-2 rounded-xl shadow-sm ${isUser ? 'bg-primary text-on-primary' : 'bg-surface-container-lowest text-on-surface border border-outline-variant/30'}`}>
+        <div className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</div>
+      </div>
+      <div className={`flex items-center gap-2 mt-1 px-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+        <span className="text-[10px] text-on-surface-variant font-medium">{formatDate(message.timestamp)}</span>
         <button
-          className="chat-fork-btn"
+          className="p-1 hover:bg-surface-container-high rounded text-on-surface-variant hover:text-primary transition-colors"
           title="Fork conversation from here"
           onClick={() => onFork(index)}
         >
-          ⑂
+          <span className="material-symbols-outlined text-sm">fork_right</span>
         </button>
       </div>
     </div>
@@ -160,12 +162,14 @@ function ChatView({ chat, onBack, ES }) {
   const messages = chat.messages || [];
 
   return (
-    <div className="chat-view">
-      <div className="chat-view-header">
-        <button className="chat-back-btn" onClick={onBack}>←</button>
+    <div className="flex flex-col h-full bg-surface-container-lowest overflow-hidden font-body">
+      <div className="flex items-center gap-3 p-4 bg-surface border-b border-outline-variant/10 shrink-0">
+        <button className="p-1.5 hover:bg-surface-container-high rounded-full text-on-surface-variant transition-colors" onClick={onBack}>
+          <span className="material-symbols-outlined text-xl">arrow_back</span>
+        </button>
         {editingTitle ? (
           <input
-            className="chat-title-input"
+            className="flex-1 px-3 py-1.5 bg-surface-container-low border border-primary/20 rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/20"
             value={titleValue}
             onChange={(e) => setTitleValue(e.target.value)}
             onBlur={handleRenameSubmit}
@@ -173,36 +177,48 @@ function ChatView({ chat, onBack, ES }) {
             autoFocus
           />
         ) : (
-          <span className="chat-view-title" onClick={() => setEditingTitle(true)} title="Click to rename">
+          <span className="flex-1 text-sm font-headline font-bold text-on-surface truncate cursor-pointer hover:text-primary transition-colors" onClick={() => setEditingTitle(true)} title="Click to rename">
             {chat.title || 'Chat'}
           </span>
         )}
       </div>
       <ChatContext context={chat.context} chatId={chat._id} ES={ES} />
-      <div className="chat-messages">
+      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-surface/30">
         {messages.map((msg, i) => (
           <MessageBubble key={i} message={msg} index={i} onFork={handleFork} />
         ))}
         {isLoading && (
-          <div className="chat-message assistant">
-            <div className="chat-message-content chat-thinking">Thinking...</div>
+          <div className="flex flex-col items-start mb-4">
+            <div className="px-4 py-2 bg-surface-container-lowest border border-outline-variant/30 rounded-xl shadow-sm">
+              <div className="flex gap-1">
+                <span className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce"></span>
+                <span className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce [animation-delay:0.2s]"></span>
+                <span className="w-1.5 h-1.5 bg-primary/40 rounded-full animate-bounce [animation-delay:0.4s]"></span>
+              </div>
+            </div>
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
-      <div className="chat-input-area">
-        <textarea
-          className="chat-input"
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="Type a message... (Enter to send, Shift+Enter for newline)"
-          rows={3}
-          disabled={isLoading}
-        />
-        <button className="chat-send-btn" onClick={handleSend} disabled={isLoading || !inputValue.trim()}>
-          {isLoading ? '...' : 'Send'}
-        </button>
+      <div className="p-4 bg-surface border-t border-outline-variant/10 shrink-0">
+        <div className="relative flex items-end gap-2">
+          <textarea
+            className="flex-1 min-h-[44px] max-h-32 px-4 py-2.5 bg-surface-container-high border border-outline-variant/30 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-none custom-scrollbar disabled:opacity-50"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Type a message..."
+            rows={1}
+            disabled={isLoading}
+          />
+          <button
+            className="p-2.5 bg-primary hover:bg-primary-container disabled:bg-surface-variant text-on-primary rounded-lg transition-all shadow-sm hover:shadow-md disabled:shadow-none"
+            onClick={handleSend}
+            disabled={isLoading || !inputValue.trim()}
+          >
+            <span className="material-symbols-outlined text-xl">send</span>
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -210,29 +226,58 @@ function ChatView({ chat, onBack, ES }) {
 
 function ConversationList({ chats, onSelect, onCreate, onDelete }) {
   return (
-    <div className="chat-list">
-      <div className="chat-list-toolbar">
-        <button className="chat-new-btn" onClick={onCreate}>+ New Chat</button>
+    <div className="flex flex-col h-full bg-surface-container-lowest font-body">
+      <div className="p-4 border-b border-outline-variant/10 flex justify-between items-center bg-surface-container-low/30">
+        <h2 className="text-sm font-headline font-bold text-on-surface uppercase tracking-wider">Recent Chats</h2>
+        <button
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-primary hover:bg-primary-container text-on-primary text-xs font-semibold rounded-lg transition-all shadow-sm hover:shadow-md active:scale-95"
+          onClick={onCreate}
+        >
+          <span className="material-symbols-outlined text-sm">add</span>
+          New Chat
+        </button>
       </div>
-      {chats.length === 0 && (
-        <div className="chat-empty">No conversations yet</div>
-      )}
-      {chats.map((chat) => (
-        <div key={chat._id} className="chat-list-item" onClick={() => onSelect(chat._id)}>
-          <div className="chat-list-item-title">{chat.title || 'Untitled'}</div>
-          <div className="chat-list-item-meta">
-            <span className="chat-list-item-date">{formatDate(chat.updated_at)}</span>
-            <span className="chat-list-item-count">{chat.message_count} msgs</span>
+      <div className="flex-1 overflow-y-auto custom-scrollbar">
+        {chats.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full p-8 text-center text-on-surface-variant opacity-50">
+            <span className="material-symbols-outlined text-4xl mb-2">forum</span>
+            <p className="text-sm">No conversations yet</p>
           </div>
-          <button
-            className="chat-list-item-delete"
-            title="Delete"
-            onClick={(e) => { e.stopPropagation(); onDelete(chat._id); }}
-          >
-            ×
-          </button>
-        </div>
-      ))}
+        ) : (
+          <div className="divide-y divide-outline-variant/5">
+            {chats.map((chat) => (
+              <div
+                key={chat._id}
+                className="group relative p-4 hover:bg-surface-container-high cursor-pointer transition-colors"
+                onClick={() => onSelect(chat._id)}
+              >
+                <div className="flex flex-col gap-1 pr-6">
+                  <div className="text-sm font-semibold text-on-surface group-hover:text-primary truncate transition-colors">
+                    {chat.title || 'Untitled Chat'}
+                  </div>
+                  <div className="flex items-center gap-3 text-[11px] font-medium text-on-surface-variant">
+                    <span className="flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[12px]">calendar_today</span>
+                      {formatDate(chat.updated_at)}
+                    </span>
+                    <span className="flex items-center gap-1 text-primary bg-surface-container-high px-1.5 py-0.5 rounded">
+                      <span className="material-symbols-outlined text-[12px]">chat_bubble</span>
+                      {chat.message_count}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  className="absolute right-4 top-1/2 -translate-y-1/2 p-1.5 opacity-0 group-hover:opacity-100 hover:bg-error-container hover:text-error text-on-surface-variant rounded-full transition-all duration-200"
+                  title="Delete conversation"
+                  onClick={(e) => { e.stopPropagation(); onDelete(chat._id); }}
+                >
+                  <span className="material-symbols-outlined text-lg">delete</span>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -335,25 +380,49 @@ export default function GlobalChatPanel({ ES }) {
 
   return (
     <>
-      <button className="chat-toggle-btn" onClick={handleToggle} title="Open Chat">
-        💬
+      <button
+        className={`fixed bottom-6 right-6 z-[60] flex items-center justify-center w-14 h-14 bg-primary text-on-primary rounded-xl shadow-lg hover:shadow-xl hover:bg-primary-container active:scale-95 transition-all duration-300 group ${state.isOpen ? 'rotate-90' : ''}`}
+        onClick={handleToggle}
+        title={state.isOpen ? 'Close Chat' : 'Open Chat'}
+      >
+        <span className="material-symbols-outlined text-2xl group-hover:scale-110 transition-transform">{state.isOpen ? 'close' : 'chat_bubble'}</span>
       </button>
+
       {state.isOpen && (
-        <div className="chat-panel">
-          <div className="chat-panel-header">
-            <span className="chat-panel-title">Chats</span>
-            <button className="chat-panel-close" onClick={handleToggle}>×</button>
+        <div className="fixed bottom-24 right-6 z-50 w-[400px] h-[600px] max-h-[calc(100vh-120px)] bg-surface rounded-xl shadow-2xl flex flex-col overflow-hidden border border-outline-variant/10 animate-in slide-in-from-bottom-4 duration-300 font-body">
+          <div className="p-4 bg-surface-container-low border-b border-outline-variant/10 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shadow-sm">
+                <span className="material-symbols-outlined text-on-primary text-lg">robot_2</span>
+              </div>
+              <div>
+                <h1 className="text-sm font-headline font-bold text-on-surface leading-none">Global Chat</h1>
+                <span className="text-[10px] font-label font-medium text-green-600 flex items-center gap-0.5 mt-1">
+                  <span className="w-1.5 h-1.5 bg-green-600 rounded-full"></span>
+                  Online
+                </span>
+              </div>
+            </div>
+            <button
+              className="p-2 hover:bg-surface-container-high rounded-lg text-on-surface-variant hover:text-on-surface transition-colors"
+              onClick={handleToggle}
+            >
+              <span className="material-symbols-outlined">expand_more</span>
+            </button>
           </div>
-          {state.activeChat ? (
-            <ChatView chat={state.activeChat} onBack={handleBack} ES={ES} />
-          ) : (
-            <ConversationList
-              chats={state.chats}
-              onSelect={handleSelectChat}
-              onCreate={() => handleCreateChat(null)}
-              onDelete={handleDeleteChat}
-            />
-          )}
+
+          <div className="flex-1 overflow-hidden">
+            {state.activeChat ? (
+              <ChatView chat={state.activeChat} onBack={handleBack} ES={ES} />
+            ) : (
+              <ConversationList
+                chats={state.chats}
+                onSelect={handleSelectChat}
+                onCreate={() => handleCreateChat(null)}
+                onDelete={handleDeleteChat}
+              />
+            )}
+          </div>
         </div>
       )}
     </>

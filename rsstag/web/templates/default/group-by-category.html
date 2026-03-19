@@ -5,33 +5,81 @@
     {% include "head-data.html" %}
 </head>
 
-<body>
+<body class="font-body selection:bg-secondary-container bg-background">
     {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}{% from
     'context-filter-bar.html' import context_filter_bar with context %}
-    <div id="global_tools">
-        <div class="left_half">
-            <div id="link_on_root" class="global_tools_button">
-                <a href="/">main</a>
-            </div>
-            <div id="group_by" class="global_tools_button">
-                <a href="{{group_by_link}}">group by tag</a>
-            </div>
-        </div>
-        <div class="right_half">
-            {{ g_status.global_status() }}
-            {{ menu.settings_menu() }}
-        </div>
-        {{ context_filter_bar() }}
-    </div>
 
-    <div id="delete_controls">
-        <button class="select-all-btn" onclick="toggleSelectAll()">Select All</button>
-        <button id="delete_btn" onclick="confirmDelete()" disabled>Delete Selected (<span
-                id="selected_count">0</span>)</button>
-    </div>
-    <div class="page">
-        <div class="post" id="cats_list"></div>
-    </div>
+    <!-- Top Navigation Bar -->
+    <header class="sticky top-0 z-40 bg-surface/80 backdrop-blur-xl border-b border-outline-variant/10">
+        <div class="px-10 h-20 flex justify-between items-center w-full max-w-[1600px] mx-auto">
+            <div class="flex items-center space-x-10">
+                <a href="/" class="font-headline font-extrabold text-primary text-xl tracking-tight">RSSTag</a>
+                <nav class="hidden md:flex items-center space-x-1">
+                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/">
+                        <span class="material-symbols-outlined text-lg">dashboard</span>
+                        <span class="text-sm">Dashboard</span>
+                    </a>
+                    <a class="sidebar-item-active flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/group/category">
+                        <span class="material-symbols-outlined text-lg">category</span>
+                        <span class="text-sm">Categories</span>
+                    </a>
+                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/group/tag/1">
+                        <span class="material-symbols-outlined text-lg">sell</span>
+                        <span class="text-sm">Tags</span>
+                    </a>
+                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/topics/1">
+                        <span class="material-symbols-outlined text-lg">topic</span>
+                        <span class="text-sm">Topics</span>
+                    </a>
+                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/map">
+                        <span class="material-symbols-outlined text-lg">map</span>
+                        <span class="text-sm">Map</span>
+                    </a>
+                </nav>
+            </div>
+            
+            <div class="flex items-center space-x-4">
+                {{ g_status.global_status() }}
+                {{ menu.settings_menu() }}
+                <div id="delete_controls" class="hidden items-center space-x-2">
+                    <button class="px-4 py-2 bg-surface-container-high hover:bg-surface-container-highest rounded-lg text-xs font-bold transition-colors" onclick="toggleSelectAll()">Select All</button>
+                    <button id="delete_btn" class="px-4 py-2 bg-error text-on-error rounded-lg text-xs font-bold transition-all active:scale-95 disabled:opacity-50 disabled:scale-100" onclick="confirmDelete()" disabled>
+                        Delete Selected (<span id="selected_count">0</span>)
+                    </button>
+                </div>
+                <a class="text-on-surface-variant hover:text-primary p-2 transition-colors" href="/logout" title="Log Out">
+                    <span class="material-symbols-outlined">logout</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="min-h-screen">
+        <div class="max-w-[1600px] mx-auto">
+
+            <!-- Filter Bar -->
+            <div class="sticky top-20 z-30 bg-surface/50 backdrop-blur-md px-10 py-2 border-b border-outline-variant/5">
+                {{ context_filter_bar() }}
+            </div>
+
+            <!-- Content -->
+            <div class="p-10">
+                <div class="flex items-center justify-between mb-8">
+                    <div class="flex items-center space-x-4">
+                        <h2 class="text-3xl font-headline font-extrabold text-primary">Categories</h2>
+                        <a href="{{group_by_link}}" class="text-xs font-bold text-on-surface-variant hover:text-primary bg-surface-container-high px-3 py-1.5 rounded-full transition-all flex items-center space-x-1.5">
+                            <span class="material-symbols-outlined text-sm">sell</span>
+                            <span>Switch to Tags</span>
+                        </a>
+                    </div>
+                </div>
+                <div id="cats_list" class="space-y-6"></div>
+            </div>
+        </div>
+    </main>
+
+    <div id="progressbar" class="fixed bottom-0 left-0 h-1 bg-primary transition-all duration-300"></div>
     <script type="text/javascript">
         var initial_cats_list = {{ data| json}};
 

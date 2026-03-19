@@ -5,44 +5,77 @@
     {% include 'head-data.html'%}
     <meta name='yandex-verification' content='4b16613c97bcd3eb' />
 </head>
-<body>
+<body class="font-body selection:bg-secondary-container bg-background">
 <noscript>
-    <h1>Please enable javascript in your browser</h1>
-</noscript>
-<div id="global_tools">
-    {% include "logo.html" %}
-    <div class="panel right_half">
-        <span class="login_button global_tools_button">
-            <a href="/login">Login</a>
-        </span>
-        <span class="login_button global_tools_button">
-            <a href="/register">Register</a>
-        </span>
+    <div class="fixed inset-0 z-[100] bg-white flex items-center justify-center p-6 text-center">
+        <h1 class="text-2xl font-headline font-bold">Please enable javascript in your browser</h1>
     </div>
-</div>
-<div class="page screen_middle">
-    <div class="middle_screen_middle">
-        {% for e in err %}
-            <p id="error">{{e}}</p>
-        {% endfor %}
-        <h1 class="description_title">
-            What it is?
-        </h1>
-        <div class="description_text">
-            <p>RSS reader with automatic generation tags cloud for posts from your rss.</p>
-            <h3>Example:</h3>
-            <p>Two posts with similar theme:</p>
-            <ol class="description_example">
-                <li><b>Apple Responds To BBC Panorama’s Portrayal Of Supplier Conditions</b></li>
-                <li><b>Apple isn’t happy with the BBC</b></li>
-            </ol>
-            <p>This posts will be grouped by tag: <b>Appl</b> and <b>BBC</b>. If you click on tag <b>Appl</b> or <b>BBC</b> you can read all posts with selected tag.</p>
-            <p>
-                <a class="start_reading" href="/register">Start reading</a>
-            </p>
+</noscript>
+
+<!-- Main Navigation -->
+<header class="fixed top-0 left-0 right-0 z-50 bg-surface/80 backdrop-blur-xl border-b border-outline-variant/10">
+    <div class="max-w-7xl mx-auto px-6 h-20 flex justify-between items-center">
+        <div class="flex items-center space-x-2">
+            <h1 class="font-headline font-extrabold text-primary text-xl tracking-tight">RSSTag</h1>
+        </div>
+        <div class="flex items-center space-x-4">
+            <a href="/login" class="text-sm font-semibold text-on-surface-variant hover:text-primary transition-colors">Login</a>
+            <a href="/register" class="bg-primary text-on-primary px-6 py-2.5 rounded-lg text-sm font-semibold active:scale-95 transition-transform">Register</a>
         </div>
     </div>
-</div>
-{% include "root-footer.html" %}
-<div id="progressbar"></div></body>
+</header>
+
+<main class="pt-32 pb-20 px-6">
+    <div class="max-w-3xl mx-auto space-y-12">
+        {% for e in err %}
+            <div class="bg-error-container text-on-error-container p-4 rounded-xl text-sm font-medium border border-error/10">
+                {{e}}
+            </div>
+        {% endfor %}
+
+        <section class="space-y-6 text-center">
+            <h1 class="text-4xl md:text-5xl font-headline font-extrabold text-primary leading-tight">
+                What it is?
+            </h1>
+            <p class="text-lg text-on-surface-variant max-w-2xl mx-auto">
+                RSS reader with automatic generation tags cloud for posts from your rss.
+            </p>
+            <div class="pt-4">
+                <a class="inline-flex items-center space-x-2 bg-primary text-on-primary px-8 py-4 rounded-xl text-base font-bold active:scale-95 transition-transform" href="/register">
+                    <span>Start reading</span>
+                    <span class="material-symbols-outlined">arrow_forward</span>
+                </a>
+            </div>
+        </section>
+
+        <section class="bg-surface-container-lowest rounded-2xl p-8 md:p-12 border border-outline-variant/10 shadow-sm">
+            <h3 class="text-xl font-headline font-bold mb-6 flex items-center space-x-2">
+                <span class="material-symbols-outlined text-primary">lightbulb</span>
+                <span>Example</span>
+            </h3>
+            
+            <div class="space-y-6">
+                <p class="text-on-surface-variant font-medium">Two posts with similar theme:</p>
+                <div class="space-y-3">
+                    <div class="bg-surface-container-low p-4 rounded-xl border-l-4 border-primary">
+                        <p class="font-semibold text-primary">Apple Responds To BBC Panorama’s Portrayal Of Supplier Conditions</p>
+                    </div>
+                    <div class="bg-surface-container-low p-4 rounded-xl border-l-4 border-primary">
+                        <p class="font-semibold text-primary">Apple isn’t happy with the BBC</p>
+                    </div>
+                </div>
+                
+                <div class="bg-surface-container-high/50 p-6 rounded-xl space-y-4">
+                    <p class="text-sm leading-relaxed text-on-surface-variant">
+                        This posts will be grouped by tag: <b class="text-primary">Appl</b> and <b class="text-primary">BBC</b>. 
+                        If you click on tag <b class="text-primary">Appl</b> or <b class="text-primary">BBC</b> you can read all posts with selected tag.
+                    </p>
+                </div>
+            </div>
+        </section>
+    </div>
+</main>
+
+<div id="progressbar" class="fixed bottom-0 left-0 h-1 bg-primary transition-all duration-300"></div>
+</body>
 </html>
