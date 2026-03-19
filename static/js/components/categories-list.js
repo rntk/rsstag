@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 import React from 'react';
 
 export default class CategoriesList extends React.Component {
@@ -30,7 +30,7 @@ export default class CategoriesList extends React.Component {
           if (cat.feeds) {
             feeds = cat.feeds.map((feed, i) => {
               return (
-                <li key={i}>
+                <li key={i} className="feed-item">
                   <input
                     type="checkbox"
                     className="feed-checkbox"
@@ -38,33 +38,37 @@ export default class CategoriesList extends React.Component {
                     data-id={feed.feed_id}
                     onChange={window.handleCheckboxChange}
                   />
-                  <a href={feed.url}>{feed.title}</a>({feed.unread_count})
+                  <a href={feed.url}>{feed.title}</a>
+                  <span className="category-count">{feed.unread_count}</span>
                 </li>
               );
             });
           }
           cats.push(
             <li className="category" key={cat_name}>
-              {cat_name !== 'All' ? (
-                <input
-                  type="checkbox"
-                  className="category-checkbox"
-                  data-type="category"
-                  data-id={cat.category_id}
-                  onChange={window.handleCheckboxChange}
-                />
-              ) : (
-                ''
-              )}
-              <a href={cat.url}>{cat.title}</a>({cat.unread_count})
-              {cat_name !== 'All' ? (
-                <span
-                  className={'show_btn ' + (cat.showed ? 'not_minimized' : 'minimized')}
-                  onClick={this.changeFeedsState.bind(this, cat_name)}
-                ></span>
-              ) : (
-                ''
-              )}
+              <div className="category-header">
+                {cat_name !== 'All' ? (
+                  <span
+                    className={'show_btn ' + (cat.showed ? 'not_minimized' : 'minimized')}
+                    onClick={this.changeFeedsState.bind(this, cat_name)}
+                  ></span>
+                ) : (
+                  <span style={{ width: '20px' }}></span>
+                )}
+                {cat_name !== 'All' ? (
+                  <input
+                    type="checkbox"
+                    className="category-checkbox"
+                    data-type="category"
+                    data-id={cat.category_id}
+                    onChange={window.handleCheckboxChange}
+                  />
+                ) : (
+                  ''
+                )}
+                <a href={cat.url}>{cat.title}</a>
+                <span className="category-count">{cat.unread_count}</span>
+              </div>
               <ul className={'feeds ' + (cat.showed ? 'not_hidden' : 'hidden')}>{feeds}</ul>
             </li>
           );

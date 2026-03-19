@@ -1,38 +1,87 @@
-﻿<!DOCTYPE html />
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-<title>{{ page_title or 'Clusters' }}</title>
-{% include "head-data.html" %}
+    <title>{{ page_title or 'Clusters' }}</title>
+    {% include "head-data.html" %}
 </head>
-<body>
-{% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
 
-<div id="global_tools">
-    <div class="left_half">
-        <div id="link_on_root" class="global_tools_button">
-            <a href="/">main</a>
+<body class="font-body selection:bg-secondary-container bg-background flex flex-col min-h-screen">
+    {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
+
+    <!-- Top Navigation Bar -->
+    <header class="sticky top-0 z-40 bg-surface/80 backdrop-blur-xl border-b border-outline-variant/10">
+        <div class="px-4 md:px-6 h-16 flex justify-between items-center w-full max-w-[1600px] mx-auto">
+            <div class="flex items-center space-x-10">
+                <a href="/" class="font-headline font-extrabold text-primary text-xl tracking-tight">RSSTag</a>
+                <nav class="hidden md:flex items-center space-x-1">
+                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/">
+                        <span class="material-symbols-outlined text-lg">dashboard</span>
+                        <span class="text-sm">Dashboard</span>
+                    </a>
+                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/group/category">
+                        <span class="material-symbols-outlined text-lg">category</span>
+                        <span class="text-sm">Categories</span>
+                    </a>
+                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/group/tag/1">
+                        <span class="material-symbols-outlined text-lg">sell</span>
+                        <span class="text-sm">Tags</span>
+                    </a>
+                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/topics/1">
+                        <span class="material-symbols-outlined text-lg">topic</span>
+                        <span class="text-sm">Topics</span>
+                    </a>
+                    <a class="sidebar-item-active flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/clusters">
+                        <span class="material-symbols-outlined text-lg">hub</span>
+                        <span class="text-sm">Clusters</span>
+                    </a>
+                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/map">
+                        <span class="material-symbols-outlined text-lg">map</span>
+                        <span class="text-sm">Map</span>
+                    </a>
+                </nav>
+            </div>
+            
+            <div class="flex items-center space-x-4">
+                {{ g_status.global_status() }}
+                {{ menu.settings_menu() }}
+                <a class="text-on-surface-variant hover:text-primary p-2 transition-colors" href="/logout" title="Log Out">
+                    <span class="material-symbols-outlined">logout</span>
+                </a>
+            </div>
         </div>
-        <div id="help_button" class="global_tools_button">
-            <a href="#">help</a>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-grow max-w-[1600px] w-full mx-auto px-4 md:px-6 py-8">
+        <div class="flex flex-col space-y-8">
+            <div class="flex items-center justify-between">
+                <h2 class="text-3xl font-headline font-extrabold text-primary">{{ page_title or 'Clusters' }}</h2>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {% if links %}
+                    {% for cl in links %}
+                    <a href="{{cl[1]}}" class="group flex flex-col justify-between p-6 bg-surface-container-lowest border border-outline-variant/20 rounded-2xl hover:bg-surface-container-low hover:border-primary/30 transition-all hover:shadow-md hover:-translate-y-1">
+                        <h3 class="text-lg font-bold text-on-surface group-hover:text-primary line-clamp-2 mb-4">{{cl[0]}}</h3>
+                        <div class="flex items-center justify-between mt-auto">
+                            <span class="text-sm text-on-surface-variant flex items-center space-x-1">
+                                <span class="material-symbols-outlined text-[16px]">article</span>
+                                <span>{{cl[2]}} items</span>
+                            </span>
+                            <span class="material-symbols-outlined text-primary opacity-0 group-hover:opacity-100 transition-opacity">arrow_forward</span>
+                        </div>
+                    </a>
+                    {% endfor %}
+                {% else %}
+                    <div class="col-span-full flex flex-col items-center justify-center p-12 bg-surface-container-highest rounded-3xl border border-dashed border-outline-variant/30">
+                        <span class="material-symbols-outlined text-6xl text-outline-variant/50 mb-4">folder_off</span>
+                        <p class="text-lg font-medium text-on-surface-variant">{{ empty_message or 'No clusters found' }}</p>
+                    </div>
+                {% endif %}
+            </div>
         </div>
-    </div>
-    <div class="right_half">
-        {{ g_status.global_status() }}
-        {{ menu.settings_menu() }}
-    </div>
-</div>
-<div class="page">
-    <div id="posts_page">
-        <h2>{{ page_title or 'Clusters' }}</h2>
-        {% if links %}
-            {% for cl in links %}
-            <a href="{{cl[1]}}" class="cluster_link">{{cl[0]}}&nbsp;({{cl[2]}})</a>
-            {% endfor %}
-        {% else %}
-            <p>{{ empty_message or 'No clusters' }}</p>
-        {% endif %}
-    </div>
-</div>
-<!--div id="show_tags"><a href="#tags">Show "level up"</a><a name="tags"></div-->
-<div id="progressbar"></div></body>
+    </main>
+
+    <div id="progressbar" class="fixed top-0 left-0 h-1 bg-primary z-50 transition-all w-0"></div>
+</body>
 </html>

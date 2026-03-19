@@ -1,4 +1,4 @@
-﻿<html>
+<html>
 
 <head>
     <title>Topics/Chapters List</title>
@@ -101,36 +101,42 @@
 
     </div>
 
-    <div id="global_tools_bottom">
-        <ul id="paginator">
+    <div id="global_tools_bottom" class="pt-10 pb-10">
+        <ul id="paginator" class="flex items-center justify-center space-x-2">
             {% if pages_map['start'] %}
             {% for number in pages_map['start'] %}
             {% if number['p'] == current_page %}
-            <li class="current_page">{{number['p']}}</li>
+            <li class="w-10 h-10 flex items-center justify-center bg-primary text-on-primary rounded-xl text-sm font-bold shadow-sm">{{number['p']}}</li>
             {% else %}
-            <li><a href="{{number['url']}}">{{number['p']}}</a></li>
+            <li class="w-10 h-10 flex items-center justify-center bg-surface-container-high hover:bg-surface-container-highest rounded-xl text-sm font-medium transition-all active:scale-95">
+                <a href="{{number['url']}}" class="w-full h-full flex items-center justify-center">{{number['p']}}</a>
+            </li>
             {% endif %}
             {% endfor %}
             {% if pages_map['middle'] %}
-            <li>....</li>
+            <li class="text-on-surface-variant px-2">...</li>
             {% endif %}
             {% endif %}
             {% if pages_map['middle'] %}
             {% for number in pages_map['middle'] %}
             {% if number['p'] == current_page %}
-            <li class="current_page">{{number['p']}}</li>
+            <li class="w-10 h-10 flex items-center justify-center bg-primary text-on-primary rounded-xl text-sm font-bold shadow-sm">{{number['p']}}</li>
             {% else %}
-            <li><a href="{{number['url']}}">{{number['p']}}</a></li>
+            <li class="w-10 h-10 flex items-center justify-center bg-surface-container-high hover:bg-surface-container-highest rounded-xl text-sm font-medium transition-all active:scale-95">
+                <a href="{{number['url']}}" class="w-full h-full flex items-center justify-center">{{number['p']}}</a>
+            </li>
             {% endif %}
             {% endfor %}
             {% endif %}
             {% if pages_map['end'] %}
-            <li>....</li>
+            <li class="text-on-surface-variant px-2">...</li>
             {% for number in pages_map['end'] %}
             {% if number['p'] == current_page %}
-            <li class="current_page">{{number['p']}}</li>
+            <li class="w-10 h-10 flex items-center justify-center bg-primary text-on-primary rounded-xl text-sm font-bold shadow-sm">{{number['p']}}</li>
             {% else %}
-            <li><a href="{{number['url']}}">{{number['p']}}</a></li>
+            <li class="w-10 h-10 flex items-center justify-center bg-surface-container-high hover:bg-surface-container-highest rounded-xl text-sm font-medium transition-all active:scale-95">
+                <a href="{{number['url']}}" class="w-full h-full flex items-center justify-center">{{number['p']}}</a>
+            </li>
             {% endif %}
             {% endfor %}
             {% endif %}

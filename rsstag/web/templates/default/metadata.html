@@ -19,8 +19,8 @@
         {{ menu.settings_menu() }}
     </div>
 </div>
-<div class="page screen_middle">
-    <h1>Metadata Reprocessing</h1>
+<div class="page form-page-container">
+    <h1 class="page-title">Metadata Reprocessing</h1>
 
     {% if success_message %}
     <p class="ok">{{ success_message }}</p>
@@ -92,10 +92,12 @@
             </select>
         </div>
 
-        <input type="submit" value="Enqueue cleanup + reprocess">
+        <div class="form-actions">
+            <input type="submit" value="Enqueue cleanup + reprocess" class="btn-primary">
+        </div>
     </form>
 
-    <div class="root_item"><a href="/">Back to Home</a></div>
+    <div class="root_item back-link"><a href="/">Back to Home</a></div>
 </div>
 
 <script>

@@ -8,9 +8,6 @@ export default class TagItem extends React.Component {
   }
 
   render() {
-    let style = {
-      display: 'inline-block',
-    };
     let sentiment = '';
 
     if (this.state.tag.sentiment && this.state.tag.sentiment.length) {
@@ -62,45 +59,40 @@ export default class TagItem extends React.Component {
     }
 
     return (
-      <div style={style}>
-        <a name={this.state.tag.tag}></a>
-        <li className={'cloud_item ' + sentiment}>
+      <li className={'cloud_item ' + sentiment}>
+        <div className="cloud_item_header">
+          <a name={this.state.tag.tag}></a>
           <a href={this.state.tag.url} className="cloud_item_title">
             {this.state.tag.tag}
           </a>{' '}
-          ({this.state.tag.count})<br />
-          {sub_tags}
-          {sub_tags.length ? sents_link : ''}
-          {sub_tags.length ? ctx_link : ''}
-          {sub_tags.length ? <br /> : ''}
-          {words}
-          {words ? <br /> : ''}
-          {hide_tag_info_link ? (
-            ''
-          ) : (
+          <span className="cloud_item_count">({this.state.tag.count})</span>
+        </div>
+        {(sub_tags.length > 0 || words) ? (
+          <div className="cloud_item_info">
+            {sub_tags}
+            {sub_tags.length ? sents_link : null}
+            {sub_tags.length ? ctx_link : null}
+            {words}
+          </div>
+        ) : null}
+        <div className="cloud_item_tools">
+          {hide_tag_info_link ? null : (
             <a href={'/tag-info/' + this.state.tag.tag} className="get_tag_siblings">
               ...
             </a>
           )}
-          {hide_tag_info_link ? '' : sents_link}
-          {hide_tag_info_link ? (
-            ''
-          ) : (
+          {hide_tag_info_link ? null : sents_link}
+          {hide_tag_info_link ? null : (
             <a href={'/sunburst/' + this.state.tag.tag} className="get_tag_sunburst">
               sunburst
             </a>
           )}
-          {hide_tag_info_link ? (
-            ''
-          ) : (
+          {hide_tag_info_link ? null : (
             <a href={'/chain/' + this.state.tag.tag} className="get_tag_chains">
               chain
             </a>
           )}
-          {hide_tag_info_link ? '' : ' '}
-          {hide_tag_info_link ? (
-            ''
-          ) : (
+          {hide_tag_info_link ? null : (
             <a
               href={'/tag-context-tree/' + encodeURIComponent(this.state.tag.tag)}
               className="get_tag_context_tree"
@@ -108,8 +100,8 @@ export default class TagItem extends React.Component {
               tree
             </a>
           )}
-        </li>
-      </div>
+        </div>
+      </li>
     );
   }
 }
