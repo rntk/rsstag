@@ -4379,7 +4379,7 @@ h3.post_title {
 }
 
 /* Sections */
-.processing-section, .add-task-section, .scope-block {
+.processing-section, .tasks-section, .add-task-section, .scope-block {
   margin-bottom: 1.5em;
   padding: 1.5em;
   background: #fdfdfd;
@@ -4387,7 +4387,7 @@ h3.post_title {
   border-radius: 8px;
 }
 
-.processing-section h2, .add-task-section h2, .scope-block h3 {
+.processing-section h2, .tasks-section h2, .add-task-section h2, .scope-block h3 {
   margin-top: 0;
   margin-bottom: 0.8em;
   font-size: 18px;
@@ -4608,6 +4608,105 @@ select:focus, textarea:focus, input[type="text"]:focus {
 
 .back-link a:hover {
   color: #008ec9;
+}
+
+/* --- Tasks Page --- */
+.tasks-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6em;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 0.8em;
+    padding: 0.8em 1em;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    transition: box-shadow 0.15s ease;
+
+    &:hover {
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    }
+  }
+}
+
+.task-title {
+  flex: 1;
+  font-size: 14px;
+  color: #334155;
+  font-weight: 500;
+}
+
+.task-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  padding-left: 1em;
+  border-left: 1px solid #e2e8f0;
+  margin-left: auto;
+}
+
+.task-processing-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0.25em 0.7em;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+  white-space: nowrap;
+}
+
+.tasks-empty {
+  color: #64748b;
+  font-size: 14px;
+  margin: 0;
+}
+
+.add-task-form {
+  display: flex;
+  gap: 0.8em;
+  align-items: flex-start;
+  margin-top: 0.8em;
+
+  select {
+    flex: 1;
+    margin-top: 0;
+  }
+
+  input[type="submit"].btn-primary {
+    width: auto;
+    flex-shrink: 0;
+    padding: 0.6em 1.4em;
+    margin-top: 0;
+  }
+}
+
+.btn-remove {
+  background: #ffffff !important;
+  color: #dc2626 !important;
+  border: 2px solid #dc2626 !important;
+  padding: 0.35em 0.85em;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.2s;
+  white-space: nowrap;
+
+  &:hover {
+    background: #dc2626 !important;
+    color: #ffffff !important;
+  }
 }
 
 /* --- Paths List --- */

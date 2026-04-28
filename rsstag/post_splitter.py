@@ -4,25 +4,25 @@ import logging
 from typing import Optional, Dict, Any, List
 
 # Import txt_splitt components
-from txt_splitt import (
+from txt_splitt import Tracer, TracingLLMCallable
+from txt_splitt.html_cleaners import HTMLParserTagStripCleaner
+from txt_splitt.protocols import LLMResponse
+from txt_splitt.sentences import (
     AdjacentSameTopicJoiner,
     BatchPipeline,
     BracketMarker,
-    SparseRegexSentenceSplitter,
-    HTMLParserTagStripCleaner,
     LLMRepairingGapHandler,
     MappingOffsetRestorer,
     OptimizingMarker,
     OverlapChunker,
-    Pipeline,
     PreparedDocument,
     RepairingGapHandler,
+    SparseRegexSentenceSplitter,
     TopicRangeLLM,
     TopicRangeParser,
-    Tracer,
-    TracingLLMCallable,
+    build_pipeline,
 )
-from txt_splitt.llm import _build_topic_ranges_prompt
+from txt_splitt.sentences.llm import _build_topic_ranges_prompt
 
 
 class PostSplitterError(Exception):
@@ -127,7 +127,7 @@ class PostSplitter:
                 offset_restorer = MappingOffsetRestorer()
 
                 # Create the pipeline
-                pipeline = Pipeline(
+                pipeline = build_pipeline(
                     splitter=splitter,
                     marker=OptimizingMarker(BracketMarker()),
                     llm=topic_range_llm,
@@ -141,8 +141,7 @@ class PostSplitter:
                     tracer=attempt_tracer,
                 )
 
-                # Run the pipeline
-                result = pipeline.run(text)
+                result = self._run_pipeline_session(pipeline, text, llm_callable)
                 transformed = self._transform_result(result)
                 self._validate_topic_lengths(transformed.get("groups", {}))
                 self._log.info(
@@ -177,6 +176,32 @@ class PostSplitter:
         raise PostSplitterError(
             f"Pipeline execution failed after {self.MAX_PIPELINE_RETRIES} attempts: {last_error}"
         ) from last_error
+
+    def _run_pipeline_session(
+        self, pipeline: Any, text: str, llm_callable: TracingLLMCallable
+    ) -> Any:
+        """Drive txt_splitt pipelines that emit deferred LLM request batches."""
+        if not hasattr(pipeline, "start"):
+            return pipeline.run(text)
+
+        session: Any = pipeline.start(text)
+        while not session.is_complete():
+            requests: tuple[Any, ...] = session.pending_requests()
+            if not requests:
+                raise PostSplitterError(
+                    "Pipeline session is incomplete but has no pending requests"
+                )
+
+            responses: List[LLMResponse] = []
+            for request in requests:
+                response: str = llm_callable.call(
+                    request.prompt,
+                    temperature=request.temperature,
+                )
+                responses.append(LLMResponse(content=response))
+            session.submit_responses(responses)
+
+        return session.result()
 
     def _create_batch_pipeline(self) -> BatchPipeline:
         """Create a BatchPipeline configured the same as the regular pipeline."""

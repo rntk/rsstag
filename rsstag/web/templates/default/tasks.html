@@ -19,44 +19,48 @@
         {{ menu.settings_menu() }}
     </div>
 </div>
-<div class="page screen_middle">
-    <h1>Tasks Queue</h1>
-    
-    <div class="tasks-section">
-        <h2>Current Tasks</h2>
-        {% if current_tasks %}
-            <ul class="tasks-list">
-            {% for task in current_tasks %}
-                <li>
-                    {{ task.title }} 
-                    {% if task.processing > 0 %}
-                        (Processing...)
-                    {% endif %}
-                    <form action="/tasks/remove/{{ task.id }}" method="post" class="inline-form">
-                        <input type="submit" value="Remove" onclick="return confirm('Are you sure?')">
-                    </form>
-                </li>
-            {% endfor %}
-            </ul>
-        {% else %}
-            <p>No active tasks.</p>
-        {% endif %}
-    </div>
+<div class="page">
+    <div class="form-page-container">
+        <h1 class="page-title">Tasks Queue</h1>
 
-    <div class="add-task-section">
-        <h2>Add Task</h2>
-        <p class="help">Task labels include capability hints: "(global only)" or "(supports scoped reprocess)".</p>
-        <form action="/tasks" method="post">
-            <select name="task_type">
-                {% for type_id, title in available_tasks.items() %}
-                    <option value="{{ type_id }}">{{ title }}</option>
+        <div class="tasks-section">
+            <h2>Current Tasks</h2>
+            {% if current_tasks %}
+                <ul class="tasks-list">
+                {% for task in current_tasks %}
+                    <li>
+                        <span class="task-title">{{ task.title }}</span>
+                        <div class="task-actions">
+                            {% if task.processing > 0 %}
+                                <span class="task-processing-badge">Processing…</span>
+                            {% endif %}
+                            <form action="/tasks/remove/{{ task.id }}" method="post" class="inline-form">
+                                <input type="submit" value="Remove" class="btn-remove" onclick="return confirm('Are you sure?')">
+                            </form>
+                        </div>
+                    </li>
                 {% endfor %}
-            </select>
-            <input type="submit" value="Add Task">
-        </form>
+                </ul>
+            {% else %}
+                <p class="tasks-empty">No active tasks.</p>
+            {% endif %}
+        </div>
+
+        <div class="add-task-section">
+            <h2>Add Task</h2>
+            <p class="help">Task labels include capability hints: "(global only)" or "(supports scoped reprocess)".</p>
+            <form action="/tasks" method="post" class="add-task-form">
+                <select name="task_type">
+                    {% for type_id, title in available_tasks.items() %}
+                        <option value="{{ type_id }}">{{ title }}</option>
+                    {% endfor %}
+                </select>
+                <input type="submit" value="Add Task" class="btn-primary">
+            </form>
+        </div>
+
+        <div class="back-link"><a href="/">← Back to Home</a></div>
     </div>
-    
-    <div class="root_item"><a href="/">Back to Home</a></div>
 </div>
 
 <div id="status" ><span></span></div>
