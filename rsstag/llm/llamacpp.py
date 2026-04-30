@@ -1,9 +1,12 @@
 import json
-from typing import List, Union, Optional, Dict, Any
+from collections.abc import Sequence
+from typing import Any, Dict, List, Optional, Union
 import logging
 import re
 from urllib.parse import urlparse
 from http.client import HTTPConnection, HTTPSConnection
+
+from rsstag.llm.base import LLMResponse, ToolCall, ToolDefinition, parse_arguments
 
 
 class LLamaCPP:
@@ -34,20 +37,99 @@ class LLamaCPP:
         conn.request("POST", "/v1/chat/completions", body, headers)
         res = conn.getresponse()
         resp_body = res.read()
-        # logging.info("server response: %s", resp_body)
         if res.status != 200:
             err_msg = f"{res.status} - {res.reason} - {resp_body}"
             logging.error(err_msg)
-            # Raise exception for 400 status (request too large)
             if res.status == 400:
                 raise ValueError(f"Request too large (400): {err_msg}")
             return err_msg
         resp = json.loads(resp_body)
 
         content = resp["choices"][0]["message"]["content"]
-        # Remove <think></think> tags and their content
         content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL)
         return content
+
+    def call_with_tools(
+        self,
+        user_msgs: List[str],
+        tools: Sequence[ToolDefinition],
+        system_msgs: Optional[List[str]] = None,
+        temperature: float = 0.0,
+        tool_choice: Optional[str] = None,
+    ) -> LLMResponse:
+        """Call the model with tool definitions; returns content and/or tool calls."""
+
+        messages: list[dict[str, Any]] = []
+        if system_msgs:
+            for msg in system_msgs:
+                messages.append({"role": "system", "content": msg})
+        for msg in user_msgs:
+            messages.append({"role": "user", "content": msg})
+
+        payload: dict[str, Any] = {
+            "model": self.__model,
+            "messages": messages,
+            "temperature": temperature,
+            "cache_prompt": True,
+            "tools": self._to_provider_tools(tools),
+        }
+        if tool_choice is not None:
+            payload["tool_choice"] = tool_choice
+
+        conn = self.get_connection()
+        try:
+            body = json.dumps(payload)
+            headers = {"Content-type": "application/json"}
+            conn.request("POST", "/v1/chat/completions", body, headers)
+            res = conn.getresponse()
+            resp_body = res.read()
+            if res.status != 200:
+                err_msg = f"{res.status} - {res.reason} - {resp_body}"
+                logging.error("LLamaCPP error: %s", err_msg)
+                return LLMResponse(content=err_msg)
+            resp = json.loads(resp_body)
+        except Exception as e:
+            logging.error("LLamaCPP error: %s", e)
+            return LLMResponse(content=f"LLamaCPP error {e}")
+        finally:
+            conn.close()
+
+        return self._from_provider_response(resp)
+
+    @staticmethod
+    def _to_provider_tools(tools: Sequence[ToolDefinition]) -> list[dict[str, Any]]:
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "parameters": dict(tool.parameters),
+                },
+            }
+            for tool in tools
+        ]
+
+    @staticmethod
+    def _from_provider_response(response: Any) -> LLMResponse:
+        choices = response.get("choices", ()) if isinstance(response, dict) else ()
+        first_choice = choices[0] if choices else {}
+        message = first_choice.get("message", {}) if isinstance(first_choice, dict) else {}
+
+        raw_content: str = message.get("content") or ""
+        content = re.sub(r"<think>.*?</think>", "", raw_content, flags=re.DOTALL).strip() or None
+
+        tool_calls: list[ToolCall] = []
+        for tc in message.get("tool_calls") or []:
+            fn = tc.get("function", tc) if isinstance(tc, dict) else tc
+            tool_calls.append(
+                ToolCall(
+                    id=tc.get("id") if isinstance(tc, dict) else None,
+                    name=fn.get("name", "") if isinstance(fn, dict) else "",
+                    arguments=parse_arguments(fn.get("arguments", "{}") if isinstance(fn, dict) else "{}"),
+                )
+            )
+        return LLMResponse(content=content, tool_calls=tuple(tool_calls), raw=response)
 
     def get_connection(self) -> Union[HTTPConnection, HTTPSConnection]:
         if self.__is_https:

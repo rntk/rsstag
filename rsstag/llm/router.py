@@ -1,7 +1,9 @@
 import inspect
 import logging
-from typing import Optional, Tuple, Dict, Any
+from collections.abc import Sequence
+from typing import Any, Optional, Tuple, Dict
 
+from rsstag.llm.base import LLMResponse, ToolDefinition
 from rsstag.llm.batch import LlmBatchProvider, NebiusBatchProvider, OpenAIBatchProvider
 
 
@@ -211,6 +213,36 @@ class LLMRouter:
         if docs:
             prompt = f"{user_prompt}\n\n" + "\n\n".join(docs)
         return self.call(settings, [prompt], provider_key=provider_key, default=default)
+
+    def call_with_tools(
+        self,
+        settings: Optional[dict],
+        user_msgs: list[str],
+        tools: Sequence[ToolDefinition],
+        provider_key: str = "realtime_llm",
+        default: str = "llamacpp",
+        **kwargs: Any,
+    ) -> LLMResponse:
+        """Call the selected LLM provider with tool definitions.
+
+        Returns an :class:`LLMResponse` containing optional text content and any
+        tool calls the model requested.  Falls back through providers the same way
+        :meth:`call` does.
+        """
+
+        handler = self.get_handler(settings, provider_key, default)
+        if not handler:
+            logging.error("No LLM handler available for %s", provider_key)
+            return LLMResponse()
+        if not hasattr(handler, "call_with_tools"):
+            logging.warning(
+                "Handler %s does not support call_with_tools, falling back to call",
+                type(handler).__name__,
+            )
+            result = self.call(settings, user_msgs, provider_key=provider_key, default=default)
+            return LLMResponse(content=result)
+        filtered = self._filter_call_kwargs(handler.call_with_tools, kwargs)
+        return handler.call_with_tools(user_msgs, tools, **filtered)
 
     def get_batch_provider(self, provider_name: Optional[str] = None):
         if provider_name and provider_name in self._batch_providers:
