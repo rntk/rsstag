@@ -54,22 +54,18 @@ class RCerebras:
         user_msgs: List[str],
         tools: Sequence[ToolDefinition],
         system_msgs: Optional[List[str]] = None,
+        messages: Optional[Sequence[dict[str, Any]]] = None,
         temperature: float = 0.0,
         tool_choice: Optional[str] = None,
         parallel_tool_calls: bool | None = None,
     ) -> LLMResponse:
         """Call the model with tool definitions; returns content and/or tool calls."""
 
-        messages: list[dict[str, Any]] = []
-        if system_msgs:
-            for msg in system_msgs:
-                messages.append({"role": "system", "content": msg})
-        for msg in user_msgs:
-            messages.append({"role": "user", "content": msg})
+        request_messages = self._build_messages(user_msgs, system_msgs, messages)
 
         call_kwargs: dict[str, Any] = {
             "model": self.__model,
-            "messages": messages,
+            "messages": request_messages,
             "temperature": temperature,
             "tools": self._to_provider_tools(tools),
         }
@@ -86,6 +82,22 @@ class RCerebras:
 
         logging.info("Cerebras response: %s", resp)
         return self._from_provider_response(resp)
+
+    @staticmethod
+    def _build_messages(
+        user_msgs: List[str],
+        system_msgs: Optional[List[str]],
+        messages: Optional[Sequence[dict[str, Any]]],
+    ) -> list[dict[str, Any]]:
+        if messages:
+            return [dict(message) for message in messages]
+        request_messages: list[dict[str, Any]] = []
+        if system_msgs:
+            for msg in system_msgs:
+                request_messages.append({"role": "system", "content": msg})
+        for msg in user_msgs:
+            request_messages.append({"role": "user", "content": msg})
+        return request_messages
 
     @staticmethod
     def _to_provider_tools(tools: Sequence[ToolDefinition]) -> list[dict[str, Any]]:

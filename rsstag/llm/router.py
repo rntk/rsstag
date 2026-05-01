@@ -163,7 +163,10 @@ class LLMRouter:
         if not call_kwargs:
             return {}
         try:
-            sig = inspect.signature(handler.call)
+            if callable(handler):
+                sig = inspect.signature(handler)
+            else:
+                sig = inspect.signature(handler.call)
         except (TypeError, ValueError):
             return call_kwargs
         allowed = set()

@@ -53,13 +53,16 @@ class Anthropic:
         user_msgs: List[str],
         tools: Sequence[ToolDefinition],
         system_msgs: Optional[List[str]] = None,
+        messages: Optional[Sequence[dict[str, Any]]] = None,
         max_tokens: int = DEFAULT_MAX_TOKENS,
     ) -> LLMResponse:
         """Call the model with tool definitions; returns content and/or tool calls."""
 
-        raw_messages: list[dict[str, Any]] = [
-            {"role": "user", "content": msg} for msg in user_msgs
-        ]
+        raw_messages, normalized_system_msgs = self._build_messages(
+            user_msgs,
+            messages,
+            system_msgs,
+        )
         messages = self._merge_consecutive_roles(raw_messages)
 
         call_kwargs: dict[str, Any] = {
@@ -68,8 +71,8 @@ class Anthropic:
             "messages": messages,
             "tools": self._to_provider_tools(tools),
         }
-        if system_msgs:
-            call_kwargs["system"] = "\n\n".join(system_msgs)
+        if normalized_system_msgs:
+            call_kwargs["system"] = "\n\n".join(normalized_system_msgs)
 
         try:
             resp = self.__client.messages.create(**call_kwargs)
@@ -79,6 +82,35 @@ class Anthropic:
 
         logging.info("Anthropic response: %s", resp)
         return self._from_provider_response(resp)
+
+    @staticmethod
+    def _build_messages(
+        user_msgs: List[str],
+        messages: Optional[Sequence[dict[str, Any]]],
+        system_msgs: Optional[List[str]],
+    ) -> tuple[list[dict[str, Any]], list[str]]:
+        if not messages:
+            return (
+                [{"role": "user", "content": msg} for msg in user_msgs],
+                list(system_msgs or []),
+            )
+
+        normalized: list[dict[str, Any]] = []
+        extracted_system_msgs: list[str] = list(system_msgs or [])
+        for message in messages:
+            role = str(message.get("role", "user")).strip() or "user"
+            if role == "system":
+                content = message.get("content")
+                if content:
+                    extracted_system_msgs.append(str(content))
+                continue
+            content = message.get("content")
+            if role == "tool":
+                tool_name = str(message.get("name", "tool")).strip() or "tool"
+                content = f"Tool result from {tool_name}:\n{content}"
+                role = "user"
+            normalized.append({"role": role, "content": str(content or "")})
+        return normalized, extracted_system_msgs
 
     @staticmethod
     def _to_provider_tools(tools: Sequence[ToolDefinition]) -> list[dict[str, Any]]:
