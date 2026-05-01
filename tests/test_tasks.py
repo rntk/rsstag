@@ -9,6 +9,7 @@ sys.modules.setdefault("rsstag.tags", types.SimpleNamespace(RssTagTags=object))
 
 from rsstag.tasks import (
     RssTagTasks,
+    TASK_ANTHOLOGY,
     TASK_POST_GROUPING,
     TASK_W2V,
     SCOPE_MODE_ALL,
@@ -58,6 +59,18 @@ class TestRssTagTasksScope(unittest.TestCase):
 
         self.assertTrue(ok)
         self.assertEqual("", error)
+
+    def test_validate_task_scope_accepts_anthology_scope(self):
+        ok, error = self.storage.validate_task_scope(
+            TASK_ANTHOLOGY,
+            {"mode": SCOPE_MODE_FEEDS, "feed_ids": ["feed-1"]},
+        )
+
+        self.assertTrue(ok)
+        self.assertEqual("", error)
+
+    def test_get_task_title_includes_anthology(self):
+        self.assertIn("Anthology", self.storage.get_task_title(TASK_ANTHOLOGY))
 
     def test_build_post_scope_predicate_all_mode(self):
         task = {"scope": {"mode": SCOPE_MODE_ALL}}

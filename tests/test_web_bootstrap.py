@@ -30,6 +30,7 @@ class TestWebBootstrap(unittest.TestCase):
             "rsstag.web.providers",
             "rsstag.web.tags",
             "rsstag.web.tasks",
+            "rsstag.web.anthologies",
             "rsstag.web.users",
         ]
 

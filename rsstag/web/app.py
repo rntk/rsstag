@@ -14,6 +14,7 @@ from rsstag.tasks import RssTagTasks
 from rsstag.web.routes import RSSTagRoutes
 from rsstag.utils import get_sorted_dict_by_alphabet, load_config
 from rsstag.posts import RssTagPosts
+from rsstag.anthologies import RssTagAnthologies, RssTagAnthologyRuns
 from rsstag.chats import RssTagChats
 from rsstag.paths import RssTagPaths
 from rsstag.feeds import RssTagFeeds
@@ -42,6 +43,7 @@ import rsstag.web.feeds as feeds_handlers
 import rsstag.web.metadata as metadata_handlers
 import rsstag.web.context_filter_handlers as context_filter_handlers
 import rsstag.web.chats as chats_handlers
+import rsstag.web.anthologies as anthologies_handlers
 import rsstag.web.paths_handlers as paths_handlers
 
 from rsstag.llm.router import LLMRouter
@@ -144,6 +146,10 @@ class RSSTagApplication(object):
         self.snippet_clusters.prepare()
         self.chats = RssTagChats(self.db)
         self.chats.prepare()
+        self.anthologies = RssTagAnthologies(self.db)
+        self.anthologies.prepare()
+        self.anthology_runs = RssTagAnthologyRuns(self.db)
+        self.anthology_runs.prepare()
         self.paths = RssTagPaths(self.db)
         self.paths.prepare()
         self.routes = RSSTagRoutes(self.config["settings"]["host_name"], handlers=self)
@@ -1886,6 +1892,64 @@ class RSSTagApplication(object):
 
     def on_chats_context_post(self, user: dict, request: Request, chat_id: str):
         return chats_handlers.on_chats_context_post(self, user, request, chat_id)
+
+    def on_anthologies_get(self, user: dict, request: Request):
+        return anthologies_handlers.on_anthologies_get(self, user, request)
+
+    def on_anthologies_detail_get(
+        self, user: dict, request: Request, anthology_id: str
+    ):
+        return anthologies_handlers.on_anthologies_detail_get(
+            self, user, request, anthology_id
+        )
+
+    def on_anthologies_api_list_get(self, user: dict, request: Request):
+        return anthologies_handlers.on_anthologies_api_list_get(self, user, request)
+
+    def on_anthologies_api_create_post(self, user: dict, request: Request):
+        return anthologies_handlers.on_anthologies_api_create_post(self, user, request)
+
+    def on_anthologies_api_detail_get(
+        self, user: dict, request: Request, anthology_id: str
+    ):
+        return anthologies_handlers.on_anthologies_api_detail_get(
+            self, user, request, anthology_id
+        )
+
+    def on_anthologies_api_delete(
+        self, user: dict, request: Request, anthology_id: str
+    ):
+        return anthologies_handlers.on_anthologies_api_delete(
+            self, user, request, anthology_id
+        )
+
+    def on_anthologies_api_run_get(
+        self, user: dict, request: Request, anthology_id: str
+    ):
+        return anthologies_handlers.on_anthologies_api_run_get(
+            self, user, request, anthology_id
+        )
+
+    def on_anthologies_api_retry_post(
+        self, user: dict, request: Request, anthology_id: str
+    ):
+        return anthologies_handlers.on_anthologies_api_retry_post(
+            self, user, request, anthology_id
+        )
+
+    def on_anthologies_api_read_post(
+        self, user: dict, request: Request, anthology_id: str
+    ):
+        return anthologies_handlers.on_anthologies_api_read_post(
+            self, user, request, anthology_id
+        )
+
+    def on_anthologies_api_export_get(
+        self, user: dict, request: Request, anthology_id: str
+    ):
+        return anthologies_handlers.on_anthologies_api_export_get(
+            self, user, request, anthology_id
+        )
 
     def on_paths_page_get(self, user: dict, request: Request):
         return paths_handlers.on_paths_page_get(self, user, request)

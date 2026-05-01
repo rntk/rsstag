@@ -5,6 +5,8 @@ from typing import Optional, List, Dict, Any, Union, Iterator
 from pymongo import MongoClient
 import hashlib
 
+from rsstag.anthologies import RssTagAnthologies
+
 PostId = Union[int, str]
 
 
@@ -14,6 +16,7 @@ class RssTagPostGrouping:
     def __init__(self, db: MongoClient) -> None:
         self._db: MongoClient = db
         self._log = logging.getLogger("post_grouping")
+        self._anthologies = RssTagAnthologies(db)
 
     def prepare(self) -> None:
         """Create indexes for post_grouping collection"""
@@ -63,6 +66,7 @@ class RssTagPostGrouping:
                 {"$set": data},
                 upsert=True,
             )
+            self._anthologies.mark_stale_for_source_change(owner, [str(pid) for pid in post_ids])
             return True
         except Exception as e:
             self._log.error("Can't save grouped posts data. Info: %s", e)
@@ -83,6 +87,7 @@ class RssTagPostGrouping:
                 {"owner": owner, "post_ids": {"$in": batch}}
             )
             deleted_total += int(result.deleted_count)
+            self._anthologies.mark_stale_for_source_change(owner, batch)
 
         return deleted_total
 

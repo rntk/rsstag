@@ -27,6 +27,9 @@
             <div id="group_by" class="global_tools_button">
                 <a href="{{group_by_link}}">group by category</a>
             </div>
+            <div id="anthologies_link" class="global_tools_button">
+                <a href="/anthologies">anthologies</a>
+            </div>
         </div>
         <div class="right_half">
             {{ g_status.global_status() }}
@@ -40,6 +43,9 @@
             </h3>
             {{', '.join(tag['words'])}} <a href="/tag-net#{{tag['tag']}}">Tag net</a>&nbsp;&nbsp;<a
                 href="/sentences/with/tags/{{tag['tag']}}">Sents</a>&nbsp;&nbsp;<a href="{{chain_link}}">Chain</a>&nbsp;&nbsp;<a href="{{context_tree_link}}">Context tree</a>
+            &nbsp;&nbsp;<button id="start_tag_anthology" class="anthology-action-button" type="button"
+                data-seed-value="{{ tag['tag'] }}">Start Anthology</button>
+            <span id="start_tag_anthology_status" class="anthology-action-status"></span>
         </div>
         <h3 class="group_title tag_info_title">Word2Vec</h3><span id="load_similar_w2v"></span>
         <div id="similar_w2v_tags" class="tag_info_block"></div>
@@ -100,6 +106,44 @@
 </script-->
     <script type="text/javascript">
         var initial_tag = {{ tag| json}};
+        (function () {
+            var startButton = document.getElementById('start_tag_anthology');
+            var statusNode = document.getElementById('start_tag_anthology_status');
+            if (!startButton || !statusNode) {
+                return;
+            }
+
+            startButton.addEventListener('click', async function () {
+                startButton.disabled = true;
+                statusNode.textContent = 'Starting...';
+                try {
+                    var response = await fetch('/api/anthologies', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            seed_type: 'tag',
+                            seed_value: startButton.dataset.seedValue || '',
+                            scope: { mode: 'all' }
+                        })
+                    });
+                    var payload = await response.json();
+                    if (!response.ok || payload.error) {
+                        statusNode.textContent = payload.error || 'Failed to start anthology';
+                        startButton.disabled = false;
+                        return;
+                    }
+                    var anthologyId = payload.data && payload.data.anthology_id;
+                    if (anthologyId) {
+                        window.location.href = '/anthologies/' + anthologyId;
+                        return;
+                    }
+                    window.location.href = '/anthologies';
+                } catch (error) {
+                    statusNode.textContent = 'Failed to start anthology';
+                    startButton.disabled = false;
+                }
+            });
+        })();
     </script>
     <div id="help_window">
         <ul>

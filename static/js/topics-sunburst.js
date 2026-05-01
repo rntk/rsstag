@@ -1,6 +1,7 @@
 'use strict';
 
 import Sunburst from 'sunburst-chart';
+import { triggerAnthology } from './topics-list.js';
 
 /**
  * Topics Sunburst Chart Component
@@ -218,6 +219,10 @@ class TopicsSunburst {
 
   handleClick(d, event, currentData) {
     if (d && d._topicPath && d._topicPosts) {
+      if (event.shiftKey) {
+        triggerAnthology(d.name || d._topicPath, d._topicPosts);
+        return;
+      }
       // Clicked on a topic segment - navigate to grouped posts
       const postIds = d._topicPosts.join('_');
       const topicPath = encodeURIComponent(d._topicPath);

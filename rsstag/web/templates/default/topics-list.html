@@ -17,6 +17,9 @@
             <div id="help_button" class="global_tools_button">
                 <a href="#">help</a>
             </div>
+            <div id="anthologies_link" class="global_tools_button">
+                <a href="/anthologies">anthologies</a>
+            </div>
         </div>
         <div class="right_half">
             {{ g_status.global_status() }}
@@ -57,6 +60,9 @@
                                     title="Compare posts">C</a>
                                 <a href="/post-grouped-snippets/{{ all_post_ids }}?topic={{ node.path|url_encode }}" class="snippet-link"
                                     title="Grouped snippets">S</a>
+                                <button type="button" class="snippet-link anthology-trigger-btn"
+                                    data-topic-name="{{ node.name }}" data-post-ids="{{ node.posts|join(',') }}"
+                                    title="Start anthology">A</button>
                                 <span class="topic-count">({{ node.count }})</span>
                             </summary>
                             <div class="topic-children">
@@ -74,6 +80,9 @@
                                 title="Compare posts">C</a>
                             <a href="/post-grouped-snippets/{{ all_post_ids }}?topic={{ node.path|url_encode }}" class="snippet-link"
                                 title="Grouped snippets">S</a>
+                            <button type="button" class="snippet-link anthology-trigger-btn"
+                                data-topic-name="{{ node.name }}" data-post-ids="{{ node.posts|join(',') }}"
+                                title="Start anthology">A</button>
                             <span class="topic-count">({{ node.count }})</span>
                         </div>
                         {% endif %}

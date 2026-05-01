@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>{{ anthology['title'] }} | Anthology</title>
+    {% include "head-data.html" %}
+</head>
+
+<body>
+    {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
+    {% macro render_source_refs(source_refs) -%}
+        {% if source_refs %}
+        <ul class="anthology-source-list">
+            {% for source_ref in source_refs %}
+            <li class="anthology-source-item">
+                <span class="anthology-source-label">
+                    {{ source_ref.get('topic_path') or source_ref.get('title') or source_ref.get('label') or source_ref.get('post_id') or source_ref.get('url') or 'Source reference' }}
+                </span>
+                {% if source_ref.get('post_id') %}
+                <span class="anthology-source-meta">post {{ source_ref.get('post_id') }}</span>
+                {% endif %}
+                {% if source_ref.get('sentence_indices') %}
+                <span class="anthology-source-meta">sentences {{ source_ref.get('sentence_indices') | join(', ') }}</span>
+                {% endif %}
+                {% if source_ref.get('read_state') %}
+                <span class="anthology-source-meta">
+                    {{ source_ref.get('read_state', {}).get('unread_sentences', 0) }} unread / {{ source_ref.get('read_state', {}).get('total_sentences', 0) }} total
+                </span>
+                <button
+                    type="button"
+                    class="anthology-inline-action anthology-read-action"
+                    data-target-kind="sentences"
+                    data-post-id="{{ source_ref.get('post_id') }}"
+                    data-sentence-indices="{{ source_ref.get('sentence_indices', []) | tojson }}"
+                    data-readed="{% if source_ref.get('read_state', {}).get('all_read') %}false{% else %}true{% endif %}"
+                >
+                    {% if source_ref.get('read_state', {}).get('all_read') %}Mark unread{% else %}Mark read{% endif %}
+                </button>
+                {% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="anthology-empty-state">No source references captured yet.</p>
+        {% endif %}
+    {%- endmacro %}
+    {% macro render_tree(node, level=0) -%}
+        {% if node %}
+            {% set children = node.get('sub_anthologies', []) %}
+            {% set source_refs = node.get('source_refs', []) %}
+            {% set read_state = node.get('read_state', {}) %}
+            <div class="anthology-tree-node level-{{ level }}">
+                {% if children %}
+                <details class="anthology-tree-details" {% if level < 1 %}open{% endif %}>
+                    <summary class="anthology-tree-summary">
+                        <span class="anthology-tree-summary-main">
+                            <span class="anthology-tree-title">{{ node.get('title') or ('Section ' ~ (level + 1)) }}</span>
+                            {% if node.get('summary') %}
+                            <span class="anthology-tree-summary-text">{{ node.get('summary') }}</span>
+                            {% endif %}
+                        </span>
+                        <span class="anthology-tree-count">{{ children|length }} sections</span>
+                    </summary>
+                    <div class="anthology-tree-content">
+                        {% if node.get('summary') %}
+                        <p class="anthology-tree-body">{{ node.get('summary') }}</p>
+                        {% endif %}
+                        <div class="anthology-tree-meta">
+                            <span>{{ source_refs|length }} sources</span>
+                            {% if read_state %}
+                            <span>{{ read_state.get('unread_sentences', 0) }} unread / {{ read_state.get('total_sentences', 0) }} total</span>
+                            {% endif %}
+                            <span>depth {{ level + 1 }}</span>
+                        </div>
+                        <div class="anthology-node-actions">
+                            <button
+                                type="button"
+                                class="anthology-inline-action anthology-read-action"
+                                data-target-kind="{% if level == 0 %}anthology{% else %}node{% endif %}"
+                                {% if level > 0 %}data-node-id="{{ node.get('node_id', '') }}"{% endif %}
+                                data-readed="{% if read_state.get('all_read') %}false{% else %}true{% endif %}"
+                            >
+                                {% if read_state.get('all_read') %}Mark unread{% else %}Mark read{% endif %}
+                            </button>
+                        </div>
+                        {% if source_refs %}
+                        {{ render_source_refs(source_refs) }}
+                        {% endif %}
+                        <div class="anthology-tree-children">
+                            {% for child in children %}
+                            {{ render_tree(child, level + 1) }}
+                            {% endfor %}
+                        </div>
+                    </div>
+                </details>
+                {% else %}
+                <div class="anthology-tree-leaf">
+                    <div class="anthology-tree-leaf-title">{{ node.get('title') or ('Section ' ~ (level + 1)) }}</div>
+                    {% if node.get('summary') %}
+                    <p class="anthology-tree-body">{{ node.get('summary') }}</p>
+                    {% endif %}
+                    <div class="anthology-tree-meta">
+                        <span>{{ source_refs|length }} sources</span>
+                        {% if read_state %}
+                        <span>{{ read_state.get('unread_sentences', 0) }} unread / {{ read_state.get('total_sentences', 0) }} total</span>
+                        {% endif %}
+                        <span>depth {{ level + 1 }}</span>
+                    </div>
+                    <div class="anthology-node-actions">
+                        <button
+                            type="button"
+                            class="anthology-inline-action anthology-read-action"
+                            data-target-kind="{% if level == 0 %}anthology{% else %}node{% endif %}"
+                            {% if level > 0 %}data-node-id="{{ node.get('node_id', '') }}"{% endif %}
+                            data-readed="{% if read_state.get('all_read') %}false{% else %}true{% endif %}"
+                        >
+                            {% if read_state.get('all_read') %}Mark unread{% else %}Mark read{% endif %}
+                        </button>
+                    </div>
+                    {% if source_refs %}
+                    {{ render_source_refs(source_refs) }}
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        {% else %}
+        <p class="anthology-empty-state">No hierarchy has been generated yet.</p>
+        {% endif %}
+    {%- endmacro %}
+    <div id="global_tools">
+        <div class="left_half">
+            <div class="global_tools_button">
+                <a href="/">main</a>
+            </div>
+            <div class="global_tools_button">
+                <a href="/anthologies">anthologies</a>
+            </div>
+        </div>
+        <div class="right_half">
+            {{ g_status.global_status() }}
+            {{ menu.settings_menu() }}
+        </div>
+    </div>
+
+    <div
+        id="anthology-detail-page"
+        class="page anthology-detail-page"
+        data-anthology-id="{{ anthology['id'] }}"
+        data-api-url="{{ detail_api_url }}"
+        data-poll-interval-ms="5000"
+    >
+        <div class="anthology-breadcrumbs">
+            <a href="/anthologies">Anthologies</a>
+            <span>/</span>
+            <span>{{ anthology['title'] }}</span>
+        </div>
+
+        <div id="anthology-detail-header" class="anthology-detail-header anthology-status-{{ anthology['status'] }}">
+            <div class="anthology-detail-title-block">
+                <h1 id="anthology-title">{{ anthology['title'] }}</h1>
+                <div class="anthology-meta">
+                    <span id="anthology-status-badge" class="anthology-status-badge">{{ anthology['status'] }}</span>
+                    <span id="anthology-stale-badge" class="anthology-inline-badge {% if not anthology['stale'] %}hide{% endif %}">stale</span>
+                    <span>seed: <span id="anthology-seed-value">{{ anthology['seed_value'] }}</span></span>
+                    <span>type: <span id="anthology-seed-type">{{ anthology['seed_type'] }}</span></span>
+                </div>
+                <p id="anthology-summary" class="anthology-summary">
+                    {% if anthology['result'] and anthology['result'].get('summary') %}
+                    {{ anthology['result'].get('summary') }}
+                    {% else %}
+                    Anthology output is still being prepared.
+                    {% endif %}
+                </p>
+            </div>
+            <div class="anthology-detail-actions">
+                <button
+                    type="button"
+                    id="anthology-retry-button"
+                    class="anthology-secondary-button anthology-placeholder-action"
+                    data-api-url="{{ retry_api_url }}"
+                >
+                    Retry
+                </button>
+                <button
+                    type="button"
+                    id="anthology-export-button"
+                    class="anthology-secondary-button anthology-placeholder-action"
+                    data-api-url="{{ export_api_url }}"
+                >
+                    Export
+                </button>
+                <a id="anthology-api-link" class="anthology-secondary-link" href="{{ detail_api_url }}">Open API</a>
+            </div>
+        </div>
+
+        <div class="anthology-status-strip">
+            <span id="anthology-processing-note">
+                {% if anthology['status'] in ('pending', 'processing') %}
+                Polling detail API while the anthology is processing.
+                {% else %}
+                Anthology is not actively processing.
+                {% endif %}
+            </span>
+            <span id="anthology-action-note" class="anthology-action-note">Ready.</span>
+            <span id="anthology-last-refresh">
+                {% if anthology['updated_at'] %}
+                Updated {{ anthology['updated_at'] | timestamp_to_datetime }}
+                {% endif %}
+            </span>
+        </div>
+
+        <div class="anthology-detail-grid">
+            <section class="anthology-section anthology-metadata-panel">
+                <h2>Metadata</h2>
+                <dl class="anthology-metadata-grid">
+                    <div>
+                        <dt>ID</dt>
+                        <dd id="anthology-id">{{ anthology['id'] }}</dd>
+                    </div>
+                    <div>
+                        <dt>Status</dt>
+                        <dd id="anthology-status">{{ anthology['status'] }}</dd>
+                    </div>
+                    <div>
+                        <dt>Created</dt>
+                        <dd id="anthology-created-at">{{ anthology['created_at'] | timestamp_to_datetime }}</dd>
+                    </div>
+                    <div>
+                        <dt>Updated</dt>
+                        <dd id="anthology-updated-at">{{ anthology['updated_at'] | timestamp_to_datetime }}</dd>
+                    </div>
+                    <div>
+                        <dt>Scope</dt>
+                        <dd><code id="anthology-scope-json">{{ anthology['scope'] | tojson }}</code></dd>
+                    </div>
+                    <div>
+                        <dt>Current run</dt>
+                        <dd id="anthology-current-run">{{ anthology.get('current_run_id') or '—' }}</dd>
+                    </div>
+                    <div>
+                        <dt>Snapshot updated</dt>
+                        <dd id="anthology-source-snapshot-updated">
+                            {% if anthology.get('source_snapshot') and anthology['source_snapshot'].get('post_grouping_updated_at') %}
+                            {{ anthology['source_snapshot'].get('post_grouping_updated_at') | timestamp_to_datetime }}
+                            {% else %}
+                            N/A
+                            {% endif %}
+                        </dd>
+                    </div>
+                    <div>
+                        <dt>Snapshot docs</dt>
+                        <dd id="anthology-source-snapshot-count">
+                            {% if anthology.get('source_snapshot') and anthology['source_snapshot'].get('post_grouping_doc_ids') %}
+                            {{ anthology['source_snapshot'].get('post_grouping_doc_ids') | length }}
+                            {% else %}
+                            0
+                            {% endif %}
+                        </dd>
+                    </div>
+                </dl>
+            </section>
+
+            <section class="anthology-section">
+                <h2>Hierarchy</h2>
+                <div id="anthology-hierarchy-tree" class="anthology-tree">
+                    {% if anthology['result'] %}
+                    {{ render_tree(anthology['result']) }}
+                    {% else %}
+                    <p class="anthology-empty-state">No hierarchy has been generated yet.</p>
+                    {% endif %}
+                </div>
+            </section>
+        </div>
+
+        <section class="anthology-section">
+            <h2>Source references</h2>
+            <div id="anthology-source-refs">
+                {% if anthology['result'] %}
+                {{ render_source_refs(anthology['result'].get('source_refs', [])) }}
+                {% else %}
+                <p class="anthology-empty-state">No source references captured yet.</p>
+                {% endif %}
+            </div>
+        </section>
+
+        <section class="anthology-section">
+            <h2>Agent run</h2>
+            <div id="anthology-run-summary" class="anthology-run-summary">
+                {% if anthology.get('latest_run') %}
+                <div class="anthology-run-meta">
+                    <span>run {{ anthology['latest_run'].get('_id') }}</span>
+                    <span>status {{ anthology['latest_run'].get('status') }}</span>
+                    <span>started {{ anthology['latest_run'].get('started_at') | timestamp_to_datetime }}</span>
+                    <span>
+                        {% if anthology['latest_run'].get('finished_at') %}
+                        finished {{ anthology['latest_run'].get('finished_at') | timestamp_to_datetime }}
+                        {% else %}
+                        still running
+                        {% endif %}
+                    </span>
+                </div>
+                {% if anthology['latest_run'].get('error') %}
+                <p class="anthology-run-error">{{ anthology['latest_run'].get('error') }}</p>
+                {% endif %}
+                {% else %}
+                <p class="anthology-empty-state">No run has started yet.</p>
+                {% endif %}
+            </div>
+            <div id="anthology-log-viewer" class="anthology-log-viewer">
+                {% if anthology.get('latest_run') and anthology['latest_run'].get('turns') %}
+                    {% for turn in anthology['latest_run'].get('turns', []) %}
+                    <details class="anthology-log-turn" {% if loop.last %}open{% endif %}>
+                        <summary class="anthology-log-turn-summary">
+                            <span>Turn {{ turn.get('turn', loop.index) }}</span>
+                            <span>{{ turn.get('messages', []) | length }} messages</span>
+                            <span>{{ turn.get('tool_calls', []) | length }} tool calls</span>
+                            <span>{{ turn.get('tool_results', []) | length }} tool results</span>
+                        </summary>
+                        <div class="anthology-log-grid">
+                            <section class="anthology-log-block">
+                                <h3>Messages</h3>
+                                {% if turn.get('messages') %}
+                                    {% for message in turn.get('messages', []) %}
+                                    <div class="anthology-log-entry">
+                                        <div class="anthology-log-entry-header">{{ message.get('role', 'message') }}</div>
+                                        <pre class="anthology-log-pre">{% if message.get('content') is string %}{{ message.get('content') }}{% else %}{{ message.get('content') | tojson }}{% endif %}</pre>
+                                    </div>
+                                    {% endfor %}
+                                {% else %}
+                                <p class="anthology-empty-state">No messages.</p>
+                                {% endif %}
+                            </section>
+                            <section class="anthology-log-block">
+                                <h3>Tool calls</h3>
+                                {% if turn.get('tool_calls') %}
+                                    {% for tool_call in turn.get('tool_calls', []) %}
+                                    <div class="anthology-log-entry">
+                                        <pre class="anthology-log-pre">{{ tool_call | tojson }}</pre>
+                                    </div>
+                                    {% endfor %}
+                                {% else %}
+                                <p class="anthology-empty-state">No tool calls.</p>
+                                {% endif %}
+                            </section>
+                            <section class="anthology-log-block">
+                                <h3>Tool results</h3>
+                                {% if turn.get('tool_results') %}
+                                    {% for tool_result in turn.get('tool_results', []) %}
+                                    <div class="anthology-log-entry">
+                                        <pre class="anthology-log-pre">{{ tool_result | tojson }}</pre>
+                                    </div>
+                                    {% endfor %}
+                                {% else %}
+                                <p class="anthology-empty-state">No tool results.</p>
+                                {% endif %}
+                            </section>
+                        </div>
+                    </details>
+                    {% endfor %}
+                {% else %}
+                <p class="anthology-empty-state">Logs will appear here when a run is available.</p>
+                {% endif %}
+            </div>
+        </section>
+    </div>
+
+    <script id="anthology-detail-data" type="application/json">{{ anthology | tojson }}</script>
+    <script type="text/javascript" src="/static/js/anthology-detail.js"></script>
+</body>
+
+</html>

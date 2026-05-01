@@ -1,5 +1,7 @@
 'use strict';
 
+import { triggerAnthology } from './topics-list.js';
+
 /**
  * Topics Marimekko Chart Component
  *
@@ -215,6 +217,15 @@ class TopicsMarimekko {
         rect.setAttribute('fill', this._colorForBar(colorIdx, rowIdx, col.rows.length));
         rect.setAttribute('stroke', '#fff');
         rect.setAttribute('stroke-width', '1');
+        rect.style.cursor = 'pointer';
+
+        rect.addEventListener('click', (e) => {
+          if (e.shiftKey && row.topicPath && row.topicPosts.length > 0) {
+            e.preventDefault();
+            e.stopPropagation();
+            triggerAnthology(row.name || row.topicPath, row.topicPosts);
+          }
+        });
 
         const title = document.createElementNS(svgNs, 'title');
         title.textContent = `${row.name}\ntext length: ${row.value}`;
@@ -250,6 +261,15 @@ class TopicsMarimekko {
             link.setAttribute('target', '_self');
             link.setAttribute('aria-label', `Open snippets for ${row.name || topicPath}`);
             link.appendChild(text);
+
+            link.addEventListener('click', (e) => {
+              if (e.shiftKey) {
+                e.preventDefault();
+                e.stopPropagation();
+                triggerAnthology(row.name || row.topicPath, row.topicPosts);
+              }
+            });
+
             svg.appendChild(link);
           } else {
             text.setAttribute('pointer-events', 'none');

@@ -36,6 +36,7 @@ TASK_TAG_CLASSIFICATION_BATCH = 22
 TASK_DELETE_FEEDS = 23
 TASK_POST_GROUPING_CLEANUP = 24
 TASK_SNIPPET_CLUSTERING = 25
+TASK_ANTHOLOGY = 26
 
 SCOPE_MODE_ALL = "all"
 SCOPE_MODE_POSTS = "posts"
@@ -72,6 +73,7 @@ TASK_SCOPE_REGISTRY: Dict[int, Dict[str, Any]] = {
     TASK_POST_GROUPING: {"scope": SCOPE_CAPABILITY_SCOPED_SUPPORTED},
     TASK_POST_GROUPING_BATCH: {"scope": SCOPE_CAPABILITY_SCOPED_SUPPORTED},
     TASK_POST_GROUPING_CLEANUP: {"scope": SCOPE_CAPABILITY_SCOPED_SUPPORTED},
+    TASK_ANTHOLOGY: {"scope": SCOPE_CAPABILITY_SCOPED_SUPPORTED},
 }
 
 
@@ -253,6 +255,9 @@ class RssTagTasks:
         scope_query = self._build_post_scope_predicate(owner, task_doc)
         return self._db.posts.count_documents({**scope_query, "grouping": {"$exists": False}})
 
+    def _count_pending_anthologies(self, owner: str) -> int:
+        return self._db.anthologies.count_documents({"owner": owner, "status": "pending"})
+
     def _find_pending_grouping_post(
         self,
         owner: str,
@@ -316,7 +321,12 @@ class RssTagTasks:
                         "manual": manual,
                         "provider": data.get("provider", ""),
                     }
-                    if data.get("scope") is not None or data["type"] in (TASK_POST_GROUPING, TASK_POST_GROUPING_BATCH, TASK_POST_GROUPING_CLEANUP):
+                    if data.get("scope") is not None or data["type"] in (
+                        TASK_POST_GROUPING,
+                        TASK_POST_GROUPING_BATCH,
+                        TASK_POST_GROUPING_CLEANUP,
+                        TASK_ANTHOLOGY,
+                    ):
                         update_data["scope"] = normalized_scope
                     for key in data:
                         if key not in update_data:
@@ -581,6 +591,25 @@ class RssTagTasks:
                     {"_id": user_task["_id"]},
                     {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
                 )
+            elif user_task["type"] == TASK_ANTHOLOGY:
+                data = self._db.anthologies.find_one_and_update(
+                    {"owner": task["user"]["sid"], "status": "pending"},
+                    {"$set": {"status": "processing", "updated_at": time.time()}},
+                    sort=[("created_at", 1)],
+                )
+                unlock_task = True
+                if not data:
+                    task["type"] = TASK_NOOP
+                    if self._count_pending_anthologies(task["user"]["sid"]) == 0:
+                        can_delete = self._can_finalize_completed_task(user_task)
+                        if can_delete:
+                            self._db.tasks.delete_one({"_id": user_task["_id"]})
+                            unlock_task = False
+                if unlock_task:
+                    self._db.tasks.update_one(
+                        {"_id": user_task["_id"]},
+                        {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
+                    )
             elif user_task["type"] == TASK_TAGS_RANK:
                 data = []
                 tags_dt = self._db.tags.find(
@@ -890,6 +919,8 @@ class RssTagTasks:
                     )
                 if updates:
                     self._db.tags.bulk_write(updates, ordered=False)
+            elif task["type"] == TASK_ANTHOLOGY:
+                remove_task = self._count_pending_anthologies(task["user"]["sid"]) == 0
             if remove_task:
                 self.remove_task(task["_id"])
                 if not task.get("manual", False):
@@ -898,9 +929,15 @@ class RssTagTasks:
             result = True
         except Exception as e:
             result = False
+            task_data = task.get("data") if isinstance(task, dict) else None
+            task_id = (
+                task_data.get("_id", "unknown")
+                if isinstance(task_data, dict)
+                else "unknown"
+            )
             self._log.error(
                 "Can`t finish task %s, type %s. Info: %s",
-                task["data"]["_id"],
+                task_id,
                 task["type"],
                 e,
             )
@@ -987,6 +1024,8 @@ class RssTagTasks:
                     info["count"] = self._db.tags.count_documents(
                         {"owner": user_id, "classifications": {"$exists": False}}
                     )
+                elif task["type"] == TASK_ANTHOLOGY:
+                    info["count"] = self._count_pending_anthologies(user_id)
 
                 status.append(info)
         except Exception as e:
@@ -1021,6 +1060,7 @@ class RssTagTasks:
             TASK_DELETE_FEEDS: "Delete feeds",
             TASK_POST_GROUPING_CLEANUP: "Post grouping cleanup (supports scoped reprocess)",
             TASK_SNIPPET_CLUSTERING: "Snippet clustering",
+            TASK_ANTHOLOGY: "Anthology generation (supports scoped reprocess)",
         }
 
         if task_type in task_titles:

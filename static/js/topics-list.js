@@ -274,6 +274,20 @@ function initTopicsSearch() {
         snippetsLink.textContent = '...';
         row.appendChild(snippetsLink);
       }
+      if (item.topic && item.post_ids) {
+        row.appendChild(document.createTextNode(' '));
+        const anthologyBtn = document.createElement('button');
+        anthologyBtn.type = 'button';
+        anthologyBtn.className = 'anthology-trigger-btn-inline';
+        anthologyBtn.textContent = 'A';
+        anthologyBtn.title = 'Start anthology';
+        anthologyBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          triggerAnthology(item.topic, item.post_ids);
+        });
+        row.appendChild(anthologyBtn);
+      }
       resultsContainer.appendChild(row);
     });
   };
@@ -346,6 +360,63 @@ function initTopicTreeControls() {
   unfoldAllButton.addEventListener('click', () => {
     setAllDetailsState(true);
   });
+
+  container.addEventListener('click', (event) => {
+    const btn = event.target.closest('.anthology-trigger-btn');
+    if (!btn) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const topicName = btn.getAttribute('data-topic-name');
+    const postIdsStr = btn.getAttribute('data-post-ids');
+    if (topicName && postIdsStr) {
+      triggerAnthology(topicName, postIdsStr.split(','));
+    }
+  });
+}
+
+export async function triggerAnthology(seedValue, postIds) {
+  if (!seedValue) {
+    return;
+  }
+  const confirmed = confirm(`Start anthology for "${seedValue}"?`);
+  if (!confirmed) {
+    return;
+  }
+
+  const payload = {
+    seed_type: 'tag',
+    seed_value: seedValue,
+    scope: {
+      mode: 'posts',
+      post_ids: Array.isArray(postIds) ? postIds : [postIds],
+    },
+  };
+
+  try {
+    const response = await fetch('/api/anthologies', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    const result = await response.json();
+    if (!response.ok || result.error) {
+      alert('Error starting anthology: ' + (result.error || response.statusText));
+      return;
+    }
+    const anthologyId = result.data && result.data.anthology_id;
+    if (anthologyId) {
+      window.location.href = '/anthologies/' + anthologyId;
+    } else {
+      window.location.href = '/anthologies';
+    }
+  } catch (error) {
+    console.error('Failed to start anthology:', error);
+    alert('Failed to start anthology: ' + error.message);
+  }
 }
 
 // Initialize topics page

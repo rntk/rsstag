@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Anthologies</title>
+    {% include "head-data.html" %}
+</head>
+
+<body>
+    {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
+    <div id="global_tools">
+        <div class="left_half">
+            <div id="link_on_root" class="global_tools_button">
+                <a href="/">main</a>
+            </div>
+        </div>
+        <div class="right_half">
+            {{ g_status.global_status() }}
+            {{ menu.settings_menu() }}
+        </div>
+    </div>
+
+    <div class="page anthologies-page">
+        <h1>Anthologies</h1>
+        <p class="anthologies-intro">Create a tag-rooted anthology and track its generation status.</p>
+
+        <form id="anthology-create-form" class="anthology-create-form">
+            <input type="hidden" name="seed_type" value="tag" />
+            <input type="hidden" name="scope_mode" value="all" />
+            <label for="anthology-seed-value">Tag</label>
+            <input
+                id="anthology-seed-value"
+                name="seed_value"
+                type="text"
+                value="{{ initial_seed_value }}"
+                placeholder="playstation 5"
+                required
+            />
+            <button type="submit">Start anthology</button>
+            <span id="anthology-create-status" class="anthology-create-status"></span>
+        </form>
+
+        <div class="anthology-list">
+            {% if anthologies %}
+            {% for anthology in anthologies %}
+            <div class="anthology-card anthology-status-{{ anthology['status'] }}">
+                <div class="anthology-card-header">
+                    <div>
+                        <h3><a class="anthology-title-link" href="/anthologies/{{ anthology['id'] }}">{{ anthology['title'] }}</a></h3>
+                        <div class="anthology-meta">
+                            <span class="anthology-status-badge">{{ anthology['status'] }}</span>
+                            <span>seed: {{ anthology['seed_value'] }}</span>
+                            {% if anthology['stale'] %}
+                            <span>stale</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        class="anthology-delete-btn"
+                        data-anthology-id="{{ anthology['id'] }}"
+                    >
+                        Delete
+                    </button>
+                </div>
+                {% if anthology['result'] and anthology['result']['summary'] %}
+                <p class="anthology-summary">{{ anthology['result']['summary'] }}</p>
+                {% endif %}
+                <div class="anthology-links">
+                    <a href="/anthologies/{{ anthology['id'] }}">Open detail</a>
+                    <a href="/api/anthologies/{{ anthology['id'] }}">API detail</a>
+                    {% if anthology['latest_run'] %}
+                    <span>run {{ anthology['latest_run']['status'] }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+            {% else %}
+            <p class="anthology-empty">No anthologies yet.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        (function () {
+            const form = document.getElementById("anthology-create-form");
+            const statusEl = document.getElementById("anthology-create-status");
+
+            if (form) {
+                form.addEventListener("submit", async function (event) {
+                    event.preventDefault();
+                    const formData = new FormData(form);
+                    const payload = {
+                        seed_type: formData.get("seed_type"),
+                        seed_value: formData.get("seed_value"),
+                        scope: { mode: formData.get("scope_mode") || "all" }
+                    };
+
+                    statusEl.textContent = "Creating...";
+                    try {
+                        const response = await fetch("/api/anthologies", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(payload)
+                        });
+                        const data = await response.json();
+                        if (!response.ok || data.error) {
+                            statusEl.textContent = data.error || "Failed to create anthology";
+                            return;
+                        }
+                        const anthologyId = data.data && data.data.anthology_id;
+                        if (anthologyId) {
+                            window.location.href = "/anthologies/" + anthologyId;
+                            return;
+                        }
+                        window.location.reload();
+                    } catch (error) {
+                        statusEl.textContent = "Failed to create anthology";
+                    }
+                });
+            }
+
+            document.querySelectorAll(".anthology-delete-btn").forEach(function (button) {
+                button.addEventListener("click", async function () {
+                    const anthologyId = button.getAttribute("data-anthology-id");
+                    if (!anthologyId) {
+                        return;
+                    }
+
+                    try {
+                        const response = await fetch("/api/anthologies/" + anthologyId, {
+                            method: "DELETE"
+                        });
+                        const data = await response.json();
+                        if (!response.ok || data.error) {
+                            return;
+                        }
+                        window.location.reload();
+                    } catch (error) {
+                        // Keep the UI unchanged on failure.
+                    }
+                });
+            });
+        })();
+    </script>
+</body>
+
+</html>

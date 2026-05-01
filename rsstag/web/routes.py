@@ -708,6 +708,52 @@ class RSSTagRoutes:
                 "endpoint": "on_chats_context_post",
                 "methods": ["POST"],
             },
+            {"url": "/anthologies", "endpoint": "on_anthologies_get", "methods": ["GET"]},
+            {
+                "url": "/anthologies/<string:anthology_id>",
+                "endpoint": "on_anthologies_detail_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/api/anthologies",
+                "endpoint": "on_anthologies_api_list_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/api/anthologies",
+                "endpoint": "on_anthologies_api_create_post",
+                "methods": ["POST"],
+            },
+            {
+                "url": "/api/anthologies/<string:anthology_id>",
+                "endpoint": "on_anthologies_api_detail_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/api/anthologies/<string:anthology_id>",
+                "endpoint": "on_anthologies_api_delete",
+                "methods": ["DELETE"],
+            },
+            {
+                "url": "/api/anthologies/<string:anthology_id>/run",
+                "endpoint": "on_anthologies_api_run_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/api/anthologies/<string:anthology_id>/retry",
+                "endpoint": "on_anthologies_api_retry_post",
+                "methods": ["POST"],
+            },
+            {
+                "url": "/api/anthologies/<string:anthology_id>/read",
+                "endpoint": "on_anthologies_api_read_post",
+                "methods": ["POST"],
+            },
+            {
+                "url": "/api/anthologies/<string:anthology_id>/export",
+                "endpoint": "on_anthologies_api_export_get",
+                "methods": ["GET"],
+            },
             {"url": "/paths", "endpoint": "on_paths_page_get", "methods": ["GET"]},
             {"url": "/api/paths", "endpoint": "on_paths_list_get", "methods": ["GET"]},
             {"url": "/api/paths", "endpoint": "on_paths_create_post", "methods": ["POST"]},

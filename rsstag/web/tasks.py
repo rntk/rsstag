@@ -21,6 +21,7 @@ from rsstag.tasks import (
     TASK_TAG_CLASSIFICATION,
     TASK_MARK_TELEGRAM,
     TASK_GMAIL_SORT,
+    TASK_ANTHOLOGY,
     TASK_POST_GROUPING_BATCH,
     TASK_TAG_CLASSIFICATION_BATCH,
     TASK_SNIPPET_CLUSTERING,
@@ -53,6 +54,7 @@ def on_tasks_get(app, user: dict, request: Request) -> Response:
         TASK_POST_GROUPING_BATCH: "Group posts (batch)",
         TASK_TAG_CLASSIFICATION_BATCH: "Classify tags (batch)",
         TASK_SNIPPET_CLUSTERING: "Cluster snippets",
+        TASK_ANTHOLOGY: "Generate anthologies",
     }
     available_tasks = {
         task_type: f"{title} ({get_task_scope_hint(task_type)})"

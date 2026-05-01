@@ -114,8 +114,9 @@ class AnthologyToolExecutor:
         for item in self._load_grouping_entries():
             if not terms:
                 score = 1
+                matched_terms: list[str] = []
             else:
-                score = self._score_topic_match(item, terms)
+                score, matched_terms = self._score_topic_match(item, terms)
             if score <= 0:
                 continue
             results.append(
@@ -126,6 +127,7 @@ class AnthologyToolExecutor:
                     "sentence_count": len(item["sentence_indices"]),
                     "preview": item["preview"],
                     "score": score,
+                    "matched_terms": matched_terms,
                 }
             )
         results.sort(key=lambda row: (-int(row["score"]), row["topic_path"]))
@@ -330,14 +332,40 @@ class AnthologyToolExecutor:
     def _tokenize(text: str) -> list[str]:
         return [token for token in re.split(r"[^a-z0-9]+", text.lower()) if token]
 
-    def _score_topic_match(self, item: dict[str, Any], terms: list[str]) -> int:
-        haystacks = [item["topic_path"].lower(), item["preview"].lower()]
+    def _score_topic_match(self, item: dict[str, Any], terms: list[str]) -> tuple[int, list[str]]:
+        topic_tokens = set(self._tokenize(item["topic_path"]))
+        preview_tokens = set(self._tokenize(item["preview"]))
+        seed_tokens = set(self._tokenize(self._seed_tag))
         score = 0
+        matched: list[str] = []
         for term in terms:
-            for haystack in haystacks:
-                if term in haystack:
-                    score += 2 if haystack == haystacks[0] else 1
-                    break
-        if self._seed_tag.lower() in item["topic_path"].lower():
+            if self._token_set_matches(term, topic_tokens):
+                score += 2
+                matched.append(term)
+            elif self._token_set_matches(term, preview_tokens):
+                score += 1
+                matched.append(term)
+        if seed_tokens and all(
+            self._token_set_matches(token, topic_tokens) for token in seed_tokens
+        ):
             score += 1
-        return score
+        return score, matched
+
+    @staticmethod
+    def _token_set_matches(term: str, tokens: set[str]) -> bool:
+        if term in tokens:
+            return True
+        for token in tokens:
+            if AnthologyToolExecutor._tokens_are_inflectional_variants(term, token):
+                return True
+        return False
+
+    @staticmethod
+    def _tokens_are_inflectional_variants(term: str, token: str) -> bool:
+        if term == token:
+            return True
+        shorter, longer = (term, token) if len(term) <= len(token) else (token, term)
+        if len(shorter) < 3 or not longer.startswith(shorter):
+            return False
+        suffix = longer[len(shorter):]
+        return suffix in {"s", "es", "ed", "d", "ing", "er", "ers", "ly"}
