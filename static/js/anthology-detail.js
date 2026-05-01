@@ -159,6 +159,32 @@
       escapeHtml(level + 1) +
       "</span>" +
       "</div>";
+    var leafPostIds = [];
+    var seenPostIds = {};
+    var leafTopic = "";
+    sourceRefs.forEach(function (ref) {
+      if (!ref) {
+        return;
+      }
+      if (ref.post_id && !seenPostIds[ref.post_id]) {
+        seenPostIds[ref.post_id] = true;
+        leafPostIds.push(String(ref.post_id));
+      }
+      if (!leafTopic && ref.topic_path) {
+        leafTopic = String(ref.topic_path);
+      }
+    });
+    if (!leafTopic) {
+      leafTopic = String(node.title || "");
+    }
+    var compareButton =
+      children.length === 0 && leafPostIds.length > 0
+        ? '<button type="button" class="anthology-inline-action anthology-compare-action" data-post-ids="' +
+          escapeHtml(leafPostIds.join("_")) +
+          '" data-topic="' +
+          escapeHtml(leafTopic) +
+          '">Read side-by-side</button>'
+        : "";
     var readAction =
       '<div class="anthology-node-actions">' +
       '<button type="button" class="anthology-inline-action anthology-read-action" data-target-kind="' +
@@ -170,6 +196,7 @@
       '">' +
       (readState.all_read ? "Mark unread" : "Mark read") +
       "</button>" +
+      compareButton +
       "</div>";
     var refsMarkup = sourceRefs.length > 0 ? renderSourceRefs(sourceRefs) : "";
 
@@ -202,7 +229,6 @@
         summaryText +
         meta +
         readAction +
-        refsMarkup +
         '<div class="anthology-tree-children">' +
         children
           .map(function (child) {
@@ -539,10 +565,64 @@
     }, interval);
   }
 
+  function openCompareModal(postIds, topic) {
+    var modal = document.getElementById("anthology-compare-modal");
+    var frame = document.getElementById("anthology-compare-modal-frame");
+    var titleNode = document.getElementById("anthology-compare-modal-title");
+    if (!modal || !frame) {
+      return;
+    }
+    var url = "/post-compare/" + encodeURIComponent(postIds);
+    if (topic) {
+      url += "?topic=" + encodeURIComponent(topic);
+    }
+    frame.src = url;
+    modal.classList.remove("hide");
+    modal.setAttribute("aria-hidden", "false");
+    if (titleNode) {
+      titleNode.textContent = topic ? "Topic: " + topic : "Posts side-by-side";
+    }
+    document.body.classList.add("anthology-compare-modal-open");
+  }
+
+  function closeCompareModal() {
+    var modal = document.getElementById("anthology-compare-modal");
+    var frame = document.getElementById("anthology-compare-modal-frame");
+    if (!modal) {
+      return;
+    }
+    modal.classList.add("hide");
+    modal.setAttribute("aria-hidden", "true");
+    if (frame) {
+      frame.src = "about:blank";
+    }
+    document.body.classList.remove("anthology-compare-modal-open");
+  }
+
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+      closeCompareModal();
+    }
+  });
+
   document.addEventListener("click", function (event) {
     var actionNoteNode = document.getElementById("anthology-action-note");
     var target = event.target;
     if (!(target instanceof HTMLElement)) {
+      return;
+    }
+
+    if (target.id === "anthology-compare-modal-close") {
+      closeCompareModal();
+      return;
+    }
+
+    if (target.classList.contains("anthology-compare-action")) {
+      var postIds = target.dataset.postIds || "";
+      if (!postIds) {
+        return;
+      }
+      openCompareModal(postIds, target.dataset.topic || "");
       return;
     }
 

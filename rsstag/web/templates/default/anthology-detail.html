@@ -83,9 +83,6 @@
                                 {% if read_state.get('all_read') %}Mark unread{% else %}Mark read{% endif %}
                             </button>
                         </div>
-                        {% if source_refs %}
-                        {{ render_source_refs(source_refs) }}
-                        {% endif %}
                         <div class="anthology-tree-children">
                             {% for child in children %}
                             {{ render_tree(child, level + 1) }}
@@ -94,6 +91,9 @@
                     </div>
                 </details>
                 {% else %}
+                {% set leaf_post_ids = source_refs | selectattr('post_id') | map(attribute='post_id') | list %}
+                {% set leaf_topic_paths = source_refs | selectattr('topic_path') | map(attribute='topic_path') | list %}
+                {% set leaf_topic = (leaf_topic_paths | first) if leaf_topic_paths else (node.get('title') or '') %}
                 <div class="anthology-tree-leaf">
                     <div class="anthology-tree-leaf-title">{{ node.get('title') or ('Section ' ~ (level + 1)) }}</div>
                     {% if node.get('summary') %}
@@ -116,6 +116,16 @@
                         >
                             {% if read_state.get('all_read') %}Mark unread{% else %}Mark read{% endif %}
                         </button>
+                        {% if leaf_post_ids %}
+                        <button
+                            type="button"
+                            class="anthology-inline-action anthology-compare-action"
+                            data-post-ids="{{ leaf_post_ids | unique | join('_') }}"
+                            data-topic="{{ leaf_topic }}"
+                        >
+                            Read side-by-side
+                        </button>
+                        {% endif %}
                     </div>
                     {% if source_refs %}
                     {{ render_source_refs(source_refs) }}
@@ -164,13 +174,7 @@
                     <span>seed: <span id="anthology-seed-value">{{ anthology['seed_value'] }}</span></span>
                     <span>type: <span id="anthology-seed-type">{{ anthology['seed_type'] }}</span></span>
                 </div>
-                <p id="anthology-summary" class="anthology-summary">
-                    {% if anthology['result'] and anthology['result'].get('summary') %}
-                    {{ anthology['result'].get('summary') }}
-                    {% else %}
-                    Anthology output is still being prepared.
-                    {% endif %}
-                </p>
+
             </div>
             <div class="anthology-detail-actions">
                 <button
@@ -362,6 +366,14 @@
                 {% endif %}
             </div>
         </section>
+    </div>
+
+    <div id="anthology-compare-modal" class="anthology-compare-modal hide" aria-hidden="true">
+        <div class="anthology-compare-modal-header">
+            <span id="anthology-compare-modal-title" class="anthology-compare-modal-title"></span>
+            <button type="button" id="anthology-compare-modal-close" class="anthology-secondary-button">Close</button>
+        </div>
+        <iframe id="anthology-compare-modal-frame" class="anthology-compare-modal-frame" title="Posts side-by-side"></iframe>
     </div>
 
     <script id="anthology-detail-data" type="application/json">{{ anthology | tojson }}</script>
