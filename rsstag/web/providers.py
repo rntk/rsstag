@@ -12,16 +12,53 @@ from rsstag.providers.x import XProvider
 from rsstag.tasks import TASK_DOWNLOAD
 
 
-def _empty_selection() -> Dict[str, List[str]]:
-    return {"channels": [], "feeds": [], "categories": []}
+_TLG_LOAD_MODES = ("unread", "limit", "unread_or_limit")
 
 
-def _get_selection(request: Request) -> Dict[str, List[str]]:
+def _empty_selection() -> Dict[str, object]:
+    return {
+        "channels": [],
+        "feeds": [],
+        "categories": [],
+        "telegram_load_mode": "unread_or_limit",
+        "telegram_load_limit": 100,
+    }
+
+
+def _parse_tlg_limit(value: str, default: int = 100) -> int:
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return default
+    if n < 1:
+        return default
+    if n > 100000:
+        return 100000
+    return n
+
+
+def _get_selection(request: Request) -> Dict[str, object]:
+    mode = request.form.get("tlg_load_mode", "unread_or_limit")
+    if mode not in _TLG_LOAD_MODES:
+        mode = "unread_or_limit"
+    limit_n = _parse_tlg_limit(request.form.get("tlg_load_limit", ""))
     return {
         "channels": request.form.getlist("channels"),
         "feeds": request.form.getlist("feeds"),
         "categories": request.form.getlist("categories"),
+        "telegram_load_mode": mode,
+        "telegram_load_limit": limit_n,
     }
+
+
+def _telegram_limit_from_selection(selection: Dict[str, object]) -> int:
+    mode = selection.get("telegram_load_mode", "unread_or_limit")
+    n = int(selection.get("telegram_load_limit", 100) or 100)
+    if mode == "unread":
+        return 0
+    if mode == "limit":
+        return n
+    return -n
 
 
 def on_provider_feeds_get_post(
@@ -70,6 +107,10 @@ def on_provider_feeds_get_post(
                         "x_home_enabled": "home" in selection["channels"],
                         "x_selected_feeds": selection["feeds"],
                     },
+                )
+            if provider == data_providers.TELEGRAM:
+                selection["telegram_limit"] = _telegram_limit_from_selection(
+                    selection
                 )
             if not user["in_queue"]:
                 added = app.tasks.add_task(

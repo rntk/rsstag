@@ -44,6 +44,38 @@
             {% else %}
             <p>No channels loaded. Click refresh to load the list.</p>
             {% endif %}
+
+            <h3>How much to load</h3>
+            <ul>
+                <li>
+                    <label>
+                        <input type="radio" name="tlg_load_mode" value="unread"
+                            {% if selected.telegram_load_mode == "unread" %}checked{% endif %} />
+                        All unread posts
+                    </label>
+                </li>
+                <li>
+                    <label>
+                        <input type="radio" name="tlg_load_mode" value="limit"
+                            {% if selected.telegram_load_mode == "limit" %}checked{% endif %} />
+                        Last N posts (regardless of read state)
+                    </label>
+                </li>
+                <li>
+                    <label>
+                        <input type="radio" name="tlg_load_mode" value="unread_or_limit"
+                            {% if selected.telegram_load_mode not in ("unread", "limit") %}checked{% endif %} />
+                        Unread, but no more than N
+                    </label>
+                </li>
+                <li>
+                    <label>
+                        N =
+                        <input type="number" name="tlg_load_limit" min="1" max="10000"
+                            value="{{ selected.telegram_load_limit or 100 }}" />
+                    </label>
+                </li>
+            </ul>
             {% endif %}
 
             {% if provider == "bazqux" %}

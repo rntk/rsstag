@@ -463,12 +463,16 @@ class TelegramProvider:
         self, user: dict, selection: Optional[dict] = None
     ) -> Tuple[List, List]:
         provider = user["provider"]
-        all_channels = user["telegram_channel"].lower() == "all"
+        telegram_channel = (user.get("telegram_channel") or "").strip()
+        all_channels = telegram_channel.lower() == "all"
         selected_channels = []
         if selection:
             selected_channels = [
                 channel_id for channel_id in selection.get("channels", []) if channel_id
             ]
+        if selected_channels:
+            # User explicitly picked channels — don't apply the bulk-mode is_channel filter.
+            all_channels = False
         self._tlg: Telegram = Telegram(
             app_id=self._config[provider]["app_id"],
             app_hash=self._config[provider]["app_hash"],
@@ -530,6 +534,14 @@ class TelegramProvider:
             tasks_q = Queue()
             results_q = Queue()
             max_limit = user["settings"]["telegram_limit"]
+            if selection and "telegram_limit" in selection:
+                try:
+                    max_limit = int(selection["telegram_limit"])
+                except (TypeError, ValueError):
+                    logging.warning(
+                        "Invalid selection.telegram_limit: %s",
+                        selection.get("telegram_limit"),
+                    )
             feeds = {}
             routes = RSSTagRoutes(self._config["settings"]["host_name"])
             for channel in channels:
