@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   mongodb:
     image: mongo:8
@@ -14,7 +12,7 @@ services:
       - ./mongo-data:/for_dumps
       - ./mongo-init:/docker-entrypoint-initdb.d
 
-  rsstag:
+  web:
     depends_on:
       - mongodb
       - otel-collector
@@ -24,9 +22,32 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    command: python3 web.py
     ports:
       - "8885:8885"
     environment:
+      - DB_HOST=mongodb
+      - DB_PORT=27017
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+    restart: always
+    volumes:
+      - ./rsscloud.conf:/rsstag/rsscloud.conf
+      - ./input_files:/input_files
+
+  worker:
+    depends_on:
+      - mongodb
+      - otel-collector
+    links:
+      - mongodb
+      - otel-collector
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python3 worker.py
+    environment:
+      - DB_HOST=mongodb
+      - DB_PORT=27017
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
     restart: always
     volumes:

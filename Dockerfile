@@ -16,7 +16,7 @@ COPY static/css/ ./static/css/
 RUN cd static/js && npm run build
 
 # Stage 2: Final application image
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
 # Install system dependencies (including git for git+ requirements and python3-pip)
