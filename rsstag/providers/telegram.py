@@ -275,9 +275,11 @@ class TelegramProvider:
                 if limit <= 0:
                     has_posts = False
                     continue
+                # TDLib getChatHistory limit must be 1..100; batch larger requests.
+                batch_limit = min(limit, 100)
                 posts_req = self.__requests_repeater(
                     get_chat_history(
-                        channel["id"], limit=limit, from_message_id=from_id
+                        channel["id"], limit=batch_limit, from_message_id=from_id
                     )
                 )
                 posts_data = posts_req.update
@@ -368,6 +370,9 @@ class TelegramProvider:
                 # example: {'@type': 'error', 'code': 429, 'message': 'Too Many Requests: retry after 77616', '@extra': {'req_id': '1643864060.31774_9523'}, '@client_id': 1}
                 if "code" in r.error:
                     code = r.error["code"]
+                    if code == 404:
+                        # Terminal: e.g. loadChats returns 404 when fully loaded.
+                        return r
                     if code == 429 or code == 420:
                         wait_time = randint(7, 20)
                         if "message" in r.error:
