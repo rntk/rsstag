@@ -19,4 +19,11 @@ bundle.js.LICENSE.txt
 .vscode
 static/css/style.css
 
+# Backend quality artifacts
+htmlcov/
+coverage.xml
+.coverage
+.mutmut-cache
+.mutmut-status
+
 

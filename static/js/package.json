@@ -25,7 +25,9 @@
     "sass": "^1.82.0",
     "webpack": "^5.97.1",
     "webpack-cli": "^5.1.4",
-    "webpack-dev-server": "^5.2.0"
+    "webpack-dev-server": "^5.2.0",
+    "c8": "^10.0.0",
+    "@stryker-mutator/core": "^8.7.0"
   },
   "scripts": {
     "build": "NODE_ENV=production webpack --config webpack.config.cjs --mode production",
@@ -40,7 +42,8 @@
     "format:check": "prettier --check \"{apps,components,storages,libs}/**/*.{js,jsx}\" \"*.{js,json,md,cjs}\" \"test/**/*.js\" \"../css/style.scss\"",
     "test": "node --loader ./test/es-module-loader.mjs --test test/**/*.test.js",
     "test:watch": "node --loader ./test/es-module-loader.mjs --test --watch test/**/*.test.js",
-    "check": "npm run lint && npm run format:check && npm run build:dev && npm run test"
+    "check": "npm run lint && npm run format:check && npm run build:dev && npm run test",
+    "quality": "./frontend-quality.sh"
   },
   "keywords": [
     "rss"

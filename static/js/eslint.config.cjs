@@ -97,7 +97,7 @@ module.exports = [
     },
   },
   {
-    files: ['topics-list.js'],
+    files: ['topics-list.js', 'topics-hierarchy.js'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
