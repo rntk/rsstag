@@ -94,7 +94,14 @@ function buildNode(node, rootName, depth) {
 
     const label = document.createElement('span');
     label.className = 'th-leaf__label';
-    label.textContent = node.name;
+    if (node._url) {
+      const link = document.createElement('a');
+      link.href = node._url;
+      link.textContent = node.name;
+      label.appendChild(link);
+    } else {
+      label.textContent = node.name;
+    }
     leaf.appendChild(label);
 
     if (count > 0) {
@@ -127,7 +134,14 @@ function buildNode(node, rootName, depth) {
 
   const labelText = document.createElement('span');
   labelText.className = 'th-node__label-text';
-  labelText.textContent = node.name;
+  if (node._url) {
+    const link = document.createElement('a');
+    link.href = node._url;
+    link.textContent = node.name;
+    labelText.appendChild(link);
+  } else {
+    labelText.textContent = node.name;
+  }
   labelSticky.appendChild(labelText);
 
   const labelCount = document.createElement('span');

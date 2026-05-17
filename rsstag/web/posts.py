@@ -2618,6 +2618,78 @@ def on_post_grouped_snippets_get(
     )
 
 
+def _highlight_words_in_html(html_text: str, word_re: re.Pattern) -> str:
+    """Wrap matched words in <mark> only inside text nodes, not inside HTML tags."""
+    parts = re.split(r"(<[^>]+>)", html_text)
+    result: list[str] = []
+    for part in parts:
+        if part.startswith("<"):
+            result.append(part)
+        else:
+            result.append(word_re.sub(r"<mark>\1</mark>", part))
+    return "".join(result)
+
+
+def on_tag_grouped_snippets_get(
+    app: "RSSTagApplication", user: dict, request: Request, tag: str
+) -> Response:
+    """Grouped snippets page filtered by tag and optional topic hierarchy — no post IDs in URL."""
+    tag_data: Optional[dict] = app.tags.get_by_tag(user["sid"], tag)
+    words: list[str] = tag_data.get("words", [tag]) if tag_data else [tag]
+    word_re = re.compile(
+        r"\b(" + "|".join(re.escape(w) for w in words) + r")\b", re.IGNORECASE
+    )
+
+    only_unread: Optional[bool] = user["settings"].get("only_unread") or None
+    cursor = app.posts.get_by_tags(
+        user["sid"],
+        [tag],
+        only_unread=only_unread,
+        projection={"pid": True},
+    )
+    post_ids: list[str] = [str(post["pid"]) for post in cursor if post.get("pid")]
+    if not post_ids:
+        return app.on_error(user, request, NotFound())
+
+    topic_filter: Optional[dict[str, Any]] = _parse_topic_filter_from_request(request)
+    context_tags = _get_context_tags(user)
+    normalized_context_tags = _normalize_context_tags(context_tags)
+    all_posts, _ = _load_posts_for_snippets(app, user, post_ids)
+
+    topics_data = _collect_topic_snippets(
+        app, user, post_ids, all_posts, topic_filter, normalized_context_tags
+    )
+
+    filtered_topics: dict[str, Any] = {}
+    for topic_name, topic_info in topics_data.items():
+        matching = []
+        for s in topic_info["snippets"]:
+            if only_unread and s.get("read", False):
+                continue
+            if not word_re.search(s.get("text", "")):
+                continue
+            highlighted = {**s, "html": _highlight_words_in_html(s.get("html", ""), word_re)}
+            matching.append(highlighted)
+        if matching:
+            filtered_topics[topic_name] = {**topic_info, "snippets": matching}
+
+    sorted_topics = sorted(filtered_topics.items(), key=lambda x: x[0])
+
+    page = app.template_env.get_template("tag-grouped-snippets.html")
+    return Response(
+        page.render(
+            topics=sorted_topics,
+            tag=tag,
+            current_topic=_topic_filter_exact_topic(topic_filter),
+            current_topic_label=_topic_filter_label(topic_filter),
+            current_topic_query=_topic_filter_query_string(topic_filter),
+            user_settings=user["settings"],
+            provider=user["provider"],
+        ),
+        mimetype="text/html",
+    )
+
+
 def on_topic_snippets_api_get(
     app: "RSSTagApplication", user: dict, request: Request, pids: str
 ) -> Response:

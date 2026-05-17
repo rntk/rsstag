@@ -653,6 +653,11 @@ class RSSTagApplication(object):
     ) -> Response:
         return posts_handlers.on_post_grouped_snippets_get(self, user, request, pids)
 
+    def on_tag_grouped_snippets_get(
+        self, user: dict, request: Request, tag: str
+    ) -> Response:
+        return posts_handlers.on_tag_grouped_snippets_get(self, user, request, tag)
+
     def on_topic_snippets_api_get(
         self, user: dict, request: Request, pids: str
     ) -> Response:

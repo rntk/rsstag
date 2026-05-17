@@ -787,6 +787,11 @@ class RSSTagRoutes:
                 "endpoint": "on_path_sentences_get",
                 "methods": ["GET"],
             },
+            {
+                "url": "/tag-grouped-snippets/<string:tag>",
+                "endpoint": "on_tag_grouped_snippets_get",
+                "methods": ["GET"],
+            },
         ]
 
         decorated_routes = (

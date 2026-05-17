@@ -59,6 +59,52 @@ import GlobalChatPanel from '../components/global-chat.js';
 import ClustersTopics from '../components/ClustersTopics.js';
 import { initTopicsPage } from '../topics-list.js';
 import TopicsMindmap from '../components/topics-mindmap.js';
+import { renderTopicsHierarchy } from '../topics-hierarchy.js';
+
+function buildGroupedTopicsHierarchy(flatTopics, tagName) {
+  const root = { name: 'root', children: [] };
+  flatTopics.forEach((topic) => {
+    const parts = (topic.tag || '').split('>').map((p) => p.trim()).filter(Boolean);
+    if (!parts.length) return;
+    let children = root.children;
+    let pathSoFar = '';
+    parts.forEach((part, i) => {
+      pathSoFar = pathSoFar ? `${pathSoFar} > ${part}` : part;
+      const isLast = i === parts.length - 1;
+      let node = children.find((n) => n.name === part);
+      if (!node) {
+        node = { name: part, value: 0, _topicPath: pathSoFar, _url: null, children: [] };
+        children.push(node);
+      }
+      if (isLast) {
+        node.value = topic.count || 0;
+        node._url = topic.url || null;
+      }
+      children = node.children;
+    });
+  });
+
+  function sumCounts(node) {
+    if (!node.children.length) return node.value;
+    const childSum = node.children.reduce((acc, child) => acc + sumCounts(child), 0);
+    if (node.value === 0) node.value = childSum;
+    return node.value;
+  }
+  root.children.forEach(sumCounts);
+
+  if (tagName) {
+    function buildParentUrls(node) {
+      node.children.forEach(buildParentUrls);
+      if (!node._url) {
+        const topicParam = encodeURIComponent(node._topicPath || node.name);
+        node._url = `/tag-grouped-snippets/${encodeURIComponent(tagName)}?topic=${topicParam}`;
+      }
+    }
+    root.children.forEach(buildParentUrls);
+  }
+
+  return root;
+}
 
 function handleTextSelection() {
   const menu = document.createElement('div');
@@ -738,8 +784,18 @@ function tagWithContextInfoPage(tag) {
     tag_grouped_topics_evsys,
     '/tag-grouped-topics'
   );
-  renderToRoot('tag_grouped_topics', <TagsList ES={tag_grouped_topics_evsys} />);
   renderToRoot('load_grouped_topics', <TagButton ES={tag_grouped_topics_evsys} title="grouped topics" tag={tag} />);
+  tag_grouped_topics_evsys.bind(tag_grouped_topics_evsys.TAGS_UPDATED, (state) => {
+    const container = document.getElementById('tag_grouped_topics');
+    if (!container) return;
+    const flatTopics = state.tags ? Array.from(state.tags.values()) : [];
+    if (!flatTopics.length) {
+      container.innerHTML = '';
+      return;
+    }
+    const hierarchyData = buildGroupedTopicsHierarchy(flatTopics, tag.tag);
+    renderTopicsHierarchy(container, hierarchyData);
+  });
   tag_grouped_topics_storage.start();
 
   const tag_llm_topics_evsys = new EventsSystem();

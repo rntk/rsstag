@@ -6,7 +6,7 @@ import math
 import html
 import logging
 from collections import Counter, defaultdict
-from urllib.parse import unquote_plus, quote
+from urllib.parse import unquote_plus, quote, quote_plus
 from typing import Optional, Any, Dict, Set
 
 from typing import TYPE_CHECKING
@@ -1012,6 +1012,8 @@ def on_tag_grouped_topics_get(
                     text = content_plain[s_start:s_end]
             num = sentence["number"]
             sentence_lengths[num] = len(text) if text else 0
+            if only_unread and sentence.get("read", False):
+                continue
             if text and word_re.search(text):
                 matching_indices.add(num)
 
@@ -1026,14 +1028,15 @@ def on_tag_grouped_topics_get(
 
     all_topics = []
     for topic, count in topic_counts.items():
-        pids_str = "_".join(str(pid) for pid in sorted(topic_pids[topic]))
+        base_url = app.routes.get_url_by_endpoint(
+            endpoint="on_tag_grouped_snippets_get",
+            params={"tag": tag},
+        )
+        topic_url = f"{base_url}?topic={quote_plus(topic)}"
         all_topics.append(
             {
                 "tag": topic,
-                "url": app.routes.get_url_by_endpoint(
-                    endpoint="on_post_grouped_snippets_get",
-                    params={"pids": pids_str, "topic": topic},
-                ),
+                "url": topic_url,
                 "count": count,
                 "total_length": topic_lengths[topic],
                 "post_ids": sorted(str(pid) for pid in topic_pids[topic]),
