@@ -27,7 +27,7 @@
     "webpack-cli": "^5.1.4",
     "webpack-dev-server": "^5.2.0",
     "c8": "^10.0.0",
-    "@stryker-mutator/core": "^8.7.0"
+    "@stryker-mutator/core": "^9.6.1"
   },
   "scripts": {
     "build": "NODE_ENV=production webpack --config webpack.config.cjs --mode production",
