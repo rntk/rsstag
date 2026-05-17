@@ -55,10 +55,14 @@ class TestExternalWorkerTokenAPI(unittest.TestCase):
         mock_session: MagicMock = MagicMock()
         mock_session.post.side_effect = requests.ConnectionError("offline")
 
-        with patch("rsstag.workers.external_worker.requests.Session", return_value=mock_session):
+        with patch("rsstag.workers.external_worker.requests.Session", return_value=mock_session), \
+             patch("rsstag.workers.external_worker.LOGGER.warning") as mock_log:
             api = ExternalWorkerTokenAPI("http://worker.test", "secret", 5.0)
+            task = api.claim_task()
 
-        self.assertIsNone(api.claim_task())
+        self.assertIsNone(task)
+        mock_log.assert_called_once()
+        self.assertIn("Claim request error", str(mock_log.call_args))
 
     def test_submit_result_posts_success_payload(self) -> None:
         mock_session: MagicMock = MagicMock()

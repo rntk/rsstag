@@ -61,6 +61,7 @@ run_coverage() {
         --include='components/**/*.js' \
         --include='storages/**/*.js' \
         --include='libs/**/*.js' \
+        --include='topics-hierarchy.js' \
         --exclude='test/**' \
         --exclude='**/*.test.js' \
         --exclude='node_modules/**' \
@@ -74,7 +75,7 @@ run_coverage() {
         --reporter=html \
         --report-dir="$COVERAGE_DIR" \
         --temp-dir=./.c8-temp \
-        node --loader ./test/es-module-loader.mjs --test test/**/*.test.js
+        node --loader ./test/es-module-loader.mjs --test test/*.test.js
     local exit_code=$?
     set -e
 

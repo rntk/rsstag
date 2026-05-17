@@ -12,6 +12,7 @@ const config = {
   mutate: [
     'libs/event_system.js',
     'libs/chart-utils.js',
+    'libs/stopwords.js',
     'storages/progressbar-storage.js',
     'storages/tag-contexts-classification-storage.js',
     'storages/topics-texts-storage.js',

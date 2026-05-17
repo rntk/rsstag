@@ -2,7 +2,10 @@ import json
 import socket
 import unittest
 
-from rsstag.anthology_agent import AnthologyAgent
+try:
+    from rsstag.anthology_agent import AnthologyAgent
+except ImportError:
+    AnthologyAgent = None  # type: ignore[misc,assignment]
 from rsstag.anthologies import RssTagAnthologies, RssTagAnthologyRuns
 from rsstag.llm.anthology_tools import AnthologyToolExecutor
 from rsstag.llm.base import LLMResponse, ToolCall

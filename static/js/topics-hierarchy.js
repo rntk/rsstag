@@ -190,4 +190,5 @@ export function renderTopicsHierarchy(container, data) {
   container.appendChild(root);
 }
 
+export { hashString, hierarchyHighlightColor, hierarchyAccentColor, countRenderedRows };
 export default renderTopicsHierarchy;
