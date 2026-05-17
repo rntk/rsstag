@@ -16,7 +16,7 @@ import re
 
 from rsstag.tasks import POST_NOT_IN_PROCESSING
 from rsstag.web.routes import RSSTagRoutes
-from rsstag.users import TelegramAuthData
+from rsstag.users import TelegramAuthData, request_telegram_password
 from rsstag.feeds import RssTagFeeds
 from rsstag.posts import RssTagPosts
 from rsstag.providers.providers import TELEGRAM

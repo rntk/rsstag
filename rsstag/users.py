@@ -3,14 +3,53 @@ import logging
 import time
 from datetime import datetime, timezone
 from random import randint
-from typing import Optional
+from typing import Optional, Dict
 from hashlib import sha256
+from threading import Lock
 from pymongo import MongoClient
 
 from rsstag.providers.providers import TELEGRAM, TEXT_FILE, GMAIL, X
 
 TELEGRAM_CODE_FIELD = "telegram_code"
 TELEGRAM_PASSWORD_FIELD = "telegram_password"
+
+# In-memory storage for transient Telegram 2FA passwords.
+# Keyed by user sid; cleared immediately after TDLib consumes the password.
+_tg_password_store: Dict[str, str] = {}
+_tg_password_lock = Lock()
+
+# In-memory flag: signals that the frontend should prompt the user for a password.
+# Set when TDLib enters authorizationStateWaitPassword; cleared when password is consumed.
+_tg_password_prompt: Dict[str, bool] = {}
+_tg_prompt_lock = Lock()
+
+
+def set_telegram_password(sid: str, password: str) -> None:
+    with _tg_password_lock:
+        _tg_password_store[sid] = password
+    with _tg_prompt_lock:
+        _tg_password_prompt.pop(sid, None)
+
+
+def get_and_clear_telegram_password(sid: str) -> str:
+    with _tg_password_lock:
+        return _tg_password_store.pop(sid, "")
+
+
+def request_telegram_password(sid: str) -> None:
+    """Signal the frontend that TDLib is waiting for a 2FA password."""
+    with _tg_prompt_lock:
+        _tg_password_prompt[sid] = True
+
+
+def check_telegram_password_prompt(sid: str) -> bool:
+    with _tg_prompt_lock:
+        return _tg_password_prompt.get(sid, False)
+
+
+def clear_telegram_password_prompt(sid: str) -> None:
+    with _tg_prompt_lock:
+        _tg_password_prompt.pop(sid, None)
 
 
 class RssTagUsers:
@@ -242,26 +281,14 @@ class TelegramAuthData:
         return ""
 
     def get_password(self, phone: str) -> str:
-        users_h = RssTagUsers(self._db)
-        user = users_h.get_by_sid(self._sid)
-        field_name = TELEGRAM_PASSWORD_FIELD
-        if not user:
-            raise Exception("User not found: " + self._sid)
-        users_h.update_by_sid(self._sid, {field_name: ""})
+        # Signal the frontend that TDLib is waiting for a 2FA password.
+        request_telegram_password(self._sid)
+        # Password is stored transiently in memory, not persisted to the database.
+        # If not available yet, poll until the web UI sets it.
         while True:
-            user = users_h.get_by_sid(self._sid)
-            if not user:
-                raise Exception("User not found: " + self._sid)
-            if field_name not in user:
-                raise Exception(
-                    "User field not '{}' found not found: {}".format(
-                        field_name, self._sid
-                    )
-                )
-            if user[field_name] == "":
-                time.sleep(2)
-                continue
-
-            return user[field_name]
+            pwd = get_and_clear_telegram_password(self._sid)
+            if pwd:
+                return pwd
+            time.sleep(2)
 
         return ""

@@ -20,7 +20,7 @@ from rsstag.providers.bazqux import BazquxProvider
 from rsstag.providers.providers import BAZQUX, TEXT_FILE, TELEGRAM, GMAIL, X
 from rsstag.providers.x import XProvider
 from rsstag.tasks import TASK_ALL, TASK_DOWNLOAD
-from rsstag.users import TELEGRAM_CODE_FIELD, TELEGRAM_PASSWORD_FIELD
+from rsstag.users import TELEGRAM_CODE_FIELD, TELEGRAM_PASSWORD_FIELD, set_telegram_password, check_telegram_password_prompt
 
 from werkzeug.wrappers import Request, Response
 from werkzeug.utils import redirect
@@ -577,9 +577,7 @@ def on_status_get(app: "RSSTagApplication", user: Optional[dict]) -> Response:
             if TELEGRAM in user.get("providers", {}):
                 if (TELEGRAM_CODE_FIELD in user) and (user[TELEGRAM_CODE_FIELD] == ""):
                     result["data"][TELEGRAM_CODE_FIELD] = True
-                if (TELEGRAM_PASSWORD_FIELD in user) and (
-                    user[TELEGRAM_PASSWORD_FIELD] == ""
-                ):
+                if check_telegram_password_prompt(user["sid"]):
                     result["data"][TELEGRAM_PASSWORD_FIELD] = True
     else:
         result = {
@@ -667,9 +665,12 @@ def on_telegram_auth_post(
         if TELEGRAM_CODE_FIELD in tlg_data and tlg_data[TELEGRAM_CODE_FIELD]:
             set_data[TELEGRAM_CODE_FIELD] = tlg_data[TELEGRAM_CODE_FIELD]
         if TELEGRAM_PASSWORD_FIELD in tlg_data and tlg_data[TELEGRAM_PASSWORD_FIELD]:
-            set_data[TELEGRAM_PASSWORD_FIELD] = tlg_data[TELEGRAM_PASSWORD_FIELD]
+            # Store password in memory only — it will be consumed by TDLib login and cleared.
+            set_telegram_password(user["sid"], tlg_data[TELEGRAM_PASSWORD_FIELD])
         if set_data:
-            app.users.update_by_sid(user["sid"], set_data)
+            # Only persist the code field; password is transient in memory.
+            if TELEGRAM_CODE_FIELD in set_data:
+                app.users.update_by_sid(user["sid"], {TELEGRAM_CODE_FIELD: set_data[TELEGRAM_CODE_FIELD]})
             result = {"data": "ok"}
             code = 200
 
@@ -819,7 +820,7 @@ def on_provider_detail_post(
                 set_active=True,
             )
             app.users.update_by_sid(
-                user["sid"], {TELEGRAM_CODE_FIELD: "", TELEGRAM_PASSWORD_FIELD: ""}
+                user["sid"], {TELEGRAM_CODE_FIELD: ""}
             )
     elif provider == TEXT_FILE:
         if not login or not password:
