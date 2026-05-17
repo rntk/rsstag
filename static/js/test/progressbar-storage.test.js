@@ -57,3 +57,70 @@ test('endTask() with no active tasks is handled as edge failure path', () => {
   assert.deepEqual(storage.getState(), { tasks: [], progress: 100 });
   assert.equal(es.calls.at(-1).event, es.CHANGE_PROGRESSBAR);
 });
+
+test('startTask pushes task to the tasks array', (t) => {
+  const es = createProgressEventSystem();
+  const storage = new ProgressBarStorage(es);
+  const originalRandInt = rsstag_utils.randInt;
+  rsstag_utils.randInt = () => 50;
+  t.after(() => {
+    rsstag_utils.randInt = originalRandInt;
+  });
+
+  storage.startTask('render');
+
+  const state = storage.getState();
+  assert.deepEqual(state.tasks, ['render']);
+  assert.equal(state.progress, 50);
+});
+
+test('startTask on second task does not change progress', (t) => {
+  const es = createProgressEventSystem();
+  const storage = new ProgressBarStorage(es);
+  const originalRandInt = rsstag_utils.randInt;
+  rsstag_utils.randInt = () => 50;
+  t.after(() => {
+    rsstag_utils.randInt = originalRandInt;
+  });
+
+  storage.startTask('first');
+  storage.startTask('second');
+
+  const state = storage.getState();
+  assert.deepEqual(state.tasks, ['first', 'second']);
+  assert.equal(state.progress, 50);
+});
+
+test('hideProgressBar resets progress to 0', () => {
+  const es = createProgressEventSystem();
+  const storage = new ProgressBarStorage(es);
+
+  storage.setState({ tasks: [], progress: 100 });
+  storage.hideProgressBar();
+
+  const state = storage.getState();
+  assert.equal(state.progress, 0);
+  assert.deepEqual(state.tasks, []);
+});
+
+test('startTask endTask hideProgressBar full lifecycle', (t) => {
+  const es = createProgressEventSystem();
+  const storage = new ProgressBarStorage(es);
+  const originalRandInt = rsstag_utils.randInt;
+  rsstag_utils.randInt = () => 42;
+  t.after(() => {
+    rsstag_utils.randInt = originalRandInt;
+  });
+
+  // Start: progress goes to randInt value
+  storage.startTask('ajax');
+  assert.equal(storage.getState().progress, 42);
+
+  // End: progress goes to 100
+  storage.endTask();
+  assert.equal(storage.getState().progress, 100);
+
+  // Hide: progress resets to 0
+  storage.hideProgressBar();
+  assert.equal(storage.getState().progress, 0);
+});

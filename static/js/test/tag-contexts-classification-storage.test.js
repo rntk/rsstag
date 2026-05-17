@@ -114,3 +114,29 @@ test('fetchContexts with empty/falsy tag is a no-op', () => {
   assert.equal(storage.getState().tags.size, 0);
   assert.equal(es.calls.length, 0);
 });
+
+test('fetchContexts error response does not update state', async (t) => {
+  const es = createTagContextsEventSystem();
+  const storage = new TagContextsClassificationStorage(es);
+  const originalFetchJSON = rsstag_utils.fetchJSON;
+  const originalError = console.error;
+  console.error = () => {};
+
+  rsstag_utils.fetchJSON = async () => null;
+  t.after(() => {
+    rsstag_utils.fetchJSON = originalFetchJSON;
+    console.error = originalError;
+  });
+
+  storage.fetchContexts('tag');
+  await flushPromises();
+
+  assert.equal(storage.getState().tags.size, 0);
+});
+
+test('constructor sets correct URL for get_contexts', () => {
+  const es = createTagContextsEventSystem();
+  const storage = new TagContextsClassificationStorage(es);
+
+  assert.equal(storage.urls.get_contexts, '/tag-contexts-classification');
+});

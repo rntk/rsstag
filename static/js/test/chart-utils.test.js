@@ -145,3 +145,64 @@ test('estimateCharacterCounts handles zero sentence counts', () => {
 
   assert.equal(result[0].A, 0);
 });
+
+test('smoothBins with all zeros produces all zeros', () => {
+  const topics = [{ name: 'A' }];
+  const bins = [
+    { x: 0, A: 0 },
+    { x: 1, A: 0 },
+    { x: 2, A: 0 },
+  ];
+
+  const smoothed = smoothBins(bins, topics);
+
+  assert.equal(smoothed[0].A, 0);
+  assert.equal(smoothed[1].A, 0);
+  assert.equal(smoothed[2].A, 0);
+});
+
+test('smoothBins handles single bin', () => {
+  const topics = [{ name: 'A' }];
+  const bins = [{ x: 0, A: 10 }];
+
+  const smoothed = smoothBins(bins, topics);
+
+  assert.equal(smoothed[0].A, 10);
+});
+
+test('smoothBins uses current value as prev/next for single non-zero bin at edge', () => {
+  const topics = [{ name: 'A' }];
+  const bins = [
+    { x: 0, A: 10 },
+    { x: 1, A: 0 },
+  ];
+
+  const smoothed = smoothBins(bins, topics);
+
+  // Bin 1: prev=10, next=0 -> max(10,0)*0.1 = 1
+  assert.equal(smoothed[1].A, 1);
+});
+
+test('smoothBins non-zero at end uses current value as next', () => {
+  const topics = [{ name: 'A' }];
+  const bins = [
+    { x: 0, A: 0 },
+    { x: 1, A: 10 },
+  ];
+
+  const smoothed = smoothBins(bins, topics);
+
+  // Bin 0: prev=0, next=10 -> max(0,10)*0.1 = 1
+  assert.equal(smoothed[0].A, 1);
+});
+
+test('estimateCharacterCounts with empty bins returns empty array', () => {
+  const result = estimateCharacterCounts([], []);
+  assert.deepEqual(result, []);
+});
+
+test('estimateCharacterCounts with empty topics preserves bin structure', () => {
+  const bins = [{ x: 0, A: 5 }];
+  const result = estimateCharacterCounts(bins, []);
+  assert.deepEqual(result, [{ x: 0, A: 5 }]);
+});
