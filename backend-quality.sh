@@ -94,7 +94,6 @@ ok "Dependencies ready"
 # ── Pre-flight checks ──────────────────────────────────────────────────────────
 
 preflight_check() {
-    local ok=true
     info "Running pre-flight checks…"
 
     # Check MongoDB is reachable
@@ -129,10 +128,6 @@ c.disconnect()
         return 1
     fi
     ok "Found ${test_count} test files in ${TEST_DIR}/"
-
-    if $ok; then
-        return 0
-    fi
 }
 
 if $RUN_COVERAGE || $RUN_MUTATION; then
@@ -179,16 +174,11 @@ run_coverage() {
     # Erase any stale coverage data
     coverage erase
 
-    # Run tests under coverage.
-    # The project uses unittest discover; we also add branch tracking.
+    # Run tests under coverage with branch tracking.
     PYTHONPATH=. coverage run \
         --branch \
         --source="${MUTATION_BASE_DIR}" \
-        --parallel-mode \
-        -m unittest discover -s "${TEST_DIR}" -v
-
-    # Combine parallel data (if any)
-    coverage combine 2>/dev/null || true
+        -m unittest discover -s "${TEST_DIR}" --top-level-dir . -v
 
     # Produce an HTML report for human inspection
     coverage html -d htmlcov --show-contexts --title "rsstag coverage"
@@ -198,32 +188,38 @@ run_coverage() {
     report=$(coverage report --show-missing --fail-under=0)
     echo "$report"
 
-    # Parse line and branch coverage percentages from the TOTAL line
-    # coverage report TOTAL line looks like:
-    #   TOTAL   1234   567    89    12    54%   43%
-    #   (files  lines  missing  branches  partial  line%  branch%)
-    # Without --branch:  TOTAL   1234   567    54%
+    # Parse line and branch coverage from the JSON report.
+    # coverage report's text TOTAL line only ever has one % (the combined Cover
+    # figure), so we must use `coverage json` to get separate line/branch counts.
     local line_pct branch_pct
-    local total_line
-    total_line=$(echo "$report" | grep '^TOTAL' || echo "")
+    local json_report
+    json_report=$(coverage json -o /dev/stdout -q 2>/dev/null)
 
-    if [[ -z "$total_line" ]]; then
-        fail "Could not parse coverage report TOTAL line"
+    if [[ -z "$json_report" ]]; then
+        fail "Could not generate coverage JSON report"
         return 1
     fi
 
-    # Count how many percentage values appear — 1 means no branch coverage
-    local pct_values
-    pct_values=$(echo "$total_line" | grep -oP '\d+%')
-    local pct_count
-    pct_count=$(echo "$pct_values" | grep -c '' || true)
+    line_pct=$(echo "$json_report" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+print(int(d['totals']['percent_covered']))
+" 2>/dev/null || echo "")
 
-    line_pct=$(echo "$pct_values" | head -1 | tr -d '%')
+    branch_pct=$(echo "$json_report" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+t = d['totals']
+nb = t.get('num_branches', 0)
+cb = t.get('covered_branches', 0)
+print(int(cb * 100 / nb) if nb else 'N/A')
+" 2>/dev/null || echo "N/A")
 
-    if [[ "$pct_count" -ge 2 ]]; then
-        branch_pct=$(echo "$pct_values" | tail -1 | tr -d '%')
-    else
-        branch_pct="N/A"
+    if [[ -z "$line_pct" ]]; then
+        fail "Could not parse line coverage from JSON report"
+        return 1
+    fi
+    if [[ "$branch_pct" == "N/A" ]]; then
         warn "No branch coverage data — skipping branch check"
     fi
 
@@ -288,47 +284,49 @@ run_mutation() {
     # Run mutation testing.
     # mutmut run mutates code and checks if tests catch the mutations.
     # Surviving mutants indicate gaps in test coverage.
+    # Capture output so we can parse the summary line from the run's progress output.
     local mutmut_exit=0
-    $mutmut run --timeout "$MUTATION_TIMEOUT" 2>&1 || mutmut_exit=$?
+    local run_output
+    run_output=$($mutmut run --timeout "$MUTATION_TIMEOUT" 2>&1) || mutmut_exit=$?
+    echo "$run_output"
     # mutmut exits 2 when mutants survive (expected), other non-zero may be real errors
     if [[ $mutmut_exit -ne 0 && $mutmut_exit -ne 2 ]]; then
         fail "mutmut run failed with exit code $mutmut_exit"
         return 1
     fi
 
-    # Show results
+    # Fetch the full per-mutant listing for counting and display.
+    # --all shows every mutant (killed + survived + timeout + suspicious).
+    local results_text
+    results_text=$($mutmut results --all 2>&1 || true)
+
     echo ""
     info "Mutation testing results:"
-    $mutmut results 2>&1 || true
+    echo "$results_text"
     echo ""
 
-    # Parse result counts from mutmut results output
-    # mutmut results shows per-file mutant status, e.g.:
-    #   rsstag/foo.py:1: survived
-    # Summary line at end:
-    #   42 total, 30 killed, 10 survived, 1 timeout, 1 suspicious
+    # Parse counts. mutmut run emits a summary like:
+    #   🎉 30 killed, 10 survived, 1 timeout, 1 suspicious out of 42 total
+    # Try that first; fall back to counting per-mutant lines from `mutmut results --all`.
     local total=0 killed=0 survived=0 timeout_count=0 suspicious=0
-    local results_text
-    results_text=$($mutmut results --all true 2>&1 || true)
 
-    # Try to parse the summary line (e.g. "42 total, 30 killed, 10 survived, 1 timeout, 1 suspicious")
-    if echo "$results_text" | grep -qP '\d+\s+total'; then
+    if echo "$run_output" | grep -qP '(?:killed|survived|timeout|suspicious).*total'; then
         local summary_line
-        summary_line=$(echo "$results_text" | grep -P '\d+\s+total' | tail -1)
-        total=$(echo "$summary_line" | grep -oP '\d+(?=\s*[, ]?\s*total)' || echo "0")
-        killed=$(echo "$summary_line" | grep -oP '\d+(?=\s*[, ]?\s*killed)' || echo "0")
-        survived=$(echo "$summary_line" | grep -oP '\d+(?=\s*[, ]?\s*survived)' || echo "0")
-        timeout_count=$(echo "$summary_line" | grep -oP '\d+(?=\s*[, ]?\s*timeout)' || echo "0")
-        suspicious=$(echo "$summary_line" | grep -oP '\d+(?=\s*[, ]?\s*suspicious)' || echo "0")
+        summary_line=$(echo "$run_output" | grep -P '(?:killed|survived|timeout|suspicious).*total' | tail -1)
+        killed=$(echo      "$summary_line" | grep -oP '\d+(?=\s+killed)'     || echo "0")
+        survived=$(echo    "$summary_line" | grep -oP '\d+(?=\s+survived)'   || echo "0")
+        timeout_count=$(echo "$summary_line" | grep -oP '\d+(?=\s+timeout)' || echo "0")
+        suspicious=$(echo  "$summary_line" | grep -oP '\d+(?=\s+suspicious)' || echo "0")
+        total=$(echo       "$summary_line" | grep -oP '\d+(?=\s+total)'      || echo "0")
     fi
 
-    # If parsing failed, count from individual mutant lines
+    # Fallback: count individual mutant status lines from `mutmut results --all`
     if [[ "$total" == "0" || -z "$total" ]]; then
-        total=$(echo "$results_text" | grep -cP '\d+\.\s+(killed|survived|timeout|suspicious)' || echo "0")
-        killed=$(echo "$results_text" | grep -cP '\d+\.\s+killed' || echo "0")
-        survived=$(echo "$results_text" | grep -cP '\d+\.\s+survived' || echo "0")
-        timeout_count=$(echo "$results_text" | grep -cP '\d+\.\s+timeout' || echo "0")
-        suspicious=$(echo "$results_text" | grep -cP '\d+\.\s+suspicious' || echo "0")
+        killed=$(echo        "$results_text" | grep -cP '\d+\.\s+killed'      || echo "0")
+        survived=$(echo      "$results_text" | grep -cP '\d+\.\s+survived'    || echo "0")
+        timeout_count=$(echo "$results_text" | grep -cP '\d+\.\s+timeout'     || echo "0")
+        suspicious=$(echo    "$results_text" | grep -cP '\d+\.\s+suspicious'  || echo "0")
+        total=$(( killed + survived + timeout_count + suspicious ))
     fi
 
     echo "  Total mutants:    ${total}"
@@ -348,7 +346,7 @@ run_mutation() {
     # List surviving mutants for agents to target
     if (( survived > 0 )); then
         warn "Surviving mutants (add tests for these):"
-        echo "$results_text" | grep -P '\d+\.\s+survived' | head -30 || true
+        $mutmut results 2>&1 | head -30 || true
         echo ""
     fi
 
