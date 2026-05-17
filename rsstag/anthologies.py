@@ -181,6 +181,25 @@ class RssTagAnthologies:
         )
         return self._serialize_doc(doc)
 
+    def reset_for_retry(self, owner: str, anthology_id: Any) -> bool:
+        """Reset an anthology to pending so it can be re-run."""
+        try:
+            result = self._db.anthologies.update_one(
+                {"_id": self._to_object_id(anthology_id), "owner": owner},
+                {
+                    "$set": {
+                        "status": "pending",
+                        "updated_at": time.time(),
+                        "result": None,
+                        "current_run_id": None,
+                    }
+                },
+            )
+            return result.matched_count > 0
+        except Exception as exc:
+            self._log.error("Can't reset anthology %s for retry. Info: %s", anthology_id, exc)
+            return False
+
     def delete(self, owner: str, anthology_id: Any) -> bool:
         """Delete anthology for an owner."""
         try:

@@ -10,7 +10,25 @@ from typing import Any, Optional
 
 from rsstag.anthologies import RssTagAnthologies, RssTagAnthologyRuns
 from rsstag.llm.anthology_tools import AnthologyToolExecutor, get_anthology_tools
-from rsstag.llm.base import ToolCall
+from rsstag.llm.base import LLMResponse, ToolCall
+
+
+class _ConversationLog:
+    """Tracks the live conversation and per-turn snapshots."""
+
+    def __init__(self) -> None:
+        self.messages: list[dict[str, Any]] = []
+        self._turn_snapshot: list[dict[str, Any]] = []
+
+    def append(self, msg: dict[str, Any]) -> None:
+        self.messages.append(msg)
+        self._turn_snapshot.append(msg)
+
+    def begin_turn(self) -> None:
+        self._turn_snapshot = []
+
+    def turn_snapshot(self) -> list[dict[str, Any]]:
+        return list(self._turn_snapshot)
 
 
 class AnthologyAgent:
@@ -49,49 +67,39 @@ class AnthologyAgent:
         scope = anthology.get("scope") if isinstance(anthology.get("scope"), dict) else {"mode": "all"}
         executor = AnthologyToolExecutor(self._db, self._owner, seed_tag, scope)
         tools = get_anthology_tools(include_tag_co_occurrences=True)
-        messages = self._build_initial_messages(seed_tag, scope, executor)
+        topic_seed = self._fetch_topic_seed(seed_tag, executor)
+        conv = _ConversationLog()
+        for msg in self._build_initial_messages(seed_tag, scope, topic_seed):
+            conv.messages.append(msg)
         max_iterations = self._get_max_iterations()
         default_provider = str(self._settings.get("realtime_llm", "llamacpp")).strip() or "llamacpp"
 
         try:
             for turn_number in range(1, max_iterations + 1):
-                response = self._llm_router.call_with_tools(
-                    self._settings,
-                    user_msgs=[],
-                    tools=tools,
-                    provider_key="anthology_llm",
-                    default=default_provider,
-                    messages=messages,
-                    parallel_tool_calls=False,
-                )
+                conv.begin_turn()
+                response = self._execute_turn(conv.messages, tools, "anthology_llm", default_provider)
                 assistant_content = str(response.content or "").strip()
-                turn_messages: list[dict[str, Any]] = []
-                if assistant_content:
-                    turn_messages.append({"role": "assistant", "content": assistant_content})
 
                 if response.tool_calls:
-                    tool_results: list[dict[str, Any]] = []
                     assistant_turn_content = assistant_content or self._summarize_tool_calls(response.tool_calls)
                     assistant_message = self._build_assistant_tool_call_message(
                         assistant_turn_content,
                         response.tool_calls,
                     )
-                    messages.append(assistant_message)
-                    if not turn_messages:
-                        turn_messages.append(dict(assistant_message))
-
+                    conv.append(assistant_message)
+                    tool_results: list[dict[str, Any]] = []
                     for tool_call in response.tool_calls:
                         tool_output = executor.execute(
                             tool_call.name,
                             dict(tool_call.arguments),
                         )
-                        tool_message = {
+                        tool_message: dict[str, Any] = {
                             "role": "tool",
                             "tool_call_id": tool_call.id or tool_call.name,
                             "name": tool_call.name,
                             "content": tool_output,
                         }
-                        messages.append(tool_message)
+                        conv.append(tool_message)
                         tool_results.append(
                             {
                                 "id": tool_call.id or tool_call.name,
@@ -99,12 +107,11 @@ class AnthologyAgent:
                                 "content": tool_output,
                             }
                         )
-
                     self._anthology_runs.append_turn(
                         run_id,
                         {
                             "turn": turn_number,
-                            "messages": turn_messages,
+                            "messages": conv.turn_snapshot(),
                             "reasoning": response.reasoning,
                             "tool_calls": [
                                 {
@@ -119,32 +126,18 @@ class AnthologyAgent:
                     )
                     continue
 
-                messages.append({"role": "assistant", "content": assistant_content})
-                result = self._normalize_result(
-                    self._parse_json_response(assistant_content),
-                    seed_tag,
-                    executor,
-                )
-                saved = self._anthologies.update_result(
-                    anthology_id,
-                    result,
-                    run_id,
-                    executor.build_source_snapshot(result),
-                )
+                conv.append({"role": "assistant", "content": assistant_content})
+                self._finalize_result(anthology_id, run_id, assistant_content, seed_tag, executor)
                 self._anthology_runs.append_turn(
                     run_id,
                     {
                         "turn": turn_number,
-                        "messages": turn_messages,
+                        "messages": conv.turn_snapshot(),
                         "reasoning": response.reasoning,
                         "tool_calls": [],
                         "tool_results": [],
                     },
                 )
-                if not saved:
-                    raise RuntimeError("Failed to save anthology result")
-
-                self._anthology_runs.finish(run_id, "done")
                 return True
 
             raise RuntimeError(f"Anthology generation exceeded {max_iterations} iterations")
@@ -163,13 +156,61 @@ class AnthologyAgent:
             self._anthologies.update_status(anthology_id, "failed")
             return False
 
+    def _execute_turn(
+        self,
+        messages: list[dict[str, Any]],
+        tools: Any,
+        provider_key: str,
+        default_provider: str,
+    ) -> LLMResponse:
+        return self._llm_router.call_with_tools(
+            self._settings,
+            user_msgs=[],
+            tools=tools,
+            provider_key=provider_key,
+            default=default_provider,
+            messages=messages,
+            parallel_tool_calls=False,
+        )
+
+    def _finalize_result(
+        self,
+        anthology_id: str,
+        run_id: str,
+        response_content: str,
+        seed_tag: str,
+        executor: AnthologyToolExecutor,
+    ) -> bool:
+        result = self._normalize_result(
+            self._parse_json_response(response_content),
+            seed_tag,
+            executor,
+        )
+        saved = self._anthologies.update_result(
+            anthology_id,
+            result,
+            run_id,
+            executor.build_source_snapshot(result),
+        )
+        if not saved:
+            raise RuntimeError("Failed to save anthology result")
+        self._anthology_runs.finish(run_id, "done")
+        return True
+
+    def _fetch_topic_seed(
+        self,
+        seed_tag: str,
+        executor: AnthologyToolExecutor,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        return executor.search_related_topics(seed_tag, limit=limit).get("topics", [])
+
     def _build_initial_messages(
         self,
         seed_tag: str,
         scope: dict[str, Any],
-        executor: AnthologyToolExecutor,
+        topic_seed: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
-        topic_seed = executor.search_related_topics(seed_tag, limit=10).get("topics", [])
         topic_lines = [
             f"- {topic['topic_path']} ({topic['sentence_count']} sentences)"
             for topic in topic_seed
@@ -249,6 +290,18 @@ class AnthologyAgent:
             "sub_anthologies": sub_anthologies,
         }
 
+    def _resolve_topic_paths(
+        self,
+        topic_paths: list[str],
+        executor: AnthologyToolExecutor,
+    ) -> list[dict[str, Any]]:
+        resolved: list[dict[str, Any]] = []
+        for topic_path in topic_paths:
+            topic_details = executor.get_topic_details(topic_path, limit=20)
+            for match in topic_details.get("matches", []):
+                resolved.extend(match.get("source_refs", []))
+        return resolved
+
     def _normalize_node(
         self,
         raw_node: dict[str, Any],
@@ -268,10 +321,7 @@ class AnthologyAgent:
             executor,
         )
         if topic_paths:
-            for topic_path in topic_paths:
-                topic_details = executor.get_topic_details(topic_path, limit=20)
-                for match in topic_details.get("matches", []):
-                    source_refs.extend(match.get("source_refs", []))
+            source_refs.extend(self._resolve_topic_paths(topic_paths, executor))
         children = [
             self._normalize_node(child, seed_tag, executor, index)
             for index, child in enumerate(raw_node.get("sub_anthologies", []), start=1)
@@ -320,7 +370,7 @@ class AnthologyAgent:
                 continue
             post_id = str(raw_ref.get("post_id", "")).strip()
             topic_path = str(raw_ref.get("topic_path", "")).strip()
-            sentence_indices = []
+            sentence_indices: list[int] = []
             for value in raw_ref.get("sentence_indices", []):
                 try:
                     sentence_indices.append(int(value))

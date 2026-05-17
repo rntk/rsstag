@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import time
 from typing import TYPE_CHECKING, Any, Dict, Iterable, Optional
 
 from werkzeug.wrappers import Request, Response
@@ -68,6 +67,7 @@ def _derive_source_refs_state(
     owner: str,
     source_refs: Iterable[dict[str, Any]],
     cache: dict[str, Optional[dict[str, Any]]],
+    sentence_map_cache: dict[str, dict[int, dict]],
 ) -> dict[str, Any]:
     total = 0
     unread = 0
@@ -83,11 +83,13 @@ def _derive_source_refs_state(
         grouping = _get_grouping_for_post(app, owner, post_id, cache)
         if not grouping:
             continue
-        sentence_map = {
-            int(sentence["number"]): sentence
-            for sentence in grouping.get("sentences", [])
-            if isinstance(sentence, dict) and "number" in sentence
-        }
+        if post_id not in sentence_map_cache:
+            sentence_map_cache[post_id] = {
+                int(sentence["number"]): sentence
+                for sentence in grouping.get("sentences", [])
+                if isinstance(sentence, dict) and "number" in sentence
+            }
+        sentence_map = sentence_map_cache[post_id]
         for sentence_index in sentence_indices:
             sentence = sentence_map.get(sentence_index)
             if not sentence:
@@ -108,6 +110,7 @@ def _annotate_result_with_read_state(
     owner: str,
     node: dict[str, Any],
     cache: dict[str, Optional[dict[str, Any]]],
+    sentence_map_cache: dict[str, dict[int, dict]],
 ) -> dict[str, Any]:
     annotated = dict(node)
     source_refs = annotated.get("source_refs", [])
@@ -116,7 +119,7 @@ def _annotate_result_with_read_state(
     annotated["source_refs"] = [
         {
             **source_ref,
-            "read_state": _derive_source_refs_state(app, owner, [source_ref], cache),
+            "read_state": _derive_source_refs_state(app, owner, [source_ref], cache, sentence_map_cache),
         }
         for source_ref in source_refs
         if isinstance(source_ref, dict)
@@ -125,11 +128,11 @@ def _annotate_result_with_read_state(
     if not isinstance(children, list):
         children = []
     annotated["sub_anthologies"] = [
-        _annotate_result_with_read_state(app, owner, child, cache)
+        _annotate_result_with_read_state(app, owner, child, cache, sentence_map_cache)
         for child in children
         if isinstance(child, dict)
     ]
-    annotated["read_state"] = _derive_source_refs_state(app, owner, annotated["source_refs"], cache)
+    annotated["read_state"] = _derive_source_refs_state(app, owner, annotated["source_refs"], cache, sentence_map_cache)
     return annotated
 
 
@@ -155,57 +158,61 @@ def _find_node_by_id(node: dict[str, Any], node_id: str) -> Optional[dict[str, A
     return None
 
 
-def _resolve_read_target(result: dict[str, Any], target: dict[str, Any]) -> list[dict[str, Any]]:
-    kind = str(target.get("kind", "")).strip()
-    if kind == "anthology":
-        return _collect_source_refs(result)
-    if kind == "node":
-        node_id = str(target.get("node_id", "")).strip()
-        node = _find_node_by_id(result, node_id) if node_id else None
-        return _collect_source_refs(node) if node else []
-    if kind == "topic":
-        topic_path = str(target.get("topic_path", "")).strip()
-        return [
-            ref
-            for ref in _collect_source_refs(result)
-            if str(ref.get("topic_path", "")).strip() == topic_path
-        ]
-    if kind == "snippet":
-        post_id = str(target.get("post_id", "")).strip()
-        return [
-            ref
-            for ref in _collect_source_refs(result)
-            if str(ref.get("post_id", "")).strip() == post_id
-        ]
-    if kind == "sentences":
-        post_id = str(target.get("post_id", "")).strip()
-        requested = {
+def _resolve_sentences_target(result: dict[str, Any], target: dict[str, Any]) -> list[dict[str, Any]]:
+    post_id = str(target.get("post_id", "")).strip()
+    requested = {
+        int(index)
+        for index in target.get("sentence_indices", [])
+        if isinstance(index, int)
+    }
+    if not post_id or not requested:
+        return []
+    resolved: list[dict[str, Any]] = []
+    for source_ref in _collect_source_refs(result):
+        if str(source_ref.get("post_id", "")).strip() != post_id:
+            continue
+        overlap = requested & {
             int(index)
-            for index in target.get("sentence_indices", [])
+            for index in source_ref.get("sentence_indices", [])
             if isinstance(index, int)
         }
-        if not post_id or not requested:
-            return []
-        resolved: list[dict[str, Any]] = []
-        for source_ref in _collect_source_refs(result):
-            if str(source_ref.get("post_id", "")).strip() != post_id:
-                continue
-            overlap = requested & {
-                int(index)
-                for index in source_ref.get("sentence_indices", [])
-                if isinstance(index, int)
-            }
-            if overlap:
-                resolved.append(
-                    {
-                        "post_id": post_id,
-                        "sentence_indices": sorted(overlap),
-                        "topic_path": source_ref.get("topic_path", ""),
-                        "tag": source_ref.get("tag", ""),
-                    }
-                )
-        return resolved
-    return []
+        if overlap:
+            resolved.append(
+                {
+                    "post_id": post_id,
+                    "sentence_indices": sorted(overlap),
+                    "topic_path": source_ref.get("topic_path", ""),
+                    "tag": source_ref.get("tag", ""),
+                }
+            )
+    return resolved
+
+
+_RESOLVERS: dict[str, Any] = {
+    "anthology": lambda result, target: _collect_source_refs(result),
+    "node": lambda result, target: _collect_source_refs(
+        _find_node_by_id(result, str(target.get("node_id", "")).strip())
+    ) if str(target.get("node_id", "")).strip() else [],
+    "topic": lambda result, target: [
+        ref
+        for ref in _collect_source_refs(result)
+        if str(ref.get("topic_path", "")).strip() == str(target.get("topic_path", "")).strip()
+    ],
+    "snippet": lambda result, target: [
+        ref
+        for ref in _collect_source_refs(result)
+        if str(ref.get("post_id", "")).strip() == str(target.get("post_id", "")).strip()
+    ],
+    "sentences": _resolve_sentences_target,
+}
+
+
+def _resolve_read_target(result: dict[str, Any], target: dict[str, Any]) -> list[dict[str, Any]]:
+    kind = str(target.get("kind", "")).strip()
+    resolver = _RESOLVERS.get(kind)
+    if resolver is None:
+        return []
+    return resolver(result, target)
 
 
 def _render_markdown(node: dict[str, Any], level: int = 1) -> str:
@@ -232,7 +239,7 @@ def _get_anthology_detail_payload(
     payload: Dict[str, Any] = _serialize_anthology(anthology)
     if isinstance(payload.get("result"), dict):
         payload["result"] = _annotate_result_with_read_state(
-            app, user["sid"], payload["result"], {}
+            app, user["sid"], payload["result"], {}, {}
         )
     latest_run: Optional[Dict[str, Any]] = app.anthology_runs.get_latest_for_anthology(
         user["sid"], anthology_id
@@ -365,17 +372,8 @@ def on_anthologies_api_retry_post(
     if str(anthology.get("status", "")).strip() == "processing":
         return app._json_response({"error": "Anthology is already processing"}, 400)
 
-    app.db.anthologies.update_one(
-        {"_id": app.anthologies._to_object_id(anthology_id), "owner": user["sid"]},
-        {
-            "$set": {
-                "status": "pending",
-                "updated_at": time.time(),
-                "result": None,
-                "current_run_id": None,
-            }
-        },
-    )
+    if not app.anthologies.reset_for_retry(user["sid"], anthology_id):
+        return app._json_response({"error": "Failed to reset anthology"}, 500)
     app.tasks.add_task(
         {
             "user": user["sid"],
