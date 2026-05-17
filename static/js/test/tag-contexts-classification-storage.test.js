@@ -70,3 +70,47 @@ test('fetchContexts() failure path emits END_TASK after error', async (t) => {
 
   assert.equal(es.calls.at(-1).event, es.END_TASK);
 });
+
+test('changeLoadButtonState with hide_list clears tags map', async (t) => {
+  const es = createTagContextsEventSystem();
+  const storage = new TagContextsClassificationStorage(es);
+
+  // Pre-populate tags
+  storage.setState({ tags: new Map([['existing', { tag: 'existing' }]]) });
+  es.calls = [];
+
+  storage.changeLoadButtonState({ tag: 'existing', hide_list: true });
+
+  assert.equal(storage.getState().tags.size, 0);
+});
+
+test('changeLoadButtonState without hide_list fetches contexts for the tag', async (t) => {
+  const es = createTagContextsEventSystem();
+  const storage = new TagContextsClassificationStorage(es);
+  const originalFetchJSON = rsstag_utils.fetchJSON;
+
+  rsstag_utils.fetchJSON = async (url) => {
+    assert.ok(url.includes('my-tag'));
+    return [{ tag: 'fetched', score: 0.9 }];
+  };
+  t.after(() => {
+    rsstag_utils.fetchJSON = originalFetchJSON;
+  });
+
+  storage.changeLoadButtonState({ tag: 'my-tag', hide_list: false });
+  await flushPromises();
+
+  assert.ok(storage.getState().tags.has('fetched'));
+});
+
+test('fetchContexts with empty/falsy tag is a no-op', () => {
+  const es = createTagContextsEventSystem();
+  const storage = new TagContextsClassificationStorage(es);
+
+  storage.fetchContexts('');
+  storage.fetchContexts(null);
+  storage.fetchContexts(undefined);
+
+  assert.equal(storage.getState().tags.size, 0);
+  assert.equal(es.calls.length, 0);
+});

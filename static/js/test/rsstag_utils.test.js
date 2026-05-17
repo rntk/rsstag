@@ -44,3 +44,61 @@ test('waitFor rejects after the timeout elapses', async () => {
     await rsstag_utils.waitFor(() => false, 30, 5);
   });
 });
+
+test('fetchJSON rejects and emits END_TASK when response.json() fails', async (t) => {
+  const es = createEventSystem();
+  const originalWindow = globalThis.window;
+  const originalFetch = globalThis.fetch;
+
+  globalThis.window = { EVSYS: es };
+  globalThis.fetch = async () => ({
+    json: async () => {
+      throw new SyntaxError('Unexpected token');
+    },
+  });
+
+  t.after(() => {
+    globalThis.window = originalWindow;
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(async () => {
+    await rsstag_utils.fetchJSON('/api/bad-json', { method: 'GET' });
+  }, SyntaxError);
+
+  assert.deepEqual(es.calls, [
+    { event: es.START_TASK, payload: 'ajax' },
+    { event: es.END_TASK, payload: 'ajax' },
+  ]);
+});
+
+test('fetchJSON rejects and emits END_TASK when fetch network fails', async (t) => {
+  const es = createEventSystem();
+  const originalWindow = globalThis.window;
+  const originalFetch = globalThis.fetch;
+
+  globalThis.window = { EVSYS: es };
+  globalThis.fetch = async () => {
+    throw new TypeError('NetworkError');
+  };
+
+  t.after(() => {
+    globalThis.window = originalWindow;
+    globalThis.fetch = originalFetch;
+  });
+
+  await assert.rejects(async () => {
+    await rsstag_utils.fetchJSON('/api/offline', { method: 'GET' });
+  }, TypeError);
+
+  assert.deepEqual(es.calls, [
+    { event: es.START_TASK, payload: 'ajax' },
+    { event: es.END_TASK, payload: 'ajax' },
+  ]);
+});
+
+test('randInt returns a number between min and max', () => {
+  const result = rsstag_utils.randInt(10, 20);
+  assert.equal(typeof result, 'number');
+  assert.ok(result >= 10 && result < 20);
+});
