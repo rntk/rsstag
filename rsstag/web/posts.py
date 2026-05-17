@@ -2680,6 +2680,7 @@ def on_tag_grouped_snippets_get(
         page.render(
             topics=sorted_topics,
             tag=tag,
+            tag_words=words,
             current_topic=_topic_filter_exact_topic(topic_filter),
             current_topic_label=_topic_filter_label(topic_filter),
             current_topic_query=_topic_filter_query_string(topic_filter),

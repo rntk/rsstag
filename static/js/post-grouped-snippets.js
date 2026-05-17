@@ -3,6 +3,21 @@
 const tagsCache = {};
 const CONTEXT_STEP = 1;
 
+function buildTagHighlightRe() {
+  const words = window.TAG_WORDS;
+  if (!Array.isArray(words) || !words.length) return null;
+  const escaped = words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  return new RegExp('\\b(' + escaped.join('|') + ')\\b', 'gi');
+}
+
+function highlightTagWordsInHtml(htmlText, re) {
+  if (!re) return htmlText;
+  return htmlText.replace(/(<[^>]+>)|([^<]+)/g, (match, tag, text) => {
+    if (tag) return tag;
+    return text.replace(re, '<mark>$1</mark>');
+  });
+}
+
 function parseIndices(value) {
   if (!value) {
     return [];
@@ -39,6 +54,18 @@ function renderExpandedSnippet(snippetItem, contextData) {
   if (!snippetText || !contextData || !contextData.base) {
     return;
   }
+
+  const highlightRe = buildTagHighlightRe();
+  const applyHighlight = (segment) => {
+    if (!segment || !segment.html) return segment;
+    return { ...segment, html: highlightTagWordsInHtml(segment.html, highlightRe) };
+  };
+  contextData = {
+    ...contextData,
+    before: applyHighlight(contextData.before),
+    base: applyHighlight(contextData.base),
+    after: applyHighlight(contextData.after),
+  };
 
   const previousVisibleIndices = parseIndices(snippetItem.dataset.visibleIndices);
   const previousFirstIndex = previousVisibleIndices.length ? previousVisibleIndices[0] : null;
