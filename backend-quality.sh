@@ -24,9 +24,15 @@ MUTATION_TIMEOUT=300           # seconds per mutant (5 min)
 MUTATION_BASE_DIR="rsstag"     # source directory to mutate
 TEST_DIR="tests"               # test directory
 
+# Optional quality gates (set --all to enable)
+LINT_CHECK=false               # run ruff linting
+TYPECHECK=false                # run mypy type checking
+
 # Packages that must be installed (added at runtime if missing)
 COVERAGE_PKG="coverage"
 MUTMUT_PKG="mutmut"
+LINT_PKG="ruff"
+TYPECHECK_PKG="mypy"
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -57,8 +63,14 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --coverage)  RUN_COVERAGE=true;  RUN_MUTATION=false; shift ;;
         --mutation)  RUN_COVERAGE=false; RUN_MUTATION=true;  shift ;;
+        --all)       LINT_CHECK=true; TYPECHECK=true; shift ;;
         --help|-h)
-            echo "Usage: $0 [--coverage|--mutation]"
+            echo "Usage: $0 [--coverage|--mutation|--all]"
+            echo ""
+            echo "  --coverage   Run coverage analysis only"
+            echo "  --mutation   Run mutation testing only (requires prior coverage data)"
+            echo "  --all        Run coverage, mutation, linting, and type checking"
+            echo "  (default)    Run coverage and mutation testing"
             exit 0
             ;;
         *)
@@ -78,6 +90,86 @@ if $RUN_MUTATION; then
     check_dep "$MUTMUT_PKG"
 fi
 ok "Dependencies ready"
+
+# ── Pre-flight checks ──────────────────────────────────────────────────────────
+
+preflight_check() {
+    local ok=true
+    info "Running pre-flight checks…"
+
+    # Check MongoDB is reachable
+    if python3 -c "from pymongo import MongoClient; MongoClient('localhost', 27017, serverSelectionTimeoutMS=2000).admin.command('ping')" 2>/dev/null; then
+        ok "MongoDB reachable at localhost:27017"
+    else
+        warn "MongoDB not reachable at localhost:27017 — test isolation disabled"
+    fi
+
+    # Check ClickHouse is reachable
+    if python3 -c "
+import clickhouse_driver
+c = clickhouse_driver.Client(host='localhost', port=9000, settings={'connect_timeout': 2})
+c.execute('SELECT 1')
+c.disconnect()
+" 2>/dev/null; then
+        ok "ClickHouse reachable at localhost:9000"
+    else
+        warn "ClickHouse not reachable at localhost:9000 — some integration tests may fail"
+    fi
+
+    # Check that test directory exists and is non-empty
+    if [[ ! -d "$TEST_DIR" ]]; then
+        fail "Test directory '$TEST_DIR' does not exist"
+        return 1
+    fi
+
+    local test_count
+    test_count=$(find "$TEST_DIR" -name 'test_*.py' -type f 2>/dev/null | wc -l)
+    if [[ "$test_count" -eq 0 ]]; then
+        fail "No test files found in '$TEST_DIR'"
+        return 1
+    fi
+    ok "Found ${test_count} test files in ${TEST_DIR}/"
+
+    if $ok; then
+        return 0
+    fi
+}
+
+if $RUN_COVERAGE || $RUN_MUTATION; then
+    preflight_check || warn "Pre-flight checks had warnings"
+fi
+
+# ── Linting ────────────────────────────────────────────────────────────────────
+
+run_lint() {
+    if ! $LINT_CHECK; then
+        return 0
+    fi
+    check_dep "$LINT_PKG"
+    info "Running linting via ruff…"
+    if python3 -m ruff check "${MUTATION_BASE_DIR}" "${TEST_DIR}"; then
+        ok "Linting passed"
+        return 0
+    else
+        fail "Linting found issues"
+        return 1
+    fi
+}
+
+run_typecheck() {
+    if ! $TYPECHECK; then
+        return 0
+    fi
+    check_dep "$TYPECHECK_PKG"
+    info "Running type checking via mypy…"
+    if python3 -m mypy "${MUTATION_BASE_DIR}" --ignore-missing-imports; then
+        ok "Type checking passed"
+        return 0
+    else
+        fail "Type checking found issues"
+        return 1
+    fi
+}
 
 # ── Coverage ───────────────────────────────────────────────────────────────────
 
@@ -110,6 +202,7 @@ run_coverage() {
     # coverage report TOTAL line looks like:
     #   TOTAL   1234   567    89    12    54%   43%
     #   (files  lines  missing  branches  partial  line%  branch%)
+    # Without --branch:  TOTAL   1234   567    54%
     local line_pct branch_pct
     local total_line
     total_line=$(echo "$report" | grep '^TOTAL' || echo "")
@@ -119,12 +212,17 @@ run_coverage() {
         return 1
     fi
 
-    # Extract percentages — last two % values are line and branch coverage
-    line_pct=$(echo "$total_line" | grep -oP '\d+%' | head -1 | tr -d '%')
-    branch_pct=$(echo "$total_line" | grep -oP '\d+%' | tail -1 | tr -d '%')
+    # Count how many percentage values appear — 1 means no branch coverage
+    local pct_values
+    pct_values=$(echo "$total_line" | grep -oP '\d+%')
+    local pct_count
+    pct_count=$(echo "$pct_values" | grep -c '' || true)
 
-    # If line and branch are the same value, branch coverage wasn't measured
-    if [[ "$line_pct" == "$branch_pct" ]]; then
+    line_pct=$(echo "$pct_values" | head -1 | tr -d '%')
+
+    if [[ "$pct_count" -ge 2 ]]; then
+        branch_pct=$(echo "$pct_values" | tail -1 | tr -d '%')
+    else
         branch_pct="N/A"
         warn "No branch coverage data — skipping branch check"
     fi
@@ -152,7 +250,7 @@ run_coverage() {
         ok "Branch coverage ${branch_pct}% meets threshold ${BRANCH_COVERAGE_THRESHOLD}%"
     fi
 
-    # Save coverage data for mutation testing
+    # Generate Cobertura XML report (useful for CI/tooling integration)
     coverage xml -o coverage.xml 2>/dev/null || true
 
     if $failed; then
@@ -164,6 +262,17 @@ run_coverage() {
 if $RUN_COVERAGE; then
     COVERAGE_EXIT=0
     run_coverage || COVERAGE_EXIT=$?
+    echo ""
+fi
+
+# ── Linting / type checking ──────────────────────────────────────────────────
+
+LINT_EXIT=0
+TYPECHECK_EXIT=0
+
+run_lint || LINT_EXIT=$?
+run_typecheck || TYPECHECK_EXIT=$?
+if $LINT_CHECK || $TYPECHECK; then
     echo ""
 fi
 
@@ -179,12 +288,18 @@ run_mutation() {
     # Run mutation testing.
     # mutmut run mutates code and checks if tests catch the mutations.
     # Surviving mutants indicate gaps in test coverage.
-    $mutmut run 2>&1 || true  # mutmut exits non-zero when mutants survive; we handle below
+    local mutmut_exit=0
+    $mutmut run --timeout "$MUTATION_TIMEOUT" 2>&1 || mutmut_exit=$?
+    # mutmut exits 2 when mutants survive (expected), other non-zero may be real errors
+    if [[ $mutmut_exit -ne 0 && $mutmut_exit -ne 2 ]]; then
+        fail "mutmut run failed with exit code $mutmut_exit"
+        return 1
+    fi
 
     # Show results
     echo ""
     info "Mutation testing results:"
-    $mutmut results --all true || true
+    $mutmut results 2>&1 || true
     echo ""
 
     # Parse result counts from mutmut results output
@@ -196,10 +311,10 @@ run_mutation() {
     local results_text
     results_text=$($mutmut results --all true 2>&1 || true)
 
-    # Try to parse the summary line
-    if echo "$results_text" | grep -qP '\d+.*total'; then
+    # Try to parse the summary line (e.g. "42 total, 30 killed, 10 survived, 1 timeout, 1 suspicious")
+    if echo "$results_text" | grep -qP '\d+\s+total'; then
         local summary_line
-        summary_line=$(echo "$results_text" | grep -P '\d+.*total' | tail -1)
+        summary_line=$(echo "$results_text" | grep -P '\d+\s+total' | tail -1)
         total=$(echo "$summary_line" | grep -oP '\d+(?=\s*[, ]?\s*total)' || echo "0")
         killed=$(echo "$summary_line" | grep -oP '\d+(?=\s*[, ]?\s*killed)' || echo "0")
         survived=$(echo "$summary_line" | grep -oP '\d+(?=\s*[, ]?\s*survived)' || echo "0")
@@ -278,9 +393,29 @@ if $RUN_MUTATION && [[ -n "${MUTATION_EXIT:-}" ]]; then
     fi
 fi
 
+if $LINT_CHECK || $TYPECHECK; then
+    echo "--- Static analysis ---"
+fi
+
+if $LINT_CHECK; then
+    if (( LINT_EXIT == 0 )); then
+        ok "Linting (ruff): PASSED"
+    else
+        fail "Linting (ruff): FAILED"
+    fi
+fi
+
+if $TYPECHECK; then
+    if (( TYPECHECK_EXIT == 0 )); then
+        ok "Type checking (mypy): PASSED"
+    else
+        fail "Type checking (mypy): FAILED"
+    fi
+fi
+
 echo ""
 
-if [[ "${COVERAGE_EXIT:-0}" -ne 0 || "${MUTATION_EXIT:-0}" -ne 0 ]]; then
+if [[ "${COVERAGE_EXIT:-0}" -ne 0 || "${MUTATION_EXIT:-0}" -ne 0 || "${LINT_EXIT:-0}" -ne 0 || "${TYPECHECK_EXIT:-0}" -ne 0 ]]; then
     fail "One or more quality checks failed. See details above."
     exit 1
 fi
