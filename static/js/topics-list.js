@@ -2,6 +2,7 @@
 
 import TopicsSunburst from './topics-sunburst.js';
 import TopicsMarimekko from './topics-marimekko.js';
+import { renderTopicsHierarchy } from './topics-hierarchy.js';
 
 // Topics List functionality
 
@@ -16,10 +17,12 @@ function initTopicTabs() {
     'topics-list': document.getElementById('tab-topics-list'),
     'topics-chart': document.getElementById('tab-topics-chart'),
     'topics-marimekko': document.getElementById('tab-topics-marimekko'),
+    'topics-hierarchy': document.getElementById('tab-topics-hierarchy'),
   };
 
   let chartRendered = false;
   let marimekkoRendered = false;
+  let hierarchyRendered = false;
 
   const activateTab = (tabName) => {
     tabs.forEach((tab) => {
@@ -38,6 +41,10 @@ function initTopicTabs() {
     if (tabName === 'topics-marimekko' && !marimekkoRendered) {
       renderTopicsMarimekkoChart();
       marimekkoRendered = true;
+    }
+    if (tabName === 'topics-hierarchy' && !hierarchyRendered) {
+      renderTopicsHierarchyView();
+      hierarchyRendered = true;
     }
   };
 
@@ -232,6 +239,19 @@ function renderTopicsMarimekkoChart() {
   } catch (error) {
     console.error('Error rendering marimekko chart:', error);
     container.textContent = 'Error rendering marimekko chart: ' + error.message;
+  }
+}
+
+function renderTopicsHierarchyView() {
+  const container = document.getElementById('topics_hierarchy_container');
+  if (!container) {
+    return;
+  }
+  try {
+    renderTopicsHierarchy(container, window.sunburst_data);
+  } catch (error) {
+    console.error('Error rendering topics hierarchy:', error);
+    container.textContent = 'Error rendering topics hierarchy: ' + error.message;
   }
 }
 
