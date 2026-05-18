@@ -63,7 +63,7 @@ class RssTagPostGrouping:
         try:
             self._db.post_grouping.update_one(
                 {"owner": owner, "post_ids_hash": post_ids_hash},
-                {"$set": data},
+                {"$set": data, "$unset": {"topic_merged": ""}},
                 upsert=True,
             )
             self._anthologies.mark_stale_for_source_change(owner, [str(pid) for pid in post_ids])
