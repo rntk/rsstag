@@ -25,6 +25,7 @@ from rsstag.tasks import (
     TASK_POST_GROUPING_BATCH,
     TASK_TAG_CLASSIFICATION_BATCH,
     TASK_SNIPPET_CLUSTERING,
+    TASK_TOPIC_MERGE,
     get_task_scope_hint,
 )
 
@@ -55,6 +56,7 @@ def on_tasks_get(app, user: dict, request: Request) -> Response:
         TASK_TAG_CLASSIFICATION_BATCH: "Classify tags (batch)",
         TASK_SNIPPET_CLUSTERING: "Cluster snippets",
         TASK_ANTHOLOGY: "Generate anthologies",
+        TASK_TOPIC_MERGE: "Merge topics",
     }
     available_tasks = {
         task_type: f"{title} ({get_task_scope_hint(task_type)})"

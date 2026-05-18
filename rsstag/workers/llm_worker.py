@@ -1296,6 +1296,34 @@ class _AnthologyWorker:
             return False
 
 
+class _TopicMergeWorker:
+    """Canonical topic merge operations."""
+
+    def __init__(self, db: Any, llm: LLMRouter) -> None:
+        self._db: Any = db
+        self._llm: LLMRouter = llm
+
+    def handle_topic_merge(self, task: Dict[str, Any]) -> bool:
+        from rsstag.topic_merge import TopicMergeAgent
+
+        owner: str = str(task.get("user", {}).get("sid", "")).strip()
+        if not owner:
+            logging.error("Topic merge task missing owner: %s", task)
+            return False
+
+        agent = TopicMergeAgent(
+            self._db,
+            self._llm,
+            owner=owner,
+            settings=task.get("user", {}).get("settings", {}),
+        )
+        try:
+            return agent.run(task.get("scope") or {})
+        except Exception as exc:
+            logging.error("Can't merge topics for owner %s. Info: %s", owner, exc)
+            return False
+
+
 class LLMWorker(BaseWorker):
     """Thin worker facade delegating to smaller LLM-specific workers."""
 
@@ -1321,12 +1349,19 @@ class LLMWorker(BaseWorker):
             self._db,
             self._llm,
         )
+        self._topic_merge_worker: _TopicMergeWorker = _TopicMergeWorker(
+            self._db,
+            self._llm,
+        )
 
     def handle_post_grouping(self, task: Dict[str, Any]) -> bool:
         return self._post_grouping_worker.handle_post_grouping(task)
 
     def handle_anthology(self, task: Dict[str, Any]) -> bool:
         return self._anthology_worker.handle_anthology(task)
+
+    def handle_topic_merge(self, task: Dict[str, Any]) -> bool:
+        return self._topic_merge_worker.handle_topic_merge(task)
 
     def handle_tags_classification(self, task: Dict[str, Any]) -> bool:
         return self._tag_classification_worker.handle_tags_classification(task)

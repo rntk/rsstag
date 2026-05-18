@@ -37,6 +37,7 @@ TASK_DELETE_FEEDS = 23
 TASK_POST_GROUPING_CLEANUP = 24
 TASK_SNIPPET_CLUSTERING = 25
 TASK_ANTHOLOGY = 26
+TASK_TOPIC_MERGE = 27
 
 SCOPE_MODE_ALL = "all"
 SCOPE_MODE_POSTS = "posts"
@@ -74,6 +75,7 @@ TASK_SCOPE_REGISTRY: Dict[int, Dict[str, Any]] = {
     TASK_POST_GROUPING_BATCH: {"scope": SCOPE_CAPABILITY_SCOPED_SUPPORTED},
     TASK_POST_GROUPING_CLEANUP: {"scope": SCOPE_CAPABILITY_SCOPED_SUPPORTED},
     TASK_ANTHOLOGY: {"scope": SCOPE_CAPABILITY_SCOPED_SUPPORTED},
+    TASK_TOPIC_MERGE: {"scope": SCOPE_CAPABILITY_SCOPED_SUPPORTED},
 }
 
 
@@ -126,6 +128,7 @@ class RssTagTasks:
         TASK_CLUSTERING: [TASK_W2V],
         TASK_W2V: [TASK_FASTTEXT],
         TASK_FASTTEXT: [TASK_POST_GROUPING],
+        TASK_POST_GROUPING: [TASK_TOPIC_MERGE],
         # TASK_W2V: [TASK_TAGS_GROUP],
         # TASK_TAGS_GROUP: [TASK_FASTTEXT]
     }
@@ -326,6 +329,7 @@ class RssTagTasks:
                         TASK_POST_GROUPING_BATCH,
                         TASK_POST_GROUPING_CLEANUP,
                         TASK_ANTHOLOGY,
+                        TASK_TOPIC_MERGE,
                     ):
                         update_data["scope"] = normalized_scope
                     for key in data:
@@ -586,6 +590,16 @@ class RssTagTasks:
                         {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
                     )
             elif user_task["type"] == TASK_POST_GROUPING_CLEANUP:
+                data = []
+                self._db.tasks.update_one(
+                    {"_id": user_task["_id"]},
+                    {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
+                )
+            elif user_task["type"] == TASK_TOPIC_MERGE:
+                # The merge agent is idempotent and re-runnable, so release the
+                # task lock immediately. finish_task removes the task on
+                # success; on failure it stays unlocked for a later retry
+                # instead of deadlocking with processing stuck set.
                 data = []
                 self._db.tasks.update_one(
                     {"_id": user_task["_id"]},
@@ -1061,6 +1075,7 @@ class RssTagTasks:
             TASK_POST_GROUPING_CLEANUP: "Post grouping cleanup (supports scoped reprocess)",
             TASK_SNIPPET_CLUSTERING: "Snippet clustering",
             TASK_ANTHOLOGY: "Anthology generation (supports scoped reprocess)",
+            TASK_TOPIC_MERGE: "Topic merge (supports scoped reprocess)",
         }
 
         if task_type in task_titles:

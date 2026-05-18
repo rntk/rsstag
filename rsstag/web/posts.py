@@ -29,6 +29,7 @@ from rsstag.read_state import ReadStateService
 from rsstag.tags_builder import TagsBuilder
 from rsstag.utils import text_to_speech
 from rsstag.web.context_filter_handlers import get_context_filter_manager
+from rsstag.topic_aliases import RssTagTopicAliases
 
 from werkzeug.wrappers import Request, Response
 from werkzeug.exceptions import NotFound
@@ -152,6 +153,20 @@ def _build_topics_index(
     topic_counts: dict[str, dict] = {}
     post_topic_mapping: dict[str, dict] = {}
 
+    topic_aliases = getattr(app, "topic_aliases", None) or RssTagTopicAliases(app.db)
+    owner_alias_map = topic_aliases.load_owner_map(user["sid"])
+    _canonical_cache: dict[str, str] = {}
+
+    def _canonical_topic(raw_topic: str) -> str:
+        cached: Optional[str] = _canonical_cache.get(raw_topic)
+        if cached is not None:
+            return cached
+        resolved: str = topic_aliases.resolve_path(
+            raw_topic, alias_map=owner_alias_map
+        )["canonical_path"]
+        _canonical_cache[raw_topic] = resolved
+        return resolved
+
     for post_data in grouped_posts:
         post_ids: list[int] = post_data.get("post_ids", [])
         post_id_str: str = "_".join(str(pid) for pid in post_ids)
@@ -227,18 +242,36 @@ def _build_topics_index(
         if not topics_for_post:
             continue
 
+        canonical_topics_for_post: list[str] = []
+        canonical_seen: set[str] = set()
+        canonical_text_lengths: dict[str, int] = {}
+        canonical_sentences_counts: dict[str, int] = {}
+        for topic in topics_for_post:
+            canonical_topic: str = _canonical_topic(topic)
+            canonical_text_lengths[canonical_topic] = (
+                canonical_text_lengths.get(canonical_topic, 0)
+                + topic_text_lengths.get(topic, 0)
+            )
+            canonical_sentences_counts[canonical_topic] = (
+                canonical_sentences_counts.get(canonical_topic, 0)
+                + topic_sentences_counts.get(topic, 0)
+            )
+            if canonical_topic not in canonical_seen:
+                canonical_seen.add(canonical_topic)
+                canonical_topics_for_post.append(canonical_topic)
+
         post_topic_mapping[post_id_str] = {
             "feed_title": feed_title,
-            "topics": topics_for_post,
+            "topics": canonical_topics_for_post,
         }
 
-        for topic in topics_for_post:
+        for topic in canonical_topics_for_post:
             if topic not in topic_counts:
                 topic_counts[topic] = {"count": 0, "posts": [], "text_length": 0, "sentences_count": 0}
             topic_counts[topic]["count"] += 1
             topic_counts[topic]["posts"].append(post_id_str)
-            topic_counts[topic]["text_length"] += topic_text_lengths.get(topic, 0)
-            topic_counts[topic]["sentences_count"] += topic_sentences_counts.get(topic, 0)
+            topic_counts[topic]["text_length"] += canonical_text_lengths.get(topic, 0)
+            topic_counts[topic]["sentences_count"] += canonical_sentences_counts.get(topic, 0)
 
     return topic_counts, post_topic_mapping
 

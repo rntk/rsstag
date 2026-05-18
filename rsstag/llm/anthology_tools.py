@@ -11,6 +11,7 @@ from typing import Any, Iterable, Optional
 from rsstag.llm.base import ToolDefinition
 from rsstag.post_grouping import RssTagPostGrouping
 from rsstag.posts import RssTagPosts
+from rsstag.topic_aliases import RssTagTopicAliases
 
 
 def get_anthology_tools(include_tag_co_occurrences: bool = True) -> tuple[ToolDefinition, ...]:
@@ -242,6 +243,8 @@ class AnthologyToolExecutor:
             query["post_ids"] = {"$in": sorted(allowed_post_ids)}
 
         entries: list[dict[str, Any]] = []
+        topic_aliases = RssTagTopicAliases(self._db)
+        alias_map = topic_aliases.load_owner_map(self._owner)
         projection = {"post_ids": True, "groups": True, "sentences": True}
         for doc in self._db.post_grouping.find(query, projection=projection):
             doc_id = str(doc.get("_id", ""))
@@ -279,11 +282,15 @@ class AnthologyToolExecutor:
                     for index in sentence_indices
                 ]
                 preview = " ".join(sentence["text"] for sentence in sentences if sentence["text"])[:280]
+                resolved = topic_aliases.resolve_path(topic_path, alias_map=alias_map)
+                canonical_id = resolved["canonical_id"]
+                canonical_topic_path = resolved["canonical_path"]
                 source_refs = [
                     {
                         "post_id": post_id,
                         "sentence_indices": sentence_indices,
                         "topic_path": topic_path,
+                        "canonical_id": canonical_id,
                         "tag": self._seed_tag,
                     }
                     for post_id in usable_post_ids
@@ -291,6 +298,8 @@ class AnthologyToolExecutor:
                 entries.append(
                     {
                         "topic_path": topic_path,
+                        "canonical_id": canonical_id,
+                        "canonical_topic_path": canonical_topic_path,
                         "post_ids": usable_post_ids,
                         "sentence_indices": sentence_indices,
                         "sentences": sentences,

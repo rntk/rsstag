@@ -96,6 +96,10 @@ class RssTagPostGrouping:
         post_ids = self._get_scope_post_ids(owner, scope)
         return self.delete_grouped_posts_by_post_ids(owner, post_ids)
 
+    def get_scope_post_ids(self, owner: str, scope: Optional[dict]) -> List[PostId]:
+        """Public: expand a task scope into the matching post ids."""
+        return self._get_scope_post_ids(owner, scope)
+
     def update_snippets_read_status(
         self, owner: str, post_id: Any, sentence_indices: List[int], read_status: bool
     ) -> Optional[bool]:

@@ -195,6 +195,11 @@ class RSSTagApplication(object):
         self.post_grouping = RssTagPostGrouping(self.db)
         self.post_grouping.prepare()
 
+        from rsstag.topic_aliases import RssTagTopicAliases
+
+        self.topic_aliases = RssTagTopicAliases(self.db)
+        self.topic_aliases.prepare()
+
     def _find_group_for_sentence(self, sentence_num, groups):
         """Custom filter to find which group a sentence belongs to"""
         for group_id, group_sentences in groups.items():

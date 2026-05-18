@@ -42,6 +42,7 @@ from rsstag.tasks import (
     TASK_TAGS_SENTIMENT,
     TASK_TAG_CLASSIFICATION,
     TASK_TAG_CLASSIFICATION_BATCH,
+    TASK_TOPIC_MERGE,
     TASK_W2V,
 )
 from rsstag.tasks import RssTagTasks
@@ -165,6 +166,7 @@ def _build_registry(tag_worker: TagWorker, llm_worker: LLMWorker, provider_worke
     registry.register(TASK_CLEAN_BIGRAMS, tag_worker.make_clean_bigrams)
     registry.register(TASK_POST_GROUPING, llm_worker.handle_post_grouping)
     registry.register(TASK_ANTHOLOGY, llm_worker.handle_anthology)
+    registry.register(TASK_TOPIC_MERGE, llm_worker.handle_topic_merge)
     registry.register(TASK_TAG_CLASSIFICATION, llm_worker.handle_tags_classification)
     registry.register(TASK_POST_GROUPING_BATCH, llm_worker.make_post_grouping_batch)
     registry.register(TASK_POST_GROUPING_CLEANUP, llm_worker.handle_post_grouping_cleanup)
