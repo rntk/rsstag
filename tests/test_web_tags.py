@@ -268,6 +268,42 @@ class TestWebTags(MongoWebTestCase):
         self.assertIn("Topic A", tags)
         self.assertIn("Subtopic", tags)
 
+    def test_on_entity_grouped_snippets_get_returns_matching_topic_ranges(self) -> None:
+        self._seed_post_with_lemmas(
+            "entity-snippet-post",
+            ["testtag"],
+            "hello testtag world",
+            "Testtag appears in grouped range. Another sentence without it.",
+        )
+        self._seed_post_grouping(
+            "entity-snippet-post",
+            sentences=[
+                {
+                    "number": 1,
+                    "text": "Testtag appears in grouped range",
+                    "read": False,
+                },
+                {
+                    "number": 2,
+                    "text": "Another sentence without it",
+                    "read": False,
+                },
+            ],
+            groups={
+                "Topic A": [1],
+                "Topic B": [2],
+            },
+        )
+
+        response = self.client.get("/entity-grouped-snippets/testtag")
+
+        self.assertEqual(response.status_code, 200)
+        body = response.get_data(as_text=True)
+        self.assertIn("Entity Snippets: testtag", body)
+        self.assertIn("Topic A", body)
+        self.assertIn("<mark>Testtag</mark> appears in grouped range", body)
+        self.assertNotIn("Topic B", body)
+
     # ------------------------------------------------------------------
     # on_tag_context_tree_get
     # ------------------------------------------------------------------

@@ -1553,6 +1553,7 @@ def on_entity_get(
             tag=tag,
             group="tag",
             words=list(words),
+            entity_snippets_url=f"/entity-grouped-snippets/{quoted_tag}?window={window}",
             user_settings=user["settings"],
             provider=user["provider"],
         ),
@@ -2714,6 +2715,235 @@ def on_tag_grouped_snippets_get(
             topics=sorted_topics,
             tag=tag,
             tag_words=words,
+            current_topic=_topic_filter_exact_topic(topic_filter),
+            current_topic_label=_topic_filter_label(topic_filter),
+            current_topic_query=_topic_filter_query_string(topic_filter),
+            user_settings=user["settings"],
+            provider=user["provider"],
+        ),
+        mimetype="text/html",
+    )
+
+
+def _entity_post_matches_window(
+    post: dict[str, Any], tag_words: list[str], window: int
+) -> bool:
+    """Return whether a post contains all entity words close enough in lemmas."""
+    if len(tag_words) <= 1:
+        return True
+
+    lemmas_payload = post.get("lemmas")
+    if not lemmas_payload:
+        return False
+
+    try:
+        lemmas_text: str = gzip.decompress(lemmas_payload).decode("utf-8", "replace")
+    except (OSError, EOFError, TypeError) as exc:
+        logging.error(
+            "Can't decode lemmas for entity snippets post %s. Info: %s",
+            post.get("pid"),
+            exc,
+        )
+        return False
+
+    lemmas_list: list[str] = lemmas_text.split()
+    word_positions: dict[str, list[int]] = {}
+    tag_words_set: set[str] = set(tag_words)
+
+    for index, lemma in enumerate(lemmas_list):
+        if lemma in tag_words_set:
+            word_positions.setdefault(lemma, []).append(index)
+
+    if len(word_positions) != len(tag_words):
+        return False
+
+    positions_lists: list[list[int]] = [
+        word_positions[word] for word in tag_words if word_positions.get(word)
+    ]
+    if len(positions_lists) != len(tag_words):
+        return False
+
+    for first_position in positions_lists[0]:
+        test_positions: list[int] = [first_position]
+        for positions in positions_lists[1:]:
+            nearest_position: int = min(
+                positions, key=lambda position: abs(position - first_position)
+            )
+            test_positions.append(nearest_position)
+
+        if max(test_positions) - min(test_positions) <= window:
+            return True
+
+    return False
+
+
+def _find_entity_post_ids(
+    app: "RSSTagApplication", user: dict, tag: str, window: int
+) -> list[str]:
+    """Find post IDs matching the entity rules used by the full entity page."""
+    tag_words: list[str] = tag.split()
+    only_unread: Optional[bool] = user["settings"].get("only_unread") or None
+    context_tags = _get_context_tags(user)
+    projection: dict[str, bool] = {
+        "_id": False,
+        "pid": True,
+        "feed_id": True,
+        "lemmas": True,
+        "clusters": True,
+    }
+
+    db_posts: list[dict[str, Any]] = list(
+        app.posts.get_by_tags(
+            user["sid"],
+            tag_words,
+            only_unread,
+            projection,
+            context_tags=context_tags,
+        )
+    )
+
+    if user["settings"].get("similar_posts"):
+        clusters = app.posts.get_clusters(db_posts)
+        similar_posts = app.posts.get_by_clusters(
+            user["sid"],
+            list(clusters),
+            only_unread,
+            projection,
+            context_tags=context_tags,
+        )
+        db_posts.extend(similar_posts)
+
+    post_ids: list[str] = []
+    seen_post_ids: set[str] = set()
+    for post in db_posts:
+        post_id = str(post.get("pid", ""))
+        if not post_id or post_id in seen_post_ids:
+            continue
+        if not _entity_post_matches_window(post, tag_words, window):
+            continue
+        post_ids.append(post_id)
+        seen_post_ids.add(post_id)
+
+    return post_ids
+
+
+def _entity_surface_word_groups(
+    app: "RSSTagApplication",
+    user: dict,
+    tag_words: list[str],
+    only_unread: Optional[bool],
+) -> list[list[str]]:
+    """Collect surface forms per entity word, mirroring the entity page.
+
+    The entity tag is a lemma; the visible text contains inflected/cased
+    surface forms. ``tags`` documents are keyed per single lemma word and
+    store the encountered surface forms in ``words``. We aggregate those the
+    same way ``on_entity_get`` does so snippet matching uses real surface
+    forms instead of the contiguous lemma phrase.
+    """
+    surface_by_word: dict[str, set[str]] = {word: {word} for word in tag_words}
+    for tag_doc in app.tags.get_by_tags(
+        user["sid"], tag_words, only_unread=only_unread
+    ):
+        lemma = tag_doc.get("tag")
+        if lemma not in surface_by_word:
+            continue
+        for surface in tag_doc.get("words", []):
+            if surface:
+                surface_by_word[lemma].add(surface)
+
+    return [sorted(surface_by_word[word]) for word in tag_words]
+
+
+def _build_entity_snippet_matchers(
+    word_groups: list[list[str]],
+) -> tuple[list[re.Pattern], re.Pattern]:
+    """Build per-word matchers plus a combined highlight matcher.
+
+    A snippet must contain every entity word (via any of its surface forms)
+    to be considered a match; highlighting spans all surface forms.
+    """
+    per_word: list[re.Pattern] = []
+    all_forms: list[str] = []
+    for forms in word_groups:
+        usable = [form for form in forms if form]
+        if not usable:
+            continue
+        per_word.append(
+            re.compile(
+                r"\b(" + "|".join(re.escape(form) for form in usable) + r")\b",
+                re.IGNORECASE,
+            )
+        )
+        all_forms.extend(usable)
+
+    unique_forms = list(dict.fromkeys(all_forms))
+    highlight_re = re.compile(
+        r"\b(" + "|".join(re.escape(form) for form in unique_forms) + r")\b",
+        re.IGNORECASE,
+    )
+    return per_word, highlight_re
+
+
+def on_entity_grouped_snippets_get(
+    app: "RSSTagApplication",
+    user: dict,
+    request: Request,
+    quoted_tag: str,
+    window: int = 10,
+) -> Response:
+    """Grouped snippets page filtered by entity and optional topic hierarchy."""
+    tag: str = unquote(quoted_tag)
+    tag_words: list[str] = tag.split()
+    only_unread: Optional[bool] = user["settings"].get("only_unread") or None
+
+    word_groups: list[list[str]] = _entity_surface_word_groups(
+        app, user, tag_words, only_unread
+    )
+    per_word_res, highlight_re = _build_entity_snippet_matchers(word_groups)
+    words: list[str] = sorted({form for forms in word_groups for form in forms})
+
+    post_ids: list[str] = _find_entity_post_ids(app, user, tag, window)
+    if not post_ids:
+        return app.on_error(user, request, NotFound())
+
+    topic_filter: Optional[dict[str, Any]] = _parse_topic_filter_from_request(request)
+    context_tags = _get_context_tags(user)
+    normalized_context_tags = _normalize_context_tags(context_tags)
+    all_posts, _ = _load_posts_for_snippets(app, user, post_ids)
+
+    topics_data = _collect_topic_snippets(
+        app, user, post_ids, all_posts, topic_filter, normalized_context_tags
+    )
+
+    filtered_topics: dict[str, Any] = {}
+    for topic_name, topic_info in topics_data.items():
+        matching: list[dict[str, Any]] = []
+        for snippet in topic_info["snippets"]:
+            if only_unread and snippet.get("read", False):
+                continue
+            text: str = snippet.get("text", "")
+            if not all(word_re.search(text) for word_re in per_word_res):
+                continue
+            highlighted = {
+                **snippet,
+                "html": _highlight_words_in_html(
+                    snippet.get("html", ""), highlight_re
+                ),
+            }
+            matching.append(highlighted)
+        if matching:
+            filtered_topics[topic_name] = {**topic_info, "snippets": matching}
+
+    sorted_topics = sorted(filtered_topics.items(), key=lambda x: x[0])
+
+    page = app.template_env.get_template("entity-grouped-snippets.html")
+    return Response(
+        page.render(
+            topics=sorted_topics,
+            tag=tag,
+            tag_words=words,
+            window=window,
             current_topic=_topic_filter_exact_topic(topic_filter),
             current_topic_label=_topic_filter_label(topic_filter),
             current_topic_query=_topic_filter_query_string(topic_filter),

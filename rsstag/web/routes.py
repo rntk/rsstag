@@ -163,6 +163,11 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/entity-grouped-snippets/<string:quoted_tag>",
+                "endpoint": "on_entity_grouped_snippets_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/category/<string:quoted_category>",
                 "endpoint": "on_category_get",
                 "methods": ["GET"],

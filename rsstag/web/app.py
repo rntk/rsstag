@@ -1120,6 +1120,20 @@ class RSSTagApplication(object):
 
         return posts_handlers.on_entity_get(self, user, quoted_tag, window, rerank)
 
+    def on_entity_grouped_snippets_get(
+        self, user: dict, req: Request, quoted_tag=None
+    ) -> Response:
+        try:
+            window = int(req.args.get("window", 10))
+        except ValueError:
+            return self.on_error(user, req, BadRequest())
+        if window < 1:
+            return self.on_error(user, req, BadRequest())
+
+        return posts_handlers.on_entity_grouped_snippets_get(
+            self, user, req, quoted_tag, window
+        )
+
     def on_tag_tfidf_get(self, user: dict, _: Request, tag: str) -> Response:
         return tags_handlers.on_tag_tfidf_get(self, user, tag)
 

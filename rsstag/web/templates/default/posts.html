@@ -69,6 +69,9 @@
                 <div class="flex items-center justify-between mb-6">
                     <div class="flex items-center space-x-4">
                         <h2 class="text-2xl font-headline font-bold text-primary truncate max-w-2xl">{{tag}}</h2>
+                        {% if entity_snippets_url %}
+                        <a href="{{ entity_snippets_url }}" class="text-sm text-primary hover:text-primary/80 font-medium">Snippets</a>
+                        {% endif %}
                         <div id="posts_stat" class="text-sm text-on-surface-variant font-medium"></div>
                     </div>
                     <button id="help_trigger" class="p-2 hover:bg-surface-container-high rounded-full transition-colors text-on-surface-variant" title="Hotkeys">
