@@ -2085,11 +2085,47 @@ class RSSTagApplication(object):
             text = f"{title} {content}"
             total_tokens += len(text) // 4
         
+        raw_stats = []
+        try:
+            pipeline = [
+                {"$match": {"owner": user["sid"]}},
+                {
+                    "$group": {
+                        "_id": "$provider",
+                        "total": {"$sum": 1},
+                        "converted": {
+                            "$sum": {
+                                "$cond": [
+                                    {"$ifNull": ["$posts_converted", False]},
+                                    1,
+                                    0,
+                                ]
+                            }
+                        },
+                    }
+                },
+                {"$sort": {"_id": 1}},
+            ]
+            for row in self.db.raw_posts.aggregate(pipeline):
+                total = row.get("total", 0)
+                converted = row.get("converted", 0)
+                raw_stats.append(
+                    {
+                        "provider": row.get("_id") or "unknown",
+                        "total": total,
+                        "converted": converted,
+                        "pending": total - converted,
+                    }
+                )
+        except Exception as e:
+            logging.warning("Can`t aggregate raw_posts stats: %s", e)
+
         page = self.template_env.get_template("statistics.html")
         return Response(
             page.render(
                 total_posts=total_posts,
                 total_tokens=total_tokens,
+                raw_stats=raw_stats,
                 user_settings=user["settings"],
                 provider=user["provider"],
             ),

@@ -223,6 +223,100 @@ def tlg_forward_to_query(post: dict) -> Optional[dict]:
     return {"chat_id": chat_id, "message_id": msg_id}
 
 
+def tlg_build_message_link(chat: dict, message: dict) -> str:
+    """Best-effort t.me link derived offline (no get_message_link call).
+
+    TDLib message ids are ``server_id << 20``; public links use the server
+    id. Public chats link by username, private ones by the internal id
+    (chat_id without the ``-100`` supergroup prefix).
+    """
+    msg_id = int(message.get("id", 0) or 0)
+    server_id = msg_id >> 20
+    if server_id <= 0:
+        return ""
+    username = ""
+    usernames = chat.get("usernames")
+    if isinstance(usernames, dict):
+        username = usernames.get("editable_username") or ""
+        if not username:
+            active = usernames.get("active_usernames") or []
+            if active:
+                username = active[0]
+    if not username:
+        username = chat.get("username", "") or ""
+    if username:
+        return f"https://t.me/{username}/{server_id}"
+    internal = str(chat.get("id", "") or message.get("chat_id", ""))
+    if internal.startswith("-100"):
+        internal = internal[4:]
+    elif internal.startswith("-"):
+        internal = internal[1:]
+    if internal:
+        return f"https://t.me/c/{internal}/{server_id}"
+    return ""
+
+
+def tlg_raw_message_to_post(
+    message: dict, chat: dict, owner: str, no_category_name: str
+) -> Optional[dict]:
+    """Transform a stored raw TDLib message into a posts-collection doc.
+
+    Mirrors the post shape built by ``TelegramProvider.download`` so the
+    converted posts flow through the normal tag pipeline unchanged. Returns
+    None when the message cannot be rendered.
+    """
+    try:
+        post_text = tlg_post_to_html(message)
+    except Exception as e:
+        logging.error(
+            "tlg_raw_message_to_post failed: %s. %s", e, traceback.format_exc()
+        )
+        return None
+
+    content = message.get("content", {}) or {}
+    entities = []
+    if "caption" in content:
+        entities = content["caption"].get("entities", [])
+    elif "text" in content:
+        if content.get("@type", "") != "messageCustomServiceAction":
+            text_obj = content.get("text", {})
+            if isinstance(text_obj, dict):
+                entities = text_obj.get("entities", [])
+    attachments_list = []
+    for entity in entities:
+        if "type" in entity and "url" in entity["type"]:
+            attachments_list.append(entity["type"]["url"])
+
+    stream_id = str(message.get("chat_id", chat.get("id", "")))
+    msg_id = message.get("id", 0)
+    pu_date = message.get("date", 0)
+    try:
+        p_date = date.fromtimestamp(int(pu_date)).strftime("%x")
+    except Exception:
+        p_date = ""
+
+    return {
+        "content": {
+            "title": "",
+            "content": gzip.compress(post_text.encode("utf-8", "replace")),
+        },
+        "feed_id": stream_id,
+        "category_id": no_category_name,
+        "id": msg_id,
+        "url": tlg_build_message_link(chat, message),
+        "date": p_date,
+        "unix_date": pu_date,
+        "read": False,
+        "favorite": False,
+        "attachments": attachments_list,
+        "tags": [],
+        "bi_grams": [],
+        "pid": generate_post_pid(TELEGRAM, stream_id, str(msg_id)),
+        "owner": owner,
+        "processing": POST_NOT_IN_PROCESSING,
+    }
+
+
 class TelegramProvider:
     def __init__(self, config: dict, db: MongoClient):
         self._config = config
@@ -666,6 +760,133 @@ class TelegramProvider:
             yield (posts, list(feeds.values()))
         finally:
             self._tlg.close()
+
+    def download_raw(self, user: dict, cursors: Dict[str, int]):
+        """Incrementally download raw TDLib messages from every chat.
+
+        ``cursors`` maps str(chat_id) -> highest message id already stored.
+        For each chat we page history newest -> oldest and stop as soon as we
+        reach a message id <= the cursor, so re-runs only fetch the diff (a
+        first run with cursor 0 backfills full history). Yields
+        ``(raw_chat, [raw_message, ...], chat_done)`` tuples; messages are
+        returned unmodified. ``chat_done`` is True on the final tuple for a
+        chat: only then may the caller advance that chat's cursor, otherwise
+        an interrupted backfill (paged newest -> oldest) would skip the
+        un-fetched older history on the next run.
+        """
+        provider = user["provider"]
+        self._tlg = Telegram(
+            app_id=self._config[provider]["app_id"],
+            app_hash=self._config[provider]["app_hash"],
+            phone=user["phone"],
+            db_key=self._config[provider]["encryption_key"],
+            db_path=self._config[provider]["db_dir"],
+        )
+        tlg_code = TelegramAuthData(self._db, user["sid"])
+        if not self._tlg.login(tlg_code.get_code, tlg_code.get_password):
+            raise Exception("Telegram login failed")
+        self._tlg.run()
+        try:
+            time.sleep(120)
+            # Pre-load chats into TDLib memory to avoid flood waits on getChat.
+            self.__requests_repeater(load_chats(limit=1000))
+            r = self.__requests_repeater(get_chats(limit=1000))
+            ids = r.update
+            chat_ids = (
+                list(ids["chat_ids"]) if ids and ids.get("chat_ids") else []
+            )
+            logging.info("Raw download: %d chats for %s", len(chat_ids), user["sid"])
+            seen_chat_ids = set()
+            for c_id in chat_ids:
+                if c_id in seen_chat_ids:
+                    continue
+                seen_chat_ids.add(c_id)
+                r = self.__requests_repeater(get_chat(c_id))
+                time.sleep(randint(1, 3))
+                if not r.update:
+                    logging.warning("Raw download: no chat details for %s", c_id)
+                    continue
+                chat = r.update
+                cursor = int(cursors.get(str(chat["id"]), 0))
+                from_id = 0
+                reached_cursor = False
+                while not reached_cursor:
+                    posts_req = self.__requests_repeater(
+                        get_chat_history(
+                            chat["id"], limit=100, from_message_id=from_id
+                        )
+                    )
+                    posts_data = posts_req.update
+                    messages = (
+                        posts_data.get("messages", []) if posts_data else []
+                    )
+                    if not messages:
+                        # Top of history reached (or empty chat).
+                        break
+                    from_id = messages[-1]["id"]
+                    new_messages = []
+                    for message in messages:
+                        if message["id"] <= cursor:
+                            # Page is newest -> oldest, so everything past
+                            # here is already stored: stop this chat.
+                            reached_cursor = True
+                            break
+                        new_messages.append(message)
+                    if new_messages:
+                        yield (chat, new_messages, False)
+                    time.sleep(uniform(1, 3))
+                # Chat fully caught up to its previous cursor (or top of
+                # history): signal the worker it may persist the new cursor.
+                yield (chat, [], True)
+                time.sleep(1)
+        finally:
+            self._tlg.close()
+
+    def raw_messages_to_posts(
+        self,
+        owner: str,
+        raw_messages: List[dict],
+        chat_by_stream: Dict[str, dict],
+    ) -> Tuple[List[dict], List[dict]]:
+        """Build (posts, feeds) from stored raw messages. No TDLib calls.
+
+        ``chat_by_stream`` maps str(chat_id) -> the raw chat object archived
+        during raw download; it is used for link derivation and feed titles.
+        """
+        routes = RSSTagRoutes(self._config["settings"]["host_name"])
+        posts: List[dict] = []
+        feeds: Dict[str, dict] = {}
+        for message in raw_messages:
+            stream_id = str(message.get("chat_id", ""))
+            chat = chat_by_stream.get(stream_id, {}) or {}
+            post = tlg_raw_message_to_post(
+                message, chat, owner, self.no_category_name
+            )
+            if not post:
+                continue
+            posts.append(post)
+            if stream_id and stream_id not in feeds:
+                feeds[stream_id] = {
+                    "createdAt": datetime.now(timezone.utc),
+                    "title": chat.get("title", stream_id) if chat else stream_id,
+                    "owner": owner,
+                    "category_id": self.no_category_name,
+                    "feed_id": stream_id,
+                    "origin_feed_id": chat.get("id", stream_id)
+                    if chat
+                    else stream_id,
+                    "category_title": self.no_category_name,
+                    "category_local_url": routes.get_url_by_endpoint(
+                        endpoint="on_category_get",
+                        params={"quoted_category": self.no_category_name},
+                    ),
+                    "local_url": routes.get_url_by_endpoint(
+                        endpoint="on_feed_get",
+                        params={"quoted_feed": stream_id},
+                    ),
+                    "favicon": "",
+                }
+        return posts, list(feeds.values())
 
     def _tlg_sync(self, phone: str, sid: str, sync_ids: List[Tuple[int, int]]) -> None:
         if not sync_ids:

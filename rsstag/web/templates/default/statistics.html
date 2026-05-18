@@ -34,6 +34,28 @@
             <td>{{ "{:,}".format(total_tokens) }}</td>
         </tr>
     </table>
+
+    <h2>Raw posts per provider</h2>
+    {% if raw_stats %}
+    <table class="stats-table">
+        <tr>
+            <td>Provider</td>
+            <td>Total</td>
+            <td>Converted</td>
+            <td>Pending</td>
+        </tr>
+        {% for row in raw_stats %}
+        <tr>
+            <td>{{ row.provider }}</td>
+            <td>{{ row.total }}</td>
+            <td>{{ row.converted }}</td>
+            <td>{{ row.pending }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% else %}
+    <p>No raw posts downloaded yet.</p>
+    {% endif %}
 </div>
 </body>
 </html>

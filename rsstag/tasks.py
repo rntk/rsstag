@@ -38,6 +38,8 @@ TASK_POST_GROUPING_CLEANUP = 24
 TASK_SNIPPET_CLUSTERING = 25
 TASK_ANTHOLOGY = 26
 TASK_TOPIC_MERGE = 27
+TASK_RAW_DOWNLOAD = 28
+TASK_RAW_TO_POSTS = 29
 
 SCOPE_MODE_ALL = "all"
 SCOPE_MODE_POSTS = "posts"
@@ -306,6 +308,52 @@ class RssTagTasks:
                                 "host": data["host"],
                                 "manual": manual,
                                 "selection": data.get("selection", {}),
+                                "provider": data.get("provider", ""),
+                            }
+                        },
+                        upsert=True,
+                    )
+                elif data["type"] == TASK_RAW_DOWNLOAD:
+                    # One incremental raw-download task per (user, provider):
+                    # re-adding it on a schedule must not pile up duplicates.
+                    # Keyed by type too so it never collides with the regular
+                    # TASK_DOWNLOAD doc for the same user+provider.
+                    self._db.tasks.update_one(
+                        {
+                            "user": data["user"],
+                            "type": TASK_RAW_DOWNLOAD,
+                            "provider": data.get("provider", ""),
+                        },
+                        {
+                            "$set": {
+                                "user": data["user"],
+                                "type": TASK_RAW_DOWNLOAD,
+                                "processing": TASK_NOT_IN_PROCESSING,
+                                "host": data.get("host", ""),
+                                "manual": manual,
+                                "selection": data.get("selection", {}),
+                                "provider": data.get("provider", ""),
+                            }
+                        },
+                        upsert=True,
+                    )
+                elif data["type"] == TASK_RAW_TO_POSTS:
+                    # One conversion task per (user, provider). Keyed by type
+                    # so it never collides with the download/raw-download
+                    # docs for the same user+provider.
+                    self._db.tasks.update_one(
+                        {
+                            "user": data["user"],
+                            "type": TASK_RAW_TO_POSTS,
+                            "provider": data.get("provider", ""),
+                        },
+                        {
+                            "$set": {
+                                "user": data["user"],
+                                "type": TASK_RAW_TO_POSTS,
+                                "processing": TASK_NOT_IN_PROCESSING,
+                                "host": data.get("host", ""),
+                                "manual": manual,
                                 "provider": data.get("provider", ""),
                             }
                         },
@@ -1076,6 +1124,8 @@ class RssTagTasks:
             TASK_SNIPPET_CLUSTERING: "Snippet clustering",
             TASK_ANTHOLOGY: "Anthology generation (supports scoped reprocess)",
             TASK_TOPIC_MERGE: "Topic merge (supports scoped reprocess)",
+            TASK_RAW_DOWNLOAD: "Download raw provider data (incremental)",
+            TASK_RAW_TO_POSTS: "Convert raw provider data to posts (incremental)",
         }
 
         if task_type in task_titles:

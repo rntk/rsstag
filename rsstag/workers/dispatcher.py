@@ -35,6 +35,8 @@ from rsstag.tasks import (
     TASK_POST_GROUPING,
     TASK_POST_GROUPING_BATCH,
     TASK_POST_GROUPING_CLEANUP,
+    TASK_RAW_DOWNLOAD,
+    TASK_RAW_TO_POSTS,
     TASK_SNIPPET_CLUSTERING,
     TASK_TAGS,
     TASK_TAGS_GROUP,
@@ -149,6 +151,8 @@ class RSSTagWorkerDispatcher:
 def _build_registry(tag_worker: TagWorker, llm_worker: LLMWorker, provider_worker: ProviderWorker) -> WorkerRegistry:
     registry = WorkerRegistry()
     registry.register(TASK_DOWNLOAD, provider_worker.handle_download)
+    registry.register(TASK_RAW_DOWNLOAD, provider_worker.handle_raw_download)
+    registry.register(TASK_RAW_TO_POSTS, provider_worker.handle_raw_to_posts)
     registry.register(TASK_MARK, provider_worker.handle_mark)
     registry.register(TASK_MARK_TELEGRAM, provider_worker.handle_mark_telegram)
     registry.register(TASK_GMAIL_SORT, provider_worker.handle_gmail_sort)
