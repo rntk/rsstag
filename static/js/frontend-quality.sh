@@ -26,6 +26,20 @@ REPORT_JSON="./quality-report.json"
 REPORT_MD="./QUALITY_REPORT.md"
 COVERAGE_THRESHOLD=80
 MUTATION_THRESHOLD=80
+TEST_LOADER="./test/es-module-loader.mjs"
+
+discover_test_files() {
+    find ./test -type f \( -name '*.test.js' -o -name '*.spec.js' \) | sort
+}
+
+load_test_files() {
+    mapfile -t TEST_FILES < <(discover_test_files)
+
+    if [ "${#TEST_FILES[@]}" -eq 0 ]; then
+        echo -e "${RED}No frontend test files found under ./test.${NC}"
+        return 1
+    fi
+}
 
 # ---------------------------------------------------------------------------
 # Dependency check / install
@@ -53,20 +67,26 @@ install_deps() {
 run_coverage() {
     echo -e "${BOLD}${BLUE}>>> Running test coverage (c8)...${NC}"
     rm -rf "$COVERAGE_DIR" .c8-temp
+    local -a TEST_FILES
+    load_test_files
 
     set +e
     npx c8 \
         --all \
+        --include='*.js' \
         --include='apps/**/*.js' \
         --include='components/**/*.js' \
         --include='storages/**/*.js' \
         --include='libs/**/*.js' \
-        --include='topics-hierarchy.js' \
         --exclude='test/**' \
         --exclude='**/*.test.js' \
+        --exclude='**/*.spec.js' \
         --exclude='node_modules/**' \
         --exclude='bundle.js' \
         --exclude='bundle.js.map' \
+        --exclude='*.min.js' \
+        --exclude='google-charts.js' \
+        --exclude='libs/cloud.min.js' \
         --exclude='coverage/**' \
         --exclude='reports/**' \
         --reporter=text-summary \
@@ -75,7 +95,7 @@ run_coverage() {
         --reporter=html \
         --report-dir="$COVERAGE_DIR" \
         --temp-dir=./.c8-temp \
-        node --loader ./test/es-module-loader.mjs --test test/*.test.js
+        node --loader "$TEST_LOADER" --test "${TEST_FILES[@]}"
     local exit_code=$?
     set -e
 
@@ -105,10 +125,16 @@ run_mutation() {
     local exit_code=$?
     set -e
 
-    # Stryker exits 1 when thresholds are not met; treat that as success for the script.
-    if [ $exit_code -ne 0 ] && [ $exit_code -ne 1 ]; then
+    # Stryker can exit 1 for threshold failures, but infrastructure errors can
+    # also use 1. Only continue when a mutation report was actually produced.
+    if [ $exit_code -ne 0 ] && { [ $exit_code -ne 1 ] || [ ! -f "$MUTATION_DIR/mutation.json" ]; }; then
         echo -e "${RED}Mutation testing encountered an error (exit $exit_code).${NC}"
         return $exit_code
+    fi
+
+    if [ ! -f "$MUTATION_DIR/mutation.json" ]; then
+        echo -e "${RED}Mutation testing did not produce $MUTATION_DIR/mutation.json.${NC}"
+        return 1
     fi
 
     echo ""
@@ -389,6 +415,62 @@ console.log('Files below ${MUTATION_THRESHOLD}% mutation score:     ' + r.mutati
 }
 
 # ---------------------------------------------------------------------------
+# Threshold enforcement
+# ---------------------------------------------------------------------------
+enforce_thresholds() {
+    echo -e "${BOLD}${BLUE}>>> Enforcing quality thresholds...${NC}"
+
+    node --input-type=module <<NODE_SCRIPT
+import { readFile } from 'fs/promises';
+
+const REPORT_JSON = './quality-report.json';
+const COVERAGE_THRESHOLD = ${COVERAGE_THRESHOLD};
+const MUTATION_THRESHOLD = ${MUTATION_THRESHOLD};
+
+const report = JSON.parse(await readFile(REPORT_JSON, 'utf8'));
+const failures = [];
+
+if (report.coverage.totalLinesPct === null) {
+    failures.push('Coverage data is missing.');
+} else if (report.coverage.totalLinesPct < COVERAGE_THRESHOLD) {
+    failures.push(
+        \`Total line coverage \${report.coverage.totalLinesPct}% is below \${COVERAGE_THRESHOLD}%.\`
+    );
+}
+
+if (report.coverage.filesBelowThreshold.length > 0) {
+    failures.push(
+        \`\${report.coverage.filesBelowThreshold.length} file(s) are below \${COVERAGE_THRESHOLD}% line coverage.\`
+    );
+}
+
+if (report.mutation.totalScore === null) {
+    failures.push('Mutation score data is missing.');
+} else if (report.mutation.totalScore < MUTATION_THRESHOLD) {
+    failures.push(
+        \`Total mutation score \${report.mutation.totalScore}% is below \${MUTATION_THRESHOLD}%.\`
+    );
+}
+
+if (report.mutation.filesBelowThreshold.length > 0) {
+    failures.push(
+        \`\${report.mutation.filesBelowThreshold.length} file(s) are below \${MUTATION_THRESHOLD}% mutation score.\`
+    );
+}
+
+if (failures.length > 0) {
+    console.error('Quality thresholds failed:');
+    for (const failure of failures) {
+        console.error(\`  - \${failure}\`);
+    }
+    process.exit(1);
+}
+
+console.log('Quality thresholds passed.');
+NODE_SCRIPT
+}
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 main() {
@@ -397,6 +479,7 @@ main() {
     run_mutation
     generate_reports
     print_summary
+    enforce_thresholds
 }
 
 main "$@"

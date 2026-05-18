@@ -268,3 +268,324 @@ test('bindEvents() handles CHAT_TOGGLE_PANEL and CHAT_START_WITH_CONTEXT', async
   assert.equal(receivedContext, 'topic context');
   assert.equal(es.calls.filter((call) => call.event === es.CHAT_UPDATED).length >= 2, true);
 });
+
+test('fetchChats() with empty response sets empty chats array', async (t) => {
+  const es = createChatEventSystem();
+  const storage = new ChatStorage(es);
+  const originalFetch = global.fetch;
+
+  global.fetch = async () => createFetchResponse({ data: [] });
+
+  t.after(() => {
+    global.fetch = originalFetch;
+  });
+
+  await storage.fetchChats();
+
+  assert.deepEqual(storage.getState().chats, []);
+  assert.equal(storage.getState().isLoading, false);
+});
+
+test('fetchChats() with response missing data key defaults to empty array', async (t) => {
+  const es = createChatEventSystem();
+  const storage = new ChatStorage(es);
+  const originalFetch = global.fetch;
+
+  global.fetch = async () => createFetchResponse({});
+
+  t.after(() => {
+    global.fetch = originalFetch;
+  });
+
+  await storage.fetchChats();
+
+  assert.deepEqual(storage.getState().chats, []);
+});
+
+test('loadChat() success sets activeChat and emits CHAT_UPDATED', async (t) => {
+  const es = createChatEventSystem();
+  const storage = new ChatStorage(es);
+  const originalFetch = global.fetch;
+
+  global.fetch = async (url) => {
+    if (url === storage.urls.detail('chat-1')) {
+      return createFetchResponse({
+        data: { _id: 'chat-1', title: 'My Chat', messages: [{ role: 'user', content: 'hi' }] },
+      });
+    }
+    throw new Error(`Unexpected URL: ${url}`);
+  };
+
+  t.after(() => {
+    global.fetch = originalFetch;
+  });
+
+  await storage.loadChat('chat-1');
+
+  assert.deepEqual(storage.getState().activeChat, {
+    _id: 'chat-1',
+    title: 'My Chat',
+    messages: [{ role: 'user', content: 'hi' }],
+  });
+  assert.equal(storage.getState().isLoading, false);
+  assert.equal(es.calls.at(-1).event, es.CHAT_UPDATED);
+});
+
+test('loadChat() API error response clears loading without throwing', async (t) => {
+  const es = createChatEventSystem();
+  const storage = new ChatStorage(es);
+  const originalFetch = global.fetch;
+  const originalConsoleError = console.error;
+
+  global.fetch = async () => createFetchResponse({ error: 'chat not found' });
+  console.error = () => {};
+
+  t.after(() => {
+    global.fetch = originalFetch;
+    console.error = originalConsoleError;
+  });
+
+  await storage.loadChat('nonexistent');
+
+  assert.equal(storage.getState().isLoading, false);
+  assert.equal(storage.getState().activeChat, null);
+});
+
+test('loadChat() network error clears loading without throwing', async (t) => {
+  const storage = new ChatStorage(createChatEventSystem());
+  const originalFetch = global.fetch;
+  const originalConsoleError = console.error;
+
+  global.fetch = async () => {
+    throw new Error('connection refused');
+  };
+  console.error = () => {};
+
+  t.after(() => {
+    global.fetch = originalFetch;
+    console.error = originalConsoleError;
+  });
+
+  await storage.loadChat('chat-1');
+
+  assert.equal(storage.getState().isLoading, false);
+});
+
+test('renameChat() success updates activeChat title and returns true', async (t) => {
+  const es = createChatEventSystem();
+  const storage = new ChatStorage(es);
+  const originalFetch = global.fetch;
+
+  storage._setState({ activeChat: { _id: 'chat-1', title: 'Old Title' } });
+
+  global.fetch = async (url) => {
+    if (url === storage.urls.rename('chat-1')) {
+      return createFetchResponse({ data: true });
+    }
+    if (url === storage.urls.list) {
+      return createFetchResponse({ data: [{ _id: 'chat-1' }] });
+    }
+    throw new Error(`Unexpected URL: ${url}`);
+  };
+
+  t.after(() => {
+    global.fetch = originalFetch;
+  });
+
+  const result = await storage.renameChat('chat-1', 'New Title');
+
+  assert.equal(result, true);
+  assert.equal(storage.getState().activeChat.title, 'New Title');
+});
+
+test('renameChat() API error returns false', async (t) => {
+  const storage = new ChatStorage(createChatEventSystem());
+  const originalFetch = global.fetch;
+  const originalConsoleError = console.error;
+
+  global.fetch = async () => createFetchResponse({ error: 'invalid title' });
+  console.error = () => {};
+
+  t.after(() => {
+    global.fetch = originalFetch;
+    console.error = originalConsoleError;
+  });
+
+  const result = await storage.renameChat('chat-1', '');
+
+  assert.equal(result, false);
+});
+
+test('renameChat() network error returns false', async (t) => {
+  const storage = new ChatStorage(createChatEventSystem());
+  const originalFetch = global.fetch;
+  const originalConsoleError = console.error;
+
+  global.fetch = async () => {
+    throw new Error('network down');
+  };
+  console.error = () => {};
+
+  t.after(() => {
+    global.fetch = originalFetch;
+    console.error = originalConsoleError;
+  });
+
+  const result = await storage.renameChat('chat-1', 'New Title');
+
+  assert.equal(result, false);
+});
+
+test('deleteChat() success clears activeChat if it matches and returns true', async (t) => {
+  const es = createChatEventSystem();
+  const storage = new ChatStorage(es);
+  const originalFetch = global.fetch;
+
+  storage._setState({ activeChat: { _id: 'chat-9', title: 'To Delete' } });
+
+  global.fetch = async (url) => {
+    if (url === storage.urls.delete('chat-9')) {
+      return createFetchResponse({ data: true });
+    }
+    if (url === storage.urls.list) {
+      return createFetchResponse({ data: [] });
+    }
+    throw new Error(`Unexpected URL: ${url}`);
+  };
+
+  t.after(() => {
+    global.fetch = originalFetch;
+  });
+
+  const result = await storage.deleteChat('chat-9');
+
+  assert.equal(result, true);
+  assert.equal(storage.getState().activeChat, null);
+});
+
+test('deleteChat() API error returns false', async (t) => {
+  const storage = new ChatStorage(createChatEventSystem());
+  const originalFetch = global.fetch;
+  const originalConsoleError = console.error;
+
+  global.fetch = async () => createFetchResponse({ error: 'cannot delete' });
+  console.error = () => {};
+
+  t.after(() => {
+    global.fetch = originalFetch;
+    console.error = originalConsoleError;
+  });
+
+  const result = await storage.deleteChat('chat-1');
+
+  assert.equal(result, false);
+});
+
+test('deleteChat() network error returns false', async (t) => {
+  const storage = new ChatStorage(createChatEventSystem());
+  const originalFetch = global.fetch;
+  const originalConsoleError = console.error;
+
+  global.fetch = async () => {
+    throw new Error('timeout');
+  };
+  console.error = () => {};
+
+  t.after(() => {
+    global.fetch = originalFetch;
+    console.error = originalConsoleError;
+  });
+
+  const result = await storage.deleteChat('chat-1');
+
+  assert.equal(result, false);
+});
+
+test('forkChat() success loads new chat and returns new id', async (t) => {
+  const es = createChatEventSystem();
+  const storage = new ChatStorage(es);
+  const originalFetch = global.fetch;
+
+  let forkBody = null;
+  global.fetch = async (url, options) => {
+    if (url === storage.urls.fork('chat-5')) {
+      forkBody = options.body;
+      return createFetchResponse({ data: { chat_id: 'forked-1' } });
+    }
+    if (url === storage.urls.detail('forked-1')) {
+      return createFetchResponse({ data: { _id: 'forked-1', title: 'Forked', messages: [] } });
+    }
+    if (url === storage.urls.list) {
+      return createFetchResponse({ data: [{ _id: 'chat-5' }] });
+    }
+    throw new Error(`Unexpected URL: ${url}`);
+  };
+
+  t.after(() => {
+    global.fetch = originalFetch;
+  });
+
+  const newId = await storage.forkChat('chat-5', 3);
+
+  assert.equal(newId, 'forked-1');
+  assert.equal(forkBody, JSON.stringify({ message_index: 3 }));
+});
+
+test('forkChat() API error returns null', async (t) => {
+  const storage = new ChatStorage(createChatEventSystem());
+  const originalFetch = global.fetch;
+  const originalConsoleError = console.error;
+
+  global.fetch = async () => createFetchResponse({ error: 'cannot fork' });
+  console.error = () => {};
+
+  t.after(() => {
+    global.fetch = originalFetch;
+    console.error = originalConsoleError;
+  });
+
+  const result = await storage.forkChat('chat-1', 0);
+
+  assert.equal(result, null);
+});
+
+test('forkChat() network error returns null', async (t) => {
+  const storage = new ChatStorage(createChatEventSystem());
+  const originalFetch = global.fetch;
+  const originalConsoleError = console.error;
+
+  global.fetch = async () => {
+    throw new Error('connection reset');
+  };
+  console.error = () => {};
+
+  t.after(() => {
+    global.fetch = originalFetch;
+    console.error = originalConsoleError;
+  });
+
+  const result = await storage.forkChat('chat-1', 0);
+
+  assert.equal(result, null);
+});
+
+test('createChat() network error returns null', async (t) => {
+  const storage = new ChatStorage(createChatEventSystem());
+  const originalFetch = global.fetch;
+  const originalConsoleError = console.error;
+
+  global.fetch = async () => {
+    throw new Error('network unreachable');
+  };
+  console.error = () => {};
+
+  t.after(() => {
+    global.fetch = originalFetch;
+    console.error = originalConsoleError;
+  });
+
+  const result = await storage.createChat('ctx');
+
+  assert.equal(result, null);
+  assert.equal(storage.getState().isLoading, false);
+});

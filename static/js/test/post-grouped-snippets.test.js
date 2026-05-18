@@ -32,16 +32,19 @@ function loadSnippetFunctions() {
   const source = fs.readFileSync(new URL('../post-grouped-snippets.js', import.meta.url), 'utf8');
   const script = [
     'const CONTEXT_STEP = 1;',
+    extractFunction(source, 'buildTagHighlightRe'),
+    extractFunction(source, 'highlightTagWordsInHtml'),
     extractFunction(source, 'parseIndices'),
     extractFunction(source, 'buildSnippetSegmentMarkup'),
     extractFunction(source, 'updateExtendContextButton'),
     extractFunction(source, 'renderExpandedSnippet'),
-    'module.exports = { parseIndices, updateExtendContextButton, renderExpandedSnippet };',
+    'module.exports = { parseIndices, updateExtendContextButton, renderExpandedSnippet, buildTagHighlightRe, highlightTagWordsInHtml };',
   ].join('\n\n');
 
   const context = {
     module: { exports: {} },
     exports: {},
+    window: {},
   };
 
   vm.runInNewContext(script, context);
@@ -146,4 +149,128 @@ test('renderExpandedSnippet disables the button when no more context exists', ()
 
   assert.equal(button.disabled, true);
   assert.equal(button.textContent, 'Full context shown');
+});
+
+// ============================================================
+// highlightTagWordsInHtml and buildTagHighlightRe tests
+// ============================================================
+
+const SNIPPET_SOURCE = fs.readFileSync(new URL('../post-grouped-snippets.js', import.meta.url), 'utf8');
+
+test('buildTagHighlightRe returns null when TAG_WORDS is empty or missing', () => {
+  // Source-inspection: verify the function guards against empty/missing TAG_WORDS
+  assert.ok(/window\.TAG_WORDS/.test(SNIPPET_SOURCE), 'should read window.TAG_WORDS');
+  assert.ok(/!Array\.isArray\(words\)/.test(SNIPPET_SOURCE), 'should check isArray');
+  assert.ok(/!words\.length/.test(SNIPPET_SOURCE), 'should check length');
+  assert.ok(/return\s+null/.test(SNIPPET_SOURCE), 'should return null');
+});
+
+test('buildTagHighlightRe creates a case-insensitive word-boundary regex', () => {
+  // Source-inspection: verify regex construction
+  assert.ok(/new\s+RegExp/.test(SNIPPET_SOURCE), 'should create RegExp');
+  assert.ok(/\\b/.test(SNIPPET_SOURCE), 'should use word boundaries');
+  assert.ok(/['"]gi['"]/.test(SNIPPET_SOURCE), 'should use gi flags');
+  assert.ok(/\.join\(['"]\|['"]\)/.test(SNIPPET_SOURCE), 'should join words with |');
+});
+
+test('buildTagHighlightRe escapes regex special characters in words', () => {
+  // Source-inspection: verify escaping of special characters
+  assert.ok(/\.replace\s*\(\s*\/\[/, 'should escape special regex chars in words');
+  assert.ok(/\\\$&/.test(SNIPPET_SOURCE), 'should use $& replacement');
+});
+
+test('highlightTagWordsInHtml returns input unchanged when regex is null', () => {
+  const { highlightTagWordsInHtml } = loadSnippetFunctions();
+
+  const input = '<p>hello world</p>';
+  assert.equal(highlightTagWordsInHtml(input, null), input);
+  assert.equal(highlightTagWordsInHtml(input, undefined), input);
+});
+
+test('highlightTagWordsInHtml wraps matching words in <mark> tags', () => {
+  const { highlightTagWordsInHtml } = loadSnippetFunctions();
+
+  const re = /\b(hello|world)\b/gi;
+  const result = highlightTagWordsInHtml('hello beautiful world', re);
+  assert.equal(result, '<mark>hello</mark> beautiful <mark>world</mark>');
+});
+
+test('highlightTagWordsInHtml skips HTML tags and does not highlight inside them', () => {
+  const { highlightTagWordsInHtml } = loadSnippetFunctions();
+
+  const re = /\b(hello|world)\b/gi;
+  const result = highlightTagWordsInHtml('<p class="hello">hello world</p>', re);
+  // The tag <p class="hello"> should not be modified
+  assert.equal(result, '<p class="hello"><mark>hello</mark> <mark>world</mark></p>');
+});
+
+test('highlightTagWordsInHtml handles multiple tags and mixed content', () => {
+  const { highlightTagWordsInHtml } = loadSnippetFunctions();
+
+  const re = /\b(foo)\b/gi;
+  const result = highlightTagWordsInHtml('<div>foo</div><span>bar foo</span>', re);
+  assert.equal(result, '<div><mark>foo</mark></div><span>bar <mark>foo</mark></span>');
+});
+
+test('highlightTagWordsInHtml is case-insensitive and preserves original case', () => {
+  const { highlightTagWordsInHtml } = loadSnippetFunctions();
+
+  const re = /\b(hello)\b/gi;
+  const result = highlightTagWordsInHtml('HELLO Hello hello', re);
+  assert.equal(result, '<mark>HELLO</mark> <mark>Hello</mark> <mark>hello</mark>');
+});
+
+// ============================================================
+// updateExtendContextButton dedicated tests
+// ============================================================
+
+test('updateExtendContextButton enables button when can_extend_before is true', () => {
+  const { updateExtendContextButton } = loadSnippetFunctions();
+
+  const button = { disabled: false, textContent: '', title: '' };
+  updateExtendContextButton(button, { can_extend_before: true, can_extend_after: false });
+
+  assert.equal(button.disabled, false);
+  assert.equal(button.textContent, 'Extend context');
+  assert.match(button.title, /Load more/);
+});
+
+test('updateExtendContextButton enables button when can_extend_after is true', () => {
+  const { updateExtendContextButton } = loadSnippetFunctions();
+
+  const button = { disabled: false, textContent: '', title: '' };
+  updateExtendContextButton(button, { can_extend_before: false, can_extend_after: true });
+
+  assert.equal(button.disabled, false);
+  assert.equal(button.textContent, 'Extend context');
+});
+
+test('updateExtendContextButton disables button when both flags are false', () => {
+  const { updateExtendContextButton } = loadSnippetFunctions();
+
+  const button = { disabled: false, textContent: 'Extend', title: '' };
+  updateExtendContextButton(button, { can_extend_before: false, can_extend_after: false });
+
+  assert.equal(button.disabled, true);
+  assert.equal(button.textContent, 'Full context shown');
+  assert.match(button.title, /All available/);
+});
+
+test('updateExtendContextButton disables button when contextData is null', () => {
+  const { updateExtendContextButton } = loadSnippetFunctions();
+
+  const button = { disabled: false, textContent: 'Extend', title: '' };
+  updateExtendContextButton(button, null);
+
+  assert.equal(button.disabled, true);
+  assert.equal(button.textContent, 'Full context shown');
+});
+
+test('updateExtendContextButton disables button when contextData is undefined', () => {
+  const { updateExtendContextButton } = loadSnippetFunctions();
+
+  const button = { disabled: false, textContent: '', title: '' };
+  updateExtendContextButton(button, undefined);
+
+  assert.equal(button.disabled, true);
 });

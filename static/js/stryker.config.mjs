@@ -4,33 +4,41 @@ const config = {
   reporters: ['html', 'clear-text', 'progress', 'json'],
   testRunner: 'command',
   commandRunner: {
-    command: 'node --loader ./test/es-module-loader.mjs --test test/*.test.js'
+    command: 'sh -c \'node --loader ./test/es-module-loader.mjs --test $(find ./test -type f \\( -name "*.test.js" -o -name "*.spec.js" \\) | sort)\''
   },
   coverageAnalysis: 'off',
   concurrency: 1,
-  // Files without setInterval/long-running mutations
+  // Source files with import-based tests (compatible with stryker instrumentation).
+  // Files using readFileSync source-scanning (all components, top-level page files,
+  // render-helper) are intentionally excluded because stryker wraps string literals
+  // with mutant tracking code, breaking regex-based source pattern matching.
   mutate: [
-    'libs/event_system.js',
+    'storages/**/*.js',
     'libs/chart-utils.js',
+    'libs/event_system.js',
+    'libs/rsstag_utils.js',
     'libs/stopwords.js',
-    'storages/progressbar-storage.js',
-    'storages/tag-contexts-classification-storage.js',
-    'storages/topics-texts-storage.js',
-    'storages/wordtree-storage.js',
   ],
   ignorePatterns: [
     'coverage/**',
+    'coverage-check/**',
+    '.c8-temp/**',
+    '.c8-temp-check/**',
     'reports/**',
     'node_modules/**',
     'bundle.js',
     'bundle.js.map',
+    'libs/cloud.min.js',
+    'google-charts.js',
+    'Chart.min.js',
+    'd3.v6.min.js',
     'quality-report.json',
     'QUALITY_REPORT.md'
   ],
   thresholds: {
     high: 80,
     low: 60,
-    break: null
+    break: 80
   }
 };
 export default config;

@@ -3,18 +3,28 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 
-function extractExportedFunction(source, name) {
-  const start = source.indexOf(`export function ${name}`);
+// NOTE: app.js has top-level browser code that cannot run in Node.js.
+// Tests use VM-based function extraction instead of direct import.
+// Coverage for app.js is tracked via --all flag in c8 (instrumentation without execution).
+
+// ============================================================
+// Section 1: Source-inspection and VM-based tests for exported functions
+// ============================================================
+
+const appSource = fs.readFileSync(new URL('../apps/app.js', import.meta.url), 'utf8');
+
+function extractExportedFunction(name) {
+  const start = appSource.indexOf(`export function ${name}`);
   if (start === -1) {
     throw new Error(`Unable to find function ${name}`);
   }
 
-  const bodyStart = source.indexOf('{', start);
+  const bodyStart = appSource.indexOf('{', start);
   let depth = 0;
   let end = bodyStart;
 
-  for (; end < source.length; end += 1) {
-    const char = source[end];
+  for (; end < appSource.length; end += 1) {
+    const char = appSource[end];
     if (char === '{') {
       depth += 1;
     } else if (char === '}') {
@@ -25,14 +35,13 @@ function extractExportedFunction(source, name) {
     }
   }
 
-  return source.slice(start, end + 1).replace('export function', 'function');
+  return appSource.slice(start, end + 1).replace('export function', 'function');
 }
 
 function loadAppFunctions(contextOverrides = {}) {
-  const source = fs.readFileSync(new URL('../apps/app.js', import.meta.url), 'utf8');
   const functionNames = ['resolvePageType', 'initSnippetHoverCards', 'initSentenceClusterPage'];
   const scriptSource = [
-    ...functionNames.map((name) => extractExportedFunction(source, name)),
+    ...functionNames.map((name) => extractExportedFunction(name)),
     'module.exports = { resolvePageType, initSnippetHoverCards, initSentenceClusterPage };',
   ].join('\n\n');
 
