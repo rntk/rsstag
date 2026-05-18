@@ -2885,6 +2885,50 @@ def _build_entity_snippet_matchers(
     return per_word, highlight_re
 
 
+# Surface tokens of a multi-word entity must co-occur within this many tokens
+# inside a single snippet. Tighter than the post-level lemma window so the
+# snippets stay tightly about the entity instead of merely mentioning each
+# component word somewhere far apart.
+ENTITY_SNIPPET_COOCCUR_WINDOW = 5
+
+
+def _snippet_words_cooccur(
+    text: str, per_word_res: list[re.Pattern], window: int
+) -> bool:
+    """Whether every entity word occurs, and (for multi-word) within ``window``.
+
+    Single-word entities only need to be present. Multi-word entities must
+    have all component words appear close together so a snippet that merely
+    mentions each word in unrelated places is rejected.
+    """
+    if not per_word_res:
+        return True
+
+    if len(per_word_res) == 1:
+        return bool(per_word_res[0].search(text))
+
+    tokens: list[str] = re.findall(r"\w+", text, re.UNICODE)
+    positions: list[list[int]] = [[] for _ in per_word_res]
+    for index, token in enumerate(tokens):
+        for group_index, word_re in enumerate(per_word_res):
+            if word_re.search(token):
+                positions[group_index].append(index)
+
+    if any(not group_positions for group_positions in positions):
+        return False
+
+    for anchor in positions[0]:
+        chosen: list[int] = [anchor]
+        for group_positions in positions[1:]:
+            chosen.append(
+                min(group_positions, key=lambda pos: abs(pos - anchor))
+            )
+        if max(chosen) - min(chosen) <= window:
+            return True
+
+    return False
+
+
 def on_entity_grouped_snippets_get(
     app: "RSSTagApplication",
     user: dict,
@@ -2923,7 +2967,9 @@ def on_entity_grouped_snippets_get(
             if only_unread and snippet.get("read", False):
                 continue
             text: str = snippet.get("text", "")
-            if not all(word_re.search(text) for word_re in per_word_res):
+            if not _snippet_words_cooccur(
+                text, per_word_res, ENTITY_SNIPPET_COOCCUR_WINDOW
+            ):
                 continue
             highlighted = {
                 **snippet,
