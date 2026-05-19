@@ -10,11 +10,13 @@ from rsstag.tasks import (
     TASK_NOOP,
     TASK_POST_GROUPING,
     TASK_TAGS,
+    TASK_TOPIC_MERGE,
     TASK_W2V,
     RssTagTasks,
 )
 from rsstag.users import RssTagUsers
 from rsstag.workers.registry import WorkerRegistry
+from rsstag.topic_merge import TOPIC_MERGE_VERSION
 from tests.db_utils import DBHelper
 
 
@@ -276,6 +278,138 @@ class TestWorkerTaskDispatch(MongoTaskDispatchTestCase):
 
         self.assertTrue(finished)
         self.assertIsNone(self.db.tasks.find_one({"_id": task_id}))
+
+    def test_topic_merge_task_noops_and_removes_when_all_topics_done(self) -> None:
+        user: Dict[str, Any] = self._create_user("topic_merge_done_user")
+        task_id = self.db.tasks.insert_one(
+            {
+                "user": user["sid"],
+                "type": TASK_TOPIC_MERGE,
+                "processing": 0,
+                "manual": True,
+            }
+        ).inserted_id
+        self.db.post_grouping.insert_one(
+            {
+                "owner": user["sid"],
+                "post_ids": ["post-1"],
+                "groups": {"Technology > AI": ["snippet"]},
+                "topic_merged": TOPIC_MERGE_VERSION,
+            }
+        )
+
+        task: Dict[str, Any] = self.tasks.get_task(self.users)
+
+        self.assertEqual(task["type"], TASK_NOOP)
+        self.assertIsNone(self.db.tasks.find_one({"_id": task_id}))
+
+    def test_topic_merge_task_stays_locked_until_finished(self) -> None:
+        user: Dict[str, Any] = self._create_user("topic_merge_claim_user")
+        task_id = self.db.tasks.insert_one(
+            {
+                "user": user["sid"],
+                "type": TASK_TOPIC_MERGE,
+                "processing": 0,
+                "manual": True,
+            }
+        ).inserted_id
+        self.db.post_grouping.insert_one(
+            {
+                "owner": user["sid"],
+                "post_ids": ["post-1"],
+                "groups": {"Technology > AI": ["snippet"]},
+            }
+        )
+
+        task: Dict[str, Any] = self.tasks.get_task(self.users)
+
+        self.assertEqual(task["type"], TASK_TOPIC_MERGE)
+        self.assertEqual(task["data"]["pending_topic_groupings"], 1)
+        stored: Dict[str, Any] | None = self.db.tasks.find_one({"_id": task_id})
+        self.assertIsNotNone(stored)
+        self.assertNotEqual(stored["processing"], 0)
+
+    def test_finish_topic_merge_keeps_task_when_pending_docs_remain(self) -> None:
+        user: Dict[str, Any] = self._create_user("topic_merge_pending_user")
+        task_id = self.db.tasks.insert_one(
+            {
+                "user": user["sid"],
+                "type": TASK_TOPIC_MERGE,
+                "processing": 0,
+                "manual": True,
+            }
+        ).inserted_id
+        self.db.post_grouping.insert_one(
+            {
+                "owner": user["sid"],
+                "post_ids": ["post-1"],
+                "groups": {"Technology > AI": ["snippet"]},
+            }
+        )
+        task: Dict[str, Any] = self.tasks.get_task(self.users)
+
+        finished: bool = self.tasks.finish_task(task)
+
+        self.assertTrue(finished)
+        stored: Dict[str, Any] | None = self.db.tasks.find_one({"_id": task_id})
+        self.assertIsNotNone(stored)
+        self.assertEqual(stored["processing"], 0)
+
+    def test_finish_topic_merge_removes_task_when_docs_are_marked_done(self) -> None:
+        user: Dict[str, Any] = self._create_user("topic_merge_finish_user")
+        task_id = self.db.tasks.insert_one(
+            {
+                "user": user["sid"],
+                "type": TASK_TOPIC_MERGE,
+                "processing": 0,
+                "manual": True,
+            }
+        ).inserted_id
+        grouping_id = self.db.post_grouping.insert_one(
+            {
+                "owner": user["sid"],
+                "post_ids": ["post-1"],
+                "groups": {"Technology > AI": ["snippet"]},
+            }
+        ).inserted_id
+        task: Dict[str, Any] = self.tasks.get_task(self.users)
+        self.db.post_grouping.update_one(
+            {"_id": grouping_id},
+            {"$set": {"topic_merged": TOPIC_MERGE_VERSION}},
+        )
+
+        finished: bool = self.tasks.finish_task(task)
+
+        self.assertTrue(finished)
+        self.assertIsNone(self.db.tasks.find_one({"_id": task_id}))
+
+    def test_release_failed_topic_merge_freezes_after_max_attempts(self) -> None:
+        user: Dict[str, Any] = self._create_user("topic_merge_failed_user")
+        task_id = self.db.tasks.insert_one(
+            {
+                "user": user["sid"],
+                "type": TASK_TOPIC_MERGE,
+                "processing": 0,
+                "manual": True,
+                "max_failed_attempts": 1,
+            }
+        ).inserted_id
+        self.db.post_grouping.insert_one(
+            {
+                "owner": user["sid"],
+                "post_ids": ["post-1"],
+                "groups": {"Technology > AI": ["snippet"]},
+            }
+        )
+        task: Dict[str, Any] = self.tasks.get_task(self.users)
+
+        released: bool = self.tasks.release_failed_task(task, "merge failed")
+
+        self.assertTrue(released)
+        stored: Dict[str, Any] | None = self.db.tasks.find_one({"_id": task_id})
+        self.assertIsNotNone(stored)
+        self.assertTrue(bool(stored["failed"]))
+        self.assertEqual(stored["processing"], -1)
 
 
 if __name__ == "__main__":

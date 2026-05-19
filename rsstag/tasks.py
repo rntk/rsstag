@@ -8,6 +8,7 @@ from bson.objectid import ObjectId
 from rsstag.llm.batch import BatchTaskStatus
 from rsstag.post_grouping import RssTagPostGrouping
 from rsstag.tags import RssTagTags
+from rsstag.topic_merge import build_pending_topic_merge_query
 
 TASK_ALL = -1
 TASK_NOOP = 0
@@ -108,6 +109,7 @@ TASK_FREEZED = -1
 TAG_NOT_IN_PROCESSING = 0
 POST_GROUPING_NOT_IN_PROCESSING = 0
 MAX_EXTERNAL_ERROR_LENGTH = 1000
+MAX_TOPIC_MERGE_FAILED_ATTEMPTS = 3
 EXTERNAL_WORKER_ALLOWED_TASK_TYPES: Set[int] = {
     TASK_POST_GROUPING,
     TASK_TAG_CLASSIFICATION,
@@ -248,7 +250,7 @@ class RssTagTasks:
 
     def _build_post_scope_predicate(self, owner: str, task_doc: dict) -> Dict[str, Any]:
         query: Dict[str, Any] = {"owner": owner}
-        scope = self._normalize_scope(task_doc.get("scope"))
+        scope: Dict[str, Any] = self._normalize_scope(task_doc.get("scope"))
         mode = scope["mode"]
         builder = self._scope_filter_builders.get(mode)
         if builder:
@@ -262,6 +264,15 @@ class RssTagTasks:
 
     def _count_pending_anthologies(self, owner: str) -> int:
         return self._db.anthologies.count_documents({"owner": owner, "status": "pending"})
+
+    def _count_pending_topic_merge_docs(self, owner: str, task_doc: dict) -> int:
+        scope: Dict[str, Any] = self._normalize_scope(task_doc.get("scope"))
+        query: Optional[Dict[str, Any]] = build_pending_topic_merge_query(
+            owner, scope, RssTagPostGrouping(self._db)
+        )
+        if query is None:
+            return 0
+        return self._db.post_grouping.count_documents(query)
 
     def _find_pending_grouping_post(
         self,
@@ -644,15 +655,20 @@ class RssTagTasks:
                     {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
                 )
             elif user_task["type"] == TASK_TOPIC_MERGE:
-                # The merge agent is idempotent and re-runnable, so release the
-                # task lock immediately. finish_task removes the task on
-                # success; on failure it stays unlocked for a later retry
-                # instead of deadlocking with processing stuck set.
-                data = []
-                self._db.tasks.update_one(
-                    {"_id": user_task["_id"]},
-                    {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
+                pending_docs: int = self._count_pending_topic_merge_docs(
+                    task["user"]["sid"], user_task
                 )
+                if pending_docs == 0:
+                    task["type"] = TASK_NOOP
+                    can_delete = self._can_finalize_completed_task(user_task)
+                    if can_delete:
+                        self._db.tasks.delete_one({"_id": user_task["_id"]})
+                    else:
+                        self._db.tasks.update_one(
+                            {"_id": user_task["_id"]},
+                            {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
+                        )
+                data = {"pending_topic_groupings": pending_docs}
             elif user_task["type"] == TASK_ANTHOLOGY:
                 data = self._db.anthologies.find_one_and_update(
                     {"owner": task["user"]["sid"], "status": "pending"},
@@ -851,6 +867,52 @@ class RssTagTasks:
 
         return result
 
+    def release_failed_task(self, task: dict, error: str = "") -> bool:
+        """Unlock a failed task for retry, freezing it after too many attempts.
+
+        Generic over task type: the retry budget is read from the task's own
+        ``max_failed_attempts`` field, falling back to
+        ``MAX_TOPIC_MERGE_FAILED_ATTEMPTS`` only because topic-merge is the sole
+        caller today. Other task types adopting this should set
+        ``max_failed_attempts`` on the task doc rather than rely on that default.
+        """
+        task_id: Any = task.get("_id")
+        if not task_id:
+            return False
+
+        try:
+            failed_attempts: int = int(task.get("failed_attempts", 0)) + 1
+            max_failed_attempts: int = int(
+                task.get("max_failed_attempts", MAX_TOPIC_MERGE_FAILED_ATTEMPTS)
+            )
+            message: str = error or (
+                f"Task handler returned false for type {task.get('type')}"
+            )
+            if failed_attempts >= max_failed_attempts:
+                self.mark_task_failed(task_id, message)
+                return True
+
+            self._db.tasks.update_one(
+                {"_id": task_id},
+                {
+                    "$set": {
+                        "processing": TASK_NOT_IN_PROCESSING,
+                        "failed_attempts": failed_attempts,
+                        "last_error": message[:MAX_EXTERNAL_ERROR_LENGTH],
+                        "updated_at": time.time(),
+                    }
+                },
+            )
+            return True
+        except Exception as e:
+            self._log.error(
+                "Can`t release failed task %s, type %s. Info: %s",
+                task_id,
+                task.get("type"),
+                e,
+            )
+            return False
+
     def finish_task(self, task: dict) -> bool:
         remove_task = True
         try:
@@ -983,6 +1045,15 @@ class RssTagTasks:
                     self._db.tags.bulk_write(updates, ordered=False)
             elif task["type"] == TASK_ANTHOLOGY:
                 remove_task = self._count_pending_anthologies(task["user"]["sid"]) == 0
+            elif task["type"] == TASK_TOPIC_MERGE:
+                remove_task = (
+                    self._count_pending_topic_merge_docs(task["user"]["sid"], task) == 0
+                )
+                if not remove_task:
+                    self._db.tasks.update_one(
+                        {"_id": task["_id"]},
+                        {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
+                    )
             if remove_task:
                 self.remove_task(task["_id"])
                 if not task.get("manual", False):

@@ -257,6 +257,7 @@ def worker(config: Dict[str, Any]) -> None:
     last_heartbeat = time.time()
     try:
         while not stop_requested:
+            task = None
             try:
                 # Update heartbeat every 10 seconds
                 if time.time() - last_heartbeat > 10:
@@ -292,11 +293,27 @@ def worker(config: Dict[str, Any]) -> None:
                     if task["type"] == TASK_CLUSTERING:
                         users.update_by_sid(task["user"]["sid"], {"in_queue": False})
                 else:
+                    if task["type"] == TASK_TOPIC_MERGE:
+                        tasks.release_failed_task(
+                            task, "Topic merge handler returned false"
+                        )
                     time.sleep(randint(3, 8))
             except Exception as e:
                 logging.error(
                     "worker got exception: {}. {}".format(e, traceback.format_exc())
                 )
+                # The topic-merge task is claimed (processing set) before it is
+                # handed to the handler. If the handler raised, releasing the
+                # lock here keeps the task retryable instead of deadlocking it
+                # with processing stuck set until a manual unfreeze.
+                if task is not None and task.get("type") == TASK_TOPIC_MERGE:
+                    try:
+                        tasks.release_failed_task(task, "Topic merge raised: {}".format(e))
+                    except Exception as release_exc:
+                        logging.error(
+                            "Failed to release topic merge task after exception: %s",
+                            release_exc,
+                        )
                 time.sleep(randint(3, 8))
     finally:
         try:

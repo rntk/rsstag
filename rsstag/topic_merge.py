@@ -20,10 +20,43 @@ _MAX_NEW_LABELS_PER_CALL = 60
 # Bump when the merge prompt or grouping algorithm changes. The per-document
 # marker stores this number (not a bare 1) so a later run can tell which docs
 # were merged under an older scheme; the collection query skips only docs at
-# the current version.
-_TOPIC_MERGE_VERSION = 1
+# the current version. Public so the task dispatcher can gate on it without
+# importing a private name.
+TOPIC_MERGE_VERSION = 1
 
 _NO_MERGES_TOKEN = "NO_MERGES"
+
+
+def build_pending_topic_merge_query(
+    owner: str,
+    scope: Optional[Dict[str, Any]],
+    post_grouping: RssTagPostGrouping,
+    force: bool = False,
+) -> Optional[Dict[str, Any]]:
+    """Build the post_grouping query for docs still needing a topic merge.
+
+    Shared by the merge agent and the task dispatcher so the "is it done?"
+    accounting cannot drift from what the merge actually processes. Returns
+    ``None`` when a non-global scope resolves to zero posts (nothing to do).
+
+    $ne also matches docs missing the marker or merged under an older version,
+    so a version bump (or save_grouped_posts clearing the marker when a doc's
+    groups change) re-merges them. ``force`` ignores the marker entirely.
+    """
+    query: Dict[str, Any] = {"owner": owner}
+    if not force:
+        query["topic_merged"] = {"$ne": TOPIC_MERGE_VERSION}
+    mode = str((scope or {}).get("mode", "all")) if scope else "all"
+    if mode != "all":
+        post_ids: List[str] = [
+            str(pid)
+            for pid in post_grouping.get_scope_post_ids(owner, scope)
+            if pid
+        ]
+        if not post_ids:
+            return None
+        query["post_ids"] = {"$in": post_ids}
+    return query
 
 
 class TopicMergeError(RuntimeError):
@@ -203,23 +236,12 @@ class TopicMergeAgent:
         self, scope: Optional[Dict[str, Any]], force: bool
     ) -> List[str]:
         # Skip grouping docs already merged at the current version so their
-        # labels are never re-bucketed or re-sent to the LLM. $ne also matches
-        # docs missing the marker or merged under an older version, so a
-        # version bump (or save_grouped_posts clearing the marker when a doc's
-        # groups change) re-merges them. force ignores the marker entirely.
-        query: Dict[str, Any] = {"owner": self._owner}
-        if not force:
-            query["topic_merged"] = {"$ne": _TOPIC_MERGE_VERSION}
-        mode = str((scope or {}).get("mode", "all")) if scope else "all"
-        if mode != "all":
-            post_ids = [
-                str(pid)
-                for pid in self._post_grouping.get_scope_post_ids(self._owner, scope)
-                if pid
-            ]
-            if not post_ids:
-                return []
-            query["post_ids"] = {"$in": post_ids}
+        # labels are never re-bucketed or re-sent to the LLM.
+        query = build_pending_topic_merge_query(
+            self._owner, scope, self._post_grouping, force
+        )
+        if query is None:
+            return []
 
         distinct: Dict[str, None] = {}
         for doc in self._db.post_grouping.find(
@@ -240,7 +262,7 @@ class TopicMergeAgent:
         try:
             self._db.post_grouping.update_many(
                 {"_id": {"$in": self._collected_doc_ids}},
-                {"$set": {"topic_merged": _TOPIC_MERGE_VERSION}},
+                {"$set": {"topic_merged": TOPIC_MERGE_VERSION}},
             )
         except Exception as exc:
             self._log.error(
