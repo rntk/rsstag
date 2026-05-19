@@ -195,5 +195,70 @@ class TestWebMutations(MongoWebTestCase):
         self.assertEqual(updated_user.get("x_code_verifier", ""), "")
 
 
+class TestPruneDownloadedData(MongoWebTestCase):
+    """Tests for pruning downloaded and generated user data."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        super().setUpClass()
+        cls.user_doc, cls.user_sid = cls.seed_test_user("pruneuser", "prunepass")
+        cls.data: Dict[str, Any] = cls.seed_minimal_data(cls.user_sid)
+        cls.auth_client: Client = cls.get_authenticated_client(cls.user_sid)
+        cls.app.users.add_provider(
+            cls.user_sid,
+            "telegram",
+            {"login": "prune-channel", "token": "provider-token", "retoken": False},
+        )
+        cls.token: Optional[str] = cls.app.tokens.create(cls.user_sid)
+
+    def test_prune_data_removes_downloaded_data_but_keeps_sources(self) -> None:
+        owner: str = self.user_sid
+        derived_collections: list[str] = [
+            "raw_posts",
+            "raw_download_state",
+            "post_grouping",
+            "snippet_clusters",
+            "topic_aliases",
+            "anthologies",
+            "anthology_runs",
+            "llm_batch_results",
+        ]
+        for collection_name in derived_collections:
+            self.test_db[collection_name].insert_one(
+                {"owner": owner, "value": collection_name}
+            )
+        self.test_db.words.insert_one({"owner": owner, "word": "testtag", "numbers": [2]})
+        self.test_db.tasks.insert_one(
+            {"user": owner, "type": TASK_LETTERS, "processing": 0}
+        )
+
+        response = self.auth_client.post("/prune-data")
+
+        self.assertIn(response.status_code, (301, 302))
+        for collection_name in [
+            "posts",
+            "tags",
+            "bi_grams",
+            "letters",
+            "words",
+            *derived_collections,
+        ]:
+            with self.subTest(collection=collection_name):
+                self.assertEqual(
+                    0,
+                    self.test_db[collection_name].count_documents({"owner": owner}),
+                )
+        self.assertEqual(0, self.test_db.tasks.count_documents({"user": owner}))
+        self.assertEqual(1, self.test_db.feeds.count_documents({"owner": owner}))
+
+        user: Optional[dict] = self.app.users.get_by_sid(owner)
+        self.assertIsNotNone(user)
+        self.assertIn("telegram", user.get("providers", {}))
+        self.assertEqual({}, user.get("in_queue"))
+        self.assertIsNotNone(
+            self.test_db.tokens.find_one({"owner": owner, "token": self.token})
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

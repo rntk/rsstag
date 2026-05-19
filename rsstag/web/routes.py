@@ -659,6 +659,11 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/prune-data",
+                "endpoint": "on_prune_data_post",
+                "methods": ["POST"],
+            },
+            {
                 "url": "/download/posts/<string:post_id>",
                 "endpoint": "on_download_post_get",
                 "methods": ["GET"],

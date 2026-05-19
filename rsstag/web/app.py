@@ -283,6 +283,61 @@ class RSSTagApplication(object):
             status=status,
         )
 
+    def _delete_owner_collection(self, collection_name: str, owner: str) -> int:
+        result = self.db[collection_name].delete_many({"owner": owner})
+        return int(result.deleted_count)
+
+    def _prune_owner_data(self, owner: str) -> Dict[str, int]:
+        collection_names: List[str] = [
+            "posts",
+            "raw_posts",
+            "raw_download_state",
+            "tags",
+            "bi_grams",
+            "letters",
+            "words",
+            "post_grouping",
+            "snippet_clusters",
+            "topic_aliases",
+            "anthologies",
+            "anthology_runs",
+            "llm_batch_results",
+        ]
+        deleted_counts: Dict[str, int] = {}
+        for collection_name in collection_names:
+            deleted_counts[collection_name] = self._delete_owner_collection(
+                collection_name, owner
+            )
+        deleted_counts["tasks"] = self._delete_tasks_for_owner(owner)
+        self.users.update_by_sid(owner, {"in_queue": {}})
+        return deleted_counts
+
+    def _delete_tasks_for_owner(self, owner: str) -> int:
+        result = self.db.tasks.delete_many({"user": owner})
+        return int(result.deleted_count)
+
+    def on_prune_data_post(self, user: dict, request: Request) -> Response:
+        try:
+            deleted_counts: Dict[str, int] = self._prune_owner_data(user["sid"])
+            logging.info(
+                "Pruned downloaded data for user %s. Deleted counts: %s",
+                user["sid"],
+                deleted_counts,
+            )
+        except Exception as e:
+            logging.error(
+                "Can`t prune downloaded data for user %s. Info: %s",
+                user.get("sid"),
+                e,
+            )
+            return self.on_root_get(
+                user,
+                request,
+                ["Unable to prune downloaded data. Please check logs and try again."],
+            )
+
+        return redirect(self.routes.get_url_by_endpoint("on_root_get"))
+
     def _get_worker_token_context(self, request: Request) -> Optional[Dict[str, str]]:
         auth_header = request.headers.get("Authorization", "")
         token = ""

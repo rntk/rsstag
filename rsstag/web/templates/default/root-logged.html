@@ -147,6 +147,17 @@
                         <a href="/processing" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Processing Items</a>
                         <a href="/statistics" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Statistics</a>
                         <a href="/tokens" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">API Tokens</a>
+                        <form
+                            action="/prune-data"
+                            method="post"
+                            class="prune-data-form"
+                            onsubmit="return confirm('Remove downloaded posts, raw data, generated tags, topics, and queued processing tasks? Sources and providers will stay connected.');"
+                        >
+                            <button type="submit" class="prune-data-button">
+                                <span class="material-symbols-outlined text-lg">delete_sweep</span>
+                                <span>Prune downloaded data</span>
+                            </button>
+                        </form>
                         {% if connected_providers %}
                         <a href="/refresh" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors text-primary font-bold">Refresh posts</a>
                         {% endif %}

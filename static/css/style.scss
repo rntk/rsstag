@@ -47,6 +47,39 @@ img {
   max-height: 12pt;
 }
 
+.prune-data-form {
+  display: block;
+}
+
+.prune-data-button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 0.5rem;
+  color: var(--rsst-error);
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  text-align: left;
+  transition:
+    background-color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+    color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  width: 100%;
+}
+
+.prune-data-button:hover,
+.prune-data-button:focus {
+  background-color: var(--rsst-error-container);
+  color: var(--rsst-on-error-container);
+  outline: none;
+}
+
+.prune-data-button:active {
+  transform: scale(0.95);
+}
+
 /*a {
     color: #008aff;
     font-size: 11pt;
