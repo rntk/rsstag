@@ -2705,6 +2705,7 @@ body.anthology-compare-modal-open {
     color: #666;
     border-bottom: 3px solid transparent;
     margin-bottom: -2px;
+    text-decoration: none;
 
     &.active {
       color: #4285f4;
@@ -3917,6 +3918,172 @@ body.anthology-compare-modal-open {
   padding: 20px;
   color: #6b7280;
   font-style: italic;
+}
+
+/* ============================================================================
+   Topic Hierarchy Full Canvas Page (topic-hierarchy.html)
+   ============================================================================ */
+
+.topic-hierarchy-body {
+  overflow: hidden;
+  background: #eef2f5;
+}
+
+.topic-hierarchy-page {
+  width: 100%;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+.topic-hierarchy-canvas-shell {
+  position: fixed;
+  inset: 0;
+  padding-top: 58px;
+  background:
+    linear-gradient(rgba(36, 48, 62, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(36, 48, 62, 0.05) 1px, transparent 1px),
+    #eef2f5;
+  background-size: 32px 32px;
+}
+
+.topic-hierarchy-toolbar {
+  position: absolute;
+  top: 74px;
+  left: 18px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: calc(100vw - 36px);
+  padding: 10px 12px;
+  border: 1px solid rgba(24, 38, 53, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 28px rgba(20, 34, 47, 0.12);
+  backdrop-filter: blur(8px);
+}
+
+.topic-hierarchy-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+
+  h1 {
+    margin: 0;
+    font-size: 16px;
+    line-height: 1.2;
+    color: #17212b;
+    white-space: nowrap;
+  }
+
+  span {
+    color: #5f6f7c;
+    font-size: 12px;
+    font-weight: 700;
+  }
+}
+
+.topic-hierarchy-controls {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+
+  button {
+    min-width: 34px;
+    min-height: 30px;
+    border: 1px solid #c7d2dc;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #203040;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+
+    &:hover {
+      background: #f3f7fa;
+      border-color: #90a4b6;
+    }
+  }
+}
+
+.topic-hierarchy-viewport {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+
+.topic-hierarchy-viewport.is-dragging {
+  cursor: grabbing;
+}
+
+.topic-hierarchy-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.topic-hierarchy-full {
+  width: max-content;
+  min-width: 1400px;
+  max-height: none;
+  margin: 0;
+  padding: 18px;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.topic-hierarchy-full .th-root {
+  --th-row-height: calc(40px * var(--th-readable-scale, 1));
+  width: max-content;
+  min-width: 1320px;
+  padding: 70px 40px 40px 0;
+}
+
+.topic-hierarchy-full .th-node__label {
+  flex-basis: calc(300px * var(--th-readable-scale, 1));
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.08);
+}
+
+.topic-hierarchy-full .th-node__label-sticky {
+  font-size: calc(16px * var(--th-readable-scale, 1));
+}
+
+.topic-hierarchy-full .th-leaf {
+  min-width: calc(260px * var(--th-readable-scale, 1));
+  font-size: calc(14px * var(--th-readable-scale, 1));
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.08);
+}
+
+.topic-hierarchy-full .th-leaf__count {
+  font-size: calc(12px * var(--th-readable-scale, 1));
+}
+
+@media (max-width: 760px) {
+  .topic-hierarchy-canvas-shell {
+    padding-top: 86px;
+  }
+
+  .topic-hierarchy-toolbar {
+    top: 92px;
+    left: 10px;
+    right: 10px;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .topic-hierarchy-controls {
+    width: 100%;
+  }
 }
 
 /* ============================================================================

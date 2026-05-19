@@ -134,6 +134,7 @@ test('resolvePageType handles expected routes and fallback', () => {
     ['/map', 'map'],
     ['/tag-net', 'tag-net'],
     ['/topics-mindmap', 'topics-mindmap'],
+    ['/topic-hierarchy', 'topic-hierarchy'],
     ['/sentence-clusters', 'sentence-clusters'],
     ['/sentence-clusters/123', 'sentence-cluster'],
     ['/topics-list', 'topics-list'],

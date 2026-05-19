@@ -59,7 +59,7 @@ import GlobalChatPanel from '../components/global-chat.js';
 import ClustersTopics from '../components/ClustersTopics.js';
 import { initTopicsPage } from '../topics-list.js';
 import TopicsMindmap from '../components/topics-mindmap.js';
-import { renderTopicsHierarchy } from '../topics-hierarchy.js';
+import { initTopicHierarchyCanvasPage, renderTopicsHierarchy } from '../topics-hierarchy.js';
 
 function buildGroupedTopicsHierarchy(flatTopics, tagName) {
   const root = { name: 'root', children: [] };
@@ -387,6 +387,9 @@ export function resolvePageType(path) {
   if (/^\/topics-mindmap$/.test(path)) {
     return 'topics-mindmap';
   }
+  if (/^\/topic-hierarchy$/.test(path)) {
+    return 'topic-hierarchy';
+  }
   if (/^\/sentence-clusters\/[0-9]+$/.test(path)) {
     return 'sentence-cluster';
   }
@@ -592,6 +595,8 @@ export function initApp() {
   } else if (pageType === 'topics-mindmap') {
     const mindmap = new TopicsMindmap();
     mindmap.render('#topics_mindmap_chart', window.mindmap_data);
+  } else if (pageType === 'topic-hierarchy') {
+    initTopicHierarchyCanvasPage();
   } else if (pageType === 'sentence-cluster') {
     initSnippetHoverCards();
     initSentenceClusterPage();

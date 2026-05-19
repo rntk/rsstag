@@ -3445,6 +3445,35 @@ def on_topics_mindmap_get(
     )
 
 
+def on_topic_hierarchy_get(
+    app: "RSSTagApplication", user: dict, request: Request
+) -> Response:
+    """Handler for the full-canvas topic hierarchy page (all topics)."""
+    context_tags: Optional[list[str]] = _get_context_tags(user)
+    normalized_context_tags: Optional[list[str]] = _normalize_context_tags(context_tags)
+    only_unread: bool = user.get("settings", {}).get("only_unread", False)
+    topic_counts: dict[str, dict]
+    topic_counts, _ = _build_topics_index(
+        app, user, normalized_context_tags, only_unread=only_unread
+    )
+
+    topics_tree: list[dict] = _build_topics_tree(topic_counts)
+    hierarchy_data: dict = {
+        "name": "Topics",
+        "children": _convert_topics_to_sunburst(topics_tree),
+    }
+
+    page: Template = app.template_env.get_template("topic-hierarchy.html")
+    return Response(
+        page.render(
+            hierarchy_data=hierarchy_data,
+            user_settings=user["settings"],
+            provider=user["provider"],
+        ),
+        mimetype="text/html",
+    )
+
+
 def on_topics_search(
     app: "RSSTagApplication", user: dict, request: Request
 ) -> Response:

@@ -190,5 +190,220 @@ export function renderTopicsHierarchy(container, data) {
   container.appendChild(root);
 }
 
-export { hashString, hierarchyHighlightColor, hierarchyAccentColor, countRenderedRows };
+/**
+ * Clamp a canvas zoom scale to the useful range for overview and detail work.
+ * @param {number} scale
+ * @returns {number}
+ */
+function clampScale(scale) {
+  return Math.min(2.5, Math.max(0.12, scale));
+}
+
+/**
+ * Initialize the full-page hierarchy canvas.
+ * @param {object} options
+ * @param {string} options.viewportId
+ * @param {string} options.canvasId
+ * @param {string} options.containerId
+ * @param {object} options.data
+ */
+export function initTopicHierarchyCanvasPage({
+  viewportId = 'topic_hierarchy_viewport',
+  canvasId = 'topic_hierarchy_canvas',
+  containerId = 'topic_hierarchy_container',
+  data = window.topic_hierarchy_data,
+} = {}) {
+  const viewport = document.getElementById(viewportId);
+  const canvas = document.getElementById(canvasId);
+  const container = document.getElementById(containerId);
+  if (!viewport || !canvas || !container) {
+    return;
+  }
+
+  renderTopicsHierarchy(container, data);
+
+  let scale = 1;
+  let translate = { x: 24, y: 24 };
+  let isDragging = false;
+  let lastPointer = { x: 0, y: 0 };
+
+  const zoomLabel = document.getElementById('topic_hierarchy_zoom_label');
+  const updateTransform = () => {
+    const readableScale = Math.min(3.2, Math.max(0.85, 1 / Math.sqrt(scale)));
+    container.style.setProperty('--th-readable-scale', String(readableScale));
+    canvas.style.transform = `translate(${translate.x}px, ${translate.y}px) scale(${scale})`;
+    if (zoomLabel) {
+      zoomLabel.textContent = `${Math.round(scale * 100)}%`;
+    }
+  };
+
+  const setScaleAt = (nextScale, anchor) => {
+    const clampedScale = clampScale(nextScale);
+    if (clampedScale === scale) {
+      return;
+    }
+    const rect = viewport.getBoundingClientRect();
+    const cursor = anchor || { x: rect.width / 2, y: rect.height / 2 };
+    const worldX = (cursor.x - translate.x) / scale;
+    const worldY = (cursor.y - translate.y) / scale;
+    translate = {
+      x: cursor.x - worldX * clampedScale,
+      y: cursor.y - worldY * clampedScale,
+    };
+    scale = clampedScale;
+    updateTransform();
+  };
+
+  const getViewportSize = () => {
+    const rect = viewport.getBoundingClientRect();
+    return {
+      width: rect.width || window.innerWidth,
+      height: rect.height || window.innerHeight,
+    };
+  };
+
+  const getContentSize = () => {
+    const root = container.querySelector('.th-root');
+    if (!root) {
+      return { width: 1, height: 1 };
+    }
+    return {
+      width: Math.max(root.scrollWidth, root.offsetWidth, 1),
+      height: Math.max(root.scrollHeight, root.offsetHeight, 1),
+    };
+  };
+
+  const panBy = (dx, dy) => {
+    translate = {
+      x: translate.x + dx,
+      y: translate.y + dy,
+    };
+    updateTransform();
+  };
+
+  const moveToTop = () => {
+    translate = { ...translate, y: 24 };
+    updateTransform();
+  };
+
+  const moveToBottom = () => {
+    const viewportSize = getViewportSize();
+    const contentSize = getContentSize();
+    translate = {
+      ...translate,
+      y: Math.min(24, viewportSize.height - contentSize.height * scale - 24),
+    };
+    updateTransform();
+  };
+
+  const fitToView = () => {
+    const root = container.querySelector('.th-root');
+    if (!root) {
+      return;
+    }
+    const viewportRect = viewport.getBoundingClientRect();
+    const contentWidth = Math.max(root.scrollWidth, root.offsetWidth, 1);
+    const contentHeight = Math.max(root.scrollHeight, root.offsetHeight, 1);
+    const fitScale = clampScale(
+      Math.min(
+        (viewportRect.width - 48) / contentWidth,
+        (viewportRect.height - 48) / contentHeight,
+      ),
+    );
+    scale = fitScale;
+    translate = {
+      x: Math.max(24, (viewportRect.width - contentWidth * scale) / 2),
+      y: Math.max(24, (viewportRect.height - contentHeight * scale) / 2),
+    };
+    updateTransform();
+  };
+
+  viewport.addEventListener('wheel', (event) => {
+    event.preventDefault();
+    const rect = viewport.getBoundingClientRect();
+    const factor = event.deltaY > 0 ? 0.88 : 1.14;
+    setScaleAt(scale * factor, {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    });
+  }, { passive: false });
+
+  viewport.addEventListener('mousedown', (event) => {
+    if (event.button !== 0 || event.target.closest('a, button, input, textarea, select')) {
+      return;
+    }
+    isDragging = true;
+    lastPointer = { x: event.clientX, y: event.clientY };
+    viewport.classList.add('is-dragging');
+    event.preventDefault();
+  });
+
+  window.addEventListener('mousemove', (event) => {
+    if (!isDragging) {
+      return;
+    }
+    translate = {
+      x: translate.x + event.clientX - lastPointer.x,
+      y: translate.y + event.clientY - lastPointer.y,
+    };
+    lastPointer = { x: event.clientX, y: event.clientY };
+    updateTransform();
+  });
+
+  window.addEventListener('mouseup', () => {
+    isDragging = false;
+    viewport.classList.remove('is-dragging');
+  });
+
+  document.getElementById('topic_hierarchy_zoom_in')?.addEventListener('click', () => {
+    setScaleAt(scale * 1.2);
+  });
+  document.getElementById('topic_hierarchy_zoom_out')?.addEventListener('click', () => {
+    setScaleAt(scale / 1.2);
+  });
+  document.getElementById('topic_hierarchy_reset')?.addEventListener('click', () => {
+    scale = 1;
+    translate = { x: 24, y: 24 };
+    updateTransform();
+  });
+  document.getElementById('topic_hierarchy_fit')?.addEventListener('click', fitToView);
+  window.addEventListener('resize', fitToView);
+  window.addEventListener('keydown', (event) => {
+    if (event.defaultPrevented) {
+      return;
+    }
+    if (
+      event.target &&
+      typeof event.target.closest === 'function' &&
+      event.target.closest('input, textarea, select, [contenteditable="true"]')
+    ) {
+      return;
+    }
+
+    const viewportSize = getViewportSize();
+    const arrowStep = event.shiftKey ? 180 : 70;
+    const pageStep = Math.max(120, viewportSize.height * 0.8);
+    const handlers = {
+      ArrowUp: () => panBy(0, arrowStep),
+      ArrowDown: () => panBy(0, -arrowStep),
+      ArrowLeft: () => panBy(arrowStep, 0),
+      ArrowRight: () => panBy(-arrowStep, 0),
+      PageUp: () => panBy(0, pageStep),
+      PageDown: () => panBy(0, -pageStep),
+      Home: moveToTop,
+      End: moveToBottom,
+    };
+    const handler = handlers[event.key];
+    if (!handler) {
+      return;
+    }
+    event.preventDefault();
+    handler();
+  });
+
+  updateTransform();
+  window.requestAnimationFrame(fitToView);
+}
+
+export { hashString, hierarchyHighlightColor, hierarchyAccentColor, countRenderedRows, clampScale };
 export default renderTopicsHierarchy;

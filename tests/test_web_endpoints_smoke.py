@@ -103,6 +103,9 @@ class TestEndpointSmoke(MongoWebTestCase):
     def test_topics_mindmap(self) -> None:
         self._get("/topics-mindmap")
 
+    def test_topic_hierarchy(self) -> None:
+        self._get("/topic-hierarchy")
+
     def test_topics_list(self) -> None:
         self._get("/topics-list")
 

@@ -223,6 +223,11 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/topic-hierarchy",
+                "endpoint": "on_topic_hierarchy_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/topics-list",
                 "endpoint": "on_topics_list_get",
                 "methods": ["GET"],

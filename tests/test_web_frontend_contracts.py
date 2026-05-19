@@ -88,6 +88,19 @@ class TestWebFrontendContracts(MongoWebTestCase):
             ],
         )
 
+    def test_topic_hierarchy_page_contract(self) -> None:
+        html = self._get_html("/topic-hierarchy")
+        self.assertContainsAll(
+            html,
+            [
+                '/static/js/bundle.js',
+                'id="topic_hierarchy_viewport"',
+                'id="topic_hierarchy_canvas"',
+                'id="topic_hierarchy_container"',
+                "window.topic_hierarchy_data =",
+            ],
+        )
+
     def test_post_grouped_page_contract(self) -> None:
         html = self._get_html(f"/post-grouped/{self.post_ids}")
         self.assertContainsAll(

@@ -1,0 +1,60 @@
+<html>
+
+<head>
+    <title>Topic Hierarchy</title>
+    {% include "head-data.html" %}
+</head>
+
+<body class="topic-hierarchy-body">
+    {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}{% from
+    'context-filter-bar.html' import context_filter_bar with context %}
+
+    <div id="global_tools">
+        <div class="left_half">
+            <div id="link_on_root" class="global_tools_button">
+                <a href="/">main</a>
+            </div>
+            <div id="help_button" class="global_tools_button">
+                <a href="/topics-list">topics list</a>
+            </div>
+            <div id="topics_mindmap_link" class="global_tools_button">
+                <a href="/topics-mindmap">mindmap</a>
+            </div>
+        </div>
+        <div class="right_half">
+            {{ g_status.global_status() }}
+            {{ menu.settings_menu() }}
+        </div>
+        {{ context_filter_bar() }}
+    </div>
+
+    <main class="topic-hierarchy-page">
+        <div class="topic-hierarchy-canvas-shell">
+            <div class="topic-hierarchy-toolbar" aria-label="Topic hierarchy controls">
+                <div class="topic-hierarchy-title">
+                    <h1>Topic Hierarchy</h1>
+                    <span id="topic_hierarchy_zoom_label">100%</span>
+                </div>
+                <div class="topic-hierarchy-controls">
+                    <button id="topic_hierarchy_zoom_out" type="button" title="Zoom out">-</button>
+                    <button id="topic_hierarchy_zoom_in" type="button" title="Zoom in">+</button>
+                    <button id="topic_hierarchy_fit" type="button" title="Fit all topics">Fit</button>
+                    <button id="topic_hierarchy_reset" type="button" title="Reset view">Reset</button>
+                </div>
+            </div>
+            <div id="topic_hierarchy_viewport" class="topic-hierarchy-viewport">
+                <div id="topic_hierarchy_canvas" class="topic-hierarchy-canvas">
+                    <div id="topic_hierarchy_container" class="topics-hierarchy-wrapper topic-hierarchy-full"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script type="text/javascript">
+        window.topic_hierarchy_data = {{ hierarchy_data | tojson | safe }};
+    </script>
+    <script type="text/javascript" src="/static/js/bundle.js"></script>
+
+</body>
+
+</html>
