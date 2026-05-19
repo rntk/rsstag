@@ -119,7 +119,6 @@ class RssTagUsers:
                 sid,
                 provider,
                 self.build_provider_data(login, password, token, provider),
-                set_active=True,
             )
         return sid
 
@@ -136,22 +135,14 @@ class RssTagUsers:
             data["login"] = login
         return data
 
-    def add_provider(
-        self, sid: str, provider: str, data: dict, set_active: bool = False
-    ) -> Optional[bool]:
+    def add_provider(self, sid: str, provider: str, data: dict) -> Optional[bool]:
         update = {f"providers.{provider}": data}
-        if set_active:
-            update["provider"] = provider
         self._db.users.update_one({"sid": sid}, {"$set": update})
         return True
 
     def update_provider(self, sid: str, provider: str, data: dict) -> Optional[bool]:
         update = {f"providers.{provider}.{k}": v for k, v in data.items()}
         self._db.users.update_one({"sid": sid}, {"$set": update})
-        return True
-
-    def set_active_provider(self, sid: str, provider: str) -> Optional[bool]:
-        self._db.users.update_one({"sid": sid}, {"$set": {"provider": provider}})
         return True
 
     def update_by_sid(self, sid: str, data: dict) -> Optional[bool]:

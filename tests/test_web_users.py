@@ -150,7 +150,6 @@ class TestWebUsersRefreshAndStatus(MongoWebTestCase):
             self.user_sid,
             "bazqux",
             {"login": "test", "token": "tok"},
-            set_active=True,
         )
         resp = self.auth_client.get("/refresh")
         self.assertIn(resp.status_code, (301, 302))

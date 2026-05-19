@@ -67,7 +67,7 @@ class ProviderWorker:
 
     def handle_download(self, task: Dict[str, Any]) -> bool:
         logging.info("Start downloading for user")
-        provider_name = task["data"].get("provider") or task["user"].get("provider")
+        provider_name = task["data"].get("provider")
         provider_user = self._users.get_provider_user(task["user"], provider_name)
         if not provider_user:
             logging.warning(
@@ -229,9 +229,7 @@ class ProviderWorker:
         fully caught up, so an interrupted run safely re-scans and dedupes
         instead of skipping un-fetched older history.
         """
-        provider_name = task["data"].get("provider") or task["user"].get(
-            "provider"
-        )
+        provider_name = task["data"].get("provider")
         provider_user = self._users.get_provider_user(
             task["user"], provider_name
         )
@@ -393,9 +391,7 @@ class ProviderWorker:
         marked converted afterwards so re-runs only handle new data. Does not
         chain into the tag pipeline (run Build Tags separately).
         """
-        provider_name = task["data"].get("provider") or task["user"].get(
-            "provider"
-        )
+        provider_name = task["data"].get("provider")
         provider = self._providers.get(provider_name)
         transform = getattr(provider, "raw_messages_to_posts", None)
         if provider is None or not callable(transform):
@@ -469,7 +465,7 @@ class ProviderWorker:
         return success
 
     def handle_mark(self, task: Dict[str, Any]) -> bool:
-        provider_name = task["data"].get("provider") or task["user"].get("provider")
+        provider_name = task["data"].get("provider")
         provider_user = self._users.get_provider_user(task["user"], provider_name)
         if not provider_user:
             logging.warning(

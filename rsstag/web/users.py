@@ -198,17 +198,12 @@ def on_oauth2callback_get(
     if refresh_token:
         provider_payload["refresh_token"] = refresh_token
 
-    set_active = not account_user.get("provider")
     if not existing_entry:
         logging.info("Linking Gmail provider for user: %s", account_user["sid"])
-        app.users.add_provider(
-            account_user["sid"], GMAIL, provider_payload, set_active=set_active
-        )
+        app.users.add_provider(account_user["sid"], GMAIL, provider_payload)
     else:
         logging.info("Updating Gmail provider for user: %s", account_user["sid"])
         app.users.update_provider(account_user["sid"], GMAIL, provider_payload)
-        if set_active:
-            app.users.set_active_provider(account_user["sid"], GMAIL)
 
     response = redirect(
         app.routes.get_url_by_endpoint(
@@ -407,13 +402,10 @@ def on_x_oauth2callback_get(
     if token_data.get("expires_in"):
         provider_payload["token_expires_at"] = int(time.time()) + int(token_data["expires_in"])
 
-    set_active = not current_user.get("provider")
     if not existing_entry:
-        app.users.add_provider(user["sid"], X, provider_payload, set_active=set_active)
+        app.users.add_provider(user["sid"], X, provider_payload)
     else:
         app.users.update_provider(user["sid"], X, provider_payload)
-        if set_active:
-            app.users.set_active_provider(user["sid"], X)
 
     _clear_x_oauth_state(app, user["sid"])
     return redirect(
@@ -615,8 +607,8 @@ def on_root_get(
         err = []
     only_unread = True
     if user:
-        provider = user.get("provider", "")
-        if provider:
+        connected_providers = list(user.get("providers", {}).keys())
+        if connected_providers:
             posts = app.posts.get_stat(user["sid"])
             sentiments = app.tags.get_sentiments(
                 user["sid"], user["settings"]["only_unread"]
@@ -631,7 +623,7 @@ def on_root_get(
                 support=app.config["settings"]["support"],
                 version=app.config["settings"]["version"],
                 user_settings=user["settings"],
-                provider=provider,
+                connected_providers=connected_providers,
                 posts=posts,
                 sentiments=sentiments,
             ),
@@ -696,7 +688,6 @@ def on_data_sources_get(app: "RSSTagApplication", user: dict) -> Response:
     return Response(
         page.render(
             sources=sources,
-            active_provider=user.get("provider", ""),
             version=app.config["settings"]["version"],
             support=app.config["settings"]["support"],
             user_settings=user["settings"],
@@ -720,7 +711,6 @@ def on_provider_detail_get(
             err=err or [],
             provider=provider,
             entry=entry,
-            active_provider=user.get("provider", ""),
             login_url=app.routes.get_url_by_endpoint(
                 endpoint="on_provider_detail_post", params={"provider": provider}
             ),
@@ -748,15 +738,6 @@ def on_provider_detail_post(
     app: "RSSTagApplication", user: dict, provider: str, request: Request
 ) -> Response:
     action = request.form.get("action")
-    if action == "activate":
-        if app.users.get_provider_entry(user, provider):
-            app.users.set_active_provider(user["sid"], provider)
-        return redirect(
-            app.routes.get_url_by_endpoint(
-                endpoint="on_provider_detail_get", params={"provider": provider}
-            )
-        )
-
     if action == "download":
         if not user["in_queue"]:
             added = app.tasks.add_task(
@@ -802,7 +783,6 @@ def on_provider_detail_post(
                     user["sid"],
                     provider,
                     app.users.build_provider_data(login, password, token, provider),
-                    set_active=True,
                 )
                 app.tasks.unfreeze_tasks(user, TASK_ALL)
             elif token == "":
@@ -817,7 +797,6 @@ def on_provider_detail_post(
                 user["sid"],
                 provider,
                 app.users.build_provider_data(login, password, "", provider),
-                set_active=True,
             )
             app.users.update_by_sid(
                 user["sid"], {TELEGRAM_CODE_FIELD: ""}
@@ -830,7 +809,6 @@ def on_provider_detail_post(
                 user["sid"],
                 provider,
                 app.users.build_provider_data(login, password, "", provider),
-                set_active=True,
             )
         else:
             err.append("File not exists")

@@ -47,14 +47,14 @@
                 <div class="flex items-center space-x-3">
                     <div class="text-right hidden lg:block">
                         <p class="text-xs font-bold text-primary">
-                            {% if provider %}
-                                {{provider}}
+                            {% if connected_providers %}
+                                {{ connected_providers | join(', ') }}
                             {% else %}
                                 No source
                             {% endif %}
                         </p>
                         <p class="text-[10px] text-on-surface-variant">
-                            {% if provider %}
+                            {% if connected_providers %}
                                 {{posts['unread']}} unread
                             {% endif %}
                         </p>
@@ -134,9 +134,11 @@
                     </h3>
                     <div class="space-y-1">
                         <a href="/data-sources" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors font-semibold text-primary">Data sources</a>
-                        {% if provider == "telegram" or provider == "bazqux" or provider == "x" %}
-                        <a href="/provider/{{provider}}/feeds" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Select channels/feeds</a>
-                        {% endif %}
+                        {% for p in connected_providers %}
+                            {% if p == "telegram" or p == "bazqux" or p == "x" %}
+                        <a href="/provider/{{p}}/feeds" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Select channels/feeds ({{p}})</a>
+                            {% endif %}
+                        {% endfor %}
                         <a href="/download/posts" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Download Posts</a>
                         <a href="/tasks" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Tasks Queue</a>
                         <a href="/metadata" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Metadata Tasks</a>
@@ -144,7 +146,7 @@
                         <a href="/processing" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Processing Items</a>
                         <a href="/statistics" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">Statistics</a>
                         <a href="/tokens" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors">API Tokens</a>
-                        {% if provider %}
+                        {% if connected_providers %}
                         <a href="/refresh" class="block px-4 py-2 rounded-lg text-sm hover:bg-surface-container-high transition-colors text-primary font-bold">Refresh posts</a>
                         {% endif %}
                     </div>

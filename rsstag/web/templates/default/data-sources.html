@@ -25,7 +25,7 @@
                 <a href="{{ source.detail_url }}">
                     {{ providers.getName(source.id) }}
                     {% if source.connected %}
-                        (connected{% if source.id == active_provider %}, active{% endif %})
+                        (connected)
                     {% else %}
                         (not connected)
                     {% endif %}

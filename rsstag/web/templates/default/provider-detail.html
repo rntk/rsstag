@@ -23,7 +23,7 @@
         <p id="error">{{e}}</p>
     {% endfor %}
     {% if entry %}
-        <p>Status: connected{% if provider == active_provider %} (active){% endif %}</p>
+        <p>Status: connected</p>
         {% if entry.login %}
             <p>Login: {{ entry.login }}</p>
         {% endif %}
@@ -47,11 +47,6 @@
     {% endif %}
 
     {% if entry %}
-        <form action="{{ login_url }}" method="POST">
-            <input type="hidden" name="action" value="activate" />
-            <input type="submit" value="Make active" {% if provider == active_provider %}disabled{% endif %} />
-        </form>
-
         <form action="{{ login_url }}" method="POST">
             <input type="hidden" name="action" value="download" />
             <input type="submit" value="Download" />
