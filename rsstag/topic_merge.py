@@ -411,6 +411,7 @@ class TopicMergeAgent:
                 [prompt],
                 provider_key="worker_llm",
                 default="llamacpp",
+                temperature=0.8,
             )
         except Exception as exc:
             # Do not swallow into {}: that would mint self-canonical aliases
