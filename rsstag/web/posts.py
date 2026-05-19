@@ -862,7 +862,7 @@ def on_category_get(
             group="category",
             words=[],
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -929,7 +929,7 @@ def on_tag_get(
             group="tag",
             words=current_tag["words"],
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -988,7 +988,7 @@ def on_bi_gram_get(
             group="tag",
             words=current_bi_gram["words"],
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -1053,7 +1053,7 @@ def on_feed_get(
             group="feed",
             words=[],
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -1333,7 +1333,7 @@ def on_get_posts_with_tags(
                 selected_tags=",".join(tags),
                 group="tag",
                 user_settings=user["settings"],
-                provider=user["provider"],
+                provider=user.get("provider", ""),
             ),
             mimetype="text/html",
         )
@@ -1555,7 +1555,7 @@ def on_entity_get(
             words=list(words),
             entity_snippets_url=f"/entity-grouped-snippets/{quoted_tag}?window={window}",
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -1787,7 +1787,7 @@ def on_entity_get_(
             group="tag",
             words=list(words),
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -1869,7 +1869,7 @@ def on_posts_get(
             group="tag",
             words=[],
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -1915,7 +1915,7 @@ def on_cluster_get(app: "RSSTagApplication", user: dict, cluster: int) -> Respon
             group="tag",
             words=[],
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -1936,7 +1936,7 @@ def on_post_grouped_get(
         page.render(
             **page_context,
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -2243,7 +2243,7 @@ def on_post_compare_get(
         page.render(
             **page_context,
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -2646,7 +2646,7 @@ def on_post_grouped_snippets_get(
             current_topic_label=_topic_filter_label(topic_filter),
             current_topic_query=_topic_filter_query_string(topic_filter),
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -2719,7 +2719,7 @@ def on_tag_grouped_snippets_get(
             current_topic_label=_topic_filter_label(topic_filter),
             current_topic_query=_topic_filter_query_string(topic_filter),
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -2994,7 +2994,7 @@ def on_entity_grouped_snippets_get(
             current_topic_label=_topic_filter_label(topic_filter),
             current_topic_query=_topic_filter_query_string(topic_filter),
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -3231,7 +3231,7 @@ def on_sentence_clusters_get(
                 page_title="Sentence Clusters",
                 empty_message="No sentence clusters",
                 user_settings=user["settings"],
-                provider=user["provider"],
+                provider=user.get("provider", ""),
             ),
             mimetype="text/html",
         )
@@ -3282,7 +3282,7 @@ def on_sentence_clusters_get(
             page_title="Sentence Clusters",
             empty_message="No sentence clusters",
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -3315,7 +3315,7 @@ def on_sentence_cluster_get(
             mindmap_data=mindmap_data,
             feed_title=combined_feed_title,
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -3409,7 +3409,7 @@ def on_topics_list_get(
             pages_map=pages_map,
             current_page=new_cookie_page_value,
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -3439,7 +3439,7 @@ def on_topics_mindmap_get(
         page.render(
             mindmap_data=mindmap_data,
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -3468,7 +3468,7 @@ def on_topic_hierarchy_get(
         page.render(
             hierarchy_data=hierarchy_data,
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -3723,7 +3723,7 @@ def on_post_graph_get(
             posts=graphs_data,
             feed_title=combined_feed_title,
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )

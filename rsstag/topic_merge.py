@@ -227,8 +227,9 @@ class TopicMergeAgent:
             self._mark_docs_merged()
             return True
         except Exception as exc:
+            err = exc
             self._log.error(
-                "Topic merge failed for owner %s: %s", self._owner, exc
+                "Topic merge failed for owner %s: %s", self._owner, err
             )
             return False
 

@@ -13,7 +13,7 @@
     {% include "logo.html" %}
     <div class="panel right_half">
         <span class="login_button global_tools_button">
-            <a href="/data-sources">{% if provider %}{{provider}}{% else %}Data sources{% endif %}</a>
+            <a href="/data-sources">Data sources</a>
         </span>
         {{ g_status.global_status() }}
         {{ menu.settings_menu() }}
@@ -48,13 +48,21 @@
 
         <div class="add-task-section">
             <h2>Add Task</h2>
-            <p class="help">Task labels include capability hints: "(global only)" or "(supports scoped reprocess)".</p>
+            <p class="help">Task labels include capability hints: "(global only)" or "(supports scoped reprocess)". Select a provider for provider-specific tasks.</p>
             <form action="/tasks" method="post" class="add-task-form">
                 <select name="task_type">
                     {% for type_id, title in available_tasks.items() %}
                         <option value="{{ type_id }}">{{ title }}</option>
                     {% endfor %}
                 </select>
+                {% if user_providers %}
+                <select name="provider">
+                    <option value="">— no provider —</option>
+                    {% for p in user_providers %}
+                        <option value="{{ p }}">{{ p }}</option>
+                    {% endfor %}
+                </select>
+                {% endif %}
                 <input type="submit" value="Add Task" class="btn-primary">
             </form>
         </div>

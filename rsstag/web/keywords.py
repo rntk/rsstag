@@ -243,7 +243,7 @@ def _render_keywords_page(
             current_page=current_page,
             letters=[],
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )

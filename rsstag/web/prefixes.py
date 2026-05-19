@@ -63,7 +63,7 @@ def on_prefixes_all_get(
             current_page=1,
             letters=letters,
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -120,7 +120,7 @@ def on_prefixes_words_get(
             current_page=1,
             letters=letters,
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -160,7 +160,7 @@ def on_prefixes_prefix_get(
             tag=tag_data,
             root=root,
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )

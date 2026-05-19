@@ -113,14 +113,12 @@ class RssTagUsers:
         user = {
             "sid": sid,
             "username": username,
-            "provider": "",
             "providers": {},
             "settings": self._settings,
             "message": 'Click on "Refresh posts" to start downloading data',
-            "in_queue": False,
+            "in_queue": {},
             "created": created,
             "lp": lp,
-            "retoken": False,
             "w2v": "{}_{}.w2v".format(created.timestamp(), randint(0, 999999)),
             "fasttext": "{}_{}.fasttext".format(
                 created.timestamp(), randint(0, 999999)
@@ -128,19 +126,6 @@ class RssTagUsers:
         }
         self._db.users.insert_one(user)
 
-        return sid
-
-    def create_user(
-        self, login: str, password: str, token: str, provider: str
-    ) -> Optional[str]:
-        """Legacy helper to create an account and attach a provider."""
-        sid = self.create_account(login, password)
-        if sid:
-            self.add_provider(
-                sid,
-                provider,
-                self.build_provider_data(login, password, token, provider),
-            )
         return sid
 
     def build_provider_data(
@@ -186,39 +171,54 @@ class RssTagUsers:
     def get_by_provider_login(self, provider: str, login: str) -> Optional[dict]:
         return self._db.users.find_one({f"providers.{provider}.login": login})
 
+    def connected_providers(self, user: dict) -> list:
+        """Return the set of providers/sources the user has connected.
+
+        This is the single source of truth for provider membership: there is
+        no "current"/"global" provider. A user simply has zero or more
+        connected sources, keyed by provider name under ``user["providers"]``.
+        """
+        return list(user.get("providers", {}).keys())
+
+    def is_provider_connected(self, user: dict, provider: str) -> bool:
+        return provider in user.get("providers", {})
+
+    def get_in_queue(self, user: dict) -> Dict[str, bool]:
+        """Return the per-provider download-queue map, normalized to a dict.
+
+        Older user documents stored ``in_queue`` as a bare boolean. Treat any
+        non-dict value as "nothing queued" so callers can safely use it as a
+        map without crashing on legacy data.
+        """
+        in_queue = user.get("in_queue")
+        return in_queue if isinstance(in_queue, dict) else {}
+
+    def reset_in_queue_if_legacy(self, sid: str, user: dict) -> None:
+        """Heal a legacy non-dict ``in_queue`` before a dotted ``$set``.
+
+        A ``$set`` on ``in_queue.<provider>`` fails in MongoDB when the stored
+        ``in_queue`` is not a document, so collapse the legacy value to an
+        empty map first.
+        """
+        if not isinstance(user.get("in_queue"), dict):
+            self._db.users.update_one({"sid": sid}, {"$set": {"in_queue": {}}})
+
     def get_provider_entry(self, user: dict, provider: str) -> Optional[dict]:
-        providers = user.get("providers", {})
-        entry = providers.get(provider)
-        if entry:
-            return entry
-        if user.get("provider") == provider:
-            legacy = {
-                "login": user.get("login", ""),
-                "token": user.get("token", ""),
-                "retoken": user.get("retoken", False),
-            }
-            if provider == TELEGRAM:
-                legacy["phone"] = user.get("phone", "")
-                legacy["telegram_channel"] = user.get("telegram_channel", "")
-            if provider == TEXT_FILE:
-                legacy["text_file"] = user.get("text_file", "")
-            if provider == GMAIL:
-                legacy["refresh_token"] = user.get("refresh_token", "")
-            if provider == X:
-                legacy["refresh_token"] = user.get("refresh_token", "")
-                legacy["access_token"] = user.get("access_token", "")
-                legacy["x_user_id"] = user.get("x_user_id", "")
-                legacy["x_username"] = user.get("x_username", "")
-            return legacy
-        return None
+        return user.get("providers", {}).get(provider)
 
     def get_provider_user(self, user: dict, provider: str) -> Optional[dict]:
+        """Build a per-source credentials view for one connected provider.
+
+        The returned dict merges the provider entry onto a copy of the user
+        document so a provider implementation sees its own credentials. It
+        intentionally does NOT inject a "current provider" marker: a provider
+        already knows its own type, and the system has no global provider.
+        """
         entry = self.get_provider_entry(user, provider)
         if not entry:
             return None
         provider_user = dict(user)
         provider_user.update(entry)
-        provider_user["provider"] = provider
         return provider_user
 
     def get_by_sid(self, sid: str) -> Optional[dict]:

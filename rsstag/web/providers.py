@@ -64,7 +64,7 @@ def _telegram_limit_from_selection(selection: Dict[str, object]) -> int:
 def on_provider_feeds_get_post(
     app, user: dict, request: Request, provider: Optional[str] = None
 ) -> Response:
-    provider = provider or user.get("provider")
+    provider = provider
     if provider not in (data_providers.TELEGRAM, data_providers.BAZQUX, data_providers.X):
         return redirect(app.routes.get_url_by_endpoint(endpoint="on_root_get"))
 
@@ -112,7 +112,8 @@ def on_provider_feeds_get_post(
                 selection["telegram_limit"] = _telegram_limit_from_selection(
                     selection
                 )
-            if not user["in_queue"]:
+            app.users.reset_in_queue_if_legacy(user["sid"], user)
+            if not app.users.get_in_queue(user).get(provider, False):
                 added = app.tasks.add_task(
                     {
                         "type": TASK_DOWNLOAD,
@@ -126,7 +127,7 @@ def on_provider_feeds_get_post(
                     updated = app.users.update_by_sid(
                         user["sid"],
                         {
-                            "in_queue": True,
+                            f"in_queue.{provider}": True,
                             "message": "Downloading selected sources, please wait",
                         },
                     )

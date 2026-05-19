@@ -68,16 +68,6 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
-                "url": "/provider",
-                "endpoint": "on_select_provider_get",
-                "methods": ["GET"],
-            },
-            {
-                "url": "/provider",
-                "endpoint": "on_select_provider_post",
-                "methods": ["POST"],
-            },
-            {
                 "url": "/provider/feeds",
                 "endpoint": "on_provider_feeds_get_post",
                 "methods": ["GET", "POST"],

@@ -499,7 +499,7 @@ class TelegramProvider:
             time.sleep(wait_time)
 
     def list_channels(self, user: dict) -> List[dict]:
-        provider = user["provider"]
+        provider = TELEGRAM
         logging.info("Starting Telegram provider for user: %s", user.get("sid"))
         self._tlg = Telegram(
             app_id=self._config[provider]["app_id"],
@@ -562,7 +562,7 @@ class TelegramProvider:
     def download(
         self, user: dict, selection: Optional[dict] = None
     ) -> Tuple[List, List]:
-        provider = user["provider"]
+        provider = TELEGRAM
         telegram_channel = (user.get("telegram_channel") or "").strip()
         all_channels = telegram_channel.lower() == "all"
         selected_channels = []
@@ -776,7 +776,7 @@ class TelegramProvider:
         an interrupted backfill (paged newest -> oldest) would skip the
         un-fetched older history on the next run.
         """
-        provider = user["provider"]
+        provider = TELEGRAM
         self._tlg = Telegram(
             app_id=self._config[provider]["app_id"],
             app_hash=self._config[provider]["app_hash"],
@@ -936,10 +936,6 @@ class TelegramProvider:
     def mark_all(self, data: dict, user: dict) -> Optional[bool]:
         feeds_h = RssTagFeeds(self._db)
         posts_h = RssTagPosts(self._db)
-        if user["provider"] != TELEGRAM:
-            logging.error("Not telegram provider")
-            return False
-
         user_id = user["sid"]
         feeds = feeds_h.get_all(user_id)
         tlg_ids = []

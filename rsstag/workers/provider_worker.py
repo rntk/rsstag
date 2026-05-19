@@ -66,6 +66,15 @@ class ProviderWorker:
         self._users.update_by_sid(task["user"]["sid"], {"message": user_message})
 
     def handle_download(self, task: Dict[str, Any]) -> bool:
+        """Incrementally download new posts/feeds for one connected source.
+
+        Contract: this task is strictly additive. It never deletes posts or
+        feeds and never wipes prior data when switching/refreshing a source.
+        Incoming posts are deduped against existing rows by ``id`` (per owner)
+        and feeds by ``feed_id``; only genuinely new documents are inserted, so
+        re-running it only fetches and stores the diff. Bulk cleanup is the job
+        of the separate (future) prune task, not download.
+        """
         logging.info("Start downloading for user")
         provider_name = task["data"].get("provider")
         provider_user = self._users.get_provider_user(task["user"], provider_name)

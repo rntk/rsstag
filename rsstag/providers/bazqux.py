@@ -82,7 +82,7 @@ class BazquxProvider:
             return (posts, data["category"])
 
     def list_subscriptions(self, user: dict) -> dict:
-        connection = client.HTTPSConnection(self._config[user["provider"]]["api_host"])
+        connection = client.HTTPSConnection(self._config[BAZQUX]["api_host"])
         headers = self.get_headers(user)
         connection.request(
             "GET", "/reader/api/0/subscription/list?output=json", "", headers
@@ -124,7 +124,7 @@ class BazquxProvider:
             selected_categories = set(selection.get("categories", []))
             selected_feeds = set(selection.get("feeds", []))
             selection_active = bool(selected_categories or selected_feeds)
-        connection = client.HTTPSConnection(self._config[user["provider"]]["api_host"])
+        connection = client.HTTPSConnection(self._config[BAZQUX]["api_host"])
         headers = self.get_headers(user)
         connection.request(
             "GET", "/reader/api/0/subscription/list?output=json", "", headers
@@ -160,7 +160,7 @@ class BazquxProvider:
                                     {
                                         "headers": headers,
                                         "url": "https://{}/reader/api/0/stream/contents?s=user/-/label/{}&xt=user/-/state/com.google/read&n=1000&output=json".format(
-                                            self._config[user["provider"]]["api_host"],
+                                            self._config[BAZQUX]["api_host"],
                                             quote_plus(category_name),
                                         ),
                                         "category": category_name,
@@ -177,7 +177,7 @@ class BazquxProvider:
                                     {
                                         "headers": headers,
                                         "url": "https://{}/reader/api/0/stream/contents?s={}&xt=user/-/state/com.google/read&n=5000&output=json".format(
-                                            self._config[user["provider"]]["api_host"],
+                                            self._config[BAZQUX]["api_host"],
                                             quote_plus(feed_id),
                                         ),
                                         "category": category_name,
@@ -193,7 +193,7 @@ class BazquxProvider:
                                     {
                                         "headers": headers,
                                         "url": "https://{}/reader/api/0/stream/contents?s={}&xt=user/-/state/com.google/read&n=5000&output=json".format(
-                                            self._config[user["provider"]]["api_host"],
+                                            self._config[BAZQUX]["api_host"],
                                             quote_plus(feed_id),
                                         ),
                                         "category": category_name,
@@ -208,7 +208,7 @@ class BazquxProvider:
                                     {
                                         "headers": headers,
                                         "url": "https://{}/reader/api/0/stream/contents?s=user/-/label/{}&xt=user/-/state/com.google/read&n=1000&output=json".format(
-                                            self._config[user["provider"]]["api_host"],
+                                            self._config[BAZQUX]["api_host"],
                                             quote_plus(category_name),
                                         ),
                                         "category": category_name,
@@ -306,7 +306,7 @@ class BazquxProvider:
         for i in range(max_repetitions):
             try:
                 connection = client.HTTPSConnection(
-                    self._config[user["provider"]]["api_host"]
+                    self._config[BAZQUX]["api_host"]
                 )
                 connection.request(
                     "POST", "/reader/api/0/edit-tag?output=json", data, headers

@@ -476,7 +476,6 @@ def on_register_post(app: "RSSTagApplication", request: Request) -> Response:
 def on_logout_get(app: "RSSTagApplication") -> Response:
     response = redirect(app.routes.get_url_by_endpoint(endpoint="on_root_get"))
     response.delete_cookie("sid")
-    response.delete_cookie("provider")
     return response
 
 
@@ -521,8 +520,12 @@ def on_refresh_get_post(
                 app.routes.get_url_by_endpoint(endpoint="on_data_sources_get")
             )
         try:
+            app.users.reset_in_queue_if_legacy(user["sid"], user)
+            in_queue = app.users.get_in_queue(user)
             any_added = False
             for prov in configured:
+                if in_queue.get(prov, False):
+                    continue
                 added = app.tasks.add_task(
                     {
                         "type": TASK_DOWNLOAD,
@@ -533,13 +536,13 @@ def on_refresh_get_post(
                 )
                 if added:
                     any_added = True
+                    app.users.update_by_sid(
+                        user["sid"],
+                        {f"in_queue.{prov}": True},
+                    )
             if any_added:
                 app.users.update_by_sid(
-                    user["sid"],
-                    {
-                        "in_queue": True,
-                        "message": "Downloading data, please wait",
-                    },
+                    user["sid"], {"message": "Downloading data, please wait"}
                 )
             else:
                 app.users.update_by_sid(
@@ -585,25 +588,6 @@ def on_status_get(app: "RSSTagApplication", user: Optional[dict]) -> Response:
     return Response(
         json.dumps(result), mimetype="text/html", headers={"Pragma": "no-cache"}
     )
-
-
-def on_select_provider_get(app: "RSSTagApplication") -> Response:
-    return redirect(app.routes.get_url_by_endpoint(endpoint="on_data_sources_get"))
-
-
-def on_select_provider_post(app: "RSSTagApplication", request: Request) -> Response:
-    provider = request.form.get("provider")
-    if provider:
-        response = redirect(
-            app.routes.get_url_by_endpoint(
-                endpoint="on_provider_detail_get", params={"provider": provider}
-            )
-        )
-    else:
-        page = app.template_env.get_template("error.html")
-        response = Response(page.render(err=["Unknown provider"]), mimetype="text/html")
-
-    return response
 
 
 def on_root_get(
@@ -745,7 +729,8 @@ def on_provider_detail_post(
 ) -> Response:
     action = request.form.get("action")
     if action == "download":
-        if not user["in_queue"]:
+        app.users.reset_in_queue_if_legacy(user["sid"], user)
+        if not app.users.get_in_queue(user).get(provider, False):
             added = app.tasks.add_task(
                 {
                     "type": TASK_DOWNLOAD,
@@ -759,7 +744,7 @@ def on_provider_detail_post(
                 updated = app.users.update_by_sid(
                     user["sid"],
                     {
-                        "in_queue": True,
+                        f"in_queue.{provider}": True,
                         "message": "Downloading from provider, please wait",
                     },
                 )

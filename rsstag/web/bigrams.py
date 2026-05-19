@@ -88,7 +88,7 @@ def on_group_by_bigrams_get(
             current_page=new_cookie_page_value,
             letters=letters,
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -465,7 +465,7 @@ def on_group_by_bigrams_dyn_get(
             current_page=1,
             letters=letters,
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )

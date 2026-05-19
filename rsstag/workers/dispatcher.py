@@ -290,8 +290,15 @@ def worker(config: Dict[str, Any]) -> None:
 
                 if task_done:
                     tasks.finish_task(task)
-                    if task["type"] == TASK_CLUSTERING:
-                        users.update_by_sid(task["user"]["sid"], {"in_queue": False})
+                    if task["type"] == TASK_DOWNLOAD:
+                        provider = task.get("provider", "")
+                        if provider:
+                            users.update_by_sid(
+                                task["user"]["sid"],
+                                {f"in_queue.{provider}": False},
+                            )
+                    elif task["type"] == TASK_CLUSTERING:
+                        users.update_by_sid(task["user"]["sid"], {"in_queue": {}})
                 else:
                     if task["type"] == TASK_TOPIC_MERGE:
                         tasks.release_failed_task(

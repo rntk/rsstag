@@ -144,7 +144,7 @@ def on_group_by_tags_get(
             current_page=new_cookie_page_value,
             letters=letters,
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -277,7 +277,7 @@ def on_s_tree_get(
             clusters=dedup_clusters,
             cluster_links=cluster_links,
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -354,7 +354,7 @@ def on_group_by_tags_sentiment(
             current_page=new_cookie_page_value,
             letters=letters,
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -440,7 +440,7 @@ def on_group_by_tags_startwith_get(
             current_page=new_cookie_page_value,
             letters=letters,
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -517,7 +517,7 @@ def on_group_by_tags_group(
             current_page=new_cookie_page_value,
             letters=letters,
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -549,7 +549,7 @@ def on_get_tag_page(
             ),
             context_tree_link="/tag-context-tree/{}".format(quote(tag_data["tag"])),
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -1356,7 +1356,7 @@ def on_get_context_tags(
             ),
             context_tree_link="/tag-context-tree/{}".format(quote(tag_data["tag"])),
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -1491,7 +1491,7 @@ def on_get_tfidf_tags(app: "RSSTagApplication", user: dict, rqst: Request) -> Re
             current_page=1,
             letters=letters,
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -1571,7 +1571,7 @@ def on_get_sunburst(app: "RSSTagApplication", user: dict, tags: str) -> Response
                 endpoint="on_group_by_category_get"
             ),
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -1703,7 +1703,7 @@ The phrase:
                 endpoint="on_group_by_category_get"
             ),
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -1774,7 +1774,7 @@ def on_get_chain(app: "RSSTagApplication", user: dict, tags: str) -> Response:
                 endpoint="on_group_by_category_get"
             ),
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -1877,7 +1877,7 @@ def on_group_by_tags_categories_get(
             current_page=1,
             letters=letters,
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -1984,7 +1984,7 @@ def on_group_by_tags_by_category_get(
             current_page=new_cookie_page_value,
             letters=letters,
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -2106,7 +2106,7 @@ def on_ba_surprise_get(app: "RSSTagApplication", user: dict, rqst: Request) -> R
             current_page=1,
             letters=letters,
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -2203,7 +2203,7 @@ def on_tag_context_tree_get(
             tag=tag,
             mindmap_data=mindmap_data,
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )

@@ -13,7 +13,7 @@ def on_processing_get(app, user: dict, request: Request) -> Response:
             posts=posts,
             tags=tags,
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
             support=app.config["settings"]["support"],
             version=app.config["settings"]["version"],
         ),

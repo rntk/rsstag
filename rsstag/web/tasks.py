@@ -67,13 +67,15 @@ def on_tasks_get(app, user: dict, request: Request) -> Response:
         for task_type, title in base_tasks.items()
     }
 
+    user_providers = list(user.get("providers", {}).keys())
+
     page = app.template_env.get_template("tasks.html")
     return Response(
         page.render(
             current_tasks=current_tasks,
             available_tasks=available_tasks,
+            user_providers=user_providers,
             user_settings=user["settings"],
-            provider=user["provider"],
             support=app.config["settings"]["support"],
             version=app.config["settings"]["version"],
         ),
@@ -83,6 +85,7 @@ def on_tasks_get(app, user: dict, request: Request) -> Response:
 
 def on_tasks_post(app, user: dict, request: Request) -> Response:
     task_type = request.form.get("task_type")
+    provider = request.form.get("provider", "")
     if task_type:
         try:
             task_type = int(task_type)
@@ -90,11 +93,8 @@ def on_tasks_post(app, user: dict, request: Request) -> Response:
                 {
                     "user": user["sid"],
                     "type": task_type,
-                    "data": [],  # Some tasks might need data, but for general ones empty list/dict might suffice or be ignored
-                    "host": app.config["settings"][
-                        "host_name"
-                    ],  # TASK_DOWNLOAD needs host
-                    "provider": user.get("provider", ""),
+                    "host": app.config["settings"]["host_name"],
+                    "provider": provider,
                 }
             )
         except ValueError:

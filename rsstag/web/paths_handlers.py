@@ -164,7 +164,7 @@ def on_paths_page_get(app: "RSSTagApplication", user: dict, request: Request) ->
         page.render(
             paths=paths,
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -425,7 +425,7 @@ def on_path_sentences_get(
             filter_chips=_build_filter_chips(filterset),
             exclude_chips=_build_filter_chips(exclude),
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
@@ -493,7 +493,7 @@ def on_path_posts_get(
             filter_chips=_build_filter_chips(filterset),
             exclude_chips=_build_filter_chips(exclude),
             user_settings=user["settings"],
-            provider=user["provider"],
+            provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )

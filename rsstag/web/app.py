@@ -166,8 +166,6 @@ class RSSTagApplication(object):
             "on_login_post",
             "on_register_get",
             "on_register_post",
-            "on_select_provider_post",
-            "on_select_provider_get",
             "on_status_get",
             "on_refresh_get_post",
             "on_login_google_auth_get",
@@ -240,13 +238,6 @@ class RSSTagApplication(object):
         for i in routes.iter_rules():
             self.endpoints[i.endpoint] = getattr(self, i.endpoint)
 
-    def create_new_session(
-        self, login: str, password: str, token: str, provider: str
-    ) -> Optional[dict]:
-        sid = self.users.create_user(login, password, token, provider)
-
-        return self.users.get_by_sid(sid)
-
     def get_page_count(self, items_count, items_on_page_count):
         page_count = divmod(items_count, items_on_page_count)
         if page_count[1] == 0:
@@ -317,12 +308,6 @@ class RSSTagApplication(object):
             return None
 
         return {"owner": owner, "token_id": str(token_id)}
-
-    def on_select_provider_get(self, _: Optional[dict], __: Request) -> Response:
-        return users_handlers.on_select_provider_get(self)
-
-    def on_select_provider_post(self, _: Optional[dict], request: Request) -> Response:
-        return users_handlers.on_select_provider_post(self, request)
 
     def on_post_speech(self, user: dict, request: Request) -> Response:
         return posts_handlers.on_post_speech(self, user, request)
@@ -489,7 +474,7 @@ class RSSTagApplication(object):
                     endpoint="on_group_by_tags_get", params={"page_number": page_number}
                 ),
                 user_settings=user["settings"],
-                provider=user["provider"],
+                provider=user.get("provider", ""),
             ),
             mimetype="text/html",
         )
@@ -747,7 +732,7 @@ class RSSTagApplication(object):
                 tag=tag,
                 post_id=post_id,
                 user_settings=user["settings"],
-                provider=user["provider"],
+                provider=user.get("provider", ""),
             ),
             mimetype="text/html",
         )
@@ -876,7 +861,7 @@ class RSSTagApplication(object):
                 support=self.config["settings"]["support"],
                 version=self.config["settings"]["version"],
                 user_settings=user["settings"],
-                provider=user["provider"],
+                provider=user.get("provider", ""),
                 cities=list(cities),
                 countries=list(countries),
             ),
@@ -931,7 +916,7 @@ class RSSTagApplication(object):
                 support=self.config["settings"]["support"],
                 version=self.config["settings"]["version"],
                 user_settings=user["settings"],
-                provider=user["provider"],
+                provider=user.get("provider", ""),
             ),
             mimetype="text/html",
         )
@@ -964,7 +949,7 @@ class RSSTagApplication(object):
                 support=self.config["settings"]["support"],
                 version=self.config["settings"]["version"],
                 user_settings=user["settings"],
-                provider=user["provider"],
+                provider=user.get("provider", ""),
                 pages_map=pages_map,
                 groups=page_groups[start_tags_range:end_tags_range],
             ),
@@ -1101,7 +1086,7 @@ class RSSTagApplication(object):
                 current_page=new_cookie_page_value,
                 letters=letters,
                 user_settings=user["settings"],
-                provider=user["provider"],
+                provider=user.get("provider", ""),
             ),
             mimetype="text/html",
         )
@@ -1218,7 +1203,7 @@ class RSSTagApplication(object):
                 group="tag",
                 words=list(words),
                 user_settings=user["settings"],
-                provider=user["provider"],
+                provider=user.get("provider", ""),
             ),
             mimetype="text/html",
         )
@@ -1294,7 +1279,7 @@ class RSSTagApplication(object):
 
         return Response(
             page.render(
-                links=lnks, user_settings=user["settings"], provider=user["provider"]
+                links=lnks, user_settings=user["settings"], provider=user.get("provider", "")
             ),
             mimetype="text/html",
         )
@@ -1381,7 +1366,7 @@ class RSSTagApplication(object):
 
         return Response(
             page.render(
-                links=lnks, user_settings=user["settings"], provider=user["provider"]
+                links=lnks, user_settings=user["settings"], provider=user.get("provider", "")
             ),
             mimetype="text/html",
         )
@@ -1671,7 +1656,7 @@ class RSSTagApplication(object):
                 clusters=clusters,
                 clusters_data=clusters_data,
                 user_settings=user["settings"],
-                provider=user["provider"],
+                provider=user.get("provider", ""),
             ),
             mimetype="text/html",
         )
@@ -2042,7 +2027,7 @@ class RSSTagApplication(object):
             page.render(
                 workers=workers,
                 user_settings=user["settings"],
-                provider=user["provider"],
+                provider=user.get("provider", ""),
             ),
             mimetype="text/html",
         )
@@ -2130,7 +2115,7 @@ class RSSTagApplication(object):
                 total_tokens=total_tokens,
                 raw_stats=raw_stats,
                 user_settings=user["settings"],
-                provider=user["provider"],
+                provider=user.get("provider", ""),
             ),
             mimetype="text/html",
         )
@@ -2152,7 +2137,7 @@ class RSSTagApplication(object):
                 tokens=tokens,
                 now=lambda: datetime.now(timezone.utc),
                 user_settings=user["settings"],
-                provider=user["provider"],
+                provider=user.get("provider", ""),
             ),
             mimetype="text/html",
         )
