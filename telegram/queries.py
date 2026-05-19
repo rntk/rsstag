@@ -126,7 +126,20 @@ def check_database_encryption_key(key: str) -> Dict[str, Any]:
 
 
 def set_authentication_phone_number(phone: str) -> Dict[str, Any]:
-    return {"@type": "setAuthenticationPhoneNumber", "phone_number": phone}
+    return {
+        "@type": "setAuthenticationPhoneNumber",
+        "phone_number": phone,
+        "settings": {
+            "@type": "phoneNumberAuthenticationSettings",
+            "allow_flash_call": False,
+            "allow_missed_call": False,
+            "is_current_phone_number": False,
+            "has_unknown_phone_number": False,
+            "allow_sms_retriever_api": False,
+            "firebase_authentication_settings": None,
+            "authentication_tokens": [],
+        },
+    }
 
 
 # login

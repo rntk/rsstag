@@ -509,6 +509,7 @@ class TelegramProvider:
             db_path=self._config[provider]["db_dir"],
         )
         tlg_code = TelegramAuthData(self._db, user["sid"])
+        tlg_code.clear_code()
         if not self._tlg.login(tlg_code.get_code, tlg_code.get_password):
             logging.error("Telegram login failed for user: %s", user.get("sid"))
             raise Exception("Telegram login failed")
@@ -580,6 +581,7 @@ class TelegramProvider:
             db_path=self._config[provider]["db_dir"],
         )
         tlg_code = TelegramAuthData(self._db, user["sid"])
+        tlg_code.clear_code()
         if not self._tlg.login(tlg_code.get_code, tlg_code.get_password):
             raise Exception("Telegram login failed")
         self._tlg.run()
@@ -783,6 +785,7 @@ class TelegramProvider:
             db_path=self._config[provider]["db_dir"],
         )
         tlg_code = TelegramAuthData(self._db, user["sid"])
+        tlg_code.clear_code()
         if not self._tlg.login(tlg_code.get_code, tlg_code.get_password):
             raise Exception("Telegram login failed")
         self._tlg.run()
@@ -902,6 +905,7 @@ class TelegramProvider:
                 db_path=t_cfg["db_dir"],
             )
             tlg_code = TelegramAuthData(self._db, sid)
+            tlg_code.clear_code()
             if not tlg.login(tlg_code.get_code, tlg_code.get_password):
                 return
 

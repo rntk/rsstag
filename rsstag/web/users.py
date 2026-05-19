@@ -20,7 +20,13 @@ from rsstag.providers.bazqux import BazquxProvider
 from rsstag.providers.providers import BAZQUX, TEXT_FILE, TELEGRAM, GMAIL, X
 from rsstag.providers.x import XProvider
 from rsstag.tasks import TASK_ALL, TASK_DOWNLOAD
-from rsstag.users import TELEGRAM_CODE_FIELD, TELEGRAM_PASSWORD_FIELD, set_telegram_password, check_telegram_password_prompt
+from rsstag.users import (
+    TELEGRAM_CODE_FIELD,
+    TELEGRAM_PASSWORD_FIELD,
+    set_telegram_password,
+    check_telegram_password_prompt,
+    check_telegram_code_prompt,
+)
 
 from werkzeug.wrappers import Request, Response
 from werkzeug.utils import redirect
@@ -567,7 +573,7 @@ def on_status_get(app: "RSSTagApplication", user: Optional[dict]) -> Response:
             task_titles = app.tasks.get_tasks_status(user["sid"])
             result = {"data": {"is_ok": True, "msgs": task_titles}}
             if TELEGRAM in user.get("providers", {}):
-                if (TELEGRAM_CODE_FIELD in user) and (user[TELEGRAM_CODE_FIELD] == ""):
+                if check_telegram_code_prompt(user["sid"]):
                     result["data"][TELEGRAM_CODE_FIELD] = True
                 if check_telegram_password_prompt(user["sid"]):
                     result["data"][TELEGRAM_PASSWORD_FIELD] = True
@@ -797,9 +803,6 @@ def on_provider_detail_post(
                 user["sid"],
                 provider,
                 app.users.build_provider_data(login, password, "", provider),
-            )
-            app.users.update_by_sid(
-                user["sid"], {TELEGRAM_CODE_FIELD: ""}
             )
     elif provider == TEXT_FILE:
         if not login or not password:

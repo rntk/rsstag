@@ -23,6 +23,11 @@ _tg_password_lock = Lock()
 _tg_password_prompt: Dict[str, bool] = {}
 _tg_prompt_lock = Lock()
 
+# In-memory flag: signals that the frontend should prompt the user for an auth code.
+# Set when TDLib enters authorizationStateWaitCode; cleared when the code is consumed.
+_tg_code_prompt: Dict[str, bool] = {}
+_tg_code_prompt_lock = Lock()
+
 
 def set_telegram_password(sid: str, password: str) -> None:
     with _tg_password_lock:
@@ -50,6 +55,22 @@ def check_telegram_password_prompt(sid: str) -> bool:
 def clear_telegram_password_prompt(sid: str) -> None:
     with _tg_prompt_lock:
         _tg_password_prompt.pop(sid, None)
+
+
+def request_telegram_code(sid: str) -> None:
+    """Signal the frontend that TDLib is waiting for an auth code."""
+    with _tg_code_prompt_lock:
+        _tg_code_prompt[sid] = True
+
+
+def check_telegram_code_prompt(sid: str) -> bool:
+    with _tg_code_prompt_lock:
+        return _tg_code_prompt.get(sid, False)
+
+
+def clear_telegram_code_prompt(sid: str) -> None:
+    with _tg_code_prompt_lock:
+        _tg_code_prompt.pop(sid, None)
 
 
 class RssTagUsers:
@@ -246,30 +267,42 @@ class TelegramAuthData:
         self._db = db
         self._sid = sid
 
+    def clear_code(self) -> None:
+        """Remove any previously stored code so stale values aren't reused."""
+        users_h = RssTagUsers(self._db)
+        users_h.update_by_sid(self._sid, {TELEGRAM_CODE_FIELD: ""})
+
     def get_code(self, phone: str) -> str:
         users_h = RssTagUsers(self._db)
         user = users_h.get_by_sid(self._sid)
         field_name = TELEGRAM_CODE_FIELD
         if not user:
             raise Exception("User not found: " + self._sid)
-        users_h.update_by_sid(self._sid, {field_name: ""})
-        while True:
-            user = users_h.get_by_sid(self._sid)
-            if not user:
-                raise Exception("User not found: " + self._sid)
-            if field_name not in user:
-                raise Exception(
-                    "User field not '{}' found not found: {}".format(
-                        field_name, self._sid
-                    )
-                )
-            if user[field_name] == "":
-                time.sleep(2)
-                continue
 
-            return user[field_name]
+        # If a code was already entered before we started polling, use it
+        # immediately to avoid losing it in a race condition.
+        existing_code = user.get(field_name, "")
+        if existing_code:
+            users_h.update_by_sid(self._sid, {field_name: ""})
+            return existing_code
 
-        return ""
+        # Signal the UI that TDLib is actively waiting for a code.
+        request_telegram_code(self._sid)
+        try:
+            users_h.update_by_sid(self._sid, {field_name: ""})
+            while True:
+                user = users_h.get_by_sid(self._sid)
+                if not user:
+                    raise Exception("User not found: " + self._sid)
+                code = user.get(field_name, "")
+                if code == "":
+                    time.sleep(2)
+                    continue
+
+                users_h.update_by_sid(self._sid, {field_name: ""})
+                return code
+        finally:
+            clear_telegram_code_prompt(self._sid)
 
     def get_password(self, phone: str) -> str:
         # Signal the frontend that TDLib is waiting for a 2FA password.

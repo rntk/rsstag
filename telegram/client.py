@@ -245,6 +245,15 @@ class Telegram:
                 continue
 
             if state == "authorizationStateWaitCode":
+                code_info = event.get("authorization_state", {}).get("code_info", {})
+                code_type = code_info.get("type", {})
+                self._log.info(
+                    "TDLib waiting for auth code. Phone: %s, Type: %s, Length: %s, Timeout: %s",
+                    code_info.get("phone_number", "unknown"),
+                    code_type.get("@type", "unknown"),
+                    code_type.get("length", "unknown"),
+                    code_info.get("timeout", "unknown"),
+                )
                 self._send(check_authentication_code(self._get_code_fn(self._phone)))
                 continue
 
@@ -257,6 +266,22 @@ class Telegram:
                 continue
 
             if state == "authorizationStateWaitRegistration":
+                self._log.error("TDLib requires user registration, which is not supported")
+                return False
+
+            if state == "authorizationStateWaitOtherDeviceConfirmation":
+                link = event.get("authorization_state", {}).get("link", "")
+                self._log.error(
+                    "TDLib requires confirmation on another device. QR link: %s", link
+                )
+                return False
+
+            if state == "authorizationStateWaitEmailAddress":
+                self._log.error("TDLib requires email address, which is not supported")
+                return False
+
+            if state == "authorizationStateWaitEmailCode":
+                self._log.error("TDLib requires email code, which is not supported")
                 return False
 
             if state == "authorizationStateWaitPassword":
@@ -270,8 +295,7 @@ class Telegram:
                 return True
 
             self._log.critical("Unknown auth state: %s. %s", state, event)
-
-            break
+            return False
 
         return False
 
