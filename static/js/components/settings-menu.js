@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 import React from 'react';
 import SettingsMenuButton from './menu-button.js';
 
@@ -58,9 +58,17 @@ export default class SettingsMenu extends React.Component {
   }
 
   changeIntSettings(e) {
-    let value = parseInt(e.target.value),
+    let raw = e.target.value,
       name = e.target.id;
 
+    // Allow a bare '-' so the user can type negative numbers (e.g. -100)
+    if (raw === '-' || raw === '') {
+      this.state.settings[name] = raw;
+      this.setState(this.state);
+      return true;
+    }
+
+    let value = parseInt(raw, 10);
     if (!isNaN(value)) {
       this.state.settings[name] = value;
       this.setState(this.state);
@@ -164,7 +172,9 @@ export default class SettingsMenu extends React.Component {
               />
             </div>
             <div id="telegram_limit_">
-              <label htmlFor="telegram_limit">telegram limit (0 for only unread)</label>
+              <label htmlFor="telegram_limit">
+                telegram limit (0 — only unread, negative — only unread up to N, e.g. -100)
+              </label>
               <br />
               <input
                 id="telegram_limit"
