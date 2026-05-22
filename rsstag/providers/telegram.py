@@ -498,6 +498,31 @@ class TelegramProvider:
             )
             time.sleep(wait_time)
 
+    def __load_all_chats(self, batch_limit: int = 1000, max_iterations: int = 100) -> None:
+        """Repeatedly call TDLib loadChats until the main chat list is fully loaded.
+
+        loadChats pulls one batch from the server into TDLib's in-memory list
+        and returns; getChats then only sees what has already been loaded. A
+        single call typically yields a few hundred chats, so without looping
+        users with ~1k chats silently get truncated. TDLib signals "fully
+        loaded" with error code 404, which __requests_repeater treats as
+        terminal.
+        """
+        for _ in range(max_iterations):
+            r = self.__requests_repeater(load_chats(limit=batch_limit))
+            if r.error:
+                if r.error.get("code") == 404:
+                    return
+                logging.warning("load_chats error, stopping loop: %s", r.error)
+                return
+            if r.update is None:
+                # No progress and no terminal error — bail out to avoid spinning.
+                return
+        logging.warning(
+            "load_chats reached max_iterations=%d without 404 terminal",
+            max_iterations,
+        )
+
     def list_channels(self, user: dict) -> List[dict]:
         provider = TELEGRAM
         logging.info("Starting Telegram provider for user: %s", user.get("sid"))
@@ -521,9 +546,10 @@ class TelegramProvider:
         time.sleep(30)
 
         channels = []
-        # Pre-load chats into TDLib memory to avoid flood waits on getChat
+        # Pre-load chats into TDLib memory to avoid flood waits on getChat.
+        # loadChats loads a batch per call; loop until 404 ("fully loaded").
         logging.info("Pre-loading chats (load_chats)...")
-        self.__requests_repeater(load_chats(limit=1000))
+        self.__load_all_chats()
 
         uniq_chat_ids = set()
         logging.info("Fetching chat IDs (get_chats)...")
@@ -587,8 +613,9 @@ class TelegramProvider:
         self._tlg.run()
         try:
             time.sleep(120)
-            # Pre-load chats into TDLib memory to avoid flood waits on getChat
-            self.__requests_repeater(load_chats(limit=1000))
+            # Pre-load chats into TDLib memory to avoid flood waits on getChat.
+            # loadChats loads a batch per call; loop until 404 ("fully loaded").
+            self.__load_all_chats()
             channels = []
             if selected_channels:
                 for channel_id in selected_channels:
@@ -792,7 +819,8 @@ class TelegramProvider:
         try:
             time.sleep(120)
             # Pre-load chats into TDLib memory to avoid flood waits on getChat.
-            self.__requests_repeater(load_chats(limit=1000))
+            # loadChats loads a batch per call; loop until 404 ("fully loaded").
+            self.__load_all_chats()
             r = self.__requests_repeater(get_chats(limit=1000))
             ids = r.update
             chat_ids = (
