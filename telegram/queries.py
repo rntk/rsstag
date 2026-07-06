@@ -13,17 +13,10 @@ def get_chat(chat_id: int) -> Dict[str, Any]:
     return {"@type": "getChat", "chat_id": chat_id}
 
 
-def get_chats_(
-    offset_order: int = 0, offset_chat_id: int = 0, limit: int = 100
-) -> Dict[str, Any]:
-    return {
-        "@type": "getChats",
-        "offset_order": offset_order,
-        "offset_chat_id": offset_chat_id,
-        "limit": limit,
-    }
-
-
+# NOTE: never paginate the chat list with offset_order/offset_chat_id —
+# chats reorder on every incoming message, so offset-based pages skip or
+# duplicate chats. Load everything with load_chats(), then take a single
+# get_chats() snapshot.
 def get_chats(limit: int = 100) -> Dict[str, Any]:
     return {
         "@type": "getChats",
