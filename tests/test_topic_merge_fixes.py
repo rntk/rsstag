@@ -18,8 +18,82 @@ from rsstag.tasks import (
     RssTagTasks,
 )
 from rsstag.topic_aliases import RssTagTopicAliases, rewrite_canonical_id_prefix
-from rsstag.topic_merge import TOPIC_MERGE_VERSION, TopicMergeAgent
+from rsstag.topic_merge import (
+    TOPIC_MERGE_VERSION,
+    TopicMergeAgent,
+    select_anchors_for_prompt,
+)
 from tests.db_utils import DBHelper
+
+
+class TestSelectAnchorsForPrompt(unittest.TestCase):
+    def test_small_pool_returns_all_sorted(self) -> None:
+        anchors = select_anchors_for_prompt(
+            ["Zebra", "Alpha", "Beta"], ["gamma"], max_anchors=80
+        )
+        self.assertEqual(anchors, ["Alpha", "Beta", "Zebra"])
+
+    def test_caps_and_prefers_related_labels(self) -> None:
+        existing = [f"Unrelated {i}" for i in range(100)]
+        existing.extend(["Government IT", "Government Services", "GPU Drivers"])
+        selected = select_anchors_for_prompt(
+            existing,
+            ["GovernmentIT", "Gov Services", "GPU"],
+            max_anchors=10,
+        )
+        self.assertEqual(len(selected), 10)
+        # Related government / GPU anchors must survive the cap.
+        self.assertIn("Government IT", selected)
+        self.assertIn("Government Services", selected)
+        self.assertIn("GPU Drivers", selected)
+
+    def test_empty_existing_returns_empty(self) -> None:
+        self.assertEqual(select_anchors_for_prompt([], ["a"], max_anchors=10), [])
+
+
+class TestEmptyLlmOutputAdvancesChunk(unittest.TestCase):
+    def test_empty_response_returns_no_merges_instead_of_raising(self) -> None:
+        llm_router = MagicMock()
+        llm_router.call.return_value = ""
+        agent = TopicMergeAgent(MagicMock(), llm_router, "owner-1")
+        agent._aliases = MagicMock()
+
+        result = agent._merge_with_llm(
+            "Technology",
+            ["Alpha", "Beta"],
+            ["gamma", "delta"],
+            anchor_ids={"Alpha": "a", "Beta": "b"},
+        )
+
+        self.assertEqual(result, {})
+        llm_router.call.assert_called_once()
+
+    def test_resolve_bucket_writes_aliases_after_empty_llm(self) -> None:
+        """Empty LLM must still mint self-canonical aliases so the chunk
+        is not re-sent on the next run."""
+        llm_router = MagicMock()
+        llm_router.call.return_value = ""
+        agent = TopicMergeAgent(MagicMock(), llm_router, "u")
+        aliases = MagicMock()
+        aliases.get_alias.return_value = None
+        aliases.get_existing_canonicals.return_value = [
+            {"canonical_id": "p/alpha", "canonical_label": "Alpha"},
+        ]
+        aliases.get_alias_by_normal_form.return_value = None
+        aliases.make_canonical_id.side_effect = (
+            RssTagTopicAliases.make_canonical_id
+        )
+        agent._aliases = aliases
+
+        resolved = agent._resolve_bucket(
+            0, "p", "Parent", ["Brand New Label"], False
+        )
+
+        self.assertIn("Brand New Label", resolved)
+        aliases.upsert_alias.assert_called()
+        self.assertEqual(
+            resolved["Brand New Label"]["canonical_label"], "Brand New Label"
+        )
 
 
 class TestPrefixRewrite(unittest.TestCase):
@@ -217,7 +291,7 @@ class TestReleaseStaleTasks(MongoBackedTestCase):
             {"user": "u", "type": TASK_TOPIC_MERGE, "processing": TASK_NOT_IN_PROCESSING}
         ).inserted_id
 
-        reclaimed = tasks.release_stale_tasks(7200)
+        reclaimed = tasks.release_stale_tasks(3600)
 
         self.assertEqual(reclaimed, 1)
         self.assertEqual(
@@ -264,6 +338,57 @@ class TestFinishTaskResetsCounters(MongoBackedTestCase):
         self.assertNotIn("failed_attempts", stored)
         self.assertNotIn("last_error", stored)
 
+    def test_finish_exception_unlocks_topic_merge_claim(self) -> None:
+        """A boom inside finish_task must not leave the long-lived claim stuck."""
+        tasks = RssTagTasks(self.db)
+        task_id = self.db.tasks.insert_one(
+            {
+                "user": "u",
+                "type": TASK_TOPIC_MERGE,
+                "processing": time.time(),
+            }
+        ).inserted_id
+
+        with patch.object(
+            tasks,
+            "_count_pending_topic_merge_docs",
+            side_effect=RuntimeError("count failed"),
+        ):
+            finished = tasks.finish_task(
+                {"_id": task_id, "type": TASK_TOPIC_MERGE, "user": {"sid": "u"}}
+            )
+
+        self.assertFalse(finished)
+        stored = self.db.tasks.find_one({"_id": task_id})
+        self.assertIsNotNone(stored)
+        self.assertEqual(stored["processing"], TASK_NOT_IN_PROCESSING)
+
+    def test_finish_removes_task_when_no_pending_docs(self) -> None:
+        tasks = RssTagTasks(self.db)
+        task_id = self.db.tasks.insert_one(
+            {
+                "user": "u",
+                "type": TASK_TOPIC_MERGE,
+                "processing": time.time(),
+                "manual": True,
+            }
+        ).inserted_id
+        self.db.post_grouping.insert_one(
+            {
+                "owner": "u",
+                "post_ids": ["p1"],
+                "groups": {"A > B": ["s"]},
+                "topic_merged": TOPIC_MERGE_VERSION,
+            }
+        )
+
+        finished = tasks.finish_task(
+            {"_id": task_id, "type": TASK_TOPIC_MERGE, "user": {"sid": "u"}}
+        )
+
+        self.assertTrue(finished)
+        self.assertIsNone(self.db.tasks.find_one({"_id": task_id}))
+
 
 class TestTopicMergeStatusCount(MongoBackedTestCase):
     def test_status_reports_pending_topic_merge_count(self) -> None:
@@ -279,6 +404,23 @@ class TestTopicMergeStatusCount(MongoBackedTestCase):
 
         merge_status = next(s for s in status if s["type"] == TASK_TOPIC_MERGE)
         self.assertEqual(merge_status["count"], 1)
+        self.assertNotIn("(frozen)", merge_status["title"])
+        self.assertNotIn("(processing)", merge_status["title"])
+
+    def test_status_marks_frozen_and_processing_titles(self) -> None:
+        tasks = RssTagTasks(self.db)
+        self.db.tasks.insert_one(
+            {
+                "user": "u",
+                "type": TASK_TOPIC_MERGE,
+                "processing": TASK_FREEZED,
+                "failed": True,
+            }
+        )
+
+        status = tasks.get_tasks_status("u")
+        merge_status = next(s for s in status if s["type"] == TASK_TOPIC_MERGE)
+        self.assertIn("(frozen)", merge_status["title"])
 
 
 class TestMarkDocsMergedRace(MongoBackedTestCase):
@@ -309,8 +451,9 @@ class TestMarkDocsMergedRace(MongoBackedTestCase):
         ).inserted_id
         agent._collected_doc_ids = [legacy_id, untouched_id, rewritten_id]
 
-        agent._mark_docs_merged()
+        marked = agent._mark_docs_merged()
 
+        self.assertTrue(marked)
         self.assertEqual(
             self.db.post_grouping.find_one({"_id": legacy_id}).get("topic_merged"),
             TOPIC_MERGE_VERSION,
@@ -322,6 +465,24 @@ class TestMarkDocsMergedRace(MongoBackedTestCase):
         self.assertIsNone(
             self.db.post_grouping.find_one({"_id": rewritten_id}).get("topic_merged")
         )
+
+    def test_mark_docs_merged_db_error_returns_false(self) -> None:
+        agent = self._agent()
+        agent._run_start = time.time()
+        agent._collected_doc_ids = ["fake-id"]
+        agent._db = MagicMock()
+        agent._db.post_grouping.update_many.side_effect = RuntimeError("db down")
+
+        self.assertFalse(agent._mark_docs_merged())
+        self.assertEqual(agent._collected_doc_ids, [])
+
+    def test_run_returns_false_when_mark_fails(self) -> None:
+        agent = self._agent()
+        self.db.post_grouping.insert_one(
+            {"owner": "u", "post_ids": ["p1"], "groups": {}}
+        )
+        with patch.object(agent, "_mark_docs_merged", return_value=False):
+            self.assertFalse(agent.run())
 
 
 class TestRedirectCanonical(MongoBackedTestCase):

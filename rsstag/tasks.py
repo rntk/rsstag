@@ -475,6 +475,19 @@ class RssTagTasks:
 
             user = users.get_by_sid(user_task["user"])
             if not user:
+                # Claim already set processing; release so the task is not deadlocked
+                # forever when the owning user document is missing.
+                try:
+                    self._db.tasks.update_one(
+                        {"_id": user_task["_id"]},
+                        {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
+                    )
+                except Exception as unlock_exc:
+                    self._log.error(
+                        "Can`t unlock task %s after missing user. Info: %s",
+                        user_task.get("_id"),
+                        unlock_exc,
+                    )
                 return task
 
             task.update(user_task)
@@ -913,6 +926,35 @@ class RssTagTasks:
             )
             return False
 
+    def release_stale_tasks(self, max_age_seconds: float) -> int:
+        """Reclaim tasks whose ``processing`` lock is a stale timestamp.
+
+        Some task types (e.g. TASK_TOPIC_MERGE) stay claimed for a whole agent
+        run instead of being unlocked immediately. If the worker crashes mid-run
+        the lock is never released and the task deadlocks. This resets any lock
+        that is a positive timestamp older than ``max_age_seconds`` back to
+        TASK_NOT_IN_PROCESSING. Frozen (TASK_FREEZED == -1) and idle
+        (TASK_NOT_IN_PROCESSING == 0) tasks are never touched because the
+        ``$gt: 0`` bound excludes them.
+        """
+        try:
+            cutoff: float = time.time() - max_age_seconds
+            result = self._db.tasks.update_many(
+                {"processing": {"$gt": TASK_NOT_IN_PROCESSING, "$lt": cutoff}},
+                {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
+            )
+            reclaimed: int = int(result.modified_count)
+            if reclaimed:
+                self._log.info(
+                    "Reclaimed %d stale task lock(s) older than %.0fs",
+                    reclaimed,
+                    max_age_seconds,
+                )
+            return reclaimed
+        except Exception as e:
+            self._log.error("Can`t reclaim stale task locks. Info: %s", e)
+            return 0
+
     def finish_task(self, task: dict) -> bool:
         remove_task = True
         try:
@@ -1050,10 +1092,11 @@ class RssTagTasks:
                     self._count_pending_topic_merge_docs(task["user"]["sid"], task) == 0
                 )
                 if not remove_task:
-                    self._db.tasks.update_one(
-                        {"_id": task["_id"]},
-                        {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
-                    )
+                    # Keep the long-lived task in the queue, but always clear
+                    # the claim so another worker can pick it up. Also clear
+                    # the failure budget on a successful run so intermittent
+                    # failures don't accumulate to the freeze threshold.
+                    self._unlock_topic_merge_task(task["_id"], clear_failures=True)
             if remove_task:
                 self.remove_task(task["_id"])
                 if not task.get("manual", False):
@@ -1062,20 +1105,40 @@ class RssTagTasks:
             result = True
         except Exception as e:
             result = False
-            task_data = task.get("data") if isinstance(task, dict) else None
-            task_id = (
-                task_data.get("_id", "unknown")
-                if isinstance(task_data, dict)
-                else "unknown"
-            )
+            task_id = task.get("_id", "unknown") if isinstance(task, dict) else "unknown"
+            task_type = task.get("type") if isinstance(task, dict) else None
             self._log.error(
                 "Can`t finish task %s, type %s. Info: %s",
                 task_id,
-                task["type"],
+                task_type,
                 e,
             )
+            # Long-lived claims (topic merge) must not stay stuck on processing
+            # if finish_task itself throws after a successful handler run.
+            if (
+                isinstance(task, dict)
+                and task.get("type") == TASK_TOPIC_MERGE
+                and task.get("_id")
+            ):
+                self._unlock_topic_merge_task(task["_id"], clear_failures=False)
 
         return result
+
+    def _unlock_topic_merge_task(
+        self, task_id: Any, clear_failures: bool = False
+    ) -> None:
+        """Release a TOPIC_MERGE claim so the task can be retried or finalized."""
+        try:
+            update: Dict[str, Any] = {
+                "$set": {"processing": TASK_NOT_IN_PROCESSING}
+            }
+            if clear_failures:
+                update["$unset"] = {"failed_attempts": "", "last_error": ""}
+            self._db.tasks.update_one({"_id": task_id}, update)
+        except Exception as e:
+            self._log.error(
+                "Can`t unlock topic merge task %s. Info: %s", task_id, e
+            )
 
     def get_current_tasks(self, user_id: str) -> List[dict]:
         try:
@@ -1123,9 +1186,21 @@ class RssTagTasks:
                     continue
                 task_types.add(task["type"])
 
+                processing = task.get("processing", TASK_NOT_IN_PROCESSING)
+                title = self.get_task_title(task["type"])
+                # Surface stuck/frozen claims in the status title so a deadlocked
+                # topic-merge does not look like active work with a huge count.
+                if task.get("failed") or processing == TASK_FREEZED:
+                    title = f"{title} (frozen)"
+                elif (
+                    isinstance(processing, (int, float))
+                    and processing > TASK_NOT_IN_PROCESSING
+                ):
+                    title = f"{title} (processing)"
+
                 info = {
                     "type": task["type"],
-                    "title": self.get_task_title(task["type"]),
+                    "title": title,
                     "count": -1,
                 }
 
@@ -1159,6 +1234,8 @@ class RssTagTasks:
                     )
                 elif task["type"] == TASK_ANTHOLOGY:
                     info["count"] = self._count_pending_anthologies(user_id)
+                elif task["type"] == TASK_TOPIC_MERGE:
+                    info["count"] = self._count_pending_topic_merge_docs(user_id, task)
 
                 status.append(info)
         except Exception as e:

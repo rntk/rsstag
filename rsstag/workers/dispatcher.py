@@ -56,6 +56,16 @@ from rsstag.workers.tag_worker import TagWorker
 from rsstag.workers.provider_worker import ProviderWorker
 from rsstag.workers_db import RssTagWorkers
 
+# How often a worker sweeps for stale task locks, and how old a lock must be
+# before it is reclaimed. Long-lived claims (e.g. TASK_TOPIC_MERGE) can leave a
+# task stuck on ``processing`` if the worker crashes mid-run, so a periodic
+# sweep at a much slower cadence than the heartbeat frees them for retry.
+STALE_TASK_RECLAIM_INTERVAL_SECONDS = 300  # 5 minutes
+# Topic merge can run for a long time; keep the age high enough not to steal a
+# live claim, but low enough that a crashed worker does not freeze the queue
+# for an entire day. 1 hour balances both.
+STALE_TASK_MAX_AGE_SECONDS = 3600  # 1 hour
+
 
 class RSSTagWorkerDispatcher:
     """Rsstag workers handler"""
@@ -255,6 +265,10 @@ def worker(config: Dict[str, Any]) -> None:
         instrument_tasks(tasks)
         register_business_metrics(db)
     last_heartbeat = time.time()
+    # Force a reclaim on the first loop so a worker restart immediately frees
+    # claims left by a previous crashed process, instead of waiting one full
+    # STALE_TASK_RECLAIM_INTERVAL_SECONDS before anything runs.
+    last_stale_reclaim = 0.0
     try:
         while not stop_requested:
             task = None
@@ -263,6 +277,12 @@ def worker(config: Dict[str, Any]) -> None:
                 if time.time() - last_heartbeat > 10:
                     workers_db.update_heartbeat(worker_id)
                     last_heartbeat = time.time()
+
+                # Reclaim stale task locks on a much slower cadence so a crashed
+                # worker's long-lived claim doesn't deadlock the task forever.
+                if time.time() - last_stale_reclaim > STALE_TASK_RECLAIM_INTERVAL_SECONDS:
+                    tasks.release_stale_tasks(STALE_TASK_MAX_AGE_SECONDS)
+                    last_stale_reclaim = time.time()
 
                 task = tasks.get_task(users)
                 task_done = False
@@ -289,7 +309,18 @@ def worker(config: Dict[str, Any]) -> None:
                         task_done = False
 
                 if task_done:
-                    tasks.finish_task(task)
+                    finished = tasks.finish_task(task)
+                    # Topic merge stays claimed for the whole handler run. If
+                    # finish_task itself fails, unlock (or freeze after budget)
+                    # so the queue cannot sit forever on a stuck claim with a
+                    # large pending count and idle workers.
+                    if (
+                        not finished
+                        and task.get("type") == TASK_TOPIC_MERGE
+                    ):
+                        tasks.release_failed_task(
+                            task, "Topic merge finish_task returned false"
+                        )
                     if task["type"] == TASK_DOWNLOAD:
                         provider = task.get("provider", "")
                         if provider:

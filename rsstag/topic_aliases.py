@@ -15,11 +15,44 @@ import time
 import unicodedata
 from typing import Any, Dict, List, Optional, Tuple
 
-from pymongo import MongoClient
+from pymongo import MongoClient, UpdateOne
 
 TOPIC_PATH_SEPARATOR = " > "
 
 AliasKey = Tuple[int, str, str]
+
+
+def rewrite_canonical_id_prefix(value: str, from_id: str, to_id: str) -> str:
+    """Rewrite a hierarchical canonical id whose prefix is being redirected.
+
+    Canonical ids are slash-joined slugs (see ``make_canonical_id``). When the
+    ``from_id`` anchor loses a merge, ids equal to it or nested beneath it move
+    under ``to_id``; unrelated ids are returned unchanged. Pure so it can be
+    unit-tested without a database.
+    """
+    if value == from_id:
+        return to_id
+    prefix = from_id + "/"
+    if value.startswith(prefix):
+        return to_id + "/" + value[len(prefix):]
+    return value
+
+
+def normalize_label(value: str) -> str:
+    """Build a syntactic normal form for near-duplicate label matching.
+
+    NFKC-normalizes, casefolds, replaces unicode-aware non-word runs with a
+    single space, then sorts the whitespace-split tokens and rejoins them.
+    This collapses case ("LLM" vs "llm"), punctuation ("LLM-Training" vs
+    "LLM Training"), and word-order ("LLM Training" vs "Training LLM")
+    variants onto the same key. Deliberately does NOT lemmatize or strip
+    plurals: that heuristic is unreliable across languages and risks
+    collapsing genuinely distinct concepts.
+    """
+    normalized = unicodedata.normalize("NFKC", value or "").casefold().strip()
+    collapsed = re.sub(r"[^\w]+", " ", normalized, flags=re.UNICODE).strip()
+    tokens = collapsed.split()
+    return " ".join(sorted(tokens))
 
 
 def slugify(value: str) -> str:
@@ -59,6 +92,14 @@ class RssTagTopicAliases:
                 [("owner", 1), ("level", 1), ("parent_canonical_id", 1)]
             )
             self._db.topic_aliases.create_index([("owner", 1), ("canonical_id", 1)])
+            self._db.topic_aliases.create_index(
+                [
+                    ("owner", 1),
+                    ("level", 1),
+                    ("parent_canonical_id", 1),
+                    ("normal_form", 1),
+                ]
+            )
         except Exception as e:
             self._log.warning(
                 "Can't create topic_aliases indexes. May already exist. Info: %s", e
@@ -88,6 +129,18 @@ class RssTagTopicAliases:
                 "level": level,
                 "parent_canonical_id": parent_canonical_id,
                 "raw_label": raw_label,
+            }
+        )
+
+    def get_alias_by_normal_form(
+        self, owner: str, level: int, parent_canonical_id: str, normal_form: str
+    ) -> Optional[Dict[str, Any]]:
+        return self._db.topic_aliases.find_one(
+            {
+                "owner": owner,
+                "level": level,
+                "parent_canonical_id": parent_canonical_id,
+                "normal_form": normal_form,
             }
         )
 
@@ -137,11 +190,93 @@ class RssTagTopicAliases:
                     "raw_label": raw_label,
                     "canonical_id": canonical_id,
                     "canonical_label": canonical_label,
+                    "normal_form": normalize_label(raw_label),
                     "updated_at": time.time(),
                 }
             },
             upsert=True,
         )
+
+    def redirect_canonical(
+        self, owner: str, from_id: str, to_id: str, to_label: str
+    ) -> int:
+        """Repoint aliases from a losing canonical id onto the winning one.
+
+        Used when a merge component contains two [E] anchors: the losing
+        anchor's aliases (and every alias nested under its hierarchy) must
+        follow the winner so no alias is left pointing at an orphaned id.
+
+        Rewrites three kinds of docs, computing new id prefixes in Python
+        because Mongo cannot do server-side string surgery:
+          * docs whose ``canonical_id`` is exactly ``from_id`` -> winner id/label;
+          * docs nested under ``from_id`` (``canonical_id``/``parent_canonical_id``
+            starting with ``from_id + "/"``) -> prefix replaced with ``to_id``;
+          * direct children whose ``parent_canonical_id`` == ``from_id``.
+
+        Returns the number of alias docs updated.
+        """
+        if not from_id or not to_id or from_id == to_id:
+            return 0
+
+        now: float = time.time()
+        updated: int = 0
+
+        # (a) Exact losing canonical -> winning id + label.
+        exact = self._db.topic_aliases.update_many(
+            {"owner": owner, "canonical_id": from_id},
+            {"$set": {"canonical_id": to_id, "canonical_label": to_label, "updated_at": now}},
+        )
+        updated += int(exact.modified_count)
+
+        # (b) Descendants: rewrite the from_id prefix in both id fields. Read the
+        # matching docs, compute new values, and bulk-write only the changes.
+        prefix_regex = {"$regex": "^" + re.escape(from_id + "/")}
+        cursor = self._db.topic_aliases.find(
+            {
+                "owner": owner,
+                "$or": [
+                    {"parent_canonical_id": from_id},
+                    {"parent_canonical_id": prefix_regex},
+                    {"canonical_id": prefix_regex},
+                ],
+            }
+        )
+        operations: List[UpdateOne] = []
+        for doc in cursor:
+            changes: Dict[str, Any] = {}
+            new_parent = rewrite_canonical_id_prefix(
+                str(doc.get("parent_canonical_id", "")), from_id, to_id
+            )
+            if new_parent != doc.get("parent_canonical_id"):
+                changes["parent_canonical_id"] = new_parent
+            new_canonical = rewrite_canonical_id_prefix(
+                str(doc.get("canonical_id", "")), from_id, to_id
+            )
+            if new_canonical != doc.get("canonical_id"):
+                changes["canonical_id"] = new_canonical
+            if not changes:
+                continue
+            changes["updated_at"] = now
+            operations.append(UpdateOne({"_id": doc["_id"]}, {"$set": changes}))
+
+        if operations:
+            try:
+                result = self._db.topic_aliases.bulk_write(operations, ordered=False)
+                updated += int(result.modified_count)
+            except Exception as e:
+                # A prefix rewrite can collide with an existing doc on the unique
+                # (owner, level, parent_canonical_id, raw_label) index; log and
+                # keep the exact-match redirect that already succeeded.
+                self._log.warning(
+                    "redirect_canonical: some descendant rewrites failed "
+                    "(owner=%s from=%s to=%s): %s",
+                    owner,
+                    from_id,
+                    to_id,
+                    e,
+                )
+
+        return updated
 
     def load_owner_map(self, owner: str) -> Dict[AliasKey, Dict[str, str]]:
         """Preload all aliases for an owner for batch path resolution."""

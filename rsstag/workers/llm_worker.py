@@ -1311,11 +1311,24 @@ class _TopicMergeWorker:
             logging.error("Topic merge task missing owner: %s", task)
             return False
 
+        task_id = task.get("_id")
+
+        def _refresh_claim() -> None:
+            # Keep the long-lived claim fresh while the agent is still working
+            # so release_stale_tasks does not steal a live merge mid-run.
+            if not task_id:
+                return
+            self._db.tasks.update_one(
+                {"_id": task_id},
+                {"$set": {"processing": time.time()}},
+            )
+
         agent = TopicMergeAgent(
             self._db,
             self._llm,
             owner=owner,
             settings=task.get("user", {}).get("settings", {}),
+            on_progress=_refresh_claim,
         )
         try:
             return agent.run(task.get("scope") or {})

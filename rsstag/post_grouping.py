@@ -1,6 +1,7 @@
 """Post grouping data management and DB dispatching"""
 
 import logging
+import time
 from typing import Optional, List, Dict, Any, Union, Iterator
 from pymongo import MongoClient
 import hashlib
@@ -58,6 +59,10 @@ class RssTagPostGrouping:
             "post_ids_hash": post_ids_hash,
             "sentences": sentences,
             "groups": groups,
+            # Stamp every rewrite so the topic-merge agent can tell whether a
+            # doc it collected was re-grouped mid-run (and must not be marked
+            # merged with now-stale labels). See TopicMergeAgent._mark_docs_merged.
+            "updated_at": time.time(),
         }
 
         try:
