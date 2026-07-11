@@ -1163,6 +1163,7 @@ def _build_hierarchy_topics(
     """Aggregate per-post topic groups into a single feed-wide topic hierarchy."""
     posts_count: dict[str, int] = defaultdict(int)
     sentences_count: dict[str, int] = defaultdict(int)
+    topic_sentences: dict[str, list[str]] = defaultdict(list)
     for post in posts:
         post_id: str = str(post.get("pid", ""))
         grouped: Optional[dict[str, Any]] = app.post_grouping.get_grouped_posts(
@@ -1171,6 +1172,13 @@ def _build_hierarchy_topics(
         if not grouped:
             continue
         groups: dict[str, Any] = grouped.get("groups", {}) or {}
+        sentences_by_number: dict[int, str] = {
+            int(sentence["number"]): str(sentence["text"]).strip()
+            for sentence in grouped.get("sentences", []) or []
+            if isinstance(sentence, dict)
+            and isinstance(sentence.get("number"), int)
+            and str(sentence.get("text", "")).strip()
+        }
         for topic, numbers in groups.items():
             if not topic or not isinstance(numbers, list):
                 continue
@@ -1179,12 +1187,18 @@ def _build_hierarchy_topics(
             sentences_count[topic_name] += sum(
                 1 for number in numbers if isinstance(number, int)
             )
+            topic_sentences[topic_name].extend(
+                sentences_by_number[number]
+                for number in numbers
+                if isinstance(number, int) and number in sentences_by_number
+            )
 
     return [
         {
             "name": topic_name,
             "posts_count": posts_count[topic_name],
             "sentences_count": sentences_count[topic_name],
+            "sentences": topic_sentences[topic_name],
         }
         for topic_name in sorted(posts_count)
     ]

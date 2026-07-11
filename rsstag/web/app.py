@@ -47,6 +47,7 @@ import rsstag.web.anthologies as anthologies_handlers
 import rsstag.web.paths_handlers as paths_handlers
 
 from rsstag.llm.router import LLMRouter
+from rsstag.llm import LLMCache
 
 from rsstag.stopwords import stopwords
 
@@ -176,6 +177,8 @@ class RSSTagApplication(object):
             "on_external_workers_submit_post",
         )
         self.llm = LLMRouter(self.config)
+        self.llm_cache = LLMCache(self.db)
+        self.llm_cache.prepare()
         try:
             from rsstag.observability.business_metrics import register_business_metrics
             from rsstag.observability.worker_instrumentation import instrument_tasks
@@ -302,6 +305,7 @@ class RSSTagApplication(object):
             "anthologies",
             "anthology_runs",
             "llm_batch_results",
+            "llm_cache",
         ]
         deleted_counts: Dict[str, int] = {}
         for collection_name in collection_names:
@@ -1938,6 +1942,9 @@ class RSSTagApplication(object):
 
     def on_openai_post(self, user: dict, request: Request):
         return openai_handlers.on_openai_post(self, user, request)
+
+    def on_openai_summary_post(self, user: dict, request: Request) -> Response:
+        return openai_handlers.on_openai_summary_post(self, user, request)
 
     def on_chat_post(self, user: dict, request: Request):
         return chat_handlers.on_chat_post(self, user, request)

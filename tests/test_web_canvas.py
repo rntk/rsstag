@@ -116,6 +116,18 @@ class TestWebCanvas(MongoWebTestCase):
         self.assertIn(b"feed-canvas.js", response.data)
         self.assertNotIn(b"Excluded post", response.data)
 
+    def test_hierarchy_includes_topic_sentences_for_summaries(self) -> None:
+        sid, feed_id = self._seed_canvas()
+        client = self.get_authenticated_client(sid)
+
+        response = client.get(f"/hierarchy?feed={feed_id}")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Technology \\u003e Canvas", response.data)
+        self.assertIn(b"First sentence.", response.data)
+        self.assertIn(b"Second sentence.", response.data)
+        self.assertIn(b"feed-hierarchy.js", response.data)
+
 
 if __name__ == "__main__":
     unittest.main()

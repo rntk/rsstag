@@ -494,6 +494,11 @@ class RSSTagRoutes:
                 "methods": ["POST"],
             },
             {
+                "url": "/openai/summary",
+                "endpoint": "on_openai_summary_post",
+                "methods": ["POST"],
+            },
+            {
                 "url": "/sunburst/<string:tags>",
                 "endpoint": "on_sunburst_get",
                 "methods": ["GET"],

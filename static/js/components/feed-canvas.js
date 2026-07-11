@@ -84,6 +84,10 @@ class FeedCanvas {
     this.y = 30;
     this.drag = null;
     this.resizeTimer = 0;
+    /** @type {Map<string, string>} */
+    this.summaries = new Map();
+    this.contextMenu = null;
+    this.summaryDialog = null;
   }
 
   init() {
@@ -92,6 +96,7 @@ class FeedCanvas {
     this.bindEvents();
     this.applyTransform();
     this.layoutTopics();
+    this.createSummaryDialog();
     document.fonts?.ready.then(() => this.layoutTopics());
   }
 
@@ -154,6 +159,9 @@ class FeedCanvas {
       .querySelector('[data-canvas-action="reset"]')
       ?.addEventListener('click', () => this.reset());
     window.addEventListener('keydown', (event) => this.handleKeyDown(event));
+    window.addEventListener('pointerdown', (event) => {
+      if (!this.contextMenu?.contains(event.target)) this.closeContextMenu();
+    });
     window.addEventListener('resize', () => {
       window.clearTimeout(this.resizeTimer);
       this.resizeTimer = window.setTimeout(() => this.layoutTopics(), 100);
@@ -310,12 +318,13 @@ class FeedCanvas {
   /**
    * @param {{node: ReturnType<typeof buildTopicNodes>[number], postId: string, run: number[], top: number, height: number}} layout
    * @param {number} cardWidth
-   * @returns {HTMLButtonElement}
+   * @returns {HTMLDivElement}
    */
   createCard(layout, cardWidth) {
-    const card = document.createElement('button');
-    card.type = 'button';
+    const card = document.createElement('div');
     card.className = 'canvas-topic-card';
+    card.tabIndex = 0;
+    card.setAttribute('role', 'button');
     card.style.top = `${layout.top}px`;
     card.style.height = `${layout.height}px`;
     card.style.width = `${cardWidth}px`;
@@ -326,7 +335,7 @@ class FeedCanvas {
       '--topic-title-lines',
       layout.height < COMPACT_TOPIC_CARD_HEIGHT ? '1' : '2'
     );
-    card.innerHTML = `<span class="canvas-topic-card__name"></span><span class="canvas-topic-card__meta">${layout.run.length} sent.</span>`;
+    card.innerHTML = `<button type="button" class="canvas-topic-card__menu" aria-label="Topic actions" title="Topic actions">⋮</button><span class="canvas-topic-card__name"></span><span class="canvas-topic-card__meta">${layout.run.length} sent.</span>`;
     const name = card.querySelector('.canvas-topic-card__name');
     if (name) name.textContent = layout.node.name;
     card.title = layout.node.path;
@@ -341,7 +350,7 @@ class FeedCanvas {
     card.addEventListener('mouseleave', () => {
       if (!card.classList.contains('is-selected')) toggleHighlight(false);
     });
-    card.addEventListener('click', () => {
+    const selectCard = () => {
       const selected = !card.classList.contains('is-selected');
       this.cards?.querySelectorAll('.is-selected').forEach((item) => {
         item.classList.remove('is-selected', 'is-active');
@@ -351,8 +360,117 @@ class FeedCanvas {
         .forEach((item) => item.classList.remove('is-topic-active'));
       card.classList.toggle('is-selected', selected);
       if (selected) toggleHighlight(true);
+    };
+    card.addEventListener('click', (event) => {
+      if (!event.target.closest('.canvas-topic-card__menu')) selectCard();
+    });
+    card.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        selectCard();
+      }
+    });
+    card.querySelector('.canvas-topic-card__menu')?.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.openContextMenu(event.currentTarget, layout, card);
     });
     return card;
+  }
+
+  closeContextMenu() {
+    this.contextMenu?.remove();
+    this.contextMenu = null;
+  }
+
+  /** @param {Element} anchor @param {object} layout @param {HTMLElement} card */
+  openContextMenu(anchor, layout, card) {
+    this.closeContextMenu();
+    const menu = document.createElement('div');
+    menu.className = 'canvas-topic-menu';
+    menu.setAttribute('role', 'menu');
+    const summaryButton = document.createElement('button');
+    summaryButton.type = 'button';
+    summaryButton.textContent = this.summaries.has(this.summaryKey(layout)) ? 'Show summary' : 'Summary';
+    summaryButton.addEventListener('click', () => {
+      this.closeContextMenu();
+      this.requestSummary(layout, card);
+    });
+    menu.appendChild(summaryButton);
+    document.body.appendChild(menu);
+    const rect = anchor.getBoundingClientRect();
+    menu.style.left = `${Math.min(rect.left, window.innerWidth - menu.offsetWidth - 8)}px`;
+    menu.style.top = `${Math.min(rect.bottom + 4, window.innerHeight - menu.offsetHeight - 8)}px`;
+    this.contextMenu = menu;
+    summaryButton.focus();
+  }
+
+  /** @param {object} layout @returns {string} */
+  summaryKey(layout) {
+    return `${layout.node.path}\u0000${layout.postId}\u0000${layout.run.join(',')}`;
+  }
+
+  /** @param {object} layout @returns {string[]} */
+  summarySentences(layout) {
+    const post = this.posts.find((item) => String(item.post_id || '') === layout.postId);
+    if (!post || !Array.isArray(post.sentences)) return [];
+    const numbers = new Set(layout.run);
+    return post.sentences
+      .filter((sentence) => numbers.has(sentence.number))
+      .map((sentence) => String(sentence.text || '').trim())
+      .filter(Boolean);
+  }
+
+  /** @param {object} layout @param {HTMLElement} card */
+  async requestSummary(layout, card) {
+    const key = this.summaryKey(layout);
+    const cached = this.summaries.get(key);
+    if (cached) {
+      this.showSummary(layout.node.path, cached);
+      return;
+    }
+    card.classList.add('is-summary-loading');
+    try {
+      const response = await fetch('/openai/summary', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic: layout.node.path, sentences: this.summarySentences(layout) }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.data) throw new Error(payload.error || 'Unable to generate summary.');
+      const summary = String(payload.data).trim();
+      this.summaries.set(key, summary);
+      this.showSummary(layout.node.path, summary);
+    } catch (error) {
+      this.showSummary(layout.node.path, error instanceof Error ? error.message : 'Unable to generate summary.', true);
+    } finally {
+      card.classList.remove('is-summary-loading');
+    }
+  }
+
+  createSummaryDialog() {
+    const dialog = document.createElement('dialog');
+    dialog.className = 'canvas-summary-dialog';
+    dialog.innerHTML = `<button type="button" class="canvas-summary-dialog__close" aria-label="Close">×</button><p class="canvas-summary-dialog__kicker">Summary</p><h2></h2><div class="canvas-summary-dialog__text"></div>`;
+    dialog.querySelector('.canvas-summary-dialog__close')?.addEventListener('click', () => dialog.close());
+    dialog.addEventListener('click', (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+    document.body.appendChild(dialog);
+    this.summaryDialog = dialog;
+  }
+
+  /** @param {string} topic @param {string} text @param {boolean} [isError] */
+  showSummary(topic, text, isError = false) {
+    if (!this.summaryDialog) return;
+    const title = this.summaryDialog.querySelector('h2');
+    const body = this.summaryDialog.querySelector('.canvas-summary-dialog__text');
+    if (title) title.textContent = topic;
+    if (body) {
+      body.textContent = text;
+      body.classList.toggle('is-error', isError);
+    }
+    this.summaryDialog.showModal();
   }
 }
 

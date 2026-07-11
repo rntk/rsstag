@@ -6,15 +6,14 @@
  * Vanilla-JS rendering of a topic hierarchy tree built from a flat list of
  * topics whose `name` encodes a path ("A > B > C"). Mirrors the behaviour of
  * the React HierarchyApp/TopicHierarchyView components (see /app/ext/src/hierarchy)
- * but intentionally skips summaries, YouTube links and record/status states —
- * this page only ever renders the topic tree for a feed.
+ * and supports on-demand summaries for every topic level.
  *
  * Matches the vanilla component style used elsewhere in this codebase
  * (components/feed-canvas.js, topics-hierarchy.js).
  */
 
 /**
- * @typedef {{name: string, posts_count?: number, sentences_count?: number}} Topic
+ * @typedef {{name: string, posts_count?: number, sentences_count?: number, sentences?: string[]}} Topic
  * @typedef {{name: string, fullPath: string, uid: string, depth: number, topic: Topic|null}} TreeNode
  * @typedef {{node: TreeNode, children: Map<string, TreeEntry>, parent: TreeEntry|null, leafCount: number}} TreeEntry
  */
@@ -180,12 +179,12 @@ export function formatLeafMeta(topic) {
 }
 
 /**
- * Build the DOM for a single leaf topic card.
+ * Build the DOM for a single leaf topic card with its action menu.
  * @param {TreeEntry} entry
  * @param {string} rootName
  * @returns {HTMLElement}
  */
-function buildLeafElement(entry, rootName) {
+function buildLeafElement(entry, rootName, onSummary) {
   const { node } = entry;
   const leaf = document.createElement('div');
   leaf.className = 'fh-leaf';
@@ -198,10 +197,7 @@ function buildLeafElement(entry, rootName) {
   label.textContent = node.name;
   leaf.appendChild(label);
 
-  const meta = document.createElement('span');
-  meta.className = 'fh-leaf__meta';
-  meta.textContent = formatLeafMeta(node.topic);
-  leaf.appendChild(meta);
+  leaf.appendChild(buildSummaryMenuButton(entry, onSummary));
 
   return leaf;
 }
@@ -215,7 +211,7 @@ function buildLeafElement(entry, rootName) {
  * @param {(fullPath: string) => void} onToggle
  * @returns {HTMLElement}
  */
-function buildBranchElement(entry, rootName, collapsedPaths, onToggle) {
+function buildBranchElement(entry, rootName, collapsedPaths, onToggle, onSummary) {
   const { node } = entry;
   const isCollapsed = collapsedPaths.has(node.fullPath);
 
@@ -245,6 +241,7 @@ function buildBranchElement(entry, rootName, collapsedPaths, onToggle) {
   labelText.className = 'fh-branch__label-text';
   labelText.textContent = node.name;
   labelRow.appendChild(labelText);
+  labelRow.appendChild(buildSummaryMenuButton(entry, onSummary));
 
   branch.appendChild(labelRow);
 
@@ -253,7 +250,9 @@ function buildBranchElement(entry, rootName, collapsedPaths, onToggle) {
     const childrenEl = document.createElement('div');
     childrenEl.className = 'fh-branch__children';
     children.forEach((child) => {
-      childrenEl.appendChild(buildTreeElement(child, rootName, collapsedPaths, onToggle));
+      childrenEl.appendChild(
+        buildTreeElement(child, rootName, collapsedPaths, onToggle, onSummary)
+      );
     });
     branch.appendChild(childrenEl);
   }
@@ -269,11 +268,26 @@ function buildBranchElement(entry, rootName, collapsedPaths, onToggle) {
  * @param {(fullPath: string) => void} onToggle
  * @returns {HTMLElement}
  */
-function buildTreeElement(entry, rootName, collapsedPaths, onToggle) {
+function buildTreeElement(entry, rootName, collapsedPaths, onToggle, onSummary) {
   const isLeaf = entry.children.size === 0;
   return isLeaf
-    ? buildLeafElement(entry, rootName)
-    : buildBranchElement(entry, rootName, collapsedPaths, onToggle);
+    ? buildLeafElement(entry, rootName, onSummary)
+    : buildBranchElement(entry, rootName, collapsedPaths, onToggle, onSummary);
+}
+
+/** @param {TreeEntry} entry @param {(entry: TreeEntry, anchor: HTMLElement) => void} onSummary */
+function buildSummaryMenuButton(entry, onSummary) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'fh-topic-menu';
+  button.setAttribute('aria-label', `Actions for ${entry.node.name}`);
+  button.title = 'Topic actions';
+  button.textContent = '⋮';
+  button.addEventListener('click', (event) => {
+    event.stopPropagation();
+    onSummary(entry, button);
+  });
+  return button;
 }
 
 /**
@@ -283,7 +297,7 @@ function buildTreeElement(entry, rootName, collapsedPaths, onToggle) {
  * @param {Set<string>} collapsedPaths
  * @param {(fullPath: string) => void} onToggle
  */
-export function renderTree(container, roots, collapsedPaths, onToggle) {
+export function renderTree(container, roots, collapsedPaths, onToggle, onSummary = () => {}) {
   if (!container) return;
   container.replaceChildren();
 
@@ -298,7 +312,9 @@ export function renderTree(container, roots, collapsedPaths, onToggle) {
   const root = document.createElement('div');
   root.className = 'fh-root';
   roots.forEach((entry) => {
-    root.appendChild(buildTreeElement(entry, entry.node.name, collapsedPaths, onToggle));
+    root.appendChild(
+      buildTreeElement(entry, entry.node.name, collapsedPaths, onToggle, onSummary)
+    );
   });
   container.appendChild(root);
 }
@@ -339,12 +355,20 @@ class FeedHierarchy {
     this.collapsedPaths = new Set(
       collectNonLeafPaths(this.roots, { minDepth: this.selectedLevel })
     );
+    /** @type {Map<string, string>} */
+    this.summaries = new Map();
+    this.contextMenu = null;
+    this.summaryDialog = null;
   }
 
   init() {
     if (!this.treeEl) return;
     this.renderLevels();
     this.renderTree();
+    this.createSummaryDialog();
+    window.addEventListener('pointerdown', (event) => {
+      if (!this.contextMenu?.contains(event.target)) this.closeContextMenu();
+    });
   }
 
   renderLevels() {
@@ -354,9 +378,104 @@ class FeedHierarchy {
   }
 
   renderTree() {
-    renderTree(this.treeEl, this.roots, this.collapsedPaths, (fullPath) =>
-      this.handleToggleCollapse(fullPath)
+    renderTree(
+      this.treeEl,
+      this.roots,
+      this.collapsedPaths,
+      (fullPath) => this.handleToggleCollapse(fullPath),
+      (entry, anchor) => this.openContextMenu(entry, anchor)
     );
+  }
+
+  closeContextMenu() {
+    this.contextMenu?.remove();
+    this.contextMenu = null;
+  }
+
+  /** @param {TreeEntry} entry @param {HTMLElement} anchor */
+  openContextMenu(entry, anchor) {
+    this.closeContextMenu();
+    const menu = document.createElement('div');
+    menu.className = 'canvas-topic-menu';
+    menu.setAttribute('role', 'menu');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = this.summaries.has(entry.node.fullPath) ? 'Show summary' : 'Summary';
+    button.addEventListener('click', () => {
+      this.closeContextMenu();
+      this.requestSummary(entry, anchor.closest('.fh-leaf, .fh-branch__label'));
+    });
+    menu.appendChild(button);
+    document.body.appendChild(menu);
+    const rect = anchor.getBoundingClientRect();
+    menu.style.left = `${Math.min(rect.left, window.innerWidth - menu.offsetWidth - 8)}px`;
+    menu.style.top = `${Math.min(rect.bottom + 4, window.innerHeight - menu.offsetHeight - 8)}px`;
+    this.contextMenu = menu;
+    button.focus();
+  }
+
+  /** @param {TreeEntry} entry @returns {string[]} */
+  collectSentences(entry) {
+    const ownSentences = Array.isArray(entry.node.topic?.sentences)
+      ? entry.node.topic.sentences
+      : [];
+    return [
+      ...ownSentences,
+      ...Array.from(entry.children.values()).flatMap((child) => this.collectSentences(child)),
+    ];
+  }
+
+  /** @param {TreeEntry} entry @param {Element|null} card */
+  async requestSummary(entry, card) {
+    const path = entry.node.fullPath;
+    const cached = this.summaries.get(path);
+    if (cached) {
+      this.showSummary(path, cached);
+      return;
+    }
+    card?.classList.add('is-summary-loading');
+    try {
+      const response = await fetch('/openai/summary', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic: path.replace(/>/g, ' > '), sentences: this.collectSentences(entry) }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.data) throw new Error(payload.error || 'Unable to generate summary.');
+      const summary = String(payload.data).trim();
+      this.summaries.set(path, summary);
+      this.showSummary(path, summary);
+    } catch (error) {
+      this.showSummary(path, error instanceof Error ? error.message : 'Unable to generate summary.', true);
+    } finally {
+      card?.classList.remove('is-summary-loading');
+    }
+  }
+
+  createSummaryDialog() {
+    const dialog = document.createElement('dialog');
+    dialog.className = 'canvas-summary-dialog';
+    dialog.innerHTML = `<button type="button" class="canvas-summary-dialog__close" aria-label="Close">×</button><p class="canvas-summary-dialog__kicker">Summary</p><h2></h2><div class="canvas-summary-dialog__text"></div>`;
+    dialog.querySelector('.canvas-summary-dialog__close')?.addEventListener('click', () => dialog.close());
+    dialog.addEventListener('click', (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+    document.body.appendChild(dialog);
+    this.summaryDialog = dialog;
+  }
+
+  /** @param {string} topic @param {string} text @param {boolean} [isError] */
+  showSummary(topic, text, isError = false) {
+    if (!this.summaryDialog) return;
+    const title = this.summaryDialog.querySelector('h2');
+    const body = this.summaryDialog.querySelector('.canvas-summary-dialog__text');
+    if (title) title.textContent = topic.replace(/>/g, ' > ');
+    if (body) {
+      body.textContent = text;
+      body.classList.toggle('is-error', isError);
+    }
+    this.summaryDialog.showModal();
   }
 
   /** @param {number} level */

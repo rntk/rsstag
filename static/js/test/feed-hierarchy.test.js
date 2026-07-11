@@ -168,7 +168,7 @@ describe('renderTree', () => {
     expect(empty.textContent).toBe('No topics have been processed for this feed yet.');
   });
 
-  it('renders branches with toggles and leaves with labels and badges', () => {
+  it('renders branches with toggles and leaves with labels and actions', () => {
     const container = document.createElement('div');
     const roots = buildTopicTree(TOPICS);
     renderTree(container, roots, new Set(), () => {});
@@ -186,7 +186,8 @@ describe('renderTree', () => {
     const llmsLeaf = [...container.querySelectorAll('.fh-leaf')].find(
       (el) => el.querySelector('.fh-leaf__label').textContent === 'LLMs'
     );
-    expect(llmsLeaf.querySelector('.fh-leaf__meta').textContent).toBe('3 posts · 12 sentences');
+    expect(llmsLeaf.querySelector('.fh-leaf__meta')).toBeNull();
+    expect(llmsLeaf.querySelector('.fh-topic-menu')).toBeTruthy();
   });
 
   it('renders a collapsed branch as a single row without children', () => {
