@@ -144,8 +144,15 @@ class TestWebHierarchy(MongoWebTestCase):
         self.assertIn('"sentences_count": 3', shared_segment)
         self.assertIn('"title": "First post"', body)
         self.assertIn('"title": "Second post"', body)
-        self.assertIn('"sentences": ["First sentence.", "Second sentence."]', body)
-        self.assertIn('"sentences": ["Third sentence."]', body)
+        self.assertIn(
+            '"sentences": [{"number": 1, "text": "First sentence.", "read": false}, '
+            '{"number": 2, "text": "Second sentence.", "read": false}]',
+            body,
+        )
+        self.assertIn(
+            '"sentences": [{"number": 1, "text": "Third sentence.", "read": false}]',
+            body,
+        )
 
         only_first_index: int = body.index("Technology \\u003e Only First")
         only_first_segment: str = body[only_first_index : only_first_index + 200]

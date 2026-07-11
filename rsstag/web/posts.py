@@ -1173,8 +1173,11 @@ def _build_hierarchy_topics(
         if not grouped:
             continue
         groups: dict[str, Any] = grouped.get("groups", {}) or {}
-        sentences_by_number: dict[int, str] = {
-            int(sentence["number"]): str(sentence["text"]).strip()
+        sentences_by_number: dict[int, dict[str, Any]] = {
+            int(sentence["number"]): {
+                "text": str(sentence["text"]).strip(),
+                "read": bool(sentence.get("read", False)),
+            }
             for sentence in grouped.get("sentences", []) or []
             if isinstance(sentence, dict)
             and isinstance(sentence.get("number"), int)
@@ -1187,8 +1190,11 @@ def _build_hierarchy_topics(
             if not topic or not isinstance(numbers, list):
                 continue
             topic_name: str = str(topic)
-            source_sentences: list[str] = [
-                sentences_by_number[number]
+            source_sentences: list[dict[str, Any]] = [
+                {
+                    "number": number,
+                    **sentences_by_number[number],
+                }
                 for number in numbers
                 if isinstance(number, int) and number in sentences_by_number
             ]
@@ -1196,7 +1202,9 @@ def _build_hierarchy_topics(
             sentences_count[topic_name] += sum(
                 1 for number in numbers if isinstance(number, int)
             )
-            topic_sentences[topic_name].extend(source_sentences)
+            topic_sentences[topic_name].extend(
+                sentence["text"] for sentence in source_sentences
+            )
             if source_sentences:
                 source: dict[str, Any] = topic_sources[topic_name].setdefault(
                     post_id,

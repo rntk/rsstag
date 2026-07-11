@@ -13,7 +13,8 @@
  */
 
 /**
- * @typedef {{title?: string, post_id?: string, url?: string, sentences?: string[]}} TopicSource
+ * @typedef {{number?: number, text: string, read?: boolean}} TopicSentence
+ * @typedef {{title?: string, post_id?: string, url?: string, sentences?: (TopicSentence|string)[]}} TopicSource
  * @typedef {{name: string, posts_count?: number, sentences_count?: number, sentences?: string[], sources?: TopicSource[]}} Topic
  * @typedef {{name: string, fullPath: string, uid: string, depth: number, topic: Topic|null}} TreeNode
  * @typedef {{node: TreeNode, children: Map<string, TreeEntry>, parent: TreeEntry|null, leafCount: number}} TreeEntry
@@ -302,13 +303,29 @@ export function collectOriginalSources(entry) {
   const sources = new Map();
   const addSource = (source) => {
     const sentences = Array.isArray(source?.sentences)
-      ? source.sentences.map((sentence) => String(sentence).trim()).filter(Boolean)
+      ? source.sentences
+          .map((sentence) => {
+            if (typeof sentence === 'string') {
+              return { text: sentence.trim(), read: false };
+            }
+            return {
+              number: Number.isInteger(sentence?.number) ? sentence.number : undefined,
+              text: String(sentence?.text || '').trim(),
+              read: Boolean(sentence?.read),
+            };
+          })
+          .filter((sentence) => sentence.text)
       : [];
     if (sentences.length === 0) return;
     const key = String(source?.post_id || source?.url || source?.title || 'source');
     const existing = sources.get(key);
     if (existing) {
-      existing.sentences.push(...sentences);
+      sentences.forEach((sentence) => {
+        const alreadyIncluded =
+          sentence.number !== undefined &&
+          existing.sentences.some((item) => item.number === sentence.number);
+        if (!alreadyIncluded) existing.sentences.push(sentence);
+      });
       return;
     }
     sources.set(key, {
@@ -594,11 +611,69 @@ class FeedHierarchy {
     sentences.className = 'canvas-original-source__sentences';
     source.sentences.forEach((sentence) => {
       const item = document.createElement('li');
-      item.textContent = sentence;
+      item.className = `canvas-original-sentence${sentence.read ? ' is-read' : ''}`;
+      const text = document.createElement('span');
+      text.className = 'canvas-original-sentence__text';
+      text.textContent = sentence.text;
+      item.appendChild(text);
+
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'canvas-original-sentence__toggle';
+      toggle.textContent = sentence.read ? 'Mark Unread' : 'Mark Read';
+      toggle.title = sentence.read ? 'Mark sentence as unread' : 'Mark sentence as read';
+      toggle.dataset.read = sentence.read ? '1' : '0';
+      if (!source.post_id || !Number.isInteger(sentence.number)) {
+        toggle.disabled = true;
+        toggle.title = 'Read status unavailable';
+      } else {
+        toggle.addEventListener('click', () =>
+          this.toggleOriginalSentence(source.post_id, sentence.number, item, toggle)
+        );
+      }
+      item.appendChild(toggle);
       sentences.appendChild(item);
     });
     article.appendChild(sentences);
     return article;
+  }
+
+  /**
+   * Update one original sentence through the same read-state API used by
+   * grouped snippets.
+   *
+   * @param {string} postId
+   * @param {number} sentenceNumber
+   * @param {HTMLElement} sentenceEl
+   * @param {HTMLButtonElement} toggle
+   */
+  async toggleOriginalSentence(postId, sentenceNumber, sentenceEl, toggle) {
+    const readed = toggle.dataset.read !== '1';
+    toggle.disabled = true;
+    try {
+      const response = await fetch('/read/snippets', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          selections: [{ post_id: postId, sentence_indices: [sentenceNumber] }],
+          readed,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok || payload.data !== 'ok') {
+        throw new Error(payload.error || 'Unable to update sentence status.');
+      }
+      sentenceEl.classList.toggle('is-read', readed);
+      toggle.dataset.read = readed ? '1' : '0';
+      toggle.textContent = readed ? 'Mark Unread' : 'Mark Read';
+      toggle.title = readed ? 'Mark sentence as unread' : 'Mark sentence as read';
+    } catch (error) {
+      console.error('Unable to update original sentence status.', error);
+      window.alert(error instanceof Error ? error.message : 'Unable to update sentence status.');
+    } finally {
+      toggle.disabled = false;
+    }
   }
 
   /** @param {number} level */

@@ -161,20 +161,25 @@ describe('collectOriginalSources', () => {
         post_id: 'post-1',
         title: 'First post',
         url: '',
-        sentences: ['First sentence.', 'Third sentence.'],
+        sentences: [
+          { text: 'First sentence.', read: false },
+          { text: 'Third sentence.', read: false },
+        ],
       },
       {
         post_id: 'post-2',
         title: 'Second post',
         url: '',
-        sentences: ['Second sentence.'],
+        sentences: [{ text: 'Second sentence.', read: false }],
       },
     ]);
   });
 
   it('falls back to topic sentences for older hierarchy payloads', () => {
     const roots = buildTopicTree([{ name: 'News', sentences: ['Original sentence.'] }]);
-    expect(collectOriginalSources(roots[0])[0].sentences).toEqual(['Original sentence.']);
+    expect(collectOriginalSources(roots[0])[0].sentences).toEqual([
+      { text: 'Original sentence.', read: false },
+    ]);
   });
 });
 
@@ -329,5 +334,27 @@ describe('FeedHierarchy (DOM smoke test)', () => {
       'Summary',
       'Original',
     ]);
+  });
+
+  it('renders read controls for original sentences', () => {
+    const hierarchy = new FeedHierarchy();
+    const source = hierarchy.buildOriginalSource(
+      {
+        post_id: 'post-1',
+        title: 'First post',
+        sentences: [
+          { number: 1, text: 'Unread sentence.', read: false },
+          { number: 2, text: 'Read sentence.', read: true },
+        ],
+      },
+      0
+    );
+
+    expect(source.querySelectorAll('.canvas-original-sentence')).toHaveLength(2);
+    expect([...source.querySelectorAll('.canvas-original-sentence__toggle')].map((button) => button.textContent)).toEqual([
+      'Mark Read',
+      'Mark Unread',
+    ]);
+    expect(source.querySelectorAll('.canvas-original-sentence.is-read')).toHaveLength(1);
   });
 });
