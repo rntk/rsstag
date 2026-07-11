@@ -32,7 +32,7 @@ from rsstag.web.context_filter_handlers import get_context_filter_manager
 from rsstag.topic_aliases import RssTagTopicAliases
 
 from werkzeug.wrappers import Request, Response
-from werkzeug.exceptions import NotFound
+from werkzeug.exceptions import BadRequest, InternalServerError, NotFound
 from werkzeug.utils import redirect
 
 
@@ -1052,6 +1052,188 @@ def on_feed_get(
             tag=current_feed["title"].replace("'", "`"),
             group="feed",
             words=[],
+            user_settings=user["settings"],
+            provider=user.get("provider", ""),
+        ),
+        mimetype="text/html",
+    )
+
+
+def _build_canvas_post(
+    app: "RSSTagApplication", user: dict[str, Any], post: dict[str, Any]
+) -> dict[str, Any]:
+    """Build the small, JSON-safe post model consumed by the canvas page."""
+    post_id: str = str(post.get("pid", ""))
+    grouped: Optional[dict[str, Any]] = app.post_grouping.get_grouped_posts(
+        user["sid"], [post_id]
+    )
+    content: dict[str, Any] = post.get("content", {}) or {}
+    sentences: list[dict[str, Any]] = []
+    groups: dict[str, list[int]] = {}
+    if grouped:
+        sentences = [
+            {
+                "number": int(sentence.get("number", index + 1)),
+                "text": str(sentence.get("text", "")),
+            }
+            for index, sentence in enumerate(grouped.get("sentences", []))
+            if sentence.get("text")
+        ]
+        groups = {
+            str(topic): [int(number) for number in numbers if isinstance(number, int)]
+            for topic, numbers in (grouped.get("groups", {}) or {}).items()
+            if topic and isinstance(numbers, list)
+        }
+
+    return {
+        "post_id": post_id,
+        "title": str(content.get("title", "Untitled post")),
+        "url": str(post.get("url", "")),
+        "sentences": sentences,
+        "groups": groups,
+    }
+
+
+def _serialize_canvas_posts(posts: list[dict[str, Any]]) -> str:
+    """Serialize canvas data without allowing values to terminate its script tag."""
+    serialized: str = json.dumps(posts, default=str)
+    return (
+        serialized.replace("&", "\\u0026")
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+    )
+
+
+def on_canvas_get(
+    app: "RSSTagApplication", user: dict[str, Any], request: Request
+) -> Response:
+    """Render feed posts as one canvas with a globally aligned topic rail."""
+    feed_id: str = request.args.get("feed", "").strip()
+    if not feed_id:
+        return app.on_error(
+            user, request, BadRequest("The canvas page requires a feed parameter.")
+        )
+
+    current_feed: Optional[dict[str, Any]] = app.feeds.get_by_feed_id(user["sid"], feed_id)
+    if not current_feed:
+        return app.on_error(user, request, NotFound("Feed not found."))
+
+    only_unread: Optional[bool] = user["settings"].get("only_unread") or None
+    projection: dict[str, bool] = {
+        "_id": False,
+        "pid": True,
+        "url": True,
+        "content.title": True,
+    }
+    try:
+        db_posts: list[dict[str, Any]] = list(
+            app.posts.get_by_feed_id(
+                user["sid"],
+                current_feed["feed_id"],
+                only_unread,
+                projection,
+                context_tags=_get_context_tags(user),
+            )
+        )
+        canvas_posts: list[dict[str, Any]] = [
+            _build_canvas_post(app, user, post) for post in db_posts
+        ]
+    except Exception as exc:
+        logging.exception("Unable to build canvas for feed %s: %s", feed_id, exc)
+        return app.on_error(
+            user, request, InternalServerError("The feed canvas could not be loaded.")
+        )
+
+    page: Template = app.template_env.get_template("canvas.html")
+    return Response(
+        page.render(
+            posts=canvas_posts,
+            posts_json=_serialize_canvas_posts(canvas_posts),
+            feed=current_feed,
+            user_settings=user["settings"],
+            provider=user.get("provider", ""),
+        ),
+        mimetype="text/html",
+    )
+
+
+def _build_hierarchy_topics(
+    app: "RSSTagApplication", user: dict[str, Any], posts: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Aggregate per-post topic groups into a single feed-wide topic hierarchy."""
+    posts_count: dict[str, int] = defaultdict(int)
+    sentences_count: dict[str, int] = defaultdict(int)
+    for post in posts:
+        post_id: str = str(post.get("pid", ""))
+        grouped: Optional[dict[str, Any]] = app.post_grouping.get_grouped_posts(
+            user["sid"], [post_id]
+        )
+        if not grouped:
+            continue
+        groups: dict[str, Any] = grouped.get("groups", {}) or {}
+        for topic, numbers in groups.items():
+            if not topic or not isinstance(numbers, list):
+                continue
+            topic_name: str = str(topic)
+            posts_count[topic_name] += 1
+            sentences_count[topic_name] += sum(
+                1 for number in numbers if isinstance(number, int)
+            )
+
+    return [
+        {
+            "name": topic_name,
+            "posts_count": posts_count[topic_name],
+            "sentences_count": sentences_count[topic_name],
+        }
+        for topic_name in sorted(posts_count)
+    ]
+
+
+def on_hierarchy_get(
+    app: "RSSTagApplication", user: dict[str, Any], request: Request
+) -> Response:
+    """Render the aggregated topic hierarchy for a feed's posts."""
+    feed_id: str = request.args.get("feed", "").strip()
+    if not feed_id:
+        return app.on_error(
+            user, request, BadRequest("The hierarchy page requires a feed parameter.")
+        )
+
+    current_feed: Optional[dict[str, Any]] = app.feeds.get_by_feed_id(user["sid"], feed_id)
+    if not current_feed:
+        return app.on_error(user, request, NotFound("Feed not found."))
+
+    only_unread: Optional[bool] = user["settings"].get("only_unread") or None
+    projection: dict[str, bool] = {
+        "_id": False,
+        "pid": True,
+    }
+    try:
+        db_posts: list[dict[str, Any]] = list(
+            app.posts.get_by_feed_id(
+                user["sid"],
+                current_feed["feed_id"],
+                only_unread,
+                projection,
+                context_tags=_get_context_tags(user),
+            )
+        )
+        hierarchy_topics: list[dict[str, Any]] = _build_hierarchy_topics(
+            app, user, db_posts
+        )
+    except Exception as exc:
+        logging.exception("Unable to build hierarchy for feed %s: %s", feed_id, exc)
+        return app.on_error(
+            user, request, InternalServerError("The feed hierarchy could not be loaded.")
+        )
+
+    page: Template = app.template_env.get_template("hierarchy.html")
+    return Response(
+        page.render(
+            topics=hierarchy_topics,
+            topics_json=_serialize_canvas_posts(hierarchy_topics),
+            feed=current_feed,
             user_settings=user["settings"],
             provider=user.get("provider", ""),
         ),

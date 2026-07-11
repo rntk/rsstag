@@ -548,6 +548,12 @@ class RSSTagApplication(object):
     def on_feed_get(self, user: dict, request: Request, quoted_feed: str) -> Response:
         return posts_handlers.on_feed_get(self, user, request, quoted_feed)
 
+    def on_canvas_get(self, user: dict, request: Request) -> Response:
+        return posts_handlers.on_canvas_get(self, user, request)
+
+    def on_hierarchy_get(self, user: dict, request: Request) -> Response:
+        return posts_handlers.on_hierarchy_get(self, user, request)
+
     def on_read_posts_post(self, user: dict, request: Request) -> Response:
         return posts_handlers.on_read_posts_post(self, user, request)
 

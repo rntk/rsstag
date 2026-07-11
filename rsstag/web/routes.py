@@ -168,6 +168,16 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/canvas",
+                "endpoint": "on_canvas_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/hierarchy",
+                "endpoint": "on_hierarchy_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/read/posts",
                 "endpoint": "on_read_posts_post",
                 "methods": ["POST"],

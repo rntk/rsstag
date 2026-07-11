@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Canvas | {{ feed.title }}</title>
+    {% include "head-data.html" %}
+</head>
+<body class="canvas-page">
+    <header class="canvas-page__header">
+        <a class="canvas-page__brand" href="/">RSSTag</a>
+        <div>
+            <p class="canvas-page__eyebrow">Feed canvas</p>
+            <h1>{{ feed.title }}</h1>
+        </div>
+        <a class="canvas-page__feed-link" href="{{ feed.local_url or ('/feed/' ~ feed.feed_id|url_encode) }}">Regular feed view</a>
+    </header>
+
+    <main id="feed_canvas" class="feed-canvas" tabindex="0">
+        <div id="feed_canvas_viewport" class="feed-canvas__viewport">
+            <div id="feed_canvas_document" class="feed-canvas__document">
+                <section id="canvas_posts" class="canvas-posts" aria-label="Posts">
+                    {% if posts %}
+                    {% for post in posts %}
+                    <article class="canvas-post" data-post-id="{{ post.post_id }}">
+                        <header class="canvas-post__header">
+                            <p class="canvas-post__number">Post {{ loop.index }}</p>
+                            <h2>{% if post.url %}<a href="{{ post.url }}" target="_blank" rel="noopener noreferrer">{{ post.title }}</a>{% else %}{{ post.title }}{% endif %}</h2>
+                        </header>
+                        {% if post.sentences %}
+                        <div class="canvas-post__text">
+                            {% for sentence in post.sentences %}<span class="canvas-sentence" data-sentence-number="{{ sentence.number }}">{{ sentence.text }}</span>{% endfor %}
+                        </div>
+                        {% else %}
+                        <p class="canvas-post__empty">Topics have not been processed for this post yet.</p>
+                        {% endif %}
+                    </article>
+                    {% endfor %}
+                    {% else %}
+                    <div class="canvas-post canvas-post__empty">No posts match this feed filter.</div>
+                    {% endif %}
+                </section>
+                <aside id="canvas_topic_rail" class="canvas-topic-rail" aria-label="Topics hierarchy">
+                    <div id="canvas_topic_cards" class="canvas-topic-rail__body"></div>
+                </aside>
+            </div>
+        </div>
+    </main>
+
+    <div class="feed-canvas__controls" aria-label="Canvas controls">
+        <div id="canvas_levels" class="feed-canvas__levels" aria-label="Topic depth"></div>
+        <button type="button" data-canvas-action="zoom-out" aria-label="Zoom out">−</button>
+        <button type="button" data-canvas-action="reset">Reset</button>
+        <button type="button" data-canvas-action="zoom-in" aria-label="Zoom in">+</button>
+    </div>
+
+    <script>window.canvasPosts = {{ posts_json | safe }};</script>
+    <script type="module" src="/static/js/components/feed-canvas.js"></script>
+</body>
+</html>

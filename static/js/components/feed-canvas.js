@@ -1,0 +1,359 @@
+/* global CSS, document, window */
+
+const CARD_WIDTH = 220;
+const CARD_GAP = 14;
+const RAIL_PADDING = 20;
+const MIN_CARD_HEIGHT = 58;
+const MIN_SCALE = 0.45;
+const MAX_SCALE = 1.8;
+const ZOOM_FACTOR = 1.1;
+const ARROW_PAN_STEP = 80;
+const PAGE_STEP_RATIO = 0.8;
+const BASE_TOPIC_FONT_SIZE = 13;
+const TOPIC_CARD_CHROME_HEIGHT = 30;
+const COMPACT_TOPIC_CARD_HEIGHT = 70;
+
+/** @returns {string} */
+function topicColor(path) {
+  let hash = 0;
+  for (let index = 0; index < path.length; index += 1) {
+    hash = (hash * 31 + path.charCodeAt(index)) >>> 0;
+  }
+  return `hsl(${hash % 360} 55% 48%)`;
+}
+
+/** @param {number[]} numbers @returns {number[][]} */
+function splitRuns(numbers) {
+  const sorted = [...new Set(numbers)].sort((left, right) => left - right);
+  /** @type {number[][]} */
+  const runs = [];
+  sorted.forEach((number) => {
+    const current = runs[runs.length - 1];
+    if (!current || number !== current[current.length - 1] + 1) {
+      runs.push([number]);
+    } else {
+      current.push(number);
+    }
+  });
+  return runs;
+}
+
+/** @param {Array<Record<string, unknown>>} posts */
+function buildTopicNodes(posts) {
+  /** @type {Map<string, {path: string, name: string, depth: number, posts: Map<string, Set<number>>}>} */
+  const nodes = new Map();
+  posts.forEach((post) => {
+    const postId = String(post.post_id || '');
+    const groups = post.groups && typeof post.groups === 'object' ? post.groups : {};
+    Object.entries(groups).forEach(([topicPath, rawNumbers]) => {
+      const parts = topicPath
+        .split('>')
+        .map((part) => part.trim())
+        .filter(Boolean);
+      const numbers = Array.isArray(rawNumbers)
+        ? rawNumbers.filter((number) => Number.isInteger(number))
+        : [];
+      parts.forEach((name, depth) => {
+        const path = parts.slice(0, depth + 1).join(' > ');
+        const node = nodes.get(path) || { path, name, depth, posts: new Map() };
+        const postNumbers = node.posts.get(postId) || new Set();
+        numbers.forEach((number) => postNumbers.add(number));
+        node.posts.set(postId, postNumbers);
+        nodes.set(path, node);
+      });
+    });
+  });
+  return [...nodes.values()];
+}
+
+class FeedCanvas {
+  constructor() {
+    /** @type {Array<Record<string, unknown>>} */
+    this.posts = Array.isArray(window.canvasPosts) ? window.canvasPosts : [];
+    this.root = document.getElementById('feed_canvas');
+    this.viewport = document.getElementById('feed_canvas_viewport');
+    this.document = document.getElementById('feed_canvas_document');
+    this.rail = document.getElementById('canvas_topic_rail');
+    this.cards = document.getElementById('canvas_topic_cards');
+    this.levels = document.getElementById('canvas_levels');
+    this.nodes = buildTopicNodes(this.posts);
+    this.maxLevel = Math.max(0, ...this.nodes.map((node) => node.depth));
+    this.selectedLevel = this.maxLevel;
+    this.scale = 1;
+    this.x = 40;
+    this.y = 30;
+    this.drag = null;
+    this.resizeTimer = 0;
+  }
+
+  init() {
+    if (!this.root || !this.viewport || !this.document || !this.rail || !this.cards) return;
+    this.renderLevelButtons();
+    this.bindEvents();
+    this.applyTransform();
+    this.layoutTopics();
+    document.fonts?.ready.then(() => this.layoutTopics());
+  }
+
+  renderLevelButtons() {
+    if (!this.levels || this.nodes.length === 0) return;
+    for (let level = 0; level <= this.maxLevel; level += 1) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = String(level + 1);
+      button.title = `Show topic levels 1–${level + 1}`;
+      button.classList.toggle('is-active', level === this.selectedLevel);
+      button.addEventListener('click', () => {
+        this.selectedLevel = level;
+        this.levels?.querySelectorAll('button').forEach((item, index) => {
+          item.classList.toggle('is-active', index === level);
+        });
+        this.layoutTopics();
+      });
+      this.levels.appendChild(button);
+    }
+  }
+
+  bindEvents() {
+    this.root?.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0 || event.target.closest('a, button, .canvas-topic-card')) return;
+      this.drag = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+      this.root?.setPointerCapture(event.pointerId);
+      this.root?.classList.add('is-dragging');
+    });
+    this.root?.addEventListener('pointermove', (event) => {
+      if (!this.drag || event.pointerId !== this.drag.pointerId) return;
+      this.x += event.clientX - this.drag.x;
+      this.y += event.clientY - this.drag.y;
+      this.drag.x = event.clientX;
+      this.drag.y = event.clientY;
+      this.applyTransform();
+    });
+    const stopDragging = () => {
+      this.drag = null;
+      this.root?.classList.remove('is-dragging');
+    };
+    this.root?.addEventListener('pointerup', stopDragging);
+    this.root?.addEventListener('pointercancel', stopDragging);
+    this.root?.addEventListener(
+      'wheel',
+      (event) => {
+        event.preventDefault();
+        const factor = event.deltaY < 0 ? ZOOM_FACTOR : 1 / ZOOM_FACTOR;
+        this.zoomByFactor(factor, event.clientX, event.clientY);
+      },
+      { passive: false }
+    );
+    document
+      .querySelector('[data-canvas-action="zoom-in"]')
+      ?.addEventListener('click', () => this.zoomByFactor(ZOOM_FACTOR));
+    document
+      .querySelector('[data-canvas-action="zoom-out"]')
+      ?.addEventListener('click', () => this.zoomByFactor(1 / ZOOM_FACTOR));
+    document
+      .querySelector('[data-canvas-action="reset"]')
+      ?.addEventListener('click', () => this.reset());
+    window.addEventListener('keydown', (event) => this.handleKeyDown(event));
+    window.addEventListener('resize', () => {
+      window.clearTimeout(this.resizeTimer);
+      this.resizeTimer = window.setTimeout(() => this.layoutTopics(), 100);
+    });
+  }
+
+  /** @param {number} factor @param {number|null} [clientX] @param {number|null} [clientY] */
+  zoomByFactor(factor, clientX = null, clientY = null) {
+    if (!this.root) return;
+    const nextScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, this.scale * factor));
+    if (nextScale === this.scale) return;
+    const rect = this.root.getBoundingClientRect();
+    const focusX = clientX ?? rect.left + rect.width / 2;
+    const focusY = clientY ?? rect.top + rect.height / 2;
+    const contentX = (focusX - rect.left - this.x) / this.scale;
+    const contentY = (focusY - rect.top - this.y) / this.scale;
+    this.x = focusX - rect.left - contentX * nextScale;
+    this.y = focusY - rect.top - contentY * nextScale;
+    this.scale = nextScale;
+    this.applyTransform();
+    this.layoutTopics();
+  }
+
+  reset() {
+    this.scale = 1;
+    this.x = 40;
+    this.y = 30;
+    this.applyTransform();
+    this.layoutTopics();
+  }
+
+  /** @param {number} dx @param {number} dy */
+  panBy(dx, dy) {
+    this.x += dx;
+    this.y += dy;
+    this.applyTransform();
+  }
+
+  /** @param {'top'|'bottom'|'prev'|'next'} position */
+  navigate(position) {
+    if (!this.root || !this.document) return;
+    const pageStep = Math.max(120, this.root.clientHeight * PAGE_STEP_RATIO);
+    if (position === 'top') {
+      this.y = 30;
+    } else if (position === 'bottom') {
+      this.y = Math.min(30, this.root.clientHeight - this.document.offsetHeight * this.scale - 30);
+    } else {
+      this.y += position === 'prev' ? pageStep : -pageStep;
+    }
+    this.applyTransform();
+  }
+
+  /** @param {KeyboardEvent} event */
+  handleKeyDown(event) {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    if (target.matches('input, textarea, select') || target.isContentEditable) return;
+    /** @type {Record<string, () => void>} */
+    const actions = {
+      Home: () => this.navigate('top'),
+      End: () => this.navigate('bottom'),
+      PageUp: () => this.navigate('prev'),
+      PageDown: () => this.navigate('next'),
+      ArrowUp: () => this.panBy(0, ARROW_PAN_STEP),
+      ArrowDown: () => this.panBy(0, -ARROW_PAN_STEP),
+      ArrowLeft: () => this.panBy(ARROW_PAN_STEP, 0),
+      ArrowRight: () => this.panBy(-ARROW_PAN_STEP, 0),
+      '+': () => this.zoomByFactor(ZOOM_FACTOR),
+      '=': () => this.zoomByFactor(ZOOM_FACTOR),
+      '-': () => this.zoomByFactor(1 / ZOOM_FACTOR),
+      '0': () => this.reset(),
+    };
+    const action = actions[event.key];
+    if (!action) return;
+    event.preventDefault();
+    action();
+  }
+
+  applyTransform() {
+    this.viewport?.style.setProperty('--canvas-x', `${this.x}px`);
+    this.viewport?.style.setProperty('--canvas-y', `${this.y}px`);
+    this.viewport?.style.setProperty('--canvas-zoom', String(this.scale));
+  }
+
+  /** @returns {number} */
+  getTopicCardWidth() {
+    return CARD_WIDTH * Math.max(1, 1 / this.scale);
+  }
+
+  /** @param {number} cardHeight @returns {number} */
+  getTopicFontSize(cardHeight) {
+    const zoomAdjusted = BASE_TOPIC_FONT_SIZE * Math.max(1, 1.25 / this.scale - 0.25);
+    const titleLines = cardHeight < COMPACT_TOPIC_CARD_HEIGHT ? 1 : 2;
+    const availableHeight = Math.max(1, cardHeight - TOPIC_CARD_CHROME_HEIGHT);
+    return Math.max(1, Math.min(zoomAdjusted, availableHeight / (titleLines * 1.25)));
+  }
+
+  layoutTopics() {
+    if (!this.document || !this.rail || !this.cards) return;
+    this.cards.replaceChildren();
+    const visibleNodes = this.nodes.filter((node) => node.depth <= this.selectedLevel);
+    const cardWidth = this.getTopicCardWidth();
+    const railWidth =
+      (this.selectedLevel + 1) * cardWidth + this.selectedLevel * CARD_GAP + RAIL_PADDING * 2;
+    this.rail.style.width = `${railWidth}px`;
+    const documentRect = this.document.getBoundingClientRect();
+    /** @type {Array<{node: ReturnType<typeof buildTopicNodes>[number], postId: string, run: number[], top: number, height: number}>} */
+    const layouts = [];
+    visibleNodes.forEach((node) => {
+      node.posts.forEach((numbers, postId) => {
+        splitRuns([...numbers]).forEach((run) => {
+          const metrics = run
+            .map((number) => {
+              const selector = `.canvas-post[data-post-id="${CSS.escape(postId)}"] .canvas-sentence[data-sentence-number="${number}"]`;
+              return this.document?.querySelector(selector)?.getBoundingClientRect();
+            })
+            .filter(Boolean);
+          if (metrics.length === 0) return;
+          const top = Math.min(...metrics.map((metric) => metric.top)) - documentRect.top;
+          const bottom = Math.max(...metrics.map((metric) => metric.bottom)) - documentRect.top;
+          layouts.push({
+            node,
+            postId,
+            run,
+            top: top / this.scale,
+            height: Math.max(MIN_CARD_HEIGHT, (bottom - top) / this.scale),
+          });
+        });
+      });
+    });
+
+    for (let level = 0; level <= this.selectedLevel; level += 1) {
+      const levelLayouts = layouts
+        .filter((layout) => layout.node.depth === level)
+        .sort(
+          (left, right) => left.top - right.top || left.node.path.localeCompare(right.node.path)
+        );
+      let previousBottom = -Infinity;
+      levelLayouts.forEach((layout) => {
+        layout.top = Math.max(layout.top, previousBottom + 8);
+        previousBottom = layout.top + layout.height;
+      });
+    }
+
+    layouts.forEach((layout) => this.cards?.appendChild(this.createCard(layout, cardWidth)));
+    const postsHeight = document.getElementById('canvas_posts')?.offsetHeight || 0;
+    const cardsHeight = layouts.reduce(
+      (maximum, layout) => Math.max(maximum, layout.top + layout.height),
+      0
+    );
+    this.cards.style.height = `${Math.max(postsHeight, cardsHeight) + 24}px`;
+  }
+
+  /**
+   * @param {{node: ReturnType<typeof buildTopicNodes>[number], postId: string, run: number[], top: number, height: number}} layout
+   * @param {number} cardWidth
+   * @returns {HTMLButtonElement}
+   */
+  createCard(layout, cardWidth) {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'canvas-topic-card';
+    card.style.top = `${layout.top}px`;
+    card.style.height = `${layout.height}px`;
+    card.style.width = `${cardWidth}px`;
+    card.style.right = `${RAIL_PADDING + layout.node.depth * (cardWidth + CARD_GAP)}px`;
+    card.style.setProperty('--topic-color', topicColor(layout.node.path));
+    card.style.setProperty('--topic-font-size', `${this.getTopicFontSize(layout.height)}px`);
+    card.style.setProperty(
+      '--topic-title-lines',
+      layout.height < COMPACT_TOPIC_CARD_HEIGHT ? '1' : '2'
+    );
+    card.innerHTML = `<span class="canvas-topic-card__name"></span><span class="canvas-topic-card__meta">${layout.run.length} sent.</span>`;
+    const name = card.querySelector('.canvas-topic-card__name');
+    if (name) name.textContent = layout.node.name;
+    card.title = layout.node.path;
+    const toggleHighlight = (active) => {
+      layout.run.forEach((number) => {
+        const selector = `.canvas-post[data-post-id="${CSS.escape(layout.postId)}"] .canvas-sentence[data-sentence-number="${number}"]`;
+        this.document?.querySelector(selector)?.classList.toggle('is-topic-active', active);
+      });
+      card.classList.toggle('is-active', active);
+    };
+    card.addEventListener('mouseenter', () => toggleHighlight(true));
+    card.addEventListener('mouseleave', () => {
+      if (!card.classList.contains('is-selected')) toggleHighlight(false);
+    });
+    card.addEventListener('click', () => {
+      const selected = !card.classList.contains('is-selected');
+      this.cards?.querySelectorAll('.is-selected').forEach((item) => {
+        item.classList.remove('is-selected', 'is-active');
+      });
+      this.document
+        ?.querySelectorAll('.canvas-sentence.is-topic-active')
+        .forEach((item) => item.classList.remove('is-topic-active'));
+      card.classList.toggle('is-selected', selected);
+      if (selected) toggleHighlight(true);
+    });
+    return card;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => new FeedCanvas().init());

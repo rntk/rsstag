@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hierarchy | {{ feed.title }}</title>
+    {% include "head-data.html" %}
+</head>
+<body class="feed-hierarchy-page">
+    <header class="feed-hierarchy-page__header">
+        <a class="feed-hierarchy-page__brand" href="/">RSSTag</a>
+        <div>
+            <p class="feed-hierarchy-page__eyebrow">Feed topic hierarchy</p>
+            <h1>{{ feed.title }}</h1>
+        </div>
+        <nav class="feed-hierarchy-page__links">
+            <a href="/canvas?feed={{ feed.feed_id|url_encode }}">Canvas view</a>
+            <a href="{{ feed.local_url or ('/feed/' ~ feed.feed_id|url_encode) }}">Regular feed view</a>
+        </nav>
+    </header>
+    <main id="feed_hierarchy" class="feed-hierarchy" tabindex="0">
+        <div id="feed_hierarchy_levels" class="feed-hierarchy__levels" aria-label="Topic depth"></div>
+        <div id="feed_hierarchy_tree" class="feed-hierarchy__tree" aria-label="Topics hierarchy"></div>
+    </main>
+    <script>window.hierarchyTopics = {{ topics_json | safe }};</script>
+    <script type="module" src="/static/js/components/feed-hierarchy.js"></script>
+</body>
+</html>
