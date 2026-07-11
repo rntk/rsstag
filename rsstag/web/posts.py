@@ -1164,6 +1164,7 @@ def _build_hierarchy_topics(
     posts_count: dict[str, int] = defaultdict(int)
     sentences_count: dict[str, int] = defaultdict(int)
     topic_sentences: dict[str, list[str]] = defaultdict(list)
+    topic_sources: dict[str, dict[str, dict[str, Any]]] = defaultdict(dict)
     for post in posts:
         post_id: str = str(post.get("pid", ""))
         grouped: Optional[dict[str, Any]] = app.post_grouping.get_grouped_posts(
@@ -1179,19 +1180,34 @@ def _build_hierarchy_topics(
             and isinstance(sentence.get("number"), int)
             and str(sentence.get("text", "")).strip()
         }
+        content: dict[str, Any] = post.get("content", {}) or {}
+        source_title: str = str(content.get("title", "")).strip() or f"Post {post_id}"
+        source_url: str = str(post.get("url", "")).strip()
         for topic, numbers in groups.items():
             if not topic or not isinstance(numbers, list):
                 continue
             topic_name: str = str(topic)
+            source_sentences: list[str] = [
+                sentences_by_number[number]
+                for number in numbers
+                if isinstance(number, int) and number in sentences_by_number
+            ]
             posts_count[topic_name] += 1
             sentences_count[topic_name] += sum(
                 1 for number in numbers if isinstance(number, int)
             )
-            topic_sentences[topic_name].extend(
-                sentences_by_number[number]
-                for number in numbers
-                if isinstance(number, int) and number in sentences_by_number
-            )
+            topic_sentences[topic_name].extend(source_sentences)
+            if source_sentences:
+                source: dict[str, Any] = topic_sources[topic_name].setdefault(
+                    post_id,
+                    {
+                        "post_id": post_id,
+                        "title": source_title,
+                        "url": source_url,
+                        "sentences": [],
+                    },
+                )
+                source["sentences"].extend(source_sentences)
 
     return [
         {
@@ -1199,6 +1215,7 @@ def _build_hierarchy_topics(
             "posts_count": posts_count[topic_name],
             "sentences_count": sentences_count[topic_name],
             "sentences": topic_sentences[topic_name],
+            "sources": list(topic_sources[topic_name].values()),
         }
         for topic_name in sorted(posts_count)
     ]
@@ -1222,6 +1239,8 @@ def on_hierarchy_get(
     projection: dict[str, bool] = {
         "_id": False,
         "pid": True,
+        "url": True,
+        "content.title": True,
     }
     try:
         db_posts: list[dict[str, Any]] = list(

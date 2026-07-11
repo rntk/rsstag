@@ -13,7 +13,8 @@
  */
 
 /**
- * @typedef {{name: string, posts_count?: number, sentences_count?: number, sentences?: string[]}} Topic
+ * @typedef {{title?: string, post_id?: string, url?: string, sentences?: string[]}} TopicSource
+ * @typedef {{name: string, posts_count?: number, sentences_count?: number, sentences?: string[], sources?: TopicSource[]}} Topic
  * @typedef {{name: string, fullPath: string, uid: string, depth: number, topic: Topic|null}} TreeNode
  * @typedef {{node: TreeNode, children: Map<string, TreeEntry>, parent: TreeEntry|null, leafCount: number}} TreeEntry
  */
@@ -291,6 +292,47 @@ function buildSummaryMenuButton(entry, onSummary) {
 }
 
 /**
+ * Collect original sentences by post, merging the same post when a branch
+ * contains more than one terminal topic from it.
+ *
+ * @param {TreeEntry} entry
+ * @returns {TopicSource[]}
+ */
+export function collectOriginalSources(entry) {
+  const sources = new Map();
+  const addSource = (source) => {
+    const sentences = Array.isArray(source?.sentences)
+      ? source.sentences.map((sentence) => String(sentence).trim()).filter(Boolean)
+      : [];
+    if (sentences.length === 0) return;
+    const key = String(source?.post_id || source?.url || source?.title || 'source');
+    const existing = sources.get(key);
+    if (existing) {
+      existing.sentences.push(...sentences);
+      return;
+    }
+    sources.set(key, {
+      title: String(source?.title || '').trim(),
+      post_id: String(source?.post_id || '').trim(),
+      url: String(source?.url || '').trim(),
+      sentences,
+    });
+  };
+
+  const visit = (current) => {
+    const topic = current?.node?.topic;
+    if (Array.isArray(topic?.sources) && topic.sources.length > 0) {
+      topic.sources.forEach(addSource);
+    } else if (Array.isArray(topic?.sentences)) {
+      addSource({ title: 'Original sentences', sentences: topic.sentences });
+    }
+    Array.from(current?.children?.values?.() || []).forEach(visit);
+  };
+  visit(entry);
+  return Array.from(sources.values());
+}
+
+/**
  * Render the topic tree into the given container.
  * @param {HTMLElement|null} container
  * @param {TreeEntry[]} roots
@@ -359,6 +401,7 @@ class FeedHierarchy {
     this.summaries = new Map();
     this.contextMenu = null;
     this.summaryDialog = null;
+    this.originalDialog = null;
   }
 
   init() {
@@ -406,6 +449,16 @@ class FeedHierarchy {
       this.requestSummary(entry, anchor.closest('.fh-leaf, .fh-branch__label'));
     });
     menu.appendChild(button);
+
+    const originalButton = document.createElement('button');
+    originalButton.type = 'button';
+    originalButton.textContent = 'Original';
+    originalButton.addEventListener('click', () => {
+      this.closeContextMenu();
+      this.showOriginal(entry);
+    });
+    menu.appendChild(originalButton);
+
     document.body.appendChild(menu);
     const rect = anchor.getBoundingClientRect();
     menu.style.left = `${Math.min(rect.left, window.innerWidth - menu.offsetWidth - 8)}px`;
@@ -463,6 +516,19 @@ class FeedHierarchy {
     });
     document.body.appendChild(dialog);
     this.summaryDialog = dialog;
+    this.createOriginalDialog();
+  }
+
+  createOriginalDialog() {
+    const dialog = document.createElement('dialog');
+    dialog.className = 'canvas-original-dialog';
+    dialog.innerHTML = `<button type="button" class="canvas-summary-dialog__close" aria-label="Close">×</button><p class="canvas-summary-dialog__kicker">Original</p><h2></h2><div class="canvas-original-dialog__sources"></div>`;
+    dialog.querySelector('.canvas-summary-dialog__close')?.addEventListener('click', () => dialog.close());
+    dialog.addEventListener('click', (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+    document.body.appendChild(dialog);
+    this.originalDialog = dialog;
   }
 
   /** @param {string} topic @param {string} text @param {boolean} [isError] */
@@ -476,6 +542,63 @@ class FeedHierarchy {
       body.classList.toggle('is-error', isError);
     }
     this.summaryDialog.showModal();
+  }
+
+  /** @param {TreeEntry} entry */
+  showOriginal(entry) {
+    if (!this.originalDialog) return;
+    const title = this.originalDialog.querySelector('h2');
+    const sourcesEl = this.originalDialog.querySelector('.canvas-original-dialog__sources');
+    if (title) title.textContent = entry.node.fullPath.replace(/>/g, ' > ');
+    if (!sourcesEl) return;
+    sourcesEl.replaceChildren();
+
+    const sources = collectOriginalSources(entry);
+    if (sources.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'canvas-original-dialog__empty';
+      empty.textContent = 'No original sentences are available for this topic.';
+      sourcesEl.appendChild(empty);
+    } else {
+      sources.forEach((source, index) => {
+        sourcesEl.appendChild(this.buildOriginalSource(source, index));
+      });
+    }
+    this.originalDialog.showModal();
+  }
+
+  /** @param {TopicSource} source @param {number} index @returns {HTMLElement} */
+  buildOriginalSource(source, index) {
+    const article = document.createElement('article');
+    article.className = 'canvas-original-source';
+
+    const header = document.createElement('header');
+    header.className = 'canvas-original-source__header';
+    const label = document.createElement('p');
+    label.className = 'canvas-original-source__label';
+    label.textContent = `Source ${index + 1}`;
+    header.appendChild(label);
+
+    const sourceTitle = document.createElement(source.url ? 'a' : 'h3');
+    sourceTitle.className = 'canvas-original-source__title';
+    sourceTitle.textContent = source.title || source.post_id || 'Original post';
+    if (source.url) {
+      sourceTitle.setAttribute('href', source.url);
+      sourceTitle.setAttribute('target', '_blank');
+      sourceTitle.setAttribute('rel', 'noopener noreferrer');
+    }
+    header.appendChild(sourceTitle);
+    article.appendChild(header);
+
+    const sentences = document.createElement('ol');
+    sentences.className = 'canvas-original-source__sentences';
+    source.sentences.forEach((sentence) => {
+      const item = document.createElement('li');
+      item.textContent = sentence;
+      sentences.appendChild(item);
+    });
+    article.appendChild(sentences);
+    return article;
   }
 
   /** @param {number} level */

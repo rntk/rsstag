@@ -142,6 +142,10 @@ class TestWebHierarchy(MongoWebTestCase):
         shared_segment: str = body[shared_index : shared_index + 200]
         self.assertIn('"posts_count": 2', shared_segment)
         self.assertIn('"sentences_count": 3', shared_segment)
+        self.assertIn('"title": "First post"', body)
+        self.assertIn('"title": "Second post"', body)
+        self.assertIn('"sentences": ["First sentence.", "Second sentence."]', body)
+        self.assertIn('"sentences": ["Third sentence."]', body)
 
         only_first_index: int = body.index("Technology \\u003e Only First")
         only_first_segment: str = body[only_first_index : only_first_index + 200]

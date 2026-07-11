@@ -6217,6 +6217,69 @@ select:focus, textarea:focus, input[type="text"]:focus {
 .canvas-summary-dialog__kicker { margin: 0; color: #777d73; font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
 .canvas-summary-dialog__text { white-space: pre-wrap; font: 15px/1.6 Inter, sans-serif; &.is-error { color: #a22920; } }
 
+.canvas-original-dialog {
+  /* The original view needs room for parallel source cards. */
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(1080px, calc(100vw - 32px));
+  height: min(760px, calc(100vh - 32px));
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 28px;
+  border: 1px solid #cdd2c9;
+  background: #f7f8f4;
+  color: #20231f;
+  box-shadow: 0 18px 60px rgb(20 25 18 / 28%);
+  &::backdrop { background: rgb(20 25 18 / 42%); }
+  h2 { margin: 2px 30px 22px 0; font: 700 20px/1.3 Manrope, sans-serif; }
+}
+
+.canvas-original-dialog__sources {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr));
+  align-items: start;
+  gap: 16px;
+}
+
+.canvas-original-source {
+  min-width: 0;
+  padding: 18px 20px 20px;
+  border: 1px solid #d7dbd2;
+  border-left: 5px solid #7e9a73;
+  background: #fff;
+  box-shadow: 0 5px 18px rgb(36 42 33 / 8%);
+  &:nth-child(3n + 2) { border-left-color: #a58460; }
+  &:nth-child(3n + 3) { border-left-color: #718aa2; }
+}
+
+.canvas-original-source__header { margin-bottom: 14px; }
+.canvas-original-source__label {
+  margin: 0 0 5px;
+  color: #777d73;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.canvas-original-source__title {
+  display: block;
+  overflow-wrap: anywhere;
+  color: #20231f;
+  font: 700 16px/1.35 Manrope, sans-serif;
+  text-decoration: none;
+  &:hover, &:focus-visible { text-decoration: underline; }
+}
+.canvas-original-source__sentences {
+  margin: 0;
+  padding-left: 24px;
+  color: #343930;
+  font: 14px/1.6 Inter, sans-serif;
+  li { padding-left: 5px; white-space: pre-wrap; }
+  li + li { margin-top: 10px; }
+}
+.canvas-original-dialog__empty { color: #777d73; font-style: italic; }
+
 .canvas-topic-card__name {
   display: -webkit-box;
   overflow: hidden;

@@ -8,6 +8,7 @@ import {
   highlightColor,
   accentColor,
   formatLeafMeta,
+  collectOriginalSources,
   renderTree,
   renderLevelButtons,
   FeedHierarchy,
@@ -136,6 +137,44 @@ describe('formatLeafMeta', () => {
 
   it('defaults missing counts to zero', () => {
     expect(formatLeafMeta(null)).toBe('0 posts · 0 sentences');
+  });
+});
+
+describe('collectOriginalSources', () => {
+  it('keeps sentences grouped by source and merges repeated posts', () => {
+    const roots = buildTopicTree([
+      {
+        name: 'News > AI',
+        sources: [
+          { post_id: 'post-1', title: 'First post', sentences: ['First sentence.'] },
+          { post_id: 'post-2', title: 'Second post', sentences: ['Second sentence.'] },
+        ],
+      },
+      {
+        name: 'News > Hardware',
+        sources: [{ post_id: 'post-1', title: 'First post', sentences: ['Third sentence.'] }],
+      },
+    ]);
+
+    expect(collectOriginalSources(roots[0])).toEqual([
+      {
+        post_id: 'post-1',
+        title: 'First post',
+        url: '',
+        sentences: ['First sentence.', 'Third sentence.'],
+      },
+      {
+        post_id: 'post-2',
+        title: 'Second post',
+        url: '',
+        sentences: ['Second sentence.'],
+      },
+    ]);
+  });
+
+  it('falls back to topic sentences for older hierarchy payloads', () => {
+    const roots = buildTopicTree([{ name: 'News', sentences: ['Original sentence.'] }]);
+    expect(collectOriginalSources(roots[0])[0].sentences).toEqual(['Original sentence.']);
   });
 });
 
@@ -280,5 +319,15 @@ describe('FeedHierarchy (DOM smoke test)', () => {
     const empty = document.querySelector('#feed_hierarchy_tree .fh-empty');
     expect(empty).toBeTruthy();
     expect(empty.textContent).toBe('No topics have been processed for this feed yet.');
+  });
+
+  it('adds Original alongside Summary in the topic context menu', () => {
+    new FeedHierarchy().init();
+    document.querySelector('.fh-topic-menu').click();
+
+    expect([...document.querySelectorAll('.canvas-topic-menu button')].map((button) => button.textContent)).toEqual([
+      'Summary',
+      'Original',
+    ]);
   });
 });
