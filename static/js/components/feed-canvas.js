@@ -7,6 +7,7 @@ const MIN_TOPIC_FONT_SIZE = 8;
 const MIN_SCALE = 0.45;
 const MAX_SCALE = 1.8;
 const ZOOM_FACTOR = 1.1;
+const TOPIC_ZOOM_SCALE = 1.6;
 const ARROW_PAN_STEP = 80;
 const PAGE_STEP_RATIO = 0.8;
 const BASE_TOPIC_FONT_SIZE = 13;
@@ -89,6 +90,8 @@ class FeedCanvas {
     this.contextMenu = null;
     this.summaryDialog = null;
     this.statusTimer = 0;
+    /** @type {{scale: number, x: number, y: number}|null} */
+    this.savedView = null;
   }
 
   init() {
@@ -281,6 +284,31 @@ class FeedCanvas {
     this.layoutTopics();
   }
 
+  /** @param {{top: number, height: number, left: number, width: number}} layout */
+  zoomToLayout(layout) {
+    if (!this.root || !this.document) return;
+    if (!this.savedView) this.savedView = { scale: this.scale, x: this.x, y: this.y };
+    const targetScale = Math.min(MAX_SCALE, Math.max(this.savedView.scale, TOPIC_ZOOM_SCALE));
+    const rect = this.root.getBoundingClientRect();
+    const centerX = layout.left + layout.width / 2;
+    const centerY = layout.top + layout.height / 2;
+    this.scale = targetScale;
+    this.x = rect.width / 2 - centerX * targetScale;
+    this.y = rect.height / 2 - centerY * targetScale;
+    this.applyTransform();
+    this.layoutTopics();
+  }
+
+  restoreView() {
+    if (!this.savedView) return;
+    this.scale = this.savedView.scale;
+    this.x = this.savedView.x;
+    this.y = this.savedView.y;
+    this.savedView = null;
+    this.applyTransform();
+    this.layoutTopics();
+  }
+
   /** @param {number} dx @param {number} dy */
   panBy(dx, dy) {
     this.x += dx;
@@ -373,12 +401,16 @@ class FeedCanvas {
           if (metrics.length === 0) return;
           const top = Math.min(...metrics.map((metric) => metric.top)) - documentRect.top;
           const bottom = Math.max(...metrics.map((metric) => metric.bottom)) - documentRect.top;
+          const left = Math.min(...metrics.map((metric) => metric.left)) - documentRect.left;
+          const right = Math.max(...metrics.map((metric) => metric.right)) - documentRect.left;
           layouts.push({
             node,
             postId,
             run,
             top: top / this.scale,
             height: (bottom - top) / this.scale,
+            left: left / this.scale,
+            width: (right - left) / this.scale,
           });
         });
       });
@@ -437,7 +469,12 @@ class FeedCanvas {
         ?.querySelectorAll('.canvas-sentence.is-topic-active')
         .forEach((item) => item.classList.remove('is-topic-active'));
       card.classList.toggle('is-selected', selected);
-      if (selected) toggleHighlight(true);
+      if (selected) {
+        toggleHighlight(true);
+        this.zoomToLayout(layout);
+      } else {
+        this.restoreView();
+      }
     };
     card.addEventListener('click', (event) => {
       if (!event.target.closest('.canvas-topic-card__menu')) selectCard();
