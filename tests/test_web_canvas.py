@@ -139,6 +139,36 @@ class TestWebCanvas(MongoWebTestCase):
         self.assertNotIn(b"Aligned post", response.data)
         self.assertNotIn(b"Excluded post", response.data)
 
+    def test_canvas_topic_filter_keeps_whole_matching_topic(self) -> None:
+        sid, feed_id = self._seed_canvas()
+        client = self.get_authenticated_client(sid)
+
+        response = client.get(f"/canvas?feed={feed_id}&tag=Canvas&topic=1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"First sentence.", response.data)
+        self.assertIn(b"Second sentence.", response.data)
+
+    def test_canvas_sentences_filter_keeps_whole_matching_topic(self) -> None:
+        sid, feed_id = self._seed_canvas()
+        client = self.get_authenticated_client(sid)
+
+        response = client.get(f"/canvas?feed={feed_id}&tag=First&sentences=1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"First sentence.", response.data)
+        self.assertIn(b"Second sentence.", response.data)
+
+    def test_canvas_topic_and_sentences_filter_drops_non_matching_topic(self) -> None:
+        sid, feed_id = self._seed_canvas()
+        client = self.get_authenticated_client(sid)
+
+        response = client.get(f"/canvas?feed={feed_id}&tag=nomatch&topic=1&sentences=1")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(b"First sentence.", response.data)
+        self.assertNotIn(b"Second sentence.", response.data)
+
     def test_hierarchy_includes_topic_sentences_for_summaries(self) -> None:
         sid, feed_id = self._seed_canvas()
         client = self.get_authenticated_client(sid)

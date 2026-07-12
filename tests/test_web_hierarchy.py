@@ -180,6 +180,41 @@ class TestWebHierarchy(MongoWebTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotIn(b"Technology \\u003e Shared", response.data)
 
+    def test_hierarchy_topic_filter_broadens_selection_beyond_post_tags(self) -> None:
+        sid, feed_id = self._seed_hierarchy()
+        client = self.get_authenticated_client(sid)
+
+        # "Shared" is not a literal post tag, only part of the topic name.
+        response = client.get(f"/hierarchy?feed={feed_id}&tag=Shared&topic=1")
+        body: str = response.data.decode("utf-8")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Technology \\u003e Shared", body)
+        self.assertNotIn("Technology \\u003e Only First", body)
+
+    def test_hierarchy_sentences_filter_broadens_selection_beyond_post_tags(self) -> None:
+        sid, feed_id = self._seed_hierarchy()
+        client = self.get_authenticated_client(sid)
+
+        # "Third" is not a literal post tag, only appears within a sentence.
+        response = client.get(f"/hierarchy?feed={feed_id}&tag=Third&sentences=1")
+        body: str = response.data.decode("utf-8")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Technology \\u003e Shared", body)
+        self.assertNotIn("Technology \\u003e Only First", body)
+
+    def test_hierarchy_text_filter_excludes_non_matching_topics(self) -> None:
+        sid, feed_id = self._seed_hierarchy()
+        client = self.get_authenticated_client(sid)
+
+        response = client.get(f"/hierarchy?feed={feed_id}&tag=nomatch&topic=1&sentences=1")
+        body: str = response.data.decode("utf-8")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("Technology \\u003e Shared", body)
+        self.assertNotIn("Technology \\u003e Only First", body)
+
     def test_hierarchy_topic_name_is_script_safe(self) -> None:
         sid, _ = self.seed_test_user("hierarchy-script-user")
         feed_id: str = "hierarchy-script-feed"

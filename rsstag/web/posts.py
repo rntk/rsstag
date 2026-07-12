@@ -7,7 +7,7 @@ from collections import defaultdict
 from urllib.parse import unquote_plus, unquote, quote_plus
 import requests  # Add requests import
 
-from typing import TYPE_CHECKING, Any, Iterator, Optional
+from typing import TYPE_CHECKING, Any, Iterable, Iterator, Optional
 from jinja2 import Template
 
 if TYPE_CHECKING:
@@ -76,6 +76,30 @@ def _topic_sentences_match_context(
                 found_tags.add(tag)
         if len(found_tags) == len(context_tags):
             return True
+    return False
+
+
+def _post_tags_match(post: dict[str, Any], tag: str) -> bool:
+    """Check if a tag literally appears in a post's own tag list."""
+    tag_cf: str = tag.casefold()
+    return any(str(post_tag).casefold() == tag_cf for post_tag in post.get("tags") or [])
+
+
+def _topic_matches_tag_or_filter(
+    topic_name: str,
+    sentence_texts: Iterable[str],
+    tag: str,
+    match_topic: bool,
+    match_sentences: bool,
+) -> bool:
+    """Check if a tag appears in the topic name or in any of its sentences (OR)."""
+    tag_cf: str = tag.casefold()
+    if match_topic and tag_cf in topic_name.casefold():
+        return True
+    if match_sentences:
+        for text in sentence_texts:
+            if tag_cf in text.casefold():
+                return True
     return False
 
 
@@ -1060,7 +1084,13 @@ def on_feed_get(
 
 
 def _build_canvas_post(
-    app: "RSSTagApplication", user: dict[str, Any], post: dict[str, Any]
+    app: "RSSTagApplication",
+    user: dict[str, Any],
+    post: dict[str, Any],
+    tag: str = "",
+    match_topic: bool = False,
+    match_sentences: bool = False,
+    bypass_filter: bool = False,
 ) -> dict[str, Any]:
     """Build the small, JSON-safe post model consumed by the canvas page."""
     post_id: str = str(post.get("pid", ""))
@@ -1084,6 +1114,28 @@ def _build_canvas_post(
             for topic, numbers in (grouped.get("groups", {}) or {}).items()
             if topic and isinstance(numbers, list)
         }
+
+    if not bypass_filter and tag and (match_topic or match_sentences):
+        text_by_number: dict[int, str] = {
+            sentence["number"]: sentence["text"] for sentence in sentences
+        }
+        groups = {
+            topic_name: numbers
+            for topic_name, numbers in groups.items()
+            if _topic_matches_tag_or_filter(
+                topic_name,
+                (text_by_number[n] for n in numbers if n in text_by_number),
+                tag,
+                match_topic,
+                match_sentences,
+            )
+        }
+        allowed_numbers: set[int] = {
+            number for numbers in groups.values() for number in numbers
+        }
+        sentences = [
+            sentence for sentence in sentences if sentence["number"] in allowed_numbers
+        ]
 
     return {
         "post_id": post_id,
@@ -1111,6 +1163,8 @@ def on_canvas_get(
     """Render filtered posts as one canvas with a globally aligned topic rail."""
     feed_id: str = request.args.get("feed", "").strip()
     tag: str = request.args.get("tag", "").strip()
+    match_topic: bool = request.args.get("topic", "").strip() == "1"
+    match_sentences: bool = request.args.get("sentences", "").strip() == "1"
 
     current_feed: Optional[dict[str, Any]] = None
     if feed_id:
@@ -1119,16 +1173,18 @@ def on_canvas_get(
         return app.on_error(user, request, NotFound("Feed not found."))
 
     only_unread: Optional[bool] = user["settings"].get("only_unread") or None
+    text_filter_active: bool = bool(tag) and (match_topic or match_sentences)
     projection: dict[str, bool] = {
         "_id": False,
         "pid": True,
         "url": True,
         "read": True,
         "content.title": True,
+        "tags": True,
     }
     try:
         context_tags: list[str] = _get_context_tags(user) or []
-        if tag and tag not in context_tags:
+        if tag and not text_filter_active and tag not in context_tags:
             context_tags.append(tag)
         posts_cursor: Iterator[dict[str, Any]]
         if current_feed:
@@ -1149,9 +1205,15 @@ def on_canvas_get(
         else:
             posts_cursor = app.posts.get_all(user["sid"], only_unread, projection)
         db_posts: list[dict[str, Any]] = list(posts_cursor)
-        canvas_posts: list[dict[str, Any]] = [
-            _build_canvas_post(app, user, post) for post in db_posts
-        ]
+        canvas_posts: list[dict[str, Any]] = []
+        for post in db_posts:
+            bypass: bool = text_filter_active and _post_tags_match(post, tag)
+            built_post: dict[str, Any] = _build_canvas_post(
+                app, user, post, tag, match_topic, match_sentences, bypass_filter=bypass
+            )
+            if text_filter_active and not bypass and not built_post["groups"]:
+                continue
+            canvas_posts.append(built_post)
     except Exception as exc:
         logging.exception(
             "Unable to build canvas for feed %s and tag %s: %s",
@@ -1178,15 +1240,22 @@ def on_canvas_get(
 
 
 def _build_hierarchy_topics(
-    app: "RSSTagApplication", user: dict[str, Any], posts: list[dict[str, Any]]
+    app: "RSSTagApplication",
+    user: dict[str, Any],
+    posts: list[dict[str, Any]],
+    tag: str = "",
+    match_topic: bool = False,
+    match_sentences: bool = False,
 ) -> list[dict[str, Any]]:
     """Aggregate per-post topic groups into a single feed-wide topic hierarchy."""
+    text_filter_active: bool = bool(tag) and (match_topic or match_sentences)
     posts_count: dict[str, int] = defaultdict(int)
     sentences_count: dict[str, int] = defaultdict(int)
     topic_sentences: dict[str, list[str]] = defaultdict(list)
     topic_sources: dict[str, dict[str, dict[str, Any]]] = defaultdict(dict)
     for post in posts:
         post_id: str = str(post.get("pid", ""))
+        bypass: bool = text_filter_active and _post_tags_match(post, tag)
         grouped: Optional[dict[str, Any]] = app.post_grouping.get_grouped_posts(
             user["sid"], [post_id]
         )
@@ -1218,6 +1287,14 @@ def _build_hierarchy_topics(
                 for number in numbers
                 if isinstance(number, int) and number in sentences_by_number
             ]
+            if text_filter_active and not bypass and not _topic_matches_tag_or_filter(
+                topic_name,
+                (sentence["text"] for sentence in source_sentences),
+                tag,
+                match_topic,
+                match_sentences,
+            ):
+                continue
             posts_count[topic_name] += 1
             sentences_count[topic_name] += sum(
                 1 for number in numbers if isinstance(number, int)
@@ -1255,6 +1332,8 @@ def on_hierarchy_get(
     """Render the aggregated topic hierarchy for posts matching the filters."""
     feed_id: str = request.args.get("feed", "").strip()
     tag: str = request.args.get("tag", "").strip()
+    match_topic: bool = request.args.get("topic", "").strip() == "1"
+    match_sentences: bool = request.args.get("sentences", "").strip() == "1"
 
     current_feed: Optional[dict[str, Any]] = None
     if feed_id:
@@ -1263,15 +1342,17 @@ def on_hierarchy_get(
         return app.on_error(user, request, NotFound("Feed not found."))
 
     only_unread: Optional[bool] = user["settings"].get("only_unread") or None
+    text_filter_active: bool = bool(tag) and (match_topic or match_sentences)
     projection: dict[str, bool] = {
         "_id": False,
         "pid": True,
         "url": True,
         "content.title": True,
+        "tags": True,
     }
     try:
         context_tags: list[str] = _get_context_tags(user) or []
-        if tag and tag not in context_tags:
+        if tag and not text_filter_active and tag not in context_tags:
             context_tags.append(tag)
         posts_cursor: Iterator[dict[str, Any]]
         if current_feed:
@@ -1293,7 +1374,7 @@ def on_hierarchy_get(
             posts_cursor = app.posts.get_all(user["sid"], only_unread, projection)
         db_posts: list[dict[str, Any]] = list(posts_cursor)
         hierarchy_topics: list[dict[str, Any]] = _build_hierarchy_topics(
-            app, user, db_posts
+            app, user, db_posts, tag, match_topic, match_sentences
         )
     except Exception as exc:
         logging.exception(
