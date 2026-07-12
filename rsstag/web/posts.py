@@ -1255,7 +1255,6 @@ def _build_hierarchy_topics(
     topic_sources: dict[str, dict[str, dict[str, Any]]] = defaultdict(dict)
     for post in posts:
         post_id: str = str(post.get("pid", ""))
-        bypass: bool = text_filter_active and _post_tags_match(post, tag)
         grouped: Optional[dict[str, Any]] = app.post_grouping.get_grouped_posts(
             user["sid"], [post_id]
         )
@@ -1287,7 +1286,7 @@ def _build_hierarchy_topics(
                 for number in numbers
                 if isinstance(number, int) and number in sentences_by_number
             ]
-            if text_filter_active and not bypass and not _topic_matches_tag_or_filter(
+            if text_filter_active and not _topic_matches_tag_or_filter(
                 topic_name,
                 (sentence["text"] for sentence in source_sentences),
                 tag,

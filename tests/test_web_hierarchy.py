@@ -245,6 +245,21 @@ class TestWebHierarchy(MongoWebTestCase):
         self.assertNotIn("Technology \\u003e Shared", body)
         self.assertNotIn("Technology \\u003e Only First", body)
 
+    def test_hierarchy_text_filter_does_not_bypass_tagged_posts(self) -> None:
+        sid, feed_id = self._seed_hierarchy()
+        client = self.get_authenticated_client(sid)
+
+        # Both posts are tagged "hierarchy", but none of their topic names or
+        # grouped sentences contains it. Text filters must still exclude them.
+        response = client.get(
+            f"/hierarchy?feed={feed_id}&tag=hierarchy&topic=1&sentences=1"
+        )
+        body: str = response.data.decode("utf-8")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("Technology \\u003e Shared", body)
+        self.assertNotIn("Technology \\u003e Only First", body)
+
     def test_hierarchy_topic_name_is_script_safe(self) -> None:
         sid, _ = self.seed_test_user("hierarchy-script-user")
         feed_id: str = "hierarchy-script-feed"
