@@ -1,4 +1,4 @@
-/* global CSS, document, window */
+/* global CSS, Element, console, document, fetch, window */
 
 const CARD_WIDTH = 220;
 const CARD_GAP = 14;
@@ -88,6 +88,7 @@ class FeedCanvas {
     this.summaries = new Map();
     this.contextMenu = null;
     this.summaryDialog = null;
+    this.statusTimer = 0;
   }
 
   init() {
@@ -158,6 +159,26 @@ class FeedCanvas {
     document
       .querySelector('[data-canvas-action="reset"]')
       ?.addEventListener('click', () => this.reset());
+    this.document?.querySelectorAll('[data-post-read-toggle]').forEach((button) => {
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const postElement = button.closest('.canvas-post');
+        const postId = postElement?.getAttribute('data-post-id');
+        if (!postId) return;
+        const post = this.findPost(postId);
+        if (post) this.changePostsReadState([postId], !post.read);
+      });
+    });
+    document.querySelectorAll('[data-canvas-read-all]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const read = button.getAttribute('data-canvas-read-all') === 'true';
+        const postIds = this.posts
+          .filter((post) => post.read !== read)
+          .map((post) => String(post.post_id || ''))
+          .filter(Boolean);
+        this.changePostsReadState(postIds, read);
+      });
+    });
     window.addEventListener('keydown', (event) => this.handleKeyDown(event));
     window.addEventListener('pointerdown', (event) => {
       if (!this.contextMenu?.contains(event.target)) this.closeContextMenu();
@@ -166,6 +187,73 @@ class FeedCanvas {
       window.clearTimeout(this.resizeTimer);
       this.resizeTimer = window.setTimeout(() => this.layoutTopics(), 100);
     });
+  }
+
+  /** @param {string} postId @returns {Record<string, unknown>|undefined} */
+  findPost(postId) {
+    return this.posts.find((post) => String(post.post_id || '') === postId);
+  }
+
+  /** @param {string} message @param {boolean} [isError] */
+  showStatus(message, isError = false) {
+    const status = document.querySelector('[data-canvas-status]');
+    if (!status) return;
+    window.clearTimeout(this.statusTimer);
+    status.textContent = message;
+    status.classList.toggle('is-error', isError);
+    this.statusTimer = window.setTimeout(() => {
+      status.textContent = '';
+      status.classList.remove('is-error');
+    }, 5000);
+  }
+
+  /** @param {string} postId @param {boolean} read */
+  renderPostReadState(postId, read) {
+    const selector = `.canvas-post[data-post-id="${CSS.escape(postId)}"]`;
+    const postElement = this.document?.querySelector(selector);
+    const button = postElement?.querySelector('[data-post-read-toggle]');
+    postElement?.classList.toggle('is-read', read);
+    if (button) {
+      button.textContent = read ? 'Mark unread' : 'Mark read';
+      button.setAttribute('aria-pressed', String(read));
+    }
+  }
+
+  /**
+   * @param {string[]} postIds
+   * @param {boolean} read
+   * @returns {Promise<void>}
+   */
+  async changePostsReadState(postIds, read) {
+    if (postIds.length === 0) {
+      this.showStatus(`All posts are already ${read ? 'read' : 'unread'}.`);
+      return;
+    }
+    const buttons = document.querySelectorAll(
+      '[data-post-read-toggle], [data-canvas-read-all]'
+    );
+    buttons.forEach((button) => button.setAttribute('disabled', ''));
+    try {
+      const response = await fetch('/read/posts', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: postIds, readed: read }),
+      });
+      if (!response.ok) throw new Error(`Request failed with status ${response.status}.`);
+      postIds.forEach((postId) => {
+        const post = this.findPost(postId);
+        if (post) post.read = read;
+        this.renderPostReadState(postId, read);
+      });
+      const noun = postIds.length === 1 ? 'post' : 'posts';
+      this.showStatus(`${postIds.length} ${noun} marked ${read ? 'read' : 'unread'}.`);
+    } catch (error) {
+      console.error('Unable to update canvas post read state.', error);
+      this.showStatus('Unable to update read status. Please try again.', true);
+    } finally {
+      buttons.forEach((button) => button.removeAttribute('disabled'));
+    }
   }
 
   /** @param {number} factor @param {number|null} [clientX] @param {number|null} [clientY] */

@@ -114,6 +114,9 @@ class TestWebCanvas(MongoWebTestCase):
         self.assertIn(b"First sentence.", response.data)
         self.assertIn(b"Technology \\u003e Canvas", response.data)
         self.assertIn(b"feed-canvas.js", response.data)
+        self.assertIn(b'data-post-read-toggle', response.data)
+        self.assertIn(b'data-canvas-read-all="true"', response.data)
+        self.assertIn(b'"read": false', response.data)
         self.assertNotIn(b"Excluded post", response.data)
 
     def test_canvas_filters_by_tag_without_feed(self) -> None:

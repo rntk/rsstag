@@ -24,10 +24,13 @@
                 <section id="canvas_posts" class="canvas-posts" aria-label="Posts">
                     {% if posts %}
                     {% for post in posts %}
-                    <article class="canvas-post" data-post-id="{{ post.post_id }}">
+                    <article class="canvas-post{% if post.read %} is-read{% endif %}" data-post-id="{{ post.post_id }}">
                         <header class="canvas-post__header">
-                            <p class="canvas-post__number">Post {{ loop.index }}</p>
-                            <h2>{% if post.url %}<a href="{{ post.url }}" target="_blank" rel="noopener noreferrer">{{ post.title }}</a>{% else %}{{ post.title }}{% endif %}</h2>
+                            <div>
+                                <p class="canvas-post__number">Post {{ loop.index }}</p>
+                                <h2>{% if post.url %}<a href="{{ post.url }}" target="_blank" rel="noopener noreferrer">{{ post.title }}</a>{% else %}{{ post.title }}{% endif %}</h2>
+                            </div>
+                            <button type="button" class="canvas-post__read-toggle" data-post-read-toggle aria-pressed="{{ 'true' if post.read else 'false' }}">Mark {{ 'unread' if post.read else 'read' }}</button>
                         </header>
                         {% if post.sentences %}
                         <div class="canvas-post__text">
@@ -50,10 +53,15 @@
     </main>
 
     <div class="feed-canvas__controls" aria-label="Canvas controls">
+        <div class="feed-canvas__read-controls" aria-label="Post read status">
+            <button type="button" data-canvas-read-all="true">Read all</button>
+            <button type="button" data-canvas-read-all="false">Unread all</button>
+        </div>
         <div id="canvas_levels" class="feed-canvas__levels" aria-label="Topic depth"></div>
         <button type="button" data-canvas-action="zoom-out" aria-label="Zoom out">−</button>
         <button type="button" data-canvas-action="reset">Reset</button>
         <button type="button" data-canvas-action="zoom-in" aria-label="Zoom in">+</button>
+        <span class="feed-canvas__status" data-canvas-status role="status" aria-live="polite"></span>
     </div>
 
     <script>window.canvasPosts = {{ posts_json | safe }};</script>

@@ -6118,12 +6118,31 @@ select:focus, textarea:focus, input[type="text"]:focus {
   background: #fff;
   box-shadow: 0 2px 8px rgb(36 42 33 / 5%);
   & + & { margin-top: 12px; }
+  &.is-read { background: #f7f8f4; color: #747a70; }
+  &.is-read .canvas-post__text { color: #747a70; }
 }
 
 .canvas-post__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
   margin-bottom: 16px;
+  > div { min-width: 0; }
   h2 { margin: 3px 0 0; font: 700 22px/1.25 Manrope, sans-serif; }
   a { color: inherit; text-decoration-color: #aeb5a9; text-underline-offset: 3px; }
+}
+
+.canvas-post__read-toggle {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  border: 1px solid #cdd2c9;
+  background: #fff;
+  color: #4e584b;
+  font: 700 10px/1.2 Inter, sans-serif;
+  cursor: pointer;
+  &:hover, &:focus-visible { border-color: #20231f; color: #20231f; }
+  &:disabled { cursor: wait; opacity: .55; }
 }
 
 .canvas-post__number {
@@ -6346,6 +6365,7 @@ select:focus, textarea:focus, input[type="text"]:focus {
     color: #20231f;
     cursor: pointer;
     &:hover, &.is-active { border-color: #20231f; background: #20231f; color: #fff; }
+    &:disabled { cursor: wait; opacity: .55; }
   }
 }
 
@@ -6354,6 +6374,27 @@ select:focus, textarea:focus, input[type="text"]:focus {
   gap: 4px;
   padding-right: 5px;
   border-right: 1px solid #d4d8d0;
+}
+
+.feed-canvas__read-controls {
+  display: flex;
+  gap: 4px;
+  padding-right: 5px;
+  border-right: 1px solid #d4d8d0;
+}
+
+.feed-canvas__status {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 7px);
+  width: max-content;
+  max-width: min(360px, calc(100vw - 44px));
+  padding: 5px 8px;
+  background: #20231f;
+  color: #fff;
+  font-size: 11px;
+  &:empty { display: none; }
+  &.is-error { background: #a22920; }
 }
 
 @media (max-width: 720px) {

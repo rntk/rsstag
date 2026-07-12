@@ -1089,6 +1089,7 @@ def _build_canvas_post(
         "post_id": post_id,
         "title": str(content.get("title", "Untitled post")),
         "url": str(post.get("url", "")),
+        "read": bool(post.get("read", False)),
         "sentences": sentences,
         "groups": groups,
     }
@@ -1122,6 +1123,7 @@ def on_canvas_get(
         "_id": False,
         "pid": True,
         "url": True,
+        "read": True,
         "content.title": True,
     }
     try:
