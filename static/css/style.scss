@@ -6313,6 +6313,12 @@ select:focus, textarea:focus, input[type="text"]:focus {
   &.is-read .canvas-original-sentence__text { color: #8a9086; text-decoration: line-through; }
 }
 .canvas-original-sentence__text { flex: 1 1 auto; min-width: 0; }
+.canvas-original-sentence__tag {
+  background-color: #ffe066;
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 2px;
+}
 .canvas-original-sentence__toggle {
   flex: 0 0 auto;
   padding: 3px 7px;
@@ -6640,6 +6646,13 @@ select:focus, textarea:focus, input[type="text"]:focus {
   white-space: nowrap;
   cursor: pointer;
   user-select: text;
+
+  .canvas-original-sentence__tag {
+    background-color: #ffe066;
+    color: inherit;
+    border-radius: 2px;
+    padding: 0 2px;
+  }
 
   &:hover, &:focus-visible {
     color: var(--fh-accent-color, #20231f);

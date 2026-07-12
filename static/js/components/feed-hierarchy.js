@@ -187,9 +187,10 @@ export function formatLeafMeta(topic) {
  * @param {string} rootName
  * @param {(entry: TreeEntry, anchor: HTMLElement) => void} onSummary
  * @param {(entry: TreeEntry) => void} onOriginal
+ * @param {RegExp|null} [tagHighlightRe]
  * @returns {HTMLElement}
  */
-function buildLeafElement(entry, rootName, onSummary, onOriginal) {
+function buildLeafElement(entry, rootName, onSummary, onOriginal, tagHighlightRe = null) {
   const { node } = entry;
   const row = document.createElement('div');
   row.className = 'fh-leaf-row';
@@ -223,7 +224,7 @@ function buildLeafElement(entry, rootName, onSummary, onOriginal) {
     preview.setAttribute('role', 'button');
     preview.tabIndex = 0;
     preview.title = 'Click to view original sentences';
-    preview.textContent = sentenceText;
+    fillHighlightedText(preview, sentenceText, tagHighlightRe);
     const showOriginal = (event) => {
       event.stopPropagation();
       onOriginal(entry);
@@ -250,9 +251,18 @@ function buildLeafElement(entry, rootName, onSummary, onOriginal) {
  * @param {(fullPath: string) => void} onToggle
  * @param {(entry: TreeEntry, anchor: HTMLElement) => void} onSummary
  * @param {(entry: TreeEntry) => void} onOriginal
+ * @param {RegExp|null} [tagHighlightRe]
  * @returns {HTMLElement}
  */
-function buildBranchElement(entry, rootName, collapsedPaths, onToggle, onSummary, onOriginal) {
+function buildBranchElement(
+  entry,
+  rootName,
+  collapsedPaths,
+  onToggle,
+  onSummary,
+  onOriginal,
+  tagHighlightRe = null
+) {
   const { node } = entry;
   const isCollapsed = collapsedPaths.has(node.fullPath);
 
@@ -292,7 +302,7 @@ function buildBranchElement(entry, rootName, collapsedPaths, onToggle, onSummary
     childrenEl.className = 'fh-branch__children';
     children.forEach((child) => {
       childrenEl.appendChild(
-        buildTreeElement(child, rootName, collapsedPaths, onToggle, onSummary, onOriginal)
+        buildTreeElement(child, rootName, collapsedPaths, onToggle, onSummary, onOriginal, tagHighlightRe)
       );
     });
     branch.appendChild(childrenEl);
@@ -309,13 +319,30 @@ function buildBranchElement(entry, rootName, collapsedPaths, onToggle, onSummary
  * @param {(fullPath: string) => void} onToggle
  * @param {(entry: TreeEntry, anchor: HTMLElement) => void} onSummary
  * @param {(entry: TreeEntry) => void} onOriginal
+ * @param {RegExp|null} [tagHighlightRe]
  * @returns {HTMLElement}
  */
-function buildTreeElement(entry, rootName, collapsedPaths, onToggle, onSummary, onOriginal) {
+function buildTreeElement(
+  entry,
+  rootName,
+  collapsedPaths,
+  onToggle,
+  onSummary,
+  onOriginal,
+  tagHighlightRe = null
+) {
   const isLeaf = entry.children.size === 0;
   return isLeaf
-    ? buildLeafElement(entry, rootName, onSummary, onOriginal)
-    : buildBranchElement(entry, rootName, collapsedPaths, onToggle, onSummary, onOriginal);
+    ? buildLeafElement(entry, rootName, onSummary, onOriginal, tagHighlightRe)
+    : buildBranchElement(
+        entry,
+        rootName,
+        collapsedPaths,
+        onToggle,
+        onSummary,
+        onOriginal,
+        tagHighlightRe
+      );
 }
 
 /** @param {TreeEntry} entry @param {(entry: TreeEntry, anchor: HTMLElement) => void} onSummary */
@@ -331,6 +358,108 @@ function buildSummaryMenuButton(entry, onSummary) {
     onSummary(entry, button);
   });
   return button;
+}
+
+/**
+ * Read the `tag` query parameter from the current page URL.
+ *
+ * @returns {string}
+ */
+export function getUrlTagParam() {
+  try {
+    const tag = new URLSearchParams(window.location.search).get('tag');
+    return tag ? String(tag).trim() : '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Words to highlight for the active tag.
+ *
+ * Prefers `window.TAG_WORDS` from the backend (lemma + surface forms from tag
+ * metadata). Falls back to splitting the URL `tag` param when metadata is
+ * unavailable.
+ *
+ * @returns {string[]}
+ */
+export function getTagHighlightWords() {
+  if (Array.isArray(window.TAG_WORDS) && window.TAG_WORDS.length > 0) {
+    const seen = new Set();
+    const words = [];
+    window.TAG_WORDS.forEach((word) => {
+      const form = String(word || '').trim();
+      if (!form || seen.has(form)) return;
+      seen.add(form);
+      words.push(form);
+    });
+    if (words.length > 0) return words;
+  }
+
+  const tag = getUrlTagParam();
+  if (!tag) return [];
+  return tag.split(/\s+/).filter(Boolean);
+}
+
+/**
+ * Build a case-insensitive word-boundary regex for highlighting tag words
+ * (same approach as post-grouped snippets / TAG_WORDS).
+ *
+ * @param {string|string[]|null|undefined} wordsOrTag
+ *        Either a list of surface forms, or a single tag string (legacy).
+ * @returns {RegExp|null}
+ */
+export function buildTagHighlightRe(wordsOrTag) {
+  const words = Array.isArray(wordsOrTag)
+    ? wordsOrTag.map((word) => String(word || '').trim()).filter(Boolean)
+    : String(wordsOrTag || '')
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+  if (words.length === 0) return null;
+  // Longer forms first so multi-word surfaces win over partial matches.
+  const unique = Array.from(new Set(words)).sort((a, b) => b.length - a.length);
+  const escaped = unique.map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  return new RegExp(`\\b(${escaped.join('|')})\\b`, 'gi');
+}
+
+/**
+ * Fill a container with plain text, wrapping matches of `re` in <mark> nodes.
+ * Uses DOM APIs so sentence text never goes through unescaped HTML.
+ *
+ * @param {HTMLElement} container
+ * @param {string} text
+ * @param {RegExp|null} re
+ */
+export function fillHighlightedText(container, text, re) {
+  container.replaceChildren();
+  const value = String(text || '');
+  if (!re) {
+    container.textContent = value;
+    return;
+  }
+
+  // Reset stateful regexes so repeated renders stay consistent.
+  re.lastIndex = 0;
+  let lastIndex = 0;
+  let match = re.exec(value);
+  while (match) {
+    if (match.index > lastIndex) {
+      container.appendChild(document.createTextNode(value.slice(lastIndex, match.index)));
+    }
+    const mark = document.createElement('mark');
+    mark.className = 'canvas-original-sentence__tag';
+    mark.textContent = match[0];
+    container.appendChild(mark);
+    lastIndex = match.index + match[0].length;
+    if (match[0].length === 0) {
+      re.lastIndex += 1;
+    }
+    match = re.exec(value);
+  }
+  if (lastIndex < value.length) {
+    container.appendChild(document.createTextNode(value.slice(lastIndex)));
+  }
 }
 
 /**
@@ -398,6 +527,7 @@ export function collectOriginalSources(entry) {
  * @param {(fullPath: string) => void} onToggle
  * @param {(entry: TreeEntry, anchor: HTMLElement) => void} [onSummary]
  * @param {(entry: TreeEntry) => void} [onOriginal]
+ * @param {RegExp|null} [tagHighlightRe]
  */
 export function renderTree(
   container,
@@ -405,7 +535,8 @@ export function renderTree(
   collapsedPaths,
   onToggle,
   onSummary = () => {},
-  onOriginal = () => {}
+  onOriginal = () => {},
+  tagHighlightRe = null
 ) {
   if (!container) return;
   container.replaceChildren();
@@ -422,7 +553,15 @@ export function renderTree(
   root.className = 'fh-root';
   roots.forEach((entry) => {
     root.appendChild(
-      buildTreeElement(entry, entry.node.name, collapsedPaths, onToggle, onSummary, onOriginal)
+      buildTreeElement(
+        entry,
+        entry.node.name,
+        collapsedPaths,
+        onToggle,
+        onSummary,
+        onOriginal,
+        tagHighlightRe
+      )
     );
   });
   container.appendChild(root);
@@ -469,6 +608,8 @@ class FeedHierarchy {
     this.contextMenu = null;
     this.summaryDialog = null;
     this.originalDialog = null;
+    /** @type {RegExp|null} */
+    this.tagHighlightRe = buildTagHighlightRe(getTagHighlightWords());
   }
 
   init() {
@@ -494,7 +635,8 @@ class FeedHierarchy {
       this.collapsedPaths,
       (fullPath) => this.handleToggleCollapse(fullPath),
       (entry, anchor) => this.openContextMenu(entry, anchor),
-      (entry) => this.showOriginal(entry)
+      (entry) => this.showOriginal(entry),
+      this.tagHighlightRe
     );
   }
 
@@ -633,6 +775,17 @@ class FeedHierarchy {
       });
     }
     this.originalDialog.showModal();
+    this.scrollToFirstTagHighlight();
+  }
+
+  /** Scroll the first highlighted tag occurrence into view inside Original. */
+  scrollToFirstTagHighlight() {
+    if (!this.originalDialog || !this.tagHighlightRe) return;
+    const firstMark = this.originalDialog.querySelector('.canvas-original-sentence__tag');
+    if (!firstMark) return;
+    setTimeout(() => {
+      firstMark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 50);
   }
 
   /** @param {TopicSource} source @param {number} index @returns {HTMLElement} */
@@ -665,7 +818,7 @@ class FeedHierarchy {
       item.className = `canvas-original-sentence${sentence.read ? ' is-read' : ''}`;
       const text = document.createElement('span');
       text.className = 'canvas-original-sentence__text';
-      text.textContent = sentence.text;
+      fillHighlightedText(text, sentence.text, this.tagHighlightRe);
       item.appendChild(text);
 
       const toggle = document.createElement('button');

@@ -25,6 +25,7 @@
         <div id="feed_hierarchy_tree" class="feed-hierarchy__tree" aria-label="Topics hierarchy"></div>
     </main>
     <script>window.hierarchyTopics = {{ topics_json | safe }};</script>
+    <script>window.TAG_WORDS = {{ tag_words | tojson }};</script>
     <script type="module" src="/static/js/components/feed-hierarchy.js"></script>
 </body>
 </html>

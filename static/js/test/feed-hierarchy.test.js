@@ -9,6 +9,10 @@ import {
   accentColor,
   formatLeafMeta,
   collectOriginalSources,
+  getUrlTagParam,
+  getTagHighlightWords,
+  buildTagHighlightRe,
+  fillHighlightedText,
   renderTree,
   renderLevelButtons,
   FeedHierarchy,
@@ -248,6 +252,28 @@ describe('renderTree', () => {
     expect(opened).toEqual([roots[0]]);
   });
 
+  it('highlights the URL tag inside leaf sentence previews', () => {
+    const container = document.createElement('div');
+    const roots = buildTopicTree([
+      { name: 'News', sources: [{ sentences: ['Learning Python is fun.'] }] },
+    ]);
+    renderTree(
+      container,
+      roots,
+      new Set(),
+      () => {},
+      () => {},
+      () => {},
+      buildTagHighlightRe('python')
+    );
+
+    const preview = container.querySelector('.fh-leaf-sentences');
+    expect(preview?.textContent).toBe('Learning Python is fun.');
+    const marks = preview?.querySelectorAll('.canvas-original-sentence__tag') || [];
+    expect(marks).toHaveLength(1);
+    expect(marks[0].textContent).toBe('Python');
+  });
+
   it('renders a collapsed branch as a single row without children', () => {
     const container = document.createElement('div');
     const roots = buildTopicTree(TOPICS);
@@ -278,6 +304,8 @@ describe('FeedHierarchy (DOM smoke test)', () => {
         <div id="feed_hierarchy_tree" class="feed-hierarchy__tree"></div>
       </main>`;
     window.hierarchyTopics = TOPICS;
+    window.TAG_WORDS = undefined;
+    window.history.replaceState({}, '', '/hierarchy');
   });
 
   it('renders level buttons and a fully unfolded tree by default', () => {
@@ -380,5 +408,89 @@ describe('FeedHierarchy (DOM smoke test)', () => {
 
     document.querySelector('.fh-leaf-sentences').click();
     expect(document.querySelector('.canvas-original-dialog').open).toBe(true);
+  });
+
+  it('highlights the URL tag inside Original sentence text', () => {
+    window.TAG_WORDS = undefined;
+    window.history.replaceState({}, '', '/hierarchy?tag=python');
+    const hierarchy = new FeedHierarchy();
+    const source = hierarchy.buildOriginalSource(
+      {
+        post_id: 'post-1',
+        title: 'First post',
+        sentences: [
+          { number: 1, text: 'Learning Python is fun.', read: false },
+          { number: 2, text: 'No match here.', read: false },
+        ],
+      },
+      0
+    );
+
+    const marks = source.querySelectorAll('.canvas-original-sentence__tag');
+    expect(marks).toHaveLength(1);
+    expect(marks[0].textContent).toBe('Python');
+    expect(source.querySelectorAll('.canvas-original-sentence')[1].querySelectorAll('mark')).toHaveLength(0);
+  });
+
+  it('highlights lemma surface forms from TAG_WORDS metadata', () => {
+    window.history.replaceState({}, '', '/hierarchy?tag=run');
+    window.TAG_WORDS = ['run', 'running', 'ran'];
+    const hierarchy = new FeedHierarchy();
+    const source = hierarchy.buildOriginalSource(
+      {
+        post_id: 'post-1',
+        title: 'First post',
+        sentences: [
+          { number: 1, text: 'She is running now.', read: false },
+          { number: 2, text: 'He ran yesterday.', read: false },
+          { number: 3, text: 'They walk often.', read: false },
+        ],
+      },
+      0
+    );
+
+    const marks = [...source.querySelectorAll('.canvas-original-sentence__tag')].map(
+      (mark) => mark.textContent
+    );
+    expect(marks).toEqual(['running', 'ran']);
+  });
+});
+
+describe('tag highlight helpers', () => {
+  it('getUrlTagParam reads and trims the tag query value', () => {
+    window.history.replaceState({}, '', '/hierarchy?tag=%20machine+learning%20');
+    expect(getUrlTagParam()).toBe('machine learning');
+    window.history.replaceState({}, '', '/hierarchy');
+    expect(getUrlTagParam()).toBe('');
+  });
+
+  it('getTagHighlightWords prefers TAG_WORDS over the URL tag', () => {
+    window.history.replaceState({}, '', '/hierarchy?tag=run');
+    window.TAG_WORDS = ['run', 'running', 'ran', 'run'];
+    expect(getTagHighlightWords()).toEqual(['run', 'running', 'ran']);
+
+    window.TAG_WORDS = [];
+    expect(getTagHighlightWords()).toEqual(['run']);
+
+    window.TAG_WORDS = undefined;
+    window.history.replaceState({}, '', '/hierarchy');
+    expect(getTagHighlightWords()).toEqual([]);
+  });
+
+  it('buildTagHighlightRe matches whole words case-insensitively', () => {
+    const re = buildTagHighlightRe('AI');
+    expect(re).toBeInstanceOf(RegExp);
+    expect('AI agents'.match(re)).toEqual(['AI']);
+    expect('the ai model'.match(re)).toEqual(['ai']);
+    expect('AIs'.match(re)).toBeNull();
+    expect(buildTagHighlightRe('')).toBeNull();
+    expect(buildTagHighlightRe(['running', 'ran']).test('She is running')).toBe(true);
+  });
+
+  it('fillHighlightedText wraps matches in mark nodes without using HTML', () => {
+    const el = document.createElement('span');
+    fillHighlightedText(el, 'Hello <python> and PYTHON', buildTagHighlightRe('python'));
+    expect(el.textContent).toBe('Hello <python> and PYTHON');
+    expect([...el.querySelectorAll('mark')].map((mark) => mark.textContent)).toEqual(['python', 'PYTHON']);
   });
 });

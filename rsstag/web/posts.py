@@ -1326,6 +1326,52 @@ def _build_hierarchy_topics(
     ]
 
 
+def _tag_highlight_words(
+    app: "RSSTagApplication",
+    owner: str,
+    tag: str,
+    only_unread: Optional[bool] = None,
+) -> list[str]:
+    """Surface forms for highlighting a tag (lemma) in original sentence text.
+
+    Tags are stored as lemmas, while sentence text keeps original surface
+    forms. Tag documents keep those forms in ``words``; collect them (plus the
+    lemma itself) so the frontend can mark all variants.
+    """
+    cleaned: str = str(tag or "").strip()
+    if not cleaned:
+        return []
+
+    seen: set[str] = set()
+    result: list[str] = []
+
+    def add_form(value: Any) -> None:
+        form: str = str(value or "").strip()
+        if not form or form in seen:
+            return
+        seen.add(form)
+        result.append(form)
+
+    add_form(cleaned)
+
+    tag_data: Optional[dict[str, Any]] = app.tags.get_by_tag(owner, cleaned)
+    if tag_data:
+        for surface in tag_data.get("words") or []:
+            add_form(surface)
+        return result
+
+    # Multi-word free text / entity-like query: merge surface forms per part.
+    parts: list[str] = [part for part in cleaned.split() if part]
+    if len(parts) > 1:
+        for part in parts:
+            add_form(part)
+        for tag_doc in app.tags.get_by_tags(owner, parts, only_unread=only_unread):
+            for surface in tag_doc.get("words") or []:
+                add_form(surface)
+
+    return result
+
+
 def on_hierarchy_get(
     app: "RSSTagApplication", user: dict[str, Any], request: Request
 ) -> Response:
@@ -1387,6 +1433,12 @@ def on_hierarchy_get(
             user, request, InternalServerError("The hierarchy could not be loaded.")
         )
 
+    tag_words: list[str] = (
+        _tag_highlight_words(app, user["sid"], tag, only_unread=only_unread)
+        if tag
+        else []
+    )
+
     page: Template = app.template_env.get_template("hierarchy.html")
     return Response(
         page.render(
@@ -1394,6 +1446,7 @@ def on_hierarchy_get(
             topics_json=_serialize_canvas_posts(hierarchy_topics),
             feed=current_feed,
             tag=tag,
+            tag_words=tag_words,
             user_settings=user["settings"],
             provider=user.get("provider", ""),
         ),

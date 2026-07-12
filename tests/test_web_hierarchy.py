@@ -9,6 +9,7 @@ class TestWebHierarchy(MongoWebTestCase):
         self.test_db.posts.delete_many({})
         self.test_db.feeds.delete_many({})
         self.test_db.post_grouping.delete_many({})
+        self.test_db.tags.delete_many({})
 
     def _seed_hierarchy(self) -> tuple[str, str]:
         user, sid = self.seed_test_user("hierarchy-user")
@@ -170,6 +171,35 @@ class TestWebHierarchy(MongoWebTestCase):
         self.assertIn("Technology \\u003e Shared", body)
         self.assertIn('"posts_count": 2', body)
         self.assertNotIn("Excluded post", body)
+        # Lemma itself is always available for highlight when no tag metadata exists.
+        self.assertIn("window.TAG_WORDS", body)
+        self.assertIn('"hierarchy"', body)
+
+    def test_hierarchy_tag_words_include_surface_forms(self) -> None:
+        sid, _ = self._seed_hierarchy()
+        self.db_helper.init_db_from_dict(
+            self.test_db,
+            {
+                "tags": [
+                    {
+                        "owner": sid,
+                        "tag": "run",
+                        "words": ["run", "running", "ran"],
+                        "posts_count": 1,
+                        "unread_count": 1,
+                    }
+                ],
+            },
+        )
+        client = self.get_authenticated_client(sid)
+
+        response = client.get("/hierarchy?tag=run")
+        body: str = response.data.decode("utf-8")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("window.TAG_WORDS", body)
+        self.assertIn('"running"', body)
+        self.assertIn('"ran"', body)
 
     def test_hierarchy_combines_feed_and_tag_filters(self) -> None:
         sid, feed_id = self._seed_hierarchy()
