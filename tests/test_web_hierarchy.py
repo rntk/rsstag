@@ -106,14 +106,14 @@ class TestWebHierarchy(MongoWebTestCase):
         )
         return sid, feed_id
 
-    def test_hierarchy_requires_feed_parameter(self) -> None:
+    def test_hierarchy_without_filters_is_allowed(self) -> None:
         _, sid = self.seed_test_user("hierarchy-missing-feed")
         client = self.get_authenticated_client(sid)
 
         response = client.get("/hierarchy")
 
-        self.assertEqual(response.status_code, 400)
-        self.assertIn(b"requires a feed parameter", response.data)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"All posts", response.data)
 
     def test_hierarchy_unknown_feed_returns_404(self) -> None:
         _, sid = self.seed_test_user("hierarchy-unknown-feed")
@@ -158,6 +158,27 @@ class TestWebHierarchy(MongoWebTestCase):
         only_first_segment: str = body[only_first_index : only_first_index + 200]
         self.assertIn('"posts_count": 1', only_first_segment)
         self.assertIn('"sentences_count": 1', only_first_segment)
+
+    def test_hierarchy_filters_by_tag_without_feed(self) -> None:
+        sid, _ = self._seed_hierarchy()
+        client = self.get_authenticated_client(sid)
+
+        response = client.get("/hierarchy?tag=hierarchy")
+        body: str = response.data.decode("utf-8")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Technology \\u003e Shared", body)
+        self.assertIn('"posts_count": 2', body)
+        self.assertNotIn("Excluded post", body)
+
+    def test_hierarchy_combines_feed_and_tag_filters(self) -> None:
+        sid, feed_id = self._seed_hierarchy()
+        client = self.get_authenticated_client(sid)
+
+        response = client.get(f"/hierarchy?feed={feed_id}&tag=other")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(b"Technology \\u003e Shared", response.data)
 
     def test_hierarchy_topic_name_is_script_safe(self) -> None:
         sid, _ = self.seed_test_user("hierarchy-script-user")

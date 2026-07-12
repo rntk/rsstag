@@ -1,19 +1,23 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Hierarchy | {{ feed.title }}</title>
+    <title>Hierarchy{% if feed %} | {{ feed.title }}{% elif tag %} | {{ tag }}{% endif %}</title>
     {% include "head-data.html" %}
 </head>
 <body class="feed-hierarchy-page">
     <header class="feed-hierarchy-page__header">
         <a class="feed-hierarchy-page__brand" href="/">RSSTag</a>
         <div>
-            <p class="feed-hierarchy-page__eyebrow">Feed topic hierarchy</p>
-            <h1>{{ feed.title }}</h1>
+            <p class="feed-hierarchy-page__eyebrow">Topic hierarchy</p>
+            <h1>{% if feed %}{{ feed.title }}{% elif tag %}{{ tag }}{% else %}All posts{% endif %}</h1>
         </div>
         <nav class="feed-hierarchy-page__links">
-            <a href="/canvas?feed={{ feed.feed_id|url_encode }}">Canvas view</a>
-            <a href="{{ feed.local_url or ('/feed/' ~ feed.feed_id|url_encode) }}">Regular feed view</a>
+            {% if feed %}
+                <a href="/canvas?feed={{ feed.feed_id|url_encode }}">Canvas view</a>
+                <a href="{{ feed.local_url or ('/feed/' ~ feed.feed_id|url_encode) }}">Regular feed view</a>
+            {% elif tag %}
+                <a href="/tag/{{ tag|url_encode }}">Tag view</a>
+            {% endif %}
         </nav>
     </header>
     <main id="feed_hierarchy" class="feed-hierarchy" tabindex="0">
