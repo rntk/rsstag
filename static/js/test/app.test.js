@@ -248,3 +248,118 @@ test('initSentenceClusterPage is a no-op when tabs container is missing', () => 
     initSentenceClusterPage();
   });
 });
+
+
+// ============================================================
+// Section: syncGlobalToolsOffset — fixed toolbar content gap
+// ============================================================
+
+test('syncGlobalToolsOffset is exported from app.js', () => {
+  assert.ok(
+    /export\s+function\s+syncGlobalToolsOffset\s*\(/.test(appSource),
+    'should export syncGlobalToolsOffset'
+  );
+});
+
+test('setupGlobalToolsOffset is called from initApp', () => {
+  assert.ok(
+    /setupGlobalToolsOffset\s*\(/.test(appSource),
+    'initApp should call setupGlobalToolsOffset'
+  );
+});
+
+test('syncGlobalToolsOffset sets --global-tools-height from toolbar height', () => {
+  const fnSource = extractExportedFunction('syncGlobalToolsOffset');
+  const styles = {};
+  const tools = {
+    style: { display: 'block' },
+    getBoundingClientRect: () => ({ height: 72.4 }),
+  };
+  const context = {
+    module: { exports: {} },
+    exports: {},
+    document: {
+      querySelector: (sel) => (sel === '#global_tools' ? tools : null),
+      documentElement: {
+        style: {
+          setProperty: (k, v) => {
+            styles[k] = v;
+          },
+          removeProperty: (k) => {
+            delete styles[k];
+          },
+        },
+      },
+    },
+    window: {
+      getComputedStyle: () => ({ display: 'block', visibility: 'visible' }),
+    },
+    Math,
+  };
+  const script = `${fnSource}\nmodule.exports = { syncGlobalToolsOffset };`;
+  vm.runInNewContext(script, context);
+  context.module.exports.syncGlobalToolsOffset();
+  assert.equal(styles['--global-tools-height'], '73px');
+});
+
+test('syncGlobalToolsOffset skips update when toolbar is hidden', () => {
+  const fnSource = extractExportedFunction('syncGlobalToolsOffset');
+  const styles = { '--global-tools-height': '60px' };
+  const tools = {
+    style: { display: 'none' },
+    getBoundingClientRect: () => ({ height: 0 }),
+  };
+  const context = {
+    module: { exports: {} },
+    exports: {},
+    document: {
+      querySelector: (sel) => (sel === '#global_tools' ? tools : null),
+      documentElement: {
+        style: {
+          setProperty: (k, v) => {
+            styles[k] = v;
+          },
+          removeProperty: (k) => {
+            delete styles[k];
+          },
+        },
+      },
+    },
+    window: {
+      getComputedStyle: () => ({ display: 'none', visibility: 'visible' }),
+    },
+    Math,
+  };
+  const script = `${fnSource}\nmodule.exports = { syncGlobalToolsOffset };`;
+  vm.runInNewContext(script, context);
+  context.module.exports.syncGlobalToolsOffset();
+  assert.equal(styles['--global-tools-height'], '60px');
+});
+
+test('syncGlobalToolsOffset clears variable when toolbar is absent', () => {
+  const fnSource = extractExportedFunction('syncGlobalToolsOffset');
+  const removed = [];
+  const context = {
+    module: { exports: {} },
+    exports: {},
+    document: {
+      querySelector: () => null,
+      documentElement: {
+        style: {
+          setProperty: () => {},
+          removeProperty: (k) => {
+            removed.push(k);
+          },
+        },
+      },
+    },
+    window: {
+      getComputedStyle: () => ({ display: 'block', visibility: 'visible' }),
+    },
+    Math,
+  };
+  const script = `${fnSource}\nmodule.exports = { syncGlobalToolsOffset };`;
+  vm.runInNewContext(script, context);
+  context.module.exports.syncGlobalToolsOffset();
+  assert.deepEqual(removed, ['--global-tools-height']);
+});

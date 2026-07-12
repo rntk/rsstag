@@ -37,6 +37,13 @@ body {
   min-height: 100vh;
 }
 
+/* Reserve space for the fixed #global_tools bar so page content is not covered.
+   Height is measured in JS and written to --global-tools-height; the fallback
+   covers first paint before measurement. */
+body:has(#global_tools) {
+  padding-top: calc(var(--global-tools-height, 3.5em) + var(--global-tools-gap, 0.5em));
+}
+
 
 img {
   max-width: 100%;
@@ -1841,8 +1848,10 @@ body.anthology-compare-modal-open {
 }
 
 @media all and (max-width: 800px) {
-  body {
-    padding-top: 3em;
+  /* Body top offset is handled by body:has(#global_tools) + measured height. */
+  body:has(#global_tools) {
+    /* Extra breathing room when toolbar buttons wrap on narrow screens. */
+    --global-tools-gap: 0.75em;
   }
 
   .screen_middle {

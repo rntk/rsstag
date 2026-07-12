@@ -196,6 +196,61 @@ function handleTextSelection() {
   });
 }
 
+/**
+ * Keep document content clear of the fixed #global_tools bar.
+ * Writes the measured toolbar height to --global-tools-height (used by CSS).
+ * Skips updates while the bar is hidden so hide-on-scroll does not collapse the gap.
+ */
+export function syncGlobalToolsOffset() {
+  const tools = document.querySelector('#global_tools');
+  if (!tools) {
+    document.documentElement.style.removeProperty('--global-tools-height');
+    return;
+  }
+
+  const isHidden =
+    tools.style.display === 'none' ||
+    window.getComputedStyle(tools).display === 'none' ||
+    window.getComputedStyle(tools).visibility === 'hidden';
+  if (isHidden) {
+    return;
+  }
+
+  const height = Math.ceil(tools.getBoundingClientRect().height);
+  if (height > 0) {
+    document.documentElement.style.setProperty('--global-tools-height', `${height}px`);
+  }
+}
+
+function setupGlobalToolsOffset() {
+  const tools = document.querySelector('#global_tools');
+  if (!tools) {
+    return;
+  }
+
+  const apply = () => {
+    syncGlobalToolsOffset();
+  };
+
+  apply();
+  window.addEventListener('resize', apply);
+
+  if (typeof ResizeObserver !== 'undefined') {
+    const observer = new ResizeObserver(() => {
+      apply();
+    });
+    observer.observe(tools);
+  }
+
+  if (window.EVSYS && typeof window.EVSYS.bind === 'function') {
+    window.EVSYS.bind(window.EVSYS.CONTEXT_FILTER_UPDATED, apply);
+  }
+
+  // Context filter (and other toolbar widgets) may render shortly after init.
+  window.setTimeout(apply, 0);
+  window.setTimeout(apply, 250);
+}
+
 function handleScroll() {
   let $tools = document.querySelector('#global_tools');
   let $tools_bottom = document.querySelector('#global_tools_bottom');
@@ -216,6 +271,8 @@ function handleScroll() {
             if ($tools_bottom) {
               $tools_bottom.style.display = 'block';
             }
+            // Re-measure after show so the content gap stays accurate.
+            syncGlobalToolsOffset();
           } else if (scroll_position < sc_t) {
             if ($tools) {
               $tools.style.display = 'none';
@@ -440,6 +497,9 @@ export function initApp() {
   const context_filter_storage = new ContextFilterStorage(window.EVSYS);
   context_filter_bar.start();
   context_filter_storage.start();
+
+  // Measure fixed toolbar after context filter mounts so content is not covered.
+  setupGlobalToolsOffset();
 
   // Initialize global chat panel
   let chatDiv = document.getElementById('global_chat_panel');
