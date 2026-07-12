@@ -1,17 +1,21 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Canvas | {{ feed.title }}</title>
+    <title>Canvas{% if feed %} | {{ feed.title }}{% elif tag %} | {{ tag }}{% endif %}</title>
     {% include "head-data.html" %}
 </head>
 <body class="canvas-page">
     <header class="canvas-page__header">
         <a class="canvas-page__brand" href="/">RSSTag</a>
         <div>
-            <p class="canvas-page__eyebrow">Feed canvas</p>
-            <h1>{{ feed.title }}</h1>
+            <p class="canvas-page__eyebrow">Posts canvas</p>
+            <h1>{% if feed %}{{ feed.title }}{% elif tag %}{{ tag }}{% else %}All posts{% endif %}</h1>
         </div>
+        {% if feed %}
         <a class="canvas-page__feed-link" href="{{ feed.local_url or ('/feed/' ~ feed.feed_id|url_encode) }}">Regular feed view</a>
+        {% elif tag %}
+        <a class="canvas-page__feed-link" href="/tag/{{ tag|url_encode }}">Tag view</a>
+        {% endif %}
     </header>
 
     <main id="feed_canvas" class="feed-canvas" tabindex="0">
@@ -35,7 +39,7 @@
                     </article>
                     {% endfor %}
                     {% else %}
-                    <div class="canvas-post canvas-post__empty">No posts match this feed filter.</div>
+                    <div class="canvas-post canvas-post__empty">No posts match these filters.</div>
                     {% endif %}
                 </section>
                 <aside id="canvas_topic_rail" class="canvas-topic-rail" aria-label="Topics hierarchy">

@@ -94,14 +94,14 @@ class TestWebCanvas(MongoWebTestCase):
         )
         return sid, feed_id
 
-    def test_canvas_requires_feed_parameter(self) -> None:
+    def test_canvas_without_filters_is_allowed(self) -> None:
         _, sid = self.seed_test_user("canvas-missing-feed")
         client = self.get_authenticated_client(sid)
 
         response = client.get("/canvas")
 
-        self.assertEqual(response.status_code, 400)
-        self.assertIn(b"requires a feed parameter", response.data)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"All posts", response.data)
 
     def test_canvas_renders_only_selected_feed_with_grouped_topics(self) -> None:
         sid, feed_id = self._seed_canvas()
@@ -114,6 +114,26 @@ class TestWebCanvas(MongoWebTestCase):
         self.assertIn(b"First sentence.", response.data)
         self.assertIn(b"Technology \\u003e Canvas", response.data)
         self.assertIn(b"feed-canvas.js", response.data)
+        self.assertNotIn(b"Excluded post", response.data)
+
+    def test_canvas_filters_by_tag_without_feed(self) -> None:
+        sid, _ = self._seed_canvas()
+        client = self.get_authenticated_client(sid)
+
+        response = client.get("/canvas?tag=canvas")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Aligned post", response.data)
+        self.assertNotIn(b"Excluded post", response.data)
+
+    def test_canvas_combines_feed_and_tag_filters(self) -> None:
+        sid, feed_id = self._seed_canvas()
+        client = self.get_authenticated_client(sid)
+
+        response = client.get(f"/canvas?feed={feed_id}&tag=other")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(b"Aligned post", response.data)
         self.assertNotIn(b"Excluded post", response.data)
 
     def test_hierarchy_includes_topic_sentences_for_summaries(self) -> None:

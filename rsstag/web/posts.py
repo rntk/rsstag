@@ -1107,15 +1107,14 @@ def _serialize_canvas_posts(posts: list[dict[str, Any]]) -> str:
 def on_canvas_get(
     app: "RSSTagApplication", user: dict[str, Any], request: Request
 ) -> Response:
-    """Render feed posts as one canvas with a globally aligned topic rail."""
+    """Render filtered posts as one canvas with a globally aligned topic rail."""
     feed_id: str = request.args.get("feed", "").strip()
-    if not feed_id:
-        return app.on_error(
-            user, request, BadRequest("The canvas page requires a feed parameter.")
-        )
+    tag: str = request.args.get("tag", "").strip()
 
-    current_feed: Optional[dict[str, Any]] = app.feeds.get_by_feed_id(user["sid"], feed_id)
-    if not current_feed:
+    current_feed: Optional[dict[str, Any]] = None
+    if feed_id:
+        current_feed = app.feeds.get_by_feed_id(user["sid"], feed_id)
+    if feed_id and not current_feed:
         return app.on_error(user, request, NotFound("Feed not found."))
 
     only_unread: Optional[bool] = user["settings"].get("only_unread") or None
@@ -1126,22 +1125,40 @@ def on_canvas_get(
         "content.title": True,
     }
     try:
-        db_posts: list[dict[str, Any]] = list(
-            app.posts.get_by_feed_id(
+        context_tags: list[str] = _get_context_tags(user) or []
+        if tag and tag not in context_tags:
+            context_tags.append(tag)
+        posts_cursor: Iterator[dict[str, Any]]
+        if current_feed:
+            posts_cursor = app.posts.get_by_feed_id(
                 user["sid"],
                 current_feed["feed_id"],
                 only_unread,
                 projection,
-                context_tags=_get_context_tags(user),
+                context_tags=context_tags or None,
             )
-        )
+        elif context_tags:
+            posts_cursor = app.posts.get_by_tags(
+                user["sid"],
+                context_tags,
+                only_unread,
+                projection,
+            )
+        else:
+            posts_cursor = app.posts.get_all(user["sid"], only_unread, projection)
+        db_posts: list[dict[str, Any]] = list(posts_cursor)
         canvas_posts: list[dict[str, Any]] = [
             _build_canvas_post(app, user, post) for post in db_posts
         ]
     except Exception as exc:
-        logging.exception("Unable to build canvas for feed %s: %s", feed_id, exc)
+        logging.exception(
+            "Unable to build canvas for feed %s and tag %s: %s",
+            feed_id,
+            tag,
+            exc,
+        )
         return app.on_error(
-            user, request, InternalServerError("The feed canvas could not be loaded.")
+            user, request, InternalServerError("The canvas could not be loaded.")
         )
 
     page: Template = app.template_env.get_template("canvas.html")
@@ -1150,6 +1167,7 @@ def on_canvas_get(
             posts=canvas_posts,
             posts_json=_serialize_canvas_posts(canvas_posts),
             feed=current_feed,
+            tag=tag,
             user_settings=user["settings"],
             provider=user.get("provider", ""),
         ),
