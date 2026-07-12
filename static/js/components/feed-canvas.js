@@ -3,7 +3,7 @@
 const CARD_WIDTH = 220;
 const CARD_GAP = 14;
 const RAIL_PADDING = 20;
-const MIN_CARD_HEIGHT = 58;
+const MIN_TOPIC_FONT_SIZE = 8;
 const MIN_SCALE = 0.45;
 const MAX_SCALE = 1.8;
 const ZOOM_FACTOR = 1.1;
@@ -256,7 +256,10 @@ class FeedCanvas {
     const zoomAdjusted = BASE_TOPIC_FONT_SIZE * Math.max(1, 1.25 / this.scale - 0.25);
     const titleLines = cardHeight < COMPACT_TOPIC_CARD_HEIGHT ? 1 : 2;
     const availableHeight = Math.max(1, cardHeight - TOPIC_CARD_CHROME_HEIGHT);
-    return Math.max(1, Math.min(zoomAdjusted, availableHeight / (titleLines * 1.25)));
+    return Math.max(
+      MIN_TOPIC_FONT_SIZE,
+      Math.min(zoomAdjusted, availableHeight / (titleLines * 1.25))
+    );
   }
 
   layoutTopics() {
@@ -287,24 +290,11 @@ class FeedCanvas {
             postId,
             run,
             top: top / this.scale,
-            height: Math.max(MIN_CARD_HEIGHT, (bottom - top) / this.scale),
+            height: (bottom - top) / this.scale,
           });
         });
       });
     });
-
-    for (let level = 0; level <= this.selectedLevel; level += 1) {
-      const levelLayouts = layouts
-        .filter((layout) => layout.node.depth === level)
-        .sort(
-          (left, right) => left.top - right.top || left.node.path.localeCompare(right.node.path)
-        );
-      let previousBottom = -Infinity;
-      levelLayouts.forEach((layout) => {
-        layout.top = Math.max(layout.top, previousBottom + 8);
-        previousBottom = layout.top + layout.height;
-      });
-    }
 
     layouts.forEach((layout) => this.cards?.appendChild(this.createCard(layout, cardWidth)));
     const postsHeight = document.getElementById('canvas_posts')?.offsetHeight || 0;
