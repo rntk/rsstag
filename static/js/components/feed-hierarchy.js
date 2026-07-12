@@ -181,18 +181,29 @@ export function formatLeafMeta(topic) {
 }
 
 /**
- * Build the DOM for a single leaf topic card with its action menu.
+ * Build the DOM for a single leaf topic card, with its source-sentence preview
+ * displayed alongside it.
  * @param {TreeEntry} entry
  * @param {string} rootName
+ * @param {(entry: TreeEntry, anchor: HTMLElement) => void} onSummary
+ * @param {(entry: TreeEntry) => void} onOriginal
  * @returns {HTMLElement}
  */
-function buildLeafElement(entry, rootName, onSummary) {
+function buildLeafElement(entry, rootName, onSummary, onOriginal) {
   const { node } = entry;
+  const row = document.createElement('div');
+  row.className = 'fh-leaf-row';
+
   const leaf = document.createElement('div');
   leaf.className = 'fh-leaf';
   leaf.style.setProperty('--fh-accent-color', accentColor(rootName, node.depth));
   leaf.style.setProperty('--fh-card-bg', highlightColor(rootName, node.depth));
   leaf.title = node.fullPath.replace(/>/g, ' ');
+
+  const spacer = document.createElement('span');
+  spacer.className = 'fh-leaf__spacer';
+  spacer.setAttribute('aria-hidden', 'true');
+  leaf.appendChild(spacer);
 
   const label = document.createElement('span');
   label.className = 'fh-leaf__label';
@@ -201,7 +212,33 @@ function buildLeafElement(entry, rootName, onSummary) {
 
   leaf.appendChild(buildSummaryMenuButton(entry, onSummary));
 
-  return leaf;
+  row.appendChild(leaf);
+
+  const sentenceText = collectOriginalSources(entry)
+    .flatMap((source) => source.sentences.map((sentence) => sentence.text))
+    .join(' ');
+  if (sentenceText) {
+    const preview = document.createElement('div');
+    preview.className = 'fh-leaf-sentences';
+    preview.setAttribute('role', 'button');
+    preview.tabIndex = 0;
+    preview.title = 'Click to view original sentences';
+    preview.textContent = sentenceText;
+    const showOriginal = (event) => {
+      event.stopPropagation();
+      onOriginal(entry);
+    };
+    preview.addEventListener('click', showOriginal);
+    preview.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        showOriginal(event);
+      }
+    });
+    row.appendChild(preview);
+  }
+
+  return row;
 }
 
 /**
@@ -211,9 +248,11 @@ function buildLeafElement(entry, rootName, onSummary) {
  * @param {string} rootName
  * @param {Set<string>} collapsedPaths
  * @param {(fullPath: string) => void} onToggle
+ * @param {(entry: TreeEntry, anchor: HTMLElement) => void} onSummary
+ * @param {(entry: TreeEntry) => void} onOriginal
  * @returns {HTMLElement}
  */
-function buildBranchElement(entry, rootName, collapsedPaths, onToggle, onSummary) {
+function buildBranchElement(entry, rootName, collapsedPaths, onToggle, onSummary, onOriginal) {
   const { node } = entry;
   const isCollapsed = collapsedPaths.has(node.fullPath);
 
@@ -253,7 +292,7 @@ function buildBranchElement(entry, rootName, collapsedPaths, onToggle, onSummary
     childrenEl.className = 'fh-branch__children';
     children.forEach((child) => {
       childrenEl.appendChild(
-        buildTreeElement(child, rootName, collapsedPaths, onToggle, onSummary)
+        buildTreeElement(child, rootName, collapsedPaths, onToggle, onSummary, onOriginal)
       );
     });
     branch.appendChild(childrenEl);
@@ -268,13 +307,15 @@ function buildBranchElement(entry, rootName, collapsedPaths, onToggle, onSummary
  * @param {string} rootName
  * @param {Set<string>} collapsedPaths
  * @param {(fullPath: string) => void} onToggle
+ * @param {(entry: TreeEntry, anchor: HTMLElement) => void} onSummary
+ * @param {(entry: TreeEntry) => void} onOriginal
  * @returns {HTMLElement}
  */
-function buildTreeElement(entry, rootName, collapsedPaths, onToggle, onSummary) {
+function buildTreeElement(entry, rootName, collapsedPaths, onToggle, onSummary, onOriginal) {
   const isLeaf = entry.children.size === 0;
   return isLeaf
-    ? buildLeafElement(entry, rootName, onSummary)
-    : buildBranchElement(entry, rootName, collapsedPaths, onToggle, onSummary);
+    ? buildLeafElement(entry, rootName, onSummary, onOriginal)
+    : buildBranchElement(entry, rootName, collapsedPaths, onToggle, onSummary, onOriginal);
 }
 
 /** @param {TreeEntry} entry @param {(entry: TreeEntry, anchor: HTMLElement) => void} onSummary */
@@ -355,8 +396,17 @@ export function collectOriginalSources(entry) {
  * @param {TreeEntry[]} roots
  * @param {Set<string>} collapsedPaths
  * @param {(fullPath: string) => void} onToggle
+ * @param {(entry: TreeEntry, anchor: HTMLElement) => void} [onSummary]
+ * @param {(entry: TreeEntry) => void} [onOriginal]
  */
-export function renderTree(container, roots, collapsedPaths, onToggle, onSummary = () => {}) {
+export function renderTree(
+  container,
+  roots,
+  collapsedPaths,
+  onToggle,
+  onSummary = () => {},
+  onOriginal = () => {}
+) {
   if (!container) return;
   container.replaceChildren();
 
@@ -372,7 +422,7 @@ export function renderTree(container, roots, collapsedPaths, onToggle, onSummary
   root.className = 'fh-root';
   roots.forEach((entry) => {
     root.appendChild(
-      buildTreeElement(entry, entry.node.name, collapsedPaths, onToggle, onSummary)
+      buildTreeElement(entry, entry.node.name, collapsedPaths, onToggle, onSummary, onOriginal)
     );
   });
   container.appendChild(root);
@@ -443,7 +493,8 @@ class FeedHierarchy {
       this.roots,
       this.collapsedPaths,
       (fullPath) => this.handleToggleCollapse(fullPath),
-      (entry, anchor) => this.openContextMenu(entry, anchor)
+      (entry, anchor) => this.openContextMenu(entry, anchor),
+      (entry) => this.showOriginal(entry)
     );
   }
 

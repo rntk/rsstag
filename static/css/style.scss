@@ -6493,7 +6493,7 @@ select:focus, textarea:focus, input[type="text"]:focus {
 .fh-root {
   --fh-row-gap: 8px;
   --fh-row-height: 44px;
-  --fh-label-width: 240px;
+  --fh-label-width: 300px;
   display: flex;
   flex-direction: column;
   width: max-content;
@@ -6585,16 +6585,26 @@ select:focus, textarea:focus, input[type="text"]:focus {
   gap: var(--fh-row-gap);
 }
 
-/* Leaf topic card: a full single-line title plus its action menu. */
+/* Leaf rows keep their source-sentence preview aligned beside the topic card. */
+.fh-leaf-row {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--fh-row-gap);
+  min-height: var(--fh-row-height, 44px);
+  width: max-content;
+}
+
+/* Leaf topic card: the same fixed width as branch cards plus its action menu. */
 .fh-leaf {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   box-sizing: border-box;
   padding: 8px 16px;
   min-height: var(--fh-row-height, 44px);
-  width: max-content;
+  width: var(--fh-label-width);
   font-size: 14px;
   color: #20231f;
   background-color: var(--fh-card-bg, #fff);
@@ -6608,8 +6618,35 @@ select:focus, textarea:focus, input[type="text"]:focus {
 
 .fh-leaf__label {
   flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-weight: 600;
   white-space: nowrap;
+}
+
+/* Leaves cannot fold, but reserve the branch toggle's footprint so every
+   topic title begins at the same horizontal position. */
+.fh-leaf__spacer {
+  flex: 0 0 32px;
+  margin-left: -16px;
+}
+
+.fh-leaf-sentences {
+  flex: 0 0 auto;
+  color: #596257;
+  font-size: 18px;
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: text;
+
+  &:hover, &:focus-visible {
+    color: var(--fh-accent-color, #20231f);
+    text-decoration: underline;
+  }
+
+  &:focus-visible { outline: 2px solid var(--fh-accent-color, #20231f); outline-offset: 3px; }
 }
 
 .fh-empty {

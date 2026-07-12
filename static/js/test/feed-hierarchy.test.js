@@ -234,6 +234,20 @@ describe('renderTree', () => {
     expect(llmsLeaf.querySelector('.fh-topic-menu')).toBeTruthy();
   });
 
+  it('renders a clickable original-sentence preview beside each leaf', () => {
+    const container = document.createElement('div');
+    const roots = buildTopicTree([
+      { name: 'News', sources: [{ sentences: ['The original sentence.'] }] },
+    ]);
+    const opened = [];
+    renderTree(container, roots, new Set(), () => {}, () => {}, (entry) => opened.push(entry));
+
+    const preview = container.querySelector('.fh-leaf-sentences');
+    expect(preview?.textContent).toBe('The original sentence.');
+    preview.click();
+    expect(opened).toEqual([roots[0]]);
+  });
+
   it('renders a collapsed branch as a single row without children', () => {
     const container = document.createElement('div');
     const roots = buildTopicTree(TOPICS);
@@ -356,5 +370,15 @@ describe('FeedHierarchy (DOM smoke test)', () => {
       'Mark Unread',
     ]);
     expect(source.querySelectorAll('.canvas-original-sentence.is-read')).toHaveLength(1);
+  });
+
+  it('opens the Original dialog from a leaf sentence preview', () => {
+    window.hierarchyTopics = [
+      { name: 'News', sources: [{ title: 'Post', sentences: ['The original sentence.'] }] },
+    ];
+    new FeedHierarchy().init();
+
+    document.querySelector('.fh-leaf-sentences').click();
+    expect(document.querySelector('.canvas-original-dialog').open).toBe(true);
   });
 });
