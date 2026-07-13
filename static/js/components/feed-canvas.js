@@ -90,6 +90,11 @@ class FeedCanvas {
     this.contextMenu = null;
     this.summaryDialog = null;
     this.statusTimer = 0;
+    /** @type {Map<string, {top: number, bottom: number, left: number, right: number}>} */
+    this.sentenceMetrics = new Map();
+    /** @type {Array<{layout: {node: ReturnType<typeof buildTopicNodes>[number], postId: string, run: number[], top: number, height: number, left: number, width: number}, card: HTMLDivElement}>} */
+    this.topicCards = [];
+    this.topicCardUpdateFrame = 0;
     /** @type {{scale: number, x: number, y: number}|null} */
     this.savedView = null;
   }
@@ -101,7 +106,10 @@ class FeedCanvas {
     this.applyTransform();
     this.layoutTopics();
     this.createSummaryDialog();
-    document.fonts?.ready.then(() => this.layoutTopics());
+    document.fonts?.ready.then(() => {
+      this.sentenceMetrics.clear();
+      this.layoutTopics();
+    });
   }
 
   renderLevelButtons() {
@@ -188,7 +196,10 @@ class FeedCanvas {
     });
     window.addEventListener('resize', () => {
       window.clearTimeout(this.resizeTimer);
-      this.resizeTimer = window.setTimeout(() => this.layoutTopics(), 100);
+      this.resizeTimer = window.setTimeout(() => {
+        this.sentenceMetrics.clear();
+        this.layoutTopics();
+      }, 100);
     });
   }
 
@@ -273,7 +284,7 @@ class FeedCanvas {
     this.y = focusY - rect.top - contentY * nextScale;
     this.scale = nextScale;
     this.applyTransform();
-    this.layoutTopics();
+    this.scheduleTopicCardUpdate();
   }
 
   reset() {
@@ -281,7 +292,7 @@ class FeedCanvas {
     this.x = 40;
     this.y = 30;
     this.applyTransform();
-    this.layoutTopics();
+    this.scheduleTopicCardUpdate();
   }
 
   /** @param {{top: number, height: number, left: number, width: number}} layout */
@@ -296,7 +307,7 @@ class FeedCanvas {
     this.x = rect.width / 2 - centerX * targetScale;
     this.y = rect.height / 2 - centerY * targetScale;
     this.applyTransform();
-    this.layoutTopics();
+    this.scheduleTopicCardUpdate();
   }
 
   restoreView() {
@@ -306,7 +317,7 @@ class FeedCanvas {
     this.y = this.savedView.y;
     this.savedView = null;
     this.applyTransform();
-    this.layoutTopics();
+    this.scheduleTopicCardUpdate();
   }
 
   /** @param {number} dx @param {number} dy */
@@ -378,9 +389,63 @@ class FeedCanvas {
     );
   }
 
+  scheduleTopicCardUpdate() {
+    if (this.topicCardUpdateFrame) return;
+    this.topicCardUpdateFrame = window.requestAnimationFrame(() => {
+      this.topicCardUpdateFrame = 0;
+      this.updateTopicCards();
+    });
+  }
+
+  updateTopicCards() {
+    const cardWidth = this.getTopicCardWidth();
+    if (this.rail) {
+      const railWidth =
+        (this.selectedLevel + 1) * cardWidth + this.selectedLevel * CARD_GAP + RAIL_PADDING * 2;
+      this.rail.style.width = `${railWidth}px`;
+    }
+    this.topicCards.forEach(({ layout, card }) => {
+      this.updateTopicCardMetrics(card, layout, cardWidth);
+    });
+  }
+
+  /**
+   * @param {HTMLDivElement} card
+   * @param {{node: ReturnType<typeof buildTopicNodes>[number], height: number}} layout
+   * @param {number} cardWidth
+   */
+  updateTopicCardMetrics(card, layout, cardWidth) {
+    card.style.width = `${cardWidth}px`;
+    card.style.right = `${RAIL_PADDING + layout.node.depth * (cardWidth + CARD_GAP)}px`;
+    card.style.setProperty('--topic-font-size', `${this.getTopicFontSize(layout.height)}px`);
+  }
+
+  /** @param {string} postId @param {number} number @param {DOMRect} documentRect */
+  getSentenceMetrics(postId, number, documentRect) {
+    const key = `${postId}\u0000${number}`;
+    const cached = this.sentenceMetrics.get(key);
+    if (cached) return cached;
+    const selector = `.canvas-post[data-post-id="${CSS.escape(postId)}"] .canvas-sentence[data-sentence-number="${number}"]`;
+    const rect = this.document?.querySelector(selector)?.getBoundingClientRect();
+    if (!rect) return null;
+    const metrics = {
+      top: (rect.top - documentRect.top) / this.scale,
+      bottom: (rect.bottom - documentRect.top) / this.scale,
+      left: (rect.left - documentRect.left) / this.scale,
+      right: (rect.right - documentRect.left) / this.scale,
+    };
+    this.sentenceMetrics.set(key, metrics);
+    return metrics;
+  }
+
   layoutTopics() {
     if (!this.document || !this.rail || !this.cards) return;
+    if (this.topicCardUpdateFrame) {
+      window.cancelAnimationFrame(this.topicCardUpdateFrame);
+      this.topicCardUpdateFrame = 0;
+    }
     this.cards.replaceChildren();
+    this.topicCards = [];
     const visibleNodes = this.nodes.filter((node) => node.depth <= this.selectedLevel);
     const cardWidth = this.getTopicCardWidth();
     const railWidth =
@@ -393,30 +458,33 @@ class FeedCanvas {
       node.posts.forEach((numbers, postId) => {
         splitRuns([...numbers]).forEach((run) => {
           const metrics = run
-            .map((number) => {
-              const selector = `.canvas-post[data-post-id="${CSS.escape(postId)}"] .canvas-sentence[data-sentence-number="${number}"]`;
-              return this.document?.querySelector(selector)?.getBoundingClientRect();
-            })
+            .map((number) => this.getSentenceMetrics(postId, number, documentRect))
             .filter(Boolean);
           if (metrics.length === 0) return;
-          const top = Math.min(...metrics.map((metric) => metric.top)) - documentRect.top;
-          const bottom = Math.max(...metrics.map((metric) => metric.bottom)) - documentRect.top;
-          const left = Math.min(...metrics.map((metric) => metric.left)) - documentRect.left;
-          const right = Math.max(...metrics.map((metric) => metric.right)) - documentRect.left;
+          const top = Math.min(...metrics.map((metric) => metric.top));
+          const bottom = Math.max(...metrics.map((metric) => metric.bottom));
+          const left = Math.min(...metrics.map((metric) => metric.left));
+          const right = Math.max(...metrics.map((metric) => metric.right));
           layouts.push({
             node,
             postId,
             run,
-            top: top / this.scale,
-            height: (bottom - top) / this.scale,
-            left: left / this.scale,
-            width: (right - left) / this.scale,
+            top,
+            height: bottom - top,
+            left,
+            width: right - left,
           });
         });
       });
     });
 
-    layouts.forEach((layout) => this.cards?.appendChild(this.createCard(layout, cardWidth)));
+    const fragment = document.createDocumentFragment();
+    layouts.forEach((layout) => {
+      const card = this.createCard(layout, cardWidth);
+      this.topicCards.push({ layout, card });
+      fragment.appendChild(card);
+    });
+    this.cards.appendChild(fragment);
     const postsHeight = document.getElementById('canvas_posts')?.offsetHeight || 0;
     const cardsHeight = layouts.reduce(
       (maximum, layout) => Math.max(maximum, layout.top + layout.height),
@@ -437,10 +505,8 @@ class FeedCanvas {
     card.setAttribute('role', 'button');
     card.style.top = `${layout.top}px`;
     card.style.height = `${layout.height}px`;
-    card.style.width = `${cardWidth}px`;
-    card.style.right = `${RAIL_PADDING + layout.node.depth * (cardWidth + CARD_GAP)}px`;
+    this.updateTopicCardMetrics(card, layout, cardWidth);
     card.style.setProperty('--topic-color', topicColor(layout.node.path));
-    card.style.setProperty('--topic-font-size', `${this.getTopicFontSize(layout.height)}px`);
     card.style.setProperty(
       '--topic-title-lines',
       layout.height < COMPACT_TOPIC_CARD_HEIGHT ? '1' : '2'
