@@ -69,7 +69,13 @@ class TestLLMRouter(unittest.TestCase):
     ):
         config = {"nebius": {"token": "tok", "model": "m"}}
         router = LLMRouter(config)
-        mock_nebius.assert_called_once_with("tok", "m", batch_host=None)
+        mock_nebius.assert_called_once_with(
+            "tok",
+            "m",
+            batch_host=None,
+            timeout=300.0,
+            max_retries=0,
+        )
         mock_openai_batch.assert_not_called()
 
     @patch("rsstag.llm.router.logging.warning")
@@ -155,19 +161,40 @@ class TestLLMRouter(unittest.TestCase):
         mock_cerebras.reset_mock()
 
         router._build_handler("llamacpp", None)
-        mock_llama.assert_called_once_with("http://localhost:8080")
+        mock_llama.assert_called_once_with(
+            "http://localhost:8080",
+            timeout=300.0,
+        )
 
         router._build_handler("openai", None)
-        mock_openai.assert_called_once_with("tok", model="gpt-4")
+        mock_openai.assert_called_once_with(
+            "tok",
+            model="gpt-4",
+            timeout=300.0,
+            max_retries=0,
+        )
 
         router._build_handler("anthropic", None)
-        mock_anthropic.assert_called_once_with("tok")
+        mock_anthropic.assert_called_once_with(
+            "tok",
+            timeout=300.0,
+            max_retries=0,
+        )
 
         router._build_handler("groqcom", None)
-        mock_groq.assert_called_once_with(host="https://api.groq.com", token="tok")
+        mock_groq.assert_called_once_with(
+            host="https://api.groq.com",
+            token="tok",
+            timeout=300.0,
+        )
 
         router._build_handler("cerebras", None)
-        mock_cerebras.assert_called_once_with(token="tok", model="llama3.1-8b")
+        mock_cerebras.assert_called_once_with(
+            token="tok",
+            model="llama3.1-8b",
+            timeout=300.0,
+            max_retries=0,
+        )
 
     @patch("rsstag.llm.cerebras.RCerebras")
     @patch("rsstag.llm.groqcom.GroqCom")
@@ -201,19 +228,100 @@ class TestLLMRouter(unittest.TestCase):
         mock_cerebras.reset_mock()
 
         router._build_handler("llamacpp", "m")
-        mock_llama.assert_called_once_with("h", model="m")
+        mock_llama.assert_called_once_with("h", model="m", timeout=300.0)
 
         router._build_handler("openai", "m")
-        mock_openai.assert_called_once_with("t", model="m")
+        mock_openai.assert_called_once_with(
+            "t",
+            model="m",
+            timeout=300.0,
+            max_retries=0,
+        )
 
         router._build_handler("anthropic", "m")
-        mock_anthropic.assert_called_once_with("t", model="m")
+        mock_anthropic.assert_called_once_with(
+            "t",
+            model="m",
+            timeout=300.0,
+            max_retries=0,
+        )
 
         router._build_handler("groqcom", "m")
-        mock_groq.assert_called_once_with(host="h", token="t", model="m")
+        mock_groq.assert_called_once_with(
+            host="h",
+            token="t",
+            model="m",
+            timeout=300.0,
+        )
 
         router._build_handler("cerebras", "m")
-        mock_cerebras.assert_called_once_with(token="t", model="m")
+        mock_cerebras.assert_called_once_with(
+            token="t",
+            model="m",
+            timeout=300.0,
+            max_retries=0,
+        )
+
+    @patch("rsstag.llm.openai.ROpenAI")
+    @patch("rsstag.llm.router.NebiusBatchProvider")
+    @patch("rsstag.llm.router.OpenAIBatchProvider")
+    def test_build_handler_uses_configured_request_limits(
+        self,
+        mock_openai_batch: MagicMock,
+        mock_nebius: MagicMock,
+        mock_openai: MagicMock,
+    ) -> None:
+        config: dict = {
+            "settings": {
+                "llm_request_timeout_seconds": "45.5",
+                "llm_request_max_retries": "1",
+            },
+            "openai": {"token": "tok", "model": "gpt-5-mini"},
+        }
+        router: LLMRouter = LLMRouter(config)
+
+        mock_openai.assert_called_once_with(
+            "tok",
+            model="gpt-5-mini",
+            timeout=45.5,
+            max_retries=1,
+        )
+        mock_openai_batch.assert_called_once_with(
+            "tok",
+            "gpt-5-mini",
+            batch_host=None,
+            timeout=45.5,
+            max_retries=1,
+        )
+
+    def test_invalid_request_limits_fall_back_to_safe_defaults(self) -> None:
+        router: LLMRouter = self._make_router(
+            {
+                "settings": {
+                    "llm_request_timeout_seconds": "invalid",
+                    "llm_request_max_retries": "invalid",
+                }
+            }
+        )
+
+        self.assertEqual(router._get_request_timeout_seconds(), 300.0)
+        self.assertEqual(router._get_request_max_retries(), 0)
+
+    def test_request_retry_limit_is_capped_at_one(self) -> None:
+        router: LLMRouter = self._make_router(
+            {"settings": {"llm_request_max_retries": "5"}}
+        )
+
+        self.assertEqual(router._get_request_max_retries(), 1)
+
+    def test_non_finite_request_timeout_uses_safe_default(self) -> None:
+        for raw_timeout in ("nan", "inf", "-inf"):
+            with self.subTest(raw_timeout=raw_timeout):
+                router: LLMRouter = self._make_router(
+                    {"settings": {"llm_request_timeout_seconds": raw_timeout}}
+                )
+
+                self.assertEqual(router._get_request_timeout_seconds(), 300.0)
 
     def test_build_handler_raises_for_unknown_name(self):
         router = self._make_router({})

@@ -1,5 +1,6 @@
 import inspect
 import logging
+import math
 from collections.abc import Sequence
 from typing import Any, Optional, Tuple, Dict
 
@@ -8,13 +9,70 @@ from rsstag.llm.batch import LlmBatchProvider, NebiusBatchProvider, OpenAIBatchP
 
 
 class LLMRouter:
+    DEFAULT_REQUEST_TIMEOUT_SECONDS = 300.0
+    DEFAULT_REQUEST_MAX_RETRIES = 0
+    MAX_REQUEST_MAX_RETRIES = 1
+
     def __init__(self, config: dict) -> None:
         self._config = config
+        self._request_timeout_seconds: float = self._get_request_timeout_seconds()
+        self._request_max_retries: int = self._get_request_max_retries()
         self._handlers: Dict[str, Optional[Any]] = {}
         self._model_handlers: Dict[Tuple[str, str], Optional[Any]] = {}
         self._batch_providers: Dict[str, LlmBatchProvider] = {}
         self._init_handlers()
         self._init_batch_providers()
+
+    def _get_request_timeout_seconds(self) -> float:
+        raw_timeout: Any = self._config.get("settings", {}).get(
+            "llm_request_timeout_seconds",
+            self.DEFAULT_REQUEST_TIMEOUT_SECONDS,
+        )
+        try:
+            timeout: float = float(raw_timeout)
+        except (TypeError, ValueError):
+            logging.warning(
+                "Invalid llm_request_timeout_seconds=%r; using %.1f seconds",
+                raw_timeout,
+                self.DEFAULT_REQUEST_TIMEOUT_SECONDS,
+            )
+            return self.DEFAULT_REQUEST_TIMEOUT_SECONDS
+        if not math.isfinite(timeout) or timeout <= 0:
+            logging.warning(
+                "llm_request_timeout_seconds must be finite and positive; using %.1f seconds",
+                self.DEFAULT_REQUEST_TIMEOUT_SECONDS,
+            )
+            return self.DEFAULT_REQUEST_TIMEOUT_SECONDS
+        return timeout
+
+    def _get_request_max_retries(self) -> int:
+        raw_retries: Any = self._config.get("settings", {}).get(
+            "llm_request_max_retries",
+            self.DEFAULT_REQUEST_MAX_RETRIES,
+        )
+        try:
+            retries: int = int(raw_retries)
+        except (TypeError, ValueError):
+            logging.warning(
+                "Invalid llm_request_max_retries=%r; using %d",
+                raw_retries,
+                self.DEFAULT_REQUEST_MAX_RETRIES,
+            )
+            return self.DEFAULT_REQUEST_MAX_RETRIES
+        if retries < 0:
+            logging.warning(
+                "llm_request_max_retries must not be negative; using %d",
+                self.DEFAULT_REQUEST_MAX_RETRIES,
+            )
+            return self.DEFAULT_REQUEST_MAX_RETRIES
+        if retries > self.MAX_REQUEST_MAX_RETRIES:
+            logging.warning(
+                "llm_request_max_retries must not exceed %d; using %d",
+                self.MAX_REQUEST_MAX_RETRIES,
+                self.MAX_REQUEST_MAX_RETRIES,
+            )
+            return self.MAX_REQUEST_MAX_RETRIES
+        return retries
 
     def _init_handlers(self) -> None:
         for name in ("llamacpp", "openai", "anthropic", "groqcom", "cerebras"):
@@ -32,6 +90,8 @@ class LLMRouter:
                     openai_cfg["token"],
                     model,
                     batch_host=openai_cfg.get("batch_host"),
+                    timeout=self._request_timeout_seconds,
+                    max_retries=self._request_max_retries,
                 )
             except Exception as e:
                 logging.warning("Can't initialize OpenAI batch provider: %s", e)
@@ -48,6 +108,8 @@ class LLMRouter:
                     nebius_cfg["token"],
                     model,
                     batch_host=nebius_cfg.get("batch_host"),
+                    timeout=self._request_timeout_seconds,
+                    max_retries=self._request_max_retries,
                 )
             except Exception as e:
                 logging.warning("Can't initialize Nebius batch provider: %s", e)
@@ -60,27 +122,56 @@ class LLMRouter:
             return None
 
     def _build_handler(self, name: str, model: Optional[str]) -> Any:
+        timeout: float = self._request_timeout_seconds
+        max_retries: int = self._request_max_retries
         if name == "llamacpp":
             from rsstag.llm.llamacpp import LLamaCPP
 
             if model:
-                return LLamaCPP(self._config["llamacpp"]["host"], model=model)
-            return LLamaCPP(self._config["llamacpp"]["host"])
+                return LLamaCPP(
+                    self._config["llamacpp"]["host"],
+                    model=model,
+                    timeout=timeout,
+                )
+            return LLamaCPP(self._config["llamacpp"]["host"], timeout=timeout)
         if name == "openai":
             from rsstag.llm.openai import ROpenAI
 
             if model:
-                return ROpenAI(self._config["openai"]["token"], model=model)
+                return ROpenAI(
+                    self._config["openai"]["token"],
+                    model=model,
+                    timeout=timeout,
+                    max_retries=max_retries,
+                )
             cfg_model = self._config["openai"].get("model")
             if cfg_model:
-                return ROpenAI(self._config["openai"]["token"], model=cfg_model)
-            return ROpenAI(self._config["openai"]["token"])
+                return ROpenAI(
+                    self._config["openai"]["token"],
+                    model=cfg_model,
+                    timeout=timeout,
+                    max_retries=max_retries,
+                )
+            return ROpenAI(
+                self._config["openai"]["token"],
+                timeout=timeout,
+                max_retries=max_retries,
+            )
         if name == "anthropic":
             from rsstag.llm.anthropic import Anthropic
 
             if model:
-                return Anthropic(self._config["anthropic"]["token"], model=model)
-            return Anthropic(self._config["anthropic"]["token"])
+                return Anthropic(
+                    self._config["anthropic"]["token"],
+                    model=model,
+                    timeout=timeout,
+                    max_retries=max_retries,
+                )
+            return Anthropic(
+                self._config["anthropic"]["token"],
+                timeout=timeout,
+                max_retries=max_retries,
+            )
         if name == "groqcom":
             from rsstag.llm.groqcom import GroqCom
 
@@ -89,22 +180,35 @@ class LLMRouter:
                     host=self._config["groqcom"]["host"],
                     token=self._config["groqcom"]["token"],
                     model=model,
+                    timeout=timeout,
                 )
             return GroqCom(
                 host=self._config["groqcom"]["host"],
                 token=self._config["groqcom"]["token"],
+                timeout=timeout,
             )
         if name == "cerebras":
             from rsstag.llm.cerebras import RCerebras
 
             if model:
-                return RCerebras(token=self._config["cerebras"]["token"], model=model)
+                return RCerebras(
+                    token=self._config["cerebras"]["token"],
+                    model=model,
+                    timeout=timeout,
+                    max_retries=max_retries,
+                )
             if self._config["cerebras"].get("model"):
                 return RCerebras(
                     token=self._config["cerebras"]["token"],
                     model=self._config["cerebras"]["model"],
+                    timeout=timeout,
+                    max_retries=max_retries,
                 )
-            return RCerebras(token=self._config["cerebras"]["token"])
+            return RCerebras(
+                token=self._config["cerebras"]["token"],
+                timeout=timeout,
+                max_retries=max_retries,
+            )
         raise ValueError(f"Unknown LLM handler: {name}")
 
     def _normalize_settings(self, settings: Optional[dict]) -> dict:

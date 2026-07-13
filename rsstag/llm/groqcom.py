@@ -16,7 +16,7 @@ class GroqCom:
         "mixtral-8x7b-32768",
         "gemma-7b-it",
     ]
-    DEFAULT_TIMEOUT = 300  # 5 minutes
+    DEFAULT_TIMEOUT = 300.0  # 5 minutes
 
     def __init__(
         self,
@@ -24,8 +24,8 @@ class GroqCom:
         max_context_tokens: int = 11000,
         token: Optional[str] = None,
         model: str = "llama-3.1-70b-versatile",
-        timeout: int = DEFAULT_TIMEOUT,
-    ):
+        timeout: float = DEFAULT_TIMEOUT,
+    ) -> None:
         u = urlparse(host)
         self.__host = u.netloc
         self.__is_https = u.scheme.lower() == "https"

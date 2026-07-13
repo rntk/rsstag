@@ -11,9 +11,14 @@ from rsstag.llm.base import LLMResponse, ToolCall, ToolDefinition, parse_argumen
 
 class LLamaCPP:
     ALLOWED_MODELS = ["default"]
-    DEFAULT_TIMEOUT = 2400  # 40 minutes
+    DEFAULT_TIMEOUT = 300.0  # 5 minutes
 
-    def __init__(self, host: str, model: str = "default", timeout: int = DEFAULT_TIMEOUT):
+    def __init__(
+        self,
+        host: str,
+        model: str = "default",
+        timeout: float = DEFAULT_TIMEOUT,
+    ) -> None:
         u = urlparse(host)
         self.__host = u.netloc
         self.__is_https = u.scheme.lower() == "https"

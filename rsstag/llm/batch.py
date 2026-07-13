@@ -27,10 +27,18 @@ class LlmBatchProvider:
     MAX_BATCH_REQUESTS = 50000
     MAX_BATCH_SIZE_BYTES = 200 * 1024 * 1024  # 200 MB
 
-    def __init__(self, model: str, batch_host: Optional[str] = None):
+    def __init__(
+        self,
+        model: str,
+        batch_host: Optional[str] = None,
+        timeout: float = 300.0,
+        max_retries: int = 0,
+    ) -> None:
         self.model = model
         self.batch_host = self._normalize_batch_host(batch_host)
-        self._client = None
+        self._timeout = timeout
+        self._max_retries = max_retries
+        self._client: Optional[OpenAI] = None
 
     def _normalize_batch_host(self, host: Optional[str]) -> Optional[str]:
         if not host:
@@ -41,9 +49,14 @@ class LlmBatchProvider:
         return normalized.rstrip("/") + "/"
 
     def _build_openai_client(self, token: str) -> OpenAI:
+        client_kwargs: dict = {
+            "api_key": token,
+            "timeout": self._timeout,
+            "max_retries": self._max_retries,
+        }
         if self.batch_host:
-            return OpenAI(api_key=token, base_url=self.batch_host)
-        return OpenAI(api_key=token)
+            client_kwargs["base_url"] = self.batch_host
+        return OpenAI(**client_kwargs)
 
     def build_request(self, custom_id: str, prompt: str) -> dict:
         """Build a single JSONL batch request dict for this provider."""
@@ -109,8 +122,20 @@ class OpenAIBatchProvider(LlmBatchProvider):
     name = "openai"
     batch_endpoint = "/v1/responses"
 
-    def __init__(self, token: str, model: str, batch_host: Optional[str] = None):
-        super().__init__(model, batch_host=batch_host)
+    def __init__(
+        self,
+        token: str,
+        model: str,
+        batch_host: Optional[str] = None,
+        timeout: float = 300.0,
+        max_retries: int = 0,
+    ) -> None:
+        super().__init__(
+            model,
+            batch_host=batch_host,
+            timeout=timeout,
+            max_retries=max_retries,
+        )
         self._client = self._build_openai_client(token)
 
     def build_request(self, custom_id: str, prompt: str) -> dict:
@@ -141,6 +166,18 @@ class NebiusBatchProvider(LlmBatchProvider):
 
     NEBIUS_BASE_URL = "https://api.tokenfactory.nebius.com/v1/"
 
-    def __init__(self, token: str, model: str, batch_host: Optional[str] = None):
-        super().__init__(model, batch_host=batch_host or self.NEBIUS_BASE_URL)
+    def __init__(
+        self,
+        token: str,
+        model: str,
+        batch_host: Optional[str] = None,
+        timeout: float = 300.0,
+        max_retries: int = 0,
+    ) -> None:
+        super().__init__(
+            model,
+            batch_host=batch_host or self.NEBIUS_BASE_URL,
+            timeout=timeout,
+            max_retries=max_retries,
+        )
         self._client = self._build_openai_client(token)

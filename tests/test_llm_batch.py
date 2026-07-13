@@ -50,7 +50,10 @@ class TestLlmBatchProvider(unittest.TestCase):
         self.provider.batch_host = "https://api.example.com/"
         client = self.provider._build_openai_client("token123")
         mock_openai.assert_called_once_with(
-            api_key="token123", base_url="https://api.example.com/"
+            api_key="token123",
+            timeout=300.0,
+            max_retries=0,
+            base_url="https://api.example.com/",
         )
         self.assertIs(client, mock_openai.return_value)
 
@@ -58,7 +61,11 @@ class TestLlmBatchProvider(unittest.TestCase):
     def test_build_openai_client_without_host(self, mock_openai: MagicMock) -> None:
         self.provider.batch_host = None
         client = self.provider._build_openai_client("token123")
-        mock_openai.assert_called_once_with(api_key="token123")
+        mock_openai.assert_called_once_with(
+            api_key="token123",
+            timeout=300.0,
+            max_retries=0,
+        )
         self.assertIs(client, mock_openai.return_value)
 
     def test_build_request(self) -> None:
@@ -175,7 +182,11 @@ class TestOpenAIBatchProvider(unittest.TestCase):
     @patch("rsstag.llm.batch.OpenAI")
     def test_init_sets_client(self, mock_openai: MagicMock) -> None:
         provider = OpenAIBatchProvider("token-abc", "gpt-4o")
-        mock_openai.assert_called_once_with(api_key="token-abc")
+        mock_openai.assert_called_once_with(
+            api_key="token-abc",
+            timeout=300.0,
+            max_retries=0,
+        )
         self.assertIs(provider._client, mock_openai.return_value)
 
     @patch("rsstag.llm.batch.OpenAI")
@@ -184,7 +195,24 @@ class TestOpenAIBatchProvider(unittest.TestCase):
             "token-abc", "gpt-4o", batch_host="https://custom.openai.com/"
         )
         mock_openai.assert_called_once_with(
-            api_key="token-abc", base_url="https://custom.openai.com/"
+            api_key="token-abc",
+            timeout=300.0,
+            max_retries=0,
+            base_url="https://custom.openai.com/",
+        )
+
+    @patch("rsstag.llm.batch.OpenAI")
+    def test_init_uses_custom_request_limits(self, mock_openai: MagicMock) -> None:
+        OpenAIBatchProvider(
+            "token-abc",
+            "gpt-4o",
+            timeout=120.0,
+            max_retries=1,
+        )
+        mock_openai.assert_called_once_with(
+            api_key="token-abc",
+            timeout=120.0,
+            max_retries=1,
         )
 
     @patch("rsstag.llm.batch.OpenAI")
@@ -203,6 +231,8 @@ class TestNebiusBatchProvider(unittest.TestCase):
         provider = NebiusBatchProvider("token-abc", "llama-3")
         mock_openai.assert_called_once_with(
             api_key="token-abc",
+            timeout=300.0,
+            max_retries=0,
             base_url="https://api.tokenfactory.nebius.com/v1/",
         )
         self.assertIs(provider._client, mock_openai.return_value)
@@ -213,7 +243,10 @@ class TestNebiusBatchProvider(unittest.TestCase):
             "token-abc", "llama-3", batch_host="https://custom.nebius.com/"
         )
         mock_openai.assert_called_once_with(
-            api_key="token-abc", base_url="https://custom.nebius.com/"
+            api_key="token-abc",
+            timeout=300.0,
+            max_retries=0,
+            base_url="https://custom.nebius.com/",
         )
 
     def test_larger_limits_than_base_class(self) -> None:

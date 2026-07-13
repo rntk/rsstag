@@ -18,7 +18,13 @@ class Anthropic:
     DEFAULT_TIMEOUT = 300.0  # 5 minutes
     DEFAULT_MAX_TOKENS = 4096
 
-    def __init__(self, token: str, model: str = "claude-3-5-haiku-20241022", timeout: float = DEFAULT_TIMEOUT):
+    def __init__(
+        self,
+        token: str,
+        model: str = "claude-3-5-haiku-20241022",
+        timeout: float = DEFAULT_TIMEOUT,
+        max_retries: int = 0,
+    ) -> None:
         self.__token = token
         if model not in self.ALLOWED_MODELS:
             self.__model = self.ALLOWED_MODELS[0]
@@ -27,6 +33,7 @@ class Anthropic:
         self.__client = anthropic.Anthropic(
             api_key=token,
             timeout=timeout,
+            max_retries=max_retries,
         )
 
     def call(self, user_msgs: List[str]) -> str:

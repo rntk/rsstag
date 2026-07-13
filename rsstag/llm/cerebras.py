@@ -11,13 +11,23 @@ class RCerebras:
     ALLOWED_MODELS = ["gpt-oss-120b"]
     DEFAULT_TIMEOUT = 300.0  # 5 minutes
 
-    def __init__(self, token: Optional[str] = None, model: str = "gpt-oss-120b", timeout: float = DEFAULT_TIMEOUT):
+    def __init__(
+        self,
+        token: Optional[str] = None,
+        model: str = "gpt-oss-120b",
+        timeout: float = DEFAULT_TIMEOUT,
+        max_retries: int = 0,
+    ) -> None:
         self.__token = token or os.environ.get("CEREBRAS_API_KEY")
         if model not in self.ALLOWED_MODELS:
             self.__model = self.ALLOWED_MODELS[-1]
         else:
             self.__model = model
-        self.__client = Cerebras(api_key=self.__token, timeout=timeout)
+        self.__client = Cerebras(
+            api_key=self.__token,
+            timeout=timeout,
+            max_retries=max_retries,
+        )
 
     def call(
         self,

@@ -13,20 +13,42 @@ class TestAnthropicInit(unittest.TestCase):
         client = Anthropic(token="tok", model="claude-3-5-sonnet-20241022")
 
         self.assertEqual(client._Anthropic__model, "claude-3-5-sonnet-20241022")
-        mock_anthropic_cls.assert_called_once_with(api_key="tok", timeout=300.0)
+        mock_anthropic_cls.assert_called_once_with(
+            api_key="tok",
+            timeout=300.0,
+            max_retries=0,
+        )
 
     @patch("rsstag.llm.anthropic.anthropic.Anthropic")
     def test_invalid_model_falls_back_to_first_allowed(self, mock_anthropic_cls: MagicMock) -> None:
         client = Anthropic(token="tok", model="not-a-model")
 
         self.assertEqual(client._Anthropic__model, Anthropic.ALLOWED_MODELS[0])
-        mock_anthropic_cls.assert_called_once_with(api_key="tok", timeout=300.0)
+        mock_anthropic_cls.assert_called_once_with(
+            api_key="tok",
+            timeout=300.0,
+            max_retries=0,
+        )
 
     @patch("rsstag.llm.anthropic.anthropic.Anthropic")
     def test_custom_timeout(self, mock_anthropic_cls: MagicMock) -> None:
         Anthropic(token="tok", timeout=60.0)
 
-        mock_anthropic_cls.assert_called_once_with(api_key="tok", timeout=60.0)
+        mock_anthropic_cls.assert_called_once_with(
+            api_key="tok",
+            timeout=60.0,
+            max_retries=0,
+        )
+
+    @patch("rsstag.llm.anthropic.anthropic.Anthropic")
+    def test_custom_retry_limit(self, mock_anthropic_cls: MagicMock) -> None:
+        Anthropic(token="tok", max_retries=1)
+
+        mock_anthropic_cls.assert_called_once_with(
+            api_key="tok",
+            timeout=300.0,
+            max_retries=1,
+        )
 
 
 class TestAnthropicCall(unittest.TestCase):

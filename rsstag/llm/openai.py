@@ -12,13 +12,23 @@ class ROpenAI:
     ALLOWED_MODELS = ["gpt-5-nano", "gpt-5-mini"]
     DEFAULT_TIMEOUT = 300.0  # 5 minutes
 
-    def __init__(self, token: str, model: str = "gpt-5-mini", timeout: float = DEFAULT_TIMEOUT):
+    def __init__(
+        self,
+        token: str,
+        model: str = "gpt-5-mini",
+        timeout: float = DEFAULT_TIMEOUT,
+        max_retries: int = 0,
+    ) -> None:
         self.token = token
         if model not in self.ALLOWED_MODELS:
             self.model = self.ALLOWED_MODELS[-1]
         else:
             self.model = model
-        self.client = OpenAI(api_key=self.token, timeout=timeout)
+        self.client = OpenAI(
+            api_key=self.token,
+            timeout=timeout,
+            max_retries=max_retries,
+        )
 
     def call(
         self,
