@@ -57,6 +57,17 @@ def get_anthology_tools(include_tag_co_occurrences: bool = True) -> tuple[ToolDe
                 "additionalProperties": False,
             },
         ),
+        ToolDefinition(
+            name="get_corpus_overview",
+            description="Return scoped document counts, dates, titles, and available topic paths.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 20},
+                },
+                "additionalProperties": False,
+            },
+        ),
     ]
     if include_tag_co_occurrences:
         tools.append(
@@ -91,6 +102,8 @@ class AnthologyToolExecutor:
         self._allowed_post_ids: Optional[set[str]] = None
         self._grouping_entries: Optional[list[dict[str, Any]]] = None
         self._grouping_ids_by_post_id: dict[str, str] = {}
+        self._post_metadata_by_id: dict[str, dict[str, Any]] = {}
+        self._latest_grouping_update: Optional[float] = None
 
     def execute(self, tool_name: str, args: dict[str, Any]) -> str:
         """Execute a named tool and return a JSON string payload."""
@@ -102,6 +115,8 @@ class AnthologyToolExecutor:
             payload = self.get_topic_details(str(args.get("topic_path", "")).strip(), limit)
         elif tool_name == "get_posts_for_topic":
             payload = self.get_posts_for_topic(str(args.get("topic_path", "")).strip(), limit)
+        elif tool_name == "get_corpus_overview":
+            payload = self.get_corpus_overview(limit)
         elif tool_name == "get_tag_co_occurrences":
             tag = str(args.get("tag", "")).strip() or self._seed_tag
             payload = self.get_tag_co_occurrences(tag, limit)
@@ -203,6 +218,29 @@ class AnthologyToolExecutor:
             ],
         }
 
+    def get_corpus_overview(self, limit: int) -> dict[str, Any]:
+        """Return a compact inventory so the agent can reason about coverage."""
+
+        allowed_post_ids: set[str] = self._get_allowed_post_ids() or set()
+        entries: list[dict[str, Any]] = self._load_grouping_entries()
+        topic_counts: Counter[str] = Counter()
+        for entry in entries:
+            topic_counts[str(entry.get("topic_path", ""))] += len(entry["post_ids"])
+
+        documents: list[dict[str, Any]] = []
+        for post_id in sorted(allowed_post_ids)[:limit]:
+            metadata: dict[str, Any] = self._get_post_metadata(post_id)
+            documents.append({"post_id": post_id, **metadata})
+        return {
+            "documents_in_scope": len(allowed_post_ids),
+            "documents": documents,
+            "topics": [
+                {"topic_path": topic_path, "post_count": count}
+                for topic_path, count in topic_counts.most_common(limit)
+                if topic_path
+            ],
+        }
+
     def build_source_snapshot(self, result: dict[str, Any]) -> dict[str, Any]:
         post_ids: set[str] = set()
         for source_ref in self.iter_source_refs(result):
@@ -216,8 +254,77 @@ class AnthologyToolExecutor:
             if post_id in self._grouping_ids_by_post_id
         ]
         return {
-            "post_grouping_updated_at": None,
+            "post_grouping_updated_at": self._latest_grouping_update,
             "post_grouping_doc_ids": doc_ids,
+        }
+
+    def validate_source_ref(
+        self,
+        post_id: str,
+        topic_path: str,
+        sentence_indices: Iterable[int],
+        tag: str,
+    ) -> Optional[dict[str, Any]]:
+        """Return a scoped source reference containing only valid topic sentences."""
+
+        normalized_post_id: str = str(post_id).strip()
+        normalized_topic_path: str = str(topic_path).strip()
+        requested_indices: set[int] = set()
+        for index in sentence_indices:
+            try:
+                requested_indices.add(int(index))
+            except (TypeError, ValueError):
+                continue
+        if not normalized_post_id or not normalized_topic_path or not requested_indices:
+            return None
+
+        valid_indices: set[int] = set()
+        for entry in self._load_grouping_entries():
+            if entry["topic_path"] != normalized_topic_path:
+                continue
+            if normalized_post_id not in entry["post_ids"]:
+                continue
+            valid_indices.update(int(index) for index in entry["sentence_indices"])
+
+        verified_indices: list[int] = sorted(requested_indices & valid_indices)
+        if not verified_indices:
+            return None
+
+        metadata: dict[str, Any] = self._get_post_metadata(normalized_post_id)
+        return {
+            "post_id": normalized_post_id,
+            "sentence_indices": verified_indices,
+            "topic_path": normalized_topic_path,
+            "tag": str(tag).strip() or self._seed_tag,
+            "title": metadata.get("title", ""),
+            "published_at": metadata.get("published_at"),
+            "feed_id": metadata.get("feed_id", ""),
+        }
+
+    def build_coverage(self, result: dict[str, Any]) -> dict[str, Any]:
+        """Build deterministic corpus and citation coverage counters."""
+
+        entries: list[dict[str, Any]] = self._load_grouping_entries()
+        documents_in_scope: set[str] = self._get_allowed_post_ids() or set()
+        grouped_documents: set[str] = {
+            post_id for entry in entries for post_id in entry["post_ids"]
+        }
+        cited_documents: set[str] = {
+            str(source_ref.get("post_id", "")).strip()
+            for source_ref in self.iter_source_refs(result)
+            if str(source_ref.get("post_id", "")).strip()
+        }
+        topics_available: set[str] = {
+            str(entry.get("topic_path", "")).strip()
+            for entry in entries
+            if str(entry.get("topic_path", "")).strip()
+        }
+        return {
+            "documents_in_scope": len(documents_in_scope),
+            "documents_with_grouped_text": len(grouped_documents),
+            "documents_cited": len(cited_documents),
+            "topics_available": len(topics_available),
+            "uncited_documents": max(len(documents_in_scope - cited_documents), 0),
         }
 
     def iter_source_refs(self, node: dict[str, Any]) -> Iterable[dict[str, Any]]:
@@ -229,6 +336,13 @@ class AnthologyToolExecutor:
         for child in node.get("sub_anthologies", []):
             if isinstance(child, dict):
                 yield from self.iter_source_refs(child)
+        for collection_name in ("findings", "claims", "timeline"):
+            collection = node.get(collection_name, [])
+            if not isinstance(collection, list):
+                continue
+            for child in collection:
+                if isinstance(child, dict):
+                    yield from self.iter_source_refs(child)
 
     def _load_grouping_entries(self) -> list[dict[str, Any]]:
         if self._grouping_entries is not None:
@@ -245,9 +359,22 @@ class AnthologyToolExecutor:
         entries: list[dict[str, Any]] = []
         topic_aliases = RssTagTopicAliases(self._db)
         alias_map = topic_aliases.load_owner_map(self._owner)
-        projection = {"post_ids": True, "groups": True, "sentences": True}
+        projection = {
+            "post_ids": True,
+            "groups": True,
+            "sentences": True,
+            "updated_at": True,
+        }
         for doc in self._db.post_grouping.find(query, projection=projection):
             doc_id = str(doc.get("_id", ""))
+            updated_at: Any = doc.get("updated_at")
+            if isinstance(updated_at, (int, float)):
+                if self._latest_grouping_update is None:
+                    self._latest_grouping_update = float(updated_at)
+                else:
+                    self._latest_grouping_update = max(
+                        self._latest_grouping_update, float(updated_at)
+                    )
             post_ids = [str(value) for value in doc.get("post_ids", []) if value is not None]
             usable_post_ids = [post_id for post_id in post_ids if self._is_allowed_post_id(post_id)]
             if not usable_post_ids:
@@ -309,6 +436,31 @@ class AnthologyToolExecutor:
                 )
         self._grouping_entries = entries
         return self._grouping_entries
+
+    def _get_post_metadata(self, post_id: str) -> dict[str, Any]:
+        if post_id in self._post_metadata_by_id:
+            return self._post_metadata_by_id[post_id]
+
+        projection: dict[str, bool] = {
+            "_id": False,
+            "pid": True,
+            "date": True,
+            "unix_date": True,
+            "feed_id": True,
+            "content.title": True,
+        }
+        post: Optional[dict[str, Any]] = self._db.posts.find_one(
+            {"owner": self._owner, "pid": post_id},
+            projection=projection,
+        )
+        content: dict[str, Any] = (post or {}).get("content", {}) or {}
+        metadata: dict[str, Any] = {
+            "title": str(content.get("title", "")).strip(),
+            "published_at": (post or {}).get("unix_date") or (post or {}).get("date"),
+            "feed_id": str((post or {}).get("feed_id", "")).strip(),
+        }
+        self._post_metadata_by_id[post_id] = metadata
+        return metadata
 
     def _get_allowed_post_ids(self) -> Optional[set[str]]:
         if self._allowed_post_ids is not None:

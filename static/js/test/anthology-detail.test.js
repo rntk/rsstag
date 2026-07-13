@@ -123,10 +123,18 @@ function loadAnthologyDetailFunctions(overrides = {}) {
     'getInitialPayload',
     'escapeHtml',
     'formatTimestamp',
+    'formatEvidenceDate',
     'stringifyValue',
     'shortenText',
     'pluralize',
     'renderSourceRefs',
+    'getEvidenceTarget',
+    'renderEvidenceAction',
+    'renderClaim',
+    'renderFindings',
+    'renderTimeline',
+    'renderCoverage',
+    'renderLimitations',
     'renderTreeNode',
     'renderRunSummary',
     'renderLogEntries',
@@ -352,6 +360,77 @@ test('renderSourceRefs omits action when no sentence_indices', () => {
   const html = renderSourceRefs(refs);
 
   assert.ok(!html.includes('anthology-read-action'));
+});
+
+test('renderSourceRefs includes deterministic evidence metadata and action', () => {
+  const { renderSourceRefs } = loadAnthologyDetailFunctions();
+  const html = renderSourceRefs([
+    {
+      title: 'Source title',
+      topic_path: 'Topic > Detail',
+      post_id: 'p1',
+      sentence_indices: [3],
+      published_at: 1700000000,
+    },
+  ]);
+
+  assert.ok(html.includes('Source title'));
+  assert.ok(html.includes('Topic &gt; Detail'));
+  assert.ok(html.includes('published'));
+  assert.ok(html.includes('Open evidence'));
+  assert.ok(html.includes('data-post-ids="p1"'));
+});
+
+test('renderFindings renders disputed claims with their evidence', () => {
+  const { renderFindings } = loadAnthologyDetailFunctions();
+  const html = renderFindings([
+    {
+      title: 'Launch timing',
+      status: 'disputed',
+      summary: 'Sources give incompatible dates.',
+      claims: [
+        {
+          text: 'The launch is in June.',
+          kind: 'forecast',
+          stance: 'disputes',
+          source_refs: [
+            { post_id: 'p1', topic_path: 'Launch', sentence_indices: [1] },
+          ],
+        },
+      ],
+    },
+  ]);
+
+  assert.ok(html.includes('anthology-finding-disputed'));
+  assert.ok(html.includes('The launch is in June.'));
+  assert.ok(html.includes('forecast'));
+  assert.ok(html.includes('Compare evidence'));
+});
+
+test('renderTimeline and renderCoverage expose report context', () => {
+  const { renderTimeline, renderCoverage } = loadAnthologyDetailFunctions();
+  const timelineHtml = renderTimeline([
+    {
+      date: '2026-07',
+      date_kind: 'event',
+      title: 'Launch',
+      description: 'The launch occurred.',
+      source_refs: [{ post_id: 'p1', topic_path: 'Launch' }],
+    },
+  ]);
+  const coverageHtml = renderCoverage({
+    documents_in_scope: 5,
+    documents_with_grouped_text: 4,
+    documents_cited: 3,
+    topics_available: 2,
+    uncited_documents: 2,
+  });
+
+  assert.ok(timelineHtml.includes('2026-07'));
+  assert.ok(timelineHtml.includes('The launch occurred.'));
+  assert.ok(coverageHtml.includes('>5<'));
+  assert.ok(coverageHtml.includes('In scope'));
+  assert.ok(coverageHtml.includes('Uncited'));
 });
 
 // ============================================================

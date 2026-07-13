@@ -37,6 +37,16 @@
                     {% if source_ref.get('read_state', {}).get('all_read') %}Mark unread{% else %}Mark read{% endif %}
                 </button>
                 {% endif %}
+                {% if source_ref.get('post_id') %}
+                <button
+                    type="button"
+                    class="anthology-inline-action anthology-compare-action"
+                    data-post-ids="{{ source_ref.get('post_id') }}"
+                    data-topic="{{ source_ref.get('topic_path', '') }}"
+                >
+                    Open evidence
+                </button>
+                {% endif %}
             </li>
             {% endfor %}
         </ul>
@@ -264,17 +274,38 @@
                 </dl>
             </section>
 
-            <section class="anthology-section">
-                <h2>Hierarchy</h2>
-                <div id="anthology-hierarchy-tree" class="anthology-tree">
-                    {% if anthology['result'] %}
-                    {{ render_tree(anthology['result']) }}
+            <section class="anthology-section anthology-report">
+                <h2>Evidence report</h2>
+                <p id="anthology-summary" class="anthology-report-summary">
+                    {% if anthology['result'] and anthology['result'].get('summary') %}
+                    {{ anthology['result'].get('summary') }}
                     {% else %}
-                    <p class="anthology-empty-state">No hierarchy has been generated yet.</p>
+                    Evidence-backed findings will appear when processing completes.
                     {% endif %}
+                </p>
+                <div id="anthology-coverage" class="anthology-coverage"></div>
+                <div id="anthology-findings" class="anthology-findings"></div>
+                <div class="anthology-report-subsection">
+                    <h3>Timeline</h3>
+                    <div id="anthology-timeline" class="anthology-timeline"></div>
+                </div>
+                <div class="anthology-report-subsection">
+                    <h3>Limitations</h3>
+                    <div id="anthology-limitations"></div>
                 </div>
             </section>
         </div>
+
+        <section class="anthology-section">
+            <h2>Topic Hierarchy</h2>
+            <div id="anthology-hierarchy-tree" class="anthology-tree">
+                {% if anthology['result'] %}
+                {{ render_tree(anthology['result']) }}
+                {% else %}
+                <p class="anthology-empty-state">No hierarchy has been generated yet.</p>
+                {% endif %}
+            </div>
+        </section>
 
         <section class="anthology-section">
             <h2>Source references</h2>

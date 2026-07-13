@@ -71,12 +71,13 @@ class ROpenAI:
         call_kwargs: dict[str, Any] = {
             "model": self.model,
             "messages": request_messages,
-            "tools": provider_tools,
             "temperature": temperature,
         }
-        if tool_choice is not None:
+        if provider_tools:
+            call_kwargs["tools"] = provider_tools
+        if provider_tools and tool_choice is not None:
             call_kwargs["tool_choice"] = tool_choice
-        if parallel_tool_calls is not None:
+        if provider_tools and parallel_tool_calls is not None:
             call_kwargs["parallel_tool_calls"] = parallel_tool_calls
 
         try:

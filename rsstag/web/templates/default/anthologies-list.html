@@ -22,11 +22,10 @@
 
     <div class="page anthologies-page">
         <h1>Anthologies</h1>
-        <p class="anthologies-intro">Create a tag-rooted anthology and track its generation status.</p>
+        <p class="anthologies-intro">Create an evidence-backed report for a tag and optional feed scope.</p>
 
         <form id="anthology-create-form" class="anthology-create-form">
             <input type="hidden" name="seed_type" value="tag" />
-            <input type="hidden" name="scope_mode" value="all" />
             <label for="anthology-seed-value">Tag</label>
             <input
                 id="anthology-seed-value"
@@ -36,7 +35,19 @@
                 placeholder="playstation 5"
                 required
             />
-            <button type="submit">Start anthology</button>
+            <label for="anthology-feed-id">Corpus</label>
+            <select id="anthology-feed-id" name="feed_id">
+                <option value="">All feeds</option>
+                {% for feed in feeds %}
+                <option
+                    value="{{ feed['feed_id'] }}"
+                    {% if feed['feed_id'] == selected_feed_id %}selected{% endif %}
+                >
+                    {{ feed['title'] }}
+                </option>
+                {% endfor %}
+            </select>
+            <button type="submit">Start report</button>
             <span id="anthology-create-status" class="anthology-create-status"></span>
         </form>
 
@@ -90,10 +101,13 @@
                 form.addEventListener("submit", async function (event) {
                     event.preventDefault();
                     const formData = new FormData(form);
+                    const feedId = String(formData.get("feed_id") || "").trim();
                     const payload = {
                         seed_type: formData.get("seed_type"),
                         seed_value: formData.get("seed_value"),
-                        scope: { mode: formData.get("scope_mode") || "all" }
+                        scope: feedId
+                            ? { mode: "feeds", feed_ids: [feedId] }
+                            : { mode: "all" }
                     };
 
                     statusEl.textContent = "Creating...";

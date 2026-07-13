@@ -67,9 +67,11 @@ class LLamaCPP:
             "messages": request_messages,
             "temperature": temperature,
             "cache_prompt": True,
-            "tools": self._to_provider_tools(tools),
         }
-        if tool_choice is not None:
+        provider_tools: list[dict[str, Any]] = self._to_provider_tools(tools)
+        if provider_tools:
+            payload["tools"] = provider_tools
+        if provider_tools and tool_choice is not None:
             payload["tool_choice"] = tool_choice
 
         conn = self.get_connection()

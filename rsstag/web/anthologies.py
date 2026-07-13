@@ -124,14 +124,19 @@ def _annotate_result_with_read_state(
         for source_ref in source_refs
         if isinstance(source_ref, dict)
     ]
-    children = annotated.get("sub_anthologies", [])
-    if not isinstance(children, list):
-        children = []
-    annotated["sub_anthologies"] = [
-        _annotate_result_with_read_state(app, owner, child, cache, sentence_map_cache)
-        for child in children
-        if isinstance(child, dict)
-    ]
+    for collection_name in ("sub_anthologies", "findings", "claims", "timeline"):
+        if collection_name not in annotated:
+            continue
+        children = annotated.get(collection_name, [])
+        if not isinstance(children, list):
+            children = []
+        annotated[collection_name] = [
+            _annotate_result_with_read_state(
+                app, owner, child, cache, sentence_map_cache
+            )
+            for child in children
+            if isinstance(child, dict)
+        ]
     annotated["read_state"] = _derive_source_refs_state(app, owner, annotated["source_refs"], cache, sentence_map_cache)
     return annotated
 
@@ -141,9 +146,13 @@ def _collect_source_refs(node: dict[str, Any]) -> list[dict[str, Any]]:
     source_refs = node.get("source_refs", [])
     if isinstance(source_refs, list):
         refs.extend(ref for ref in source_refs if isinstance(ref, dict))
-    for child in node.get("sub_anthologies", []):
-        if isinstance(child, dict):
-            refs.extend(_collect_source_refs(child))
+    for collection_name in ("sub_anthologies", "findings", "claims", "timeline"):
+        collection = node.get(collection_name, [])
+        if not isinstance(collection, list):
+            continue
+        for child in collection:
+            if isinstance(child, dict):
+                refs.extend(_collect_source_refs(child))
     return refs
 
 
@@ -223,10 +232,80 @@ def _render_markdown(node: dict[str, Any], level: int = 1) -> str:
         str(node.get("summary", "")).strip(),
         "",
     ]
+    findings: Any = node.get("findings", [])
+    if isinstance(findings, list) and findings:
+        lines.extend([f"{'#' * min(level + 1, 6)} Findings", ""])
+        for finding in findings:
+            if not isinstance(finding, dict):
+                continue
+            status: str = str(finding.get("status", "single_source")).replace(
+                "_", " "
+            )
+            lines.extend(
+                [
+                    f"{'#' * min(level + 2, 6)} {finding.get('title', 'Finding')}",
+                    "",
+                    f"Status: {status}",
+                    "",
+                    str(finding.get("summary", "")).strip(),
+                    "",
+                ]
+            )
+            for claim in finding.get("claims", []):
+                if not isinstance(claim, dict):
+                    continue
+                citations: str = _render_markdown_citations(
+                    claim.get("source_refs", [])
+                )
+                suffix: str = f" — {citations}" if citations else ""
+                lines.append(f"- {claim.get('text', '')}{suffix}")
+            lines.append("")
+
+    timeline: Any = node.get("timeline", [])
+    if isinstance(timeline, list) and timeline:
+        lines.extend([f"{'#' * min(level + 1, 6)} Timeline", ""])
+        for event in timeline:
+            if not isinstance(event, dict):
+                continue
+            citations: str = _render_markdown_citations(
+                event.get("source_refs", [])
+            )
+            suffix: str = f" — {citations}" if citations else ""
+            lines.append(
+                f"- {event.get('date', 'Date not stated')}: "
+                f"{event.get('title', 'Event')}{suffix}"
+            )
+        lines.append("")
+
+    limitations: Any = node.get("limitations", [])
+    if isinstance(limitations, list) and limitations:
+        lines.extend([f"{'#' * min(level + 1, 6)} Limitations", ""])
+        lines.extend(f"- {limitation}" for limitation in limitations)
+        lines.append("")
     for child in node.get("sub_anthologies", []):
         if isinstance(child, dict):
             lines.append(_render_markdown(child, level + 1))
     return "\n".join(lines).strip()
+
+
+def _render_markdown_citations(source_refs: Any) -> str:
+    if not isinstance(source_refs, list):
+        return ""
+    citations: list[str] = []
+    for source_ref in source_refs:
+        if not isinstance(source_ref, dict):
+            continue
+        post_id: str = str(source_ref.get("post_id", "")).strip()
+        sentence_indices: list[str] = [
+            str(index) for index in source_ref.get("sentence_indices", [])
+        ]
+        if not post_id:
+            continue
+        sentence_label: str = (
+            f", sentences {', '.join(sentence_indices)}" if sentence_indices else ""
+        )
+        citations.append(f"[post {post_id}{sentence_label}]")
+    return " ".join(citations)
 
 
 def _get_anthology_detail_payload(
@@ -253,14 +332,31 @@ def _get_anthology_detail_payload(
 def on_anthologies_get(app: "RSSTagApplication", user: dict, rqst: Request) -> Response:
     status_filter: str = str(rqst.args.get("status", "")).strip()
     seed_value: str = str(rqst.args.get("seed_value", "")).strip()
-    anthologies = [
+    selected_feed_id: str = str(rqst.args.get("feed", "")).strip()
+    anthologies: list[Dict[str, Any]] = [
         _serialize_anthology(item)
         for item in app.anthologies.list_by_owner(user["sid"], status=status_filter or None)
     ]
+    feeds: list[dict[str, str]] = sorted(
+        [
+            {
+                "feed_id": str(feed.get("feed_id", "")).strip(),
+                "title": str(feed.get("title", "")).strip()
+                or str(feed.get("feed_id", "")).strip(),
+            }
+            for feed in app.feeds.get_all(
+                user["sid"], projection={"_id": False, "feed_id": True, "title": True}
+            )
+            if str(feed.get("feed_id", "")).strip()
+        ],
+        key=lambda feed: feed["title"].casefold(),
+    )
     page = app.template_env.get_template("anthologies-list.html")
     return Response(
         page.render(
             anthologies=anthologies,
+            feeds=feeds,
+            selected_feed_id=selected_feed_id,
             initial_seed_value=seed_value,
             user_settings=user["settings"],
             provider=user.get("provider", ""),

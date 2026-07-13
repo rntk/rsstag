@@ -110,6 +110,17 @@ class TestWebAnthologies(MongoWebTestCase):
         self.assertIn("done-tag", body)
         self.assertNotIn("pending-tag", body)
 
+    def test_on_anthologies_get_offers_feed_scope(self) -> None:
+        feed: dict | None = self.test_db.feeds.find_one({"owner": self.sid})
+        self.assertIsNotNone(feed)
+
+        response = self.client.get("/anthologies")
+        body = response.get_data(as_text=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(str(feed["feed_id"]), body)
+        self.assertIn("All feeds", body)
+
     # ------------------------------------------------------------------
     # on_anthologies_detail_get
     # ------------------------------------------------------------------
@@ -210,6 +221,30 @@ class TestWebAnthologies(MongoWebTestCase):
         self.assertEqual(response.status_code, 200)
         data = response.get_json()
         self.assertEqual(data["data"]["anthology"]["seed_value"], "docker")
+
+    def test_on_anthologies_api_create_post_preserves_feed_scope(self) -> None:
+        feed: dict | None = self.test_db.feeds.find_one({"owner": self.sid})
+        self.assertIsNotNone(feed)
+        feed_id: str = str(feed["feed_id"])
+
+        response = self.client.post(
+            "/api/anthologies",
+            data=json.dumps(
+                {
+                    "seed_type": "tag",
+                    "seed_value": "scoped-report",
+                    "scope": {"mode": "feeds", "feed_ids": [feed_id]},
+                }
+            ),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        data: dict = response.get_json()
+        self.assertEqual(
+            data["data"]["anthology"]["scope"],
+            {"mode": "feeds", "feed_ids": [feed_id]},
+        )
 
     def test_on_anthologies_api_create_post_deduplicates_existing(self) -> None:
         first = self.client.post(

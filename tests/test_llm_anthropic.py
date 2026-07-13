@@ -63,6 +63,25 @@ class TestAnthropicCall(unittest.TestCase):
 
 class TestAnthropicCallWithTools(unittest.TestCase):
     @patch("rsstag.llm.anthropic.anthropic.Anthropic")
+    def test_call_with_no_tools_omits_tools_parameter(
+        self, mock_anthropic_cls: MagicMock
+    ) -> None:
+        mock_client: MagicMock = MagicMock()
+        mock_anthropic_cls.return_value = mock_client
+        mock_response: MagicMock = MagicMock()
+        mock_response.content = [MagicMock(type="text", text="Final report")]
+        mock_client.messages.create.return_value = mock_response
+
+        client = Anthropic(token="tok")
+        result: LLMResponse = client.call_with_tools(
+            user_msgs=["Finish"], tools=[]
+        )
+
+        self.assertEqual(result.content, "Final report")
+        kwargs = mock_client.messages.create.call_args.kwargs
+        self.assertNotIn("tools", kwargs)
+
+    @patch("rsstag.llm.anthropic.anthropic.Anthropic")
     def test_call_with_tools_text_response(self, mock_anthropic_cls: MagicMock) -> None:
         mock_client = MagicMock()
         mock_anthropic_cls.return_value = mock_client

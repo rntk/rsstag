@@ -69,8 +69,10 @@ class Anthropic:
             "model": self.__model,
             "max_tokens": max_tokens,
             "messages": messages,
-            "tools": self._to_provider_tools(tools),
         }
+        provider_tools: list[dict[str, Any]] = self._to_provider_tools(tools)
+        if provider_tools:
+            call_kwargs["tools"] = provider_tools
         if normalized_system_msgs:
             call_kwargs["system"] = "\n\n".join(normalized_system_msgs)
 

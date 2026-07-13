@@ -72,8 +72,8 @@
         .map(function (sourceRef) {
           var item = sourceRef && typeof sourceRef === "object" ? sourceRef : {};
           var label =
-            item.topic_path ||
             item.title ||
+            item.topic_path ||
             item.label ||
             item.post_id ||
             item.url ||
@@ -89,6 +89,16 @@
                 escapeHtml(item.sentence_indices.join(", ")) +
                 "</span>"
               : "";
+          var topicMeta = item.topic_path
+            ? '<span class="anthology-source-meta">' +
+              escapeHtml(item.topic_path) +
+              "</span>"
+            : "";
+          var publishedMeta = item.published_at
+            ? '<span class="anthology-source-meta">published ' +
+              escapeHtml(formatEvidenceDate(item.published_at)) +
+              "</span>"
+            : "";
           var readState = item.read_state || {};
           var readMeta =
             typeof readState.total_sentences === "number"
@@ -110,6 +120,13 @@
                 (readState.all_read ? "Mark unread" : "Mark read") +
                 "</button>"
               : "";
+          var evidenceAction = item.post_id
+            ? '<button type="button" class="anthology-inline-action anthology-compare-action" data-post-ids="' +
+              escapeHtml(item.post_id) +
+              '" data-topic="' +
+              escapeHtml(item.topic_path || "") +
+              '">Open evidence</button>'
+            : "";
 
           return (
             '<li class="anthology-source-item">' +
@@ -117,11 +134,193 @@
             escapeHtml(label) +
             "</span>" +
             postId +
+            topicMeta +
             sentenceMeta +
+            publishedMeta +
             readMeta +
             action +
+            evidenceAction +
             "</li>"
           );
+        })
+        .join("") +
+      "</ul>"
+    );
+  }
+
+  function formatEvidenceDate(value) {
+    var numericValue = Number(value);
+    if (Number.isFinite(numericValue) && numericValue > 100000000) {
+      return formatTimestamp(numericValue);
+    }
+    return String(value || "Unknown date");
+  }
+
+  function getEvidenceTarget(sourceRefs) {
+    var postIds = [];
+    var topicPaths = [];
+    var seenPostIds = {};
+    var seenTopicPaths = {};
+    (Array.isArray(sourceRefs) ? sourceRefs : []).forEach(function (sourceRef) {
+      if (!sourceRef || typeof sourceRef !== "object") {
+        return;
+      }
+      var postId = String(sourceRef.post_id || "");
+      var topicPath = String(sourceRef.topic_path || "");
+      if (postId && !seenPostIds[postId]) {
+        seenPostIds[postId] = true;
+        postIds.push(postId);
+      }
+      if (topicPath && !seenTopicPaths[topicPath]) {
+        seenTopicPaths[topicPath] = true;
+        topicPaths.push(topicPath);
+      }
+    });
+    return {
+      postIds: postIds,
+      topic: topicPaths.length === 1 ? topicPaths[0] : ""
+    };
+  }
+
+  function renderEvidenceAction(sourceRefs, label) {
+    var target = getEvidenceTarget(sourceRefs);
+    if (target.postIds.length === 0) {
+      return "";
+    }
+    return (
+      '<button type="button" class="anthology-inline-action anthology-compare-action" data-post-ids="' +
+      escapeHtml(target.postIds.join("_")) +
+      '" data-topic="' +
+      escapeHtml(target.topic) +
+      '">' +
+      escapeHtml(label) +
+      "</button>"
+    );
+  }
+
+  function renderClaim(claim) {
+    var item = claim && typeof claim === "object" ? claim : {};
+    var sourceRefs = Array.isArray(item.source_refs) ? item.source_refs : [];
+    var metadata = [item.kind, item.stance, item.actor, item.event_time]
+      .filter(function (value) {
+        return Boolean(value);
+      })
+      .map(function (value) {
+        return '<span class="anthology-claim-meta-item">' + escapeHtml(value) + "</span>";
+      })
+      .join("");
+    return (
+      '<article class="anthology-claim anthology-claim-' +
+      escapeHtml(item.stance || "supports") +
+      '">' +
+      '<p class="anthology-claim-text">' +
+      escapeHtml(item.text || "") +
+      "</p>" +
+      '<div class="anthology-claim-meta">' +
+      metadata +
+      "</div>" +
+      '<div class="anthology-claim-actions">' +
+      renderEvidenceAction(sourceRefs, "Compare evidence") +
+      "</div>" +
+      renderSourceRefs(sourceRefs) +
+      "</article>"
+    );
+  }
+
+  function renderFindings(findings) {
+    if (!Array.isArray(findings) || findings.length === 0) {
+      return '<p class="anthology-empty-state">No claim-level findings were generated.</p>';
+    }
+    return findings
+      .map(function (finding) {
+        var item = finding && typeof finding === "object" ? finding : {};
+        var claims = Array.isArray(item.claims) ? item.claims : [];
+        return (
+          '<article class="anthology-finding anthology-finding-' +
+          escapeHtml(item.status || "single_source") +
+          '">' +
+          '<header class="anthology-finding-header">' +
+          '<h3 class="anthology-finding-title">' +
+          escapeHtml(item.title || "Finding") +
+          "</h3>" +
+          '<span class="anthology-finding-status">' +
+          escapeHtml(String(item.status || "single source").replace("_", " ")) +
+          "</span>" +
+          "</header>" +
+          (item.summary
+            ? '<p class="anthology-finding-summary">' + escapeHtml(item.summary) + "</p>"
+            : "") +
+          '<div class="anthology-claims">' +
+          claims.map(renderClaim).join("") +
+          "</div>" +
+          "</article>"
+        );
+      })
+      .join("");
+  }
+
+  function renderTimeline(timeline) {
+    if (!Array.isArray(timeline) || timeline.length === 0) {
+      return '<p class="anthology-empty-state">No supported timeline events were generated.</p>';
+    }
+    return timeline
+      .map(function (event) {
+        var item = event && typeof event === "object" ? event : {};
+        var sourceRefs = Array.isArray(item.source_refs) ? item.source_refs : [];
+        return (
+          '<article class="anthology-timeline-event">' +
+          '<div class="anthology-timeline-date">' +
+          escapeHtml(item.date || "Date not stated") +
+          '<span class="anthology-timeline-date-kind">' +
+          escapeHtml(item.date_kind || "unknown") +
+          "</span>" +
+          "</div>" +
+          '<div class="anthology-timeline-content">' +
+          '<h4>' +
+          escapeHtml(item.title || "Event") +
+          "</h4>" +
+          (item.description ? "<p>" + escapeHtml(item.description) + "</p>" : "") +
+          renderEvidenceAction(sourceRefs, "Open evidence") +
+          "</div>" +
+          "</article>"
+        );
+      })
+      .join("");
+  }
+
+  function renderCoverage(coverage) {
+    if (!coverage || typeof coverage !== "object") {
+      return '<p class="anthology-empty-state">Coverage data is not available.</p>';
+    }
+    var metrics = [
+      ["In scope", coverage.documents_in_scope],
+      ["Grouped", coverage.documents_with_grouped_text],
+      ["Cited", coverage.documents_cited],
+      ["Topics", coverage.topics_available],
+      ["Uncited", coverage.uncited_documents]
+    ];
+    return metrics
+      .map(function (metric) {
+        return (
+          '<div class="anthology-coverage-item"><strong>' +
+          escapeHtml(metric[1] === undefined ? "—" : metric[1]) +
+          "</strong><span>" +
+          escapeHtml(metric[0]) +
+          "</span></div>"
+        );
+      })
+      .join("");
+  }
+
+  function renderLimitations(limitations) {
+    if (!Array.isArray(limitations) || limitations.length === 0) {
+      return '<p class="anthology-empty-state">No additional limitations were reported.</p>';
+    }
+    return (
+      '<ul class="anthology-limitations-list">' +
+      limitations
+        .map(function (limitation) {
+          return "<li>" + escapeHtml(limitation) + "</li>";
         })
         .join("") +
       "</ul>"
@@ -421,6 +620,10 @@
     var headerNode = document.getElementById("anthology-detail-header");
     var staleBadgeNode = document.getElementById("anthology-stale-badge");
     var summaryNode = document.getElementById("anthology-summary");
+    var coverageNode = document.getElementById("anthology-coverage");
+    var findingsNode = document.getElementById("anthology-findings");
+    var timelineNode = document.getElementById("anthology-timeline");
+    var limitationsNode = document.getElementById("anthology-limitations");
     var scopeNode = document.getElementById("anthology-scope-json");
     var hierarchyNode = document.getElementById("anthology-hierarchy-tree");
     var sourceRefsNode = document.getElementById("anthology-source-refs");
@@ -460,6 +663,36 @@
         payload.result && payload.result.summary
           ? payload.result.summary
           : "Anthology output is still being prepared.";
+    }
+
+    if (coverageNode) {
+      coverageNode.innerHTML = renderCoverage(
+        payload.result && payload.result.coverage ? payload.result.coverage : null
+      );
+    }
+
+    if (findingsNode) {
+      findingsNode.innerHTML = renderFindings(
+        payload.result && Array.isArray(payload.result.findings)
+          ? payload.result.findings
+          : []
+      );
+    }
+
+    if (timelineNode) {
+      timelineNode.innerHTML = renderTimeline(
+        payload.result && Array.isArray(payload.result.timeline)
+          ? payload.result.timeline
+          : []
+      );
+    }
+
+    if (limitationsNode) {
+      limitationsNode.innerHTML = renderLimitations(
+        payload.result && Array.isArray(payload.result.limitations)
+          ? payload.result.limitations
+          : []
+      );
     }
 
     if (scopeNode) {

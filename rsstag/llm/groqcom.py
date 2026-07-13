@@ -85,11 +85,13 @@ class GroqCom:
             "model": self.__model,
             "messages": request_messages,
             "temperature": temperature,
-            "tools": self._to_provider_tools(tools),
         }
-        if tool_choice is not None:
+        provider_tools: list[dict[str, Any]] = self._to_provider_tools(tools)
+        if provider_tools:
+            payload["tools"] = provider_tools
+        if provider_tools and tool_choice is not None:
             payload["tool_choice"] = tool_choice
-        if parallel_tool_calls is not None:
+        if provider_tools and parallel_tool_calls is not None:
             payload["parallel_tool_calls"] = parallel_tool_calls
 
         conn = self.get_connection()
