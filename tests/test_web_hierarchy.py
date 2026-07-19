@@ -46,6 +46,7 @@ class TestWebHierarchy(MongoWebTestCase):
                         "owner": user["sid"],
                         "pid": "hierarchy-post-1",
                         "feed_id": feed_id,
+                        "category_id": "hierarchy-category",
                         "processing": 0,
                         "read": False,
                         "tags": ["hierarchy"],
@@ -60,6 +61,7 @@ class TestWebHierarchy(MongoWebTestCase):
                         "owner": user["sid"],
                         "pid": "hierarchy-post-2",
                         "feed_id": feed_id,
+                        "category_id": "hierarchy-category",
                         "processing": 0,
                         "read": False,
                         "tags": ["hierarchy"],
@@ -74,6 +76,7 @@ class TestWebHierarchy(MongoWebTestCase):
                         "owner": user["sid"],
                         "pid": "other-post",
                         "feed_id": "other-feed",
+                        "category_id": "other-category",
                         "processing": 0,
                         "read": False,
                         "tags": ["other"],
@@ -174,6 +177,19 @@ class TestWebHierarchy(MongoWebTestCase):
         # Lemma itself is always available for highlight when no tag metadata exists.
         self.assertIn("window.TAG_WORDS", body)
         self.assertIn('"hierarchy"', body)
+
+    def test_hierarchy_filters_by_category(self) -> None:
+        sid, _ = self._seed_hierarchy()
+        client = self.get_authenticated_client(sid)
+
+        response = client.get("/hierarchy?category=hierarchy-category")
+        body: str = response.data.decode("utf-8")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("Hierarchy category", body)
+        self.assertIn("Technology \\u003e Shared", body)
+        self.assertNotIn("Excluded post", body)
+        self.assertIn("/canvas?category=hierarchy-category", body)
 
     def test_hierarchy_tag_words_include_surface_forms(self) -> None:
         sid, _ = self._seed_hierarchy()

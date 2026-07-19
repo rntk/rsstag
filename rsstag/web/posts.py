@@ -1157,11 +1157,32 @@ def _serialize_canvas_posts(posts: list[dict[str, Any]]) -> str:
     )
 
 
+def _get_category_scope(
+    app: "RSSTagApplication", owner: str, category_id: str
+) -> Optional[dict[str, str]]:
+    """Return display data for a category owned by a user."""
+    if not category_id:
+        return None
+
+    category_feed: Optional[dict[str, Any]] = next(
+        app.feeds.get_by_category(owner, category_id), None
+    )
+    if not category_feed:
+        return None
+
+    return {
+        "category_id": category_id,
+        "title": str(category_feed.get("category_title", category_id)),
+        "local_url": str(category_feed.get("category_local_url", "")),
+    }
+
+
 def on_canvas_get(
     app: "RSSTagApplication", user: dict[str, Any], request: Request
 ) -> Response:
     """Render filtered posts as one canvas with a globally aligned topic rail."""
     feed_id: str = request.args.get("feed", "").strip()
+    category_id: str = request.args.get("category", "").strip()
     tag: str = request.args.get("tag", "").strip()
     match_topic: bool = request.args.get("topic", "").strip() == "1"
     match_sentences: bool = request.args.get("sentences", "").strip() == "1"
@@ -1171,6 +1192,12 @@ def on_canvas_get(
         current_feed = app.feeds.get_by_feed_id(user["sid"], feed_id)
     if feed_id and not current_feed:
         return app.on_error(user, request, NotFound("Feed not found."))
+
+    current_category: Optional[dict[str, str]] = _get_category_scope(
+        app, user["sid"], category_id
+    )
+    if category_id and not current_category:
+        return app.on_error(user, request, NotFound("Category not found."))
 
     only_unread: Optional[bool] = user["settings"].get("only_unread") or None
     text_filter_active: bool = bool(tag) and (match_topic or match_sentences)
@@ -1195,6 +1222,14 @@ def on_canvas_get(
                 projection,
                 context_tags=context_tags or None,
             )
+        elif current_category:
+            posts_cursor = app.posts.get_by_category(
+                user["sid"],
+                only_unread,
+                category_id,
+                projection,
+                context_tags=context_tags or None,
+            )
         elif context_tags:
             posts_cursor = app.posts.get_by_tags(
                 user["sid"],
@@ -1216,8 +1251,9 @@ def on_canvas_get(
             canvas_posts.append(built_post)
     except Exception as exc:
         logging.exception(
-            "Unable to build canvas for feed %s and tag %s: %s",
+            "Unable to build canvas for feed %s, category %s, and tag %s: %s",
             feed_id,
+            category_id,
             tag,
             exc,
         )
@@ -1231,6 +1267,7 @@ def on_canvas_get(
             posts=canvas_posts,
             posts_json=_serialize_canvas_posts(canvas_posts),
             feed=current_feed,
+            category=current_category,
             tag=tag,
             user_settings=user["settings"],
             provider=user.get("provider", ""),
@@ -1376,6 +1413,7 @@ def on_hierarchy_get(
 ) -> Response:
     """Render the aggregated topic hierarchy for posts matching the filters."""
     feed_id: str = request.args.get("feed", "").strip()
+    category_id: str = request.args.get("category", "").strip()
     tag: str = request.args.get("tag", "").strip()
     match_topic: bool = request.args.get("topic", "").strip() == "1"
     match_sentences: bool = request.args.get("sentences", "").strip() == "1"
@@ -1385,6 +1423,12 @@ def on_hierarchy_get(
         current_feed = app.feeds.get_by_feed_id(user["sid"], feed_id)
     if feed_id and not current_feed:
         return app.on_error(user, request, NotFound("Feed not found."))
+
+    current_category: Optional[dict[str, str]] = _get_category_scope(
+        app, user["sid"], category_id
+    )
+    if category_id and not current_category:
+        return app.on_error(user, request, NotFound("Category not found."))
 
     only_unread: Optional[bool] = user["settings"].get("only_unread") or None
     text_filter_active: bool = bool(tag) and (match_topic or match_sentences)
@@ -1408,6 +1452,14 @@ def on_hierarchy_get(
                 projection,
                 context_tags=context_tags or None,
             )
+        elif current_category:
+            posts_cursor = app.posts.get_by_category(
+                user["sid"],
+                only_unread,
+                category_id,
+                projection,
+                context_tags=context_tags or None,
+            )
         elif context_tags:
             posts_cursor = app.posts.get_by_tags(
                 user["sid"],
@@ -1423,8 +1475,9 @@ def on_hierarchy_get(
         )
     except Exception as exc:
         logging.exception(
-            "Unable to build hierarchy for feed %s and tag %s: %s",
+            "Unable to build hierarchy for feed %s, category %s, and tag %s: %s",
             feed_id,
+            category_id,
             tag,
             exc,
         )
@@ -1444,6 +1497,7 @@ def on_hierarchy_get(
             topics=hierarchy_topics,
             topics_json=_serialize_canvas_posts(hierarchy_topics),
             feed=current_feed,
+            category=current_category,
             tag=tag,
             tag_words=tag_words,
             user_settings=user["settings"],

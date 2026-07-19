@@ -3,6 +3,7 @@ import json
 import re
 from collections import OrderedDict, defaultdict
 from typing import TYPE_CHECKING
+from urllib.parse import urlencode
 
 from rsstag.html_cleaner import HTMLCleaner
 from rsstag.lda import LDA
@@ -19,6 +20,12 @@ def on_group_by_category_get(app: "RSSTagApplication", user: dict, request: Requ
     page_number = 1
     by_feed = {}
     db_feeds = app.feeds.get_all(user["sid"])
+    canvas_url: str = (
+        app.routes.get_url_by_endpoint(endpoint="on_canvas_get") or "/canvas"
+    )
+    hierarchy_url: str = (
+        app.routes.get_url_by_endpoint(endpoint="on_hierarchy_get") or "/hierarchy"
+    )
 
     for f in db_feeds:
         by_feed[f["feed_id"]] = f
@@ -36,17 +43,22 @@ def on_group_by_category_get(app: "RSSTagApplication", user: dict, request: Requ
                 endpoint="on_category_get",
                 params={"quoted_category": app.feeds.all_feeds},
             ),
+            "canvas_url": canvas_url,
+            "hierarchy_url": hierarchy_url,
             "feeds": [],
         }
     }
     for g in grouped:
         if g["count"] > 0:
             if g["category_id"] not in by_category:
+                category_query: str = urlencode({"category": g["category_id"]})
                 by_category[g["category_id"]] = {
                     "unread_count": 0,
                     "category_id": g["category_id"],
                     "title": by_feed[g["_id"]]["category_title"],
                     "url": by_feed[g["_id"]]["category_local_url"],
+                    "canvas_url": f"{canvas_url}?{category_query}",
+                    "hierarchy_url": f"{hierarchy_url}?{category_query}",
                     "feeds": [],
                 }
             by_category[g["category_id"]]["unread_count"] += g["count"]
@@ -57,6 +69,8 @@ def on_group_by_category_get(app: "RSSTagApplication", user: dict, request: Requ
                     "feed_id": g["_id"],
                     "url": by_feed[g["_id"]]["local_url"],
                     "title": by_feed[g["_id"]]["title"],
+                    "canvas_url": f"{canvas_url}?{urlencode({'feed': g['_id']})}",
+                    "hierarchy_url": f"{hierarchy_url}?{urlencode({'feed': g['_id']})}",
                 }
             )
     if len(by_category) > 1:

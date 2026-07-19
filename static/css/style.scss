@@ -5937,7 +5937,7 @@ select:focus, textarea:focus, input[type="text"]:focus {
     border-bottom: none;
   }
 
-  .category-header a {
+  .category-header .category-title-link {
     font-weight: 600;
     color: #1e293b;
     text-decoration: none;
@@ -5945,8 +5945,28 @@ select:focus, textarea:focus, input[type="text"]:focus {
     font-size: 15px;
   }
   
-  .category-header a:hover {
+  .category-header .category-title-link:hover {
     color: #008ec9;
+  }
+
+  .category-actions {
+    display: flex;
+    gap: 0.4em;
+  }
+
+  .category-header .category-action-link {
+    color: #475569;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    padding: 0.25em 0.5em;
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .category-header .category-action-link:hover {
+    color: #008ec9;
+    border-color: #008ec9;
   }
 
   .category-count {
@@ -5975,15 +5995,35 @@ select:focus, textarea:focus, input[type="text"]:focus {
     gap: 0.8em;
   }
 
-  .feed-item a {
+  .feed-item .feed-title-link {
     color: #334155;
     text-decoration: none;
     font-size: 14px;
     flex-grow: 1;
   }
 
-  .feed-item a:hover {
+  .feed-item .feed-title-link:hover {
     color: #008ec9;
+  }
+
+  .feed-actions {
+    display: flex;
+    gap: 0.4em;
+  }
+
+  .feed-item .feed-action-link {
+    color: #64748b;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    padding: 0.25em 0.5em;
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  .feed-item .feed-action-link:hover {
+    color: #008ec9;
+    border-color: #008ec9;
   }
 
   .show_btn {

@@ -33,6 +33,7 @@ class TestWebCanvas(MongoWebTestCase):
                         "feed_id": feed_id,
                         "category_id": "canvas-category",
                         "category_title": "Canvas category",
+                        "category_local_url": "/category/canvas-category",
                         "local_url": f"/feed/{feed_id}",
                         "title": "Canvas Feed",
                         "url": "https://example.com/feed",
@@ -44,6 +45,7 @@ class TestWebCanvas(MongoWebTestCase):
                         "feed_id": "other-feed",
                         "category_id": "other-category",
                         "category_title": "Other category",
+                        "category_local_url": "/category/other-category",
                         "local_url": "/feed/other-feed",
                         "title": "Other Feed",
                         "url": "https://example.com/other-feed",
@@ -56,6 +58,7 @@ class TestWebCanvas(MongoWebTestCase):
                         "owner": user["sid"],
                         "pid": "canvas-post-1",
                         "feed_id": feed_id,
+                        "category_id": "canvas-category",
                         "processing": 0,
                         "read": False,
                         "tags": ["canvas"],
@@ -70,6 +73,7 @@ class TestWebCanvas(MongoWebTestCase):
                         "owner": user["sid"],
                         "pid": "other-post",
                         "feed_id": "other-feed",
+                        "category_id": "other-category",
                         "processing": 0,
                         "read": False,
                         "tags": ["other"],
@@ -128,6 +132,30 @@ class TestWebCanvas(MongoWebTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn(b"Aligned post", response.data)
         self.assertNotIn(b"Excluded post", response.data)
+
+    def test_canvas_filters_by_category(self) -> None:
+        sid, _ = self._seed_canvas()
+        client = self.get_authenticated_client(sid)
+
+        response = client.get("/canvas?category=canvas-category")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b"Canvas category", response.data)
+        self.assertIn(b"Aligned post", response.data)
+        self.assertNotIn(b"Excluded post", response.data)
+        self.assertIn(b"/hierarchy?category=canvas-category", response.data)
+
+    def test_category_page_includes_visualization_urls(self) -> None:
+        sid, _ = self._seed_canvas()
+        client = self.get_authenticated_client(sid)
+
+        response = client.get("/group/category")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(b'"hierarchy_url": "/hierarchy?category=canvas-category"', response.data)
+        self.assertIn(b'"canvas_url": "/canvas?category=canvas-category"', response.data)
+        self.assertIn(b'"hierarchy_url": "/hierarchy?feed=canvas-feed"', response.data)
+        self.assertIn(b'"canvas_url": "/canvas?feed=canvas-feed"', response.data)
 
     def test_canvas_combines_feed_and_tag_filters(self) -> None:
         sid, feed_id = self._seed_canvas()

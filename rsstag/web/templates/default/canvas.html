@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Canvas{% if feed %} | {{ feed.title }}{% elif tag %} | {{ tag }}{% endif %}</title>
+    <title>Canvas{% if feed %} | {{ feed.title }}{% elif category %} | {{ category.title }}{% elif tag %} | {{ tag }}{% endif %}</title>
     {% include "head-data.html" %}
 </head>
 <body class="canvas-page">
@@ -9,10 +9,13 @@
         <a class="canvas-page__brand" href="/">RSSTag</a>
         <div>
             <p class="canvas-page__eyebrow">Posts canvas</p>
-            <h1>{% if feed %}{{ feed.title }}{% elif tag %}{{ tag }}{% else %}All posts{% endif %}</h1>
+            <h1>{% if feed %}{{ feed.title }}{% elif category %}{{ category.title }}{% elif tag %}{{ tag }}{% else %}All posts{% endif %}</h1>
         </div>
         {% if feed %}
         <a class="canvas-page__feed-link" href="{{ feed.local_url or ('/feed/' ~ feed.feed_id|url_encode) }}">Regular feed view</a>
+        {% elif category %}
+        <a class="canvas-page__feed-link" href="/hierarchy?category={{ category.category_id|url_encode }}">Hierarchy view</a>
+        <a class="canvas-page__feed-link" href="{{ category.local_url or ('/category/' ~ category.category_id|url_encode) }}">Regular category view</a>
         {% elif tag %}
         <a class="canvas-page__feed-link" href="/tag/{{ tag|url_encode }}">Tag view</a>
         {% endif %}

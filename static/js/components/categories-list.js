@@ -38,8 +38,12 @@ export default class CategoriesList extends React.Component {
                     data-id={feed.feed_id}
                     onChange={window.handleCheckboxChange}
                   />
-                  <a href={feed.url}>{feed.title}</a>
+                  <a className="feed-title-link" href={feed.url}>{feed.title}</a>
                   <span className="category-count">{feed.unread_count}</span>
+                  <div className="feed-actions" aria-label={`${feed.title} views`}>
+                    <a className="feed-action-link" href={feed.hierarchy_url}>Hierarchy</a>
+                    <a className="feed-action-link" href={feed.canvas_url}>Canvas</a>
+                  </div>
                 </li>
               );
             });
@@ -66,8 +70,12 @@ export default class CategoriesList extends React.Component {
                 ) : (
                   ''
                 )}
-                <a href={cat.url}>{cat.title}</a>
+                <a className="category-title-link" href={cat.url}>{cat.title}</a>
                 <span className="category-count">{cat.unread_count}</span>
+                <div className="category-actions" aria-label={`${cat.title} views`}>
+                  <a className="category-action-link" href={cat.hierarchy_url}>Hierarchy</a>
+                  <a className="category-action-link" href={cat.canvas_url}>Canvas</a>
+                </div>
               </div>
               <ul className={'feeds ' + (cat.showed ? 'not_hidden' : 'hidden')}>{feeds}</ul>
             </li>

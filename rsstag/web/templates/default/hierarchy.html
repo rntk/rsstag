@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Hierarchy{% if feed %} | {{ feed.title }}{% elif tag %} | {{ tag }}{% endif %}</title>
+    <title>Hierarchy{% if feed %} | {{ feed.title }}{% elif category %} | {{ category.title }}{% elif tag %} | {{ tag }}{% endif %}</title>
     {% include "head-data.html" %}
 </head>
 <body class="feed-hierarchy-page">
@@ -9,12 +9,15 @@
         <a class="feed-hierarchy-page__brand" href="/">RSSTag</a>
         <div>
             <p class="feed-hierarchy-page__eyebrow">Topic hierarchy</p>
-            <h1>{% if feed %}{{ feed.title }}{% elif tag %}{{ tag }}{% else %}All posts{% endif %}</h1>
+            <h1>{% if feed %}{{ feed.title }}{% elif category %}{{ category.title }}{% elif tag %}{{ tag }}{% else %}All posts{% endif %}</h1>
         </div>
         <nav class="feed-hierarchy-page__links">
             {% if feed %}
                 <a href="/canvas?feed={{ feed.feed_id|url_encode }}">Canvas view</a>
                 <a href="{{ feed.local_url or ('/feed/' ~ feed.feed_id|url_encode) }}">Regular feed view</a>
+            {% elif category %}
+                <a href="/canvas?category={{ category.category_id|url_encode }}">Canvas view</a>
+                <a href="{{ category.local_url or ('/category/' ~ category.category_id|url_encode) }}">Regular category view</a>
             {% elif tag %}
                 <a href="/tag/{{ tag|url_encode }}">Tag view</a>
             {% endif %}

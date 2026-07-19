@@ -190,6 +190,18 @@ test('render displays cat.title', () => {
     'should display cat.title');
 });
 
+test('render includes a hierarchy link for each category', () => {
+  const src = readSource();
+  assert.ok(/href=\{cat\.hierarchy_url\}/.test(src),
+    'should link each category to its hierarchy view');
+});
+
+test('render includes a canvas link for each category', () => {
+  const src = readSource();
+  assert.ok(/href=\{cat\.canvas_url\}/.test(src),
+    'should link each category to its canvas view');
+});
+
 test('render uses feeds CSS class', () => {
   const src = readSource();
   assert.ok(/feeds\s*\+/.test(src) || /['"]feeds['"]/.test(src) || /'feeds '/.test(src),
@@ -246,6 +258,18 @@ test('render feed checkbox has data-id attribute', () => {
   const src = readSource();
   assert.ok(/data-id\s*=\s*\{?\s*feed\.feed_id/.test(src),
     'should set data-id to feed.feed_id');
+});
+
+test('render includes a hierarchy link for each feed', () => {
+  const src = readSource();
+  assert.ok(/href=\{feed\.hierarchy_url\}/.test(src),
+    'should link each feed to its hierarchy view');
+});
+
+test('render includes a canvas link for each feed', () => {
+  const src = readSource();
+  assert.ok(/href=\{feed\.canvas_url\}/.test(src),
+    'should link each feed to its canvas view');
 });
 
 test('render category checkbox has data-type="category"', () => {
