@@ -295,7 +295,7 @@ export default class PostsStorage {
     } else {
       console.log(msg);
     }
-    this.ES.trigger(this.POSTS_ERROR_MESSAGE, msg);
+    this.ES.trigger(this.ES.POSTS_ERROR_MESSAGE, msg);
   }
 
   start() {

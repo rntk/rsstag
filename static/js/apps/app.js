@@ -16,6 +16,7 @@ import CategoriesList from '../components/categories-list.js';
 import PostsNumbers from '../components/posts-numbers.js';
 import BiGramsStorage from '../storages/bi-grams-storage.js';
 import TagButton from '../components/tag-button.js';
+import TagToolWidget from '../components/tag-tool-widget.js';
 import ProgressBarStorage from '../storages/progressbar-storage.js';
 import ProgressBar from '../components/progressbar.js';
 import GeoTagsStorage from '../storages/geo-tags-storage.js';
@@ -715,23 +716,30 @@ function tagWithContextInfoPage(tag) {
   path_storage.start();
   window.pathManager = new PathManager(path_storage);
 
-  const similar_w2v_evsys = new EventsSystem();
-  const similar_w2v_storage = new TagsStorage(similar_w2v_evsys, '/tag-similar/w2v');
-  renderToRoot('similar_w2v_tags', <TagsList ES={similar_w2v_evsys} />);
-  renderToRoot('load_similar_w2v', <TagButton ES={similar_w2v_evsys} title="Word2Vec" tag={tag} />);
-  similar_w2v_storage.start();
+  renderToRoot(
+    'load_similar_w2v',
+    <TagToolWidget
+      tag={tag.tag}
+      title="Word2Vec"
+      url="/tag-similar/w2v"
+      listContainerId="similar_w2v_tags"
+    />
+  );
 
-  const similar_fasttext_evsys = new EventsSystem();
-  const similar_fasttext_storage = new TagsStorage(similar_fasttext_evsys, '/tag-similar/fasttext');
-  renderToRoot('similar_fasttext_tags', <TagsList ES={similar_fasttext_evsys} />);
-  renderToRoot('load_similar_fasttext', <TagButton ES={similar_fasttext_evsys} title="FastText" tag={tag} />);
-  similar_fasttext_storage.start();
+  renderToRoot(
+    'load_similar_fasttext',
+    <TagToolWidget
+      tag={tag.tag}
+      title="FastText"
+      url="/tag-similar/fasttext"
+      listContainerId="similar_fasttext_tags"
+    />
+  );
 
-  const siblings_evsys = new EventsSystem();
-  const siblings_storage = new TagsStorage(siblings_evsys, '/tag-siblings');
-  renderToRoot('siblings_tags', <TagsList ES={siblings_evsys} />);
-  renderToRoot('load_siblings', <TagButton ES={siblings_evsys} title="siblings" tag={tag} />);
-  siblings_storage.start();
+  renderToRoot(
+    'load_siblings',
+    <TagToolWidget tag={tag.tag} title="siblings" url="/tag-siblings" listContainerId="siblings_tags" />
+  );
 
   const clusters_evsys = new EventsSystem();
   const clusters_storage = new TagsClustersStorage(clusters_evsys);
@@ -747,11 +755,10 @@ function tagWithContextInfoPage(tag) {
   renderToRoot('load_contexts_classification', <TagButton ES={contexts_classification_evsys} title="contexts" tag={tag} />);
   contexts_classification_storage.start();
 
-  const bi_grams_evsys = new EventsSystem();
-  const bi_grams_storage = new TagsStorage(bi_grams_evsys, '/tag-bi-grams');
-  renderToRoot('bi_grams', <TagsList ES={bi_grams_evsys} is_bigram={true} />);
-  renderToRoot('load_bi_grams', <TagButton ES={bi_grams_evsys} title="bi-grams" tag={tag} />);
-  bi_grams_storage.start();
+  renderToRoot(
+    'load_bi_grams',
+    <TagToolWidget tag={tag.tag} title="bi-grams" url="/tag-bi-grams" listContainerId="bi_grams" is_bigram={true} />
+  );
 
   // Bi-grams graph
   const bi_grams_graph_evsys = new EventsSystem();
@@ -832,42 +839,40 @@ function tagWithContextInfoPage(tag) {
     loadGraphSpan.appendChild(loadGraphButton);
   }
 
-  const pmi_evsys = new EventsSystem();
-  const pmi_storage = new TagsStorage(pmi_evsys, '/tag-pmi');
-  renderToRoot('pmi', <TagsList ES={pmi_evsys} is_bigram={true} />);
-  renderToRoot('load_pmi', <TagButton ES={pmi_evsys} title="PMI" tag={tag} />);
-  pmi_storage.start();
-
-  const tag_topics_evsys = new EventsSystem();
-  const tag_topics_storage = new TagsStorage(tag_topics_evsys, '/tag-topics');
-  renderToRoot('tag_topics', <TagsList ES={tag_topics_evsys} />);
-  renderToRoot('load_topics', <TagButton ES={tag_topics_evsys} title="topics" tag={tag} />);
-  tag_topics_storage.start();
-
-  const tag_grouped_topics_evsys = new EventsSystem();
-  const tag_grouped_topics_storage = new TagsStorage(
-    tag_grouped_topics_evsys,
-    '/tag-grouped-topics'
+  renderToRoot(
+    'load_pmi',
+    <TagToolWidget tag={tag.tag} title="PMI" url="/tag-pmi" listContainerId="pmi" is_bigram={true} />
   );
-  renderToRoot('load_grouped_topics', <TagButton ES={tag_grouped_topics_evsys} title="grouped topics" tag={tag} />);
-  tag_grouped_topics_evsys.bind(tag_grouped_topics_evsys.TAGS_UPDATED, (state) => {
-    const container = document.getElementById('tag_grouped_topics');
-    if (!container) return;
-    const flatTopics = state.tags ? Array.from(state.tags.values()) : [];
+
+  renderToRoot(
+    'load_topics',
+    <TagToolWidget tag={tag.tag} title="topics" url="/tag-topics" listContainerId="tag_topics" />
+  );
+
+  const renderGroupedTopics = (container, tags) => {
+    const flatTopics = tags ? Array.from(tags.values()) : [];
     if (!flatTopics.length) {
       container.innerHTML = '';
       return;
     }
     const hierarchyData = buildGroupedTopicsHierarchy(flatTopics, tag.tag);
     renderTopicsHierarchy(container, hierarchyData);
-  });
-  tag_grouped_topics_storage.start();
+  };
+  renderToRoot(
+    'load_grouped_topics',
+    <TagToolWidget
+      tag={tag.tag}
+      title="grouped topics"
+      url="/tag-grouped-topics"
+      listContainerId="tag_grouped_topics"
+      renderData={renderGroupedTopics}
+    />
+  );
 
-  const tag_llm_topics_evsys = new EventsSystem();
-  const tag_llm_topics_storage = new TagsStorage(tag_llm_topics_evsys, '/tag-llm-topics');
-  renderToRoot('tag_llm_topics', <TagsList ES={tag_llm_topics_evsys} />);
-  renderToRoot('load_llm_topics', <TagButton ES={tag_llm_topics_evsys} title="LLM topics" tag={tag} />);
-  tag_llm_topics_storage.start();
+  renderToRoot(
+    'load_llm_topics',
+    <TagToolWidget tag={tag.tag} title="LLM topics" url="/tag-llm-topics" listContainerId="tag_llm_topics" />
+  );
 
   const tag_topics_radar_evsys = new EventsSystem();
   const tag_topics_radar_storage = new TagsStorage(tag_topics_radar_evsys, '/tag-grouped-topics');
@@ -886,33 +891,28 @@ function tagWithContextInfoPage(tag) {
   tag_mentions_chart.start();
   tag_mentions_storage.start();
 
-  const tag_entities_evsys = new EventsSystem();
-  const tag_entities_storage = new TagsStorage(tag_entities_evsys, '/tag-entities');
-  renderToRoot('tag_entities', <TagsList ES={tag_entities_evsys} is_entities={true} />);
-  renderToRoot('load_entities', <TagButton ES={tag_entities_evsys} title="entities" tag={tag} />);
-  tag_entities_storage.start();
+  renderToRoot(
+    'load_entities',
+    <TagToolWidget tag={tag.tag} title="entities" url="/tag-entities" listContainerId="tag_entities" is_entities={true} />
+  );
 
-  const tag_tfidf_evsys = new EventsSystem();
-  const tag_tfidf_storage = new TagsStorage(tag_tfidf_evsys, '/tag-tfidf');
-  renderToRoot('tag_tfidf', <TagsList ES={tag_tfidf_evsys} is_entities={true} />);
-  renderToRoot('load_tfidf', <TagButton ES={tag_tfidf_evsys} title="TFIDF" tag={tag} />);
-  tag_tfidf_storage.start();
+  renderToRoot(
+    'load_tfidf',
+    <TagToolWidget tag={tag.tag} title="TFIDF" url="/tag-tfidf" listContainerId="tag_tfidf" is_entities={true} />
+  );
 
-  const tag_specific_evsys = new EventsSystem();
-  const tag_specific_storage = new TagsStorage(tag_specific_evsys, '/tag-specific');
-  renderToRoot('tag_specific', <TagsList ES={tag_specific_evsys} />);
-  renderToRoot('load_specific', <TagButton ES={tag_specific_evsys} title="specific" tag={tag} />);
-  tag_specific_storage.start();
+  renderToRoot(
+    'load_specific',
+    <TagToolWidget tag={tag.tag} title="specific" url="/tag-specific" listContainerId="tag_specific" />
+  );
 
-  const tag_specific1_evsys = new EventsSystem();
-  const tag_specific1_storage = new TagsStorage(tag_specific1_evsys, '/tag-specific1');
-  renderToRoot('tag_specific1', <TagsList ES={tag_specific1_evsys} />);
-  renderToRoot('load_specific1', <TagButton ES={tag_specific1_evsys} title="specific1" tag={tag} />);
-  tag_specific1_storage.start();
+  renderToRoot(
+    'load_specific1',
+    <TagToolWidget tag={tag.tag} title="specific1" url="/tag-specific1" listContainerId="tag_specific1" />
+  );
 
-  const similar_words_evsys = new EventsSystem();
-  const similar_words_storage = new TagsStorage(similar_words_evsys, '/tag-similar-tags');
-  renderToRoot('similar_words_tags', <TagsList ES={similar_words_evsys} />);
-  renderToRoot('load_similar_words', <TagButton ES={similar_words_evsys} title="Words" tag={tag} />);
-  similar_words_storage.start();
+  renderToRoot(
+    'load_similar_words',
+    <TagToolWidget tag={tag.tag} title="Words" url="/tag-similar-tags" listContainerId="similar_words_tags" />
+  );
 }

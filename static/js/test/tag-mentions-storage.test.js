@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import TagMetionsStorage from '../storages/tag-mentions-storage.js';
+import TagMentionsStorage from '../storages/tag-mentions-storage.js';
 import rsstag_utils from '../libs/rsstag_utils.js';
 import { createEventSystem, flushPromises } from './helpers.js';
 
@@ -13,7 +13,7 @@ function createTagMentionsEventSystem() {
 }
 
 test('constructor sets default state snapshot', () => {
-  const storage = new TagMetionsStorage('tag-x', createTagMentionsEventSystem());
+  const storage = new TagMentionsStorage('tag-x', createTagMentionsEventSystem());
 
   assert.deepEqual(storage.getState(), {
     tag: 'tag-x',
@@ -23,7 +23,7 @@ test('constructor sets default state snapshot', () => {
 
 test('start() binds CHANGE_TAGS_LOAD_BUTTON_STATE', () => {
   const es = createTagMentionsEventSystem();
-  const storage = new TagMetionsStorage('tag-x', es);
+  const storage = new TagMentionsStorage('tag-x', es);
 
   storage.start();
 
@@ -32,7 +32,7 @@ test('start() binds CHANGE_TAGS_LOAD_BUTTON_STATE', () => {
 
 test('fetchTagDates() success updates state and emits payload shape', async (t) => {
   const es = createTagMentionsEventSystem();
-  const storage = new TagMetionsStorage('tag-x', es);
+  const storage = new TagMentionsStorage('tag-x', es);
   const originalFetchJSON = rsstag_utils.fetchJSON;
 
   rsstag_utils.fetchJSON = async () => ({ data: ['2024-01-01'] });
@@ -50,7 +50,7 @@ test('fetchTagDates() success updates state and emits payload shape', async (t) 
 });
 
 test('fetchTagDates() failure path triggers errorMessage', async (t) => {
-  const storage = new TagMetionsStorage('tag-x', createTagMentionsEventSystem());
+  const storage = new TagMentionsStorage('tag-x', createTagMentionsEventSystem());
   const originalFetchJSON = rsstag_utils.fetchJSON;
 
   let errorText = null;

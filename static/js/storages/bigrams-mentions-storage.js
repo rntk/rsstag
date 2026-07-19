@@ -56,7 +56,7 @@ export default class BiGramsMetionsStorage {
 
   errorMessage(msg, data) {
     console.log(msg, data);
-    this.ES.trigger(this.TAGS_ERROR_MESSAGE, msg);
+    this.ES.trigger(this.ES.TAGS_ERROR_MESSAGE, msg);
   }
 
   bindEvents() {

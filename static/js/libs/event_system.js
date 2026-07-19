@@ -13,7 +13,6 @@ export default class EventsSystem {
     this.SETTINGS_UPDATED = 'settings_updated';
     this.UPDATE_SETTINGS = 'update_settings';
     this.SETTINGS_ERROR_MESSAGE = 'settings_error_message';
-    this.SETTINGS_ERROR_MESSSAGE = this.SETTINGS_ERROR_MESSAGE;
 
     this.CHANGE_SETTINGS_WINDOW_STATE = 'change_settings_window_state';
 
@@ -40,7 +39,6 @@ export default class EventsSystem {
     this.POSTS_RENDERED = 'posts_rendered';
 
     this.TAG_MENTIONS_UPDATED = 'tag_mentions_updated';
-    this.TAG_TOPICS_UPDATED = 'tag_topics_updated';
 
     this.WORDTREE_TEXTS_UPDATED = 'wordtree_texts_updated';
 
@@ -61,8 +59,6 @@ export default class EventsSystem {
     this.CONTEXT_FILTER_UPDATED = 'context_filter_updated';
     this.CONTEXT_FILTER_ADD = 'context_filter_add';
     this.CONTEXT_FILTER_REMOVE = 'context_filter_remove';
-    this.CONTEXT_FILTER_ADD_TAG = this.CONTEXT_FILTER_ADD;
-    this.CONTEXT_FILTER_REMOVE_TAG = this.CONTEXT_FILTER_REMOVE;
     this.CONTEXT_FILTER_CLEAR = 'context_filter_clear';
 
     this.PATH_CREATED = 'path_created';
@@ -79,7 +75,6 @@ export default class EventsSystem {
   }
 
   bind(event, fct) {
-    this._events = this._events || {};
     this._events[event] = this._events[event] || [];
     this._events[event].push(fct);
 
@@ -89,16 +84,16 @@ export default class EventsSystem {
   }
 
   unbind(event, fct) {
-    this._events = this._events || {};
     if (event in this._events === false) {
       return;
     }
-    this._events[event].splice(this._events[event].indexOf(fct), 1);
+    const index = this._events[event].indexOf(fct);
+    if (index !== -1) {
+      this._events[event].splice(index, 1);
+    }
   }
 
   trigger(event /* , args... */) {
-    this._events = this._events || {};
-    this._last_events = this._last_events || {};
     var args = Array.prototype.slice.call(arguments, 1);
     this._last_events[event] = args;
 

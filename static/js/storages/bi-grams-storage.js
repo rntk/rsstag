@@ -103,7 +103,7 @@ export default class BiGramsStorage {
 
   errorMessage(msg) {
     console.log(msg);
-    this.ES.trigger(this.TAGS_ERROR_MESSAGE, msg);
+    this.ES.trigger(this.ES.TAGS_ERROR_MESSAGE, msg);
   }
 
   start() {

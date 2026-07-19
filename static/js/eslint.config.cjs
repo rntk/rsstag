@@ -65,6 +65,7 @@ module.exports = [
       'components/load-posts.js',
       'components/post-item.js',
       'components/posts-list.js',
+      'components/tag-tool-widget.js',
       'storages/context-filter-storage.js',
       'storages/posts-storage.js',
       'libs/rsstag_utils.js',

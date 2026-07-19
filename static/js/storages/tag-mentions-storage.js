@@ -1,7 +1,7 @@
 'use strict';
 import rsstag_utils from '../libs/rsstag_utils.js';
 
-export default class TagMetionsStorage {
+export default class TagMentionsStorage {
   constructor(tag, event_system) {
     this.ES = event_system;
     this._state = {
@@ -56,7 +56,7 @@ export default class TagMetionsStorage {
 
   errorMessage(msg, data) {
     console.log(msg, data);
-    this.ES.trigger(this.TAGS_ERROR_MESSAGE, msg);
+    this.ES.trigger(this.ES.TAGS_ERROR_MESSAGE, msg);
   }
 
   bindEvents() {

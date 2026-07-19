@@ -21,13 +21,24 @@ export default class TagsList extends React.Component {
     this.setState((prevState) => ({ groupByLetter: !prevState.groupByLetter }));
   }
 
+  static getDerivedStateFromProps(props) {
+    if (props.tags) {
+      return { tags: props.tags, tag_hash: props.tag_hash || '' };
+    }
+    return null;
+  }
+
   componentDidMount() {
-    this.props.ES.bind(this.props.ES.TAGS_UPDATED, this.updateTags);
+    if (!this.props.tags) {
+      this.props.ES.bind(this.props.ES.TAGS_UPDATED, this.updateTags);
+    }
     //subscribe
   }
 
   componentWillUnmount() {
-    this.props.ES.unbind(this.props.ES.TAGS_UPDATED, this.updateTags);
+    if (!this.props.tags) {
+      this.props.ES.unbind(this.props.ES.TAGS_UPDATED, this.updateTags);
+    }
     //unsubscribe
   }
 
