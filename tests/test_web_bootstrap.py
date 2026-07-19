@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import MagicMock
 
 from rsstag.utils import load_config
-from rsstag.web.app import RSSTagApplication
+from rsstag.web.app import RSSTagApplication, HANDLER_MODULES
 from rsstag.web.routes import RSSTagRoutes
 from tests.web_test_utils import create_test_config, get_route_endpoints
 
@@ -72,10 +72,28 @@ class TestWebBootstrap(unittest.TestCase):
 
         for endpoint in endpoints:
             with self.subTest(endpoint=endpoint):
-                self.assertTrue(hasattr(RSSTagApplication, endpoint))
-                self.assertTrue(
-                    inspect.isfunction(getattr(RSSTagApplication, endpoint)),
-                )
+                on_class: bool = hasattr(RSSTagApplication, endpoint)
+                if on_class:
+                    self.assertTrue(
+                        inspect.isfunction(getattr(RSSTagApplication, endpoint)),
+                        f"Endpoint '{endpoint}' on RSSTagApplication is not a function"
+                    )
+                else:
+                    matching_modules: list[object] = [
+                        module for module in HANDLER_MODULES
+                        if hasattr(module, endpoint)
+                    ]
+                    self.assertEqual(
+                        len(matching_modules),
+                        1,
+                        f"Endpoint '{endpoint}' must be in exactly one handler module, "
+                        f"but found in {len(matching_modules)}: "
+                        f"{', '.join(m.__name__ for m in matching_modules) if matching_modules else 'none'}"
+                    )
+                    self.assertTrue(
+                        inspect.isfunction(getattr(matching_modules[0], endpoint)),
+                        f"Endpoint '{endpoint}' in {matching_modules[0].__name__} is not a function"
+                    )
 
     def test_web_module_import_does_not_run_server(self) -> None:
         module = importlib.import_module("web")

@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import functools
 from urllib.parse import quote_plus
 import time
 import gzip
@@ -65,6 +66,27 @@ from sklearn.neighbors import NearestNeighbors
 from sklearn.metrics import silhouette_score
 from sklearn.metrics.pairwise import cosine_distances
 import numpy as np
+
+
+HANDLER_MODULES = (
+    posts_handlers,
+    users_handlers,
+    tags_handlers,
+    bigrams_handlers,
+    keywords_handlers,
+    openai_handlers,
+    prefixes_handlers,
+    chat_handlers,
+    tasks_handlers,
+    processing_handlers,
+    providers_handlers,
+    feeds_handlers,
+    metadata_handlers,
+    context_filter_handlers,
+    chats_handlers,
+    anthologies_handlers,
+    paths_handlers,
+)
 
 
 class RSSTagApplication(object):
@@ -236,10 +258,32 @@ class RSSTagApplication(object):
     def close(self):
         logging.info("Goodbye!")
 
-    def update_endpoints(self):
+    def _resolve_endpoint(self, name: str):
+        """Resolve a werkzeug endpoint name to a callable.
+
+        A bound method on ``self`` takes priority (covers handlers with
+        real logic or non-trivial argument mapping). Otherwise look up a
+        module-level function of the same name across ``HANDLER_MODULES``
+        and bind it to ``self`` via ``functools.partial``.
+        """
+        if hasattr(self, name):
+            return getattr(self, name)
+
+        found_modules = [module for module in HANDLER_MODULES if hasattr(module, name)]
+        if not found_modules:
+            raise RuntimeError(f"No handler found for endpoint '{name}'")
+        if len(found_modules) > 1:
+            module_names = ", ".join(module.__name__ for module in found_modules)
+            raise RuntimeError(
+                f"Endpoint '{name}' is ambiguous: found in multiple modules ({module_names})"
+            )
+
+        return functools.partial(getattr(found_modules[0], name), self)
+
+    def update_endpoints(self) -> None:
         routes = self.routes.get_werkzeug_routes()
-        for i in routes.iter_rules():
-            self.endpoints[i.endpoint] = getattr(self, i.endpoint)
+        for rule in routes.iter_rules():
+            self.endpoints[rule.endpoint] = self._resolve_endpoint(rule.endpoint)
 
     def get_page_count(self, items_count, items_on_page_count):
         page_count = divmod(items_count, items_on_page_count)
@@ -368,31 +412,10 @@ class RSSTagApplication(object):
 
         return {"owner": owner, "token_id": str(token_id)}
 
-    def on_post_speech(self, user: dict, request: Request) -> Response:
-        return posts_handlers.on_post_speech(self, user, request)
-
     def on_login_get(
         self, _: Optional[dict], request: Request, err: Optional[List[str]] = None
     ) -> Response:
         return users_handlers.on_login_get(self, request, err=err)
-
-    def on_login_google_auth_get(
-        self, user: Optional[dict], request: Request
-    ) -> Response:
-        return users_handlers.on_login_google_auth_get(self, user, request)
-
-    def on_oauth2callback_get(self, user: Optional[dict], request: Request) -> Response:
-        return users_handlers.on_oauth2callback_get(self, user, request)
-
-    def on_login_x_auth_get(
-        self, user: Optional[dict], request: Request
-    ) -> Response:
-        return users_handlers.on_login_x_auth_get(self, user, request)
-
-    def on_x_oauth2callback_get(
-        self, user: Optional[dict], request: Request
-    ) -> Response:
-        return users_handlers.on_x_oauth2callback_get(self, user, request)
 
     def on_login_post(self, _: Optional[dict], request: Request) -> Response:
         return users_handlers.on_login_post(self, request)
@@ -406,9 +429,6 @@ class RSSTagApplication(object):
     def on_logout_get(self, _: Optional[dict], __: Request) -> Response:
         return users_handlers.on_logout_get(self)
 
-    def on_refresh_get_post(self, user: dict, request: Request) -> Response:
-        return users_handlers.on_refresh_get_post(self, user, request)
-
     def on_provider_feeds_get_post(
         self, user: dict, request: Request, provider: Optional[str] = None
     ) -> Response:
@@ -416,14 +436,8 @@ class RSSTagApplication(object):
             self, user, request, provider
         )
 
-    def on_delete_feeds_categories_post(self, user: dict, request: Request) -> Response:
-        return feeds_handlers.on_delete_feeds_categories_post(self, user, request)
-
     def on_status_get(self, user: Optional[dict], _: Request) -> Response:
         return users_handlers.on_status_get(self, user)
-
-    def on_settings_post(self, user: dict, request: Request) -> Response:
-        return users_handlers.on_settings_post(self, user, request)
 
     def on_data_sources_get(self, user: dict, _: Request) -> Response:
         return users_handlers.on_data_sources_get(self, user)
@@ -435,29 +449,6 @@ class RSSTagApplication(object):
         self, user: dict, request: Request, provider: str
     ) -> Response:
         return users_handlers.on_provider_detail_post(self, user, provider, request)
-
-    def on_tasks_get(self, user: dict, request: Request) -> Response:
-        return tasks_handlers.on_tasks_get(self, user, request)
-
-    def on_tasks_post(self, user: dict, request: Request) -> Response:
-        return tasks_handlers.on_tasks_post(self, user, request)
-
-    def on_tasks_remove_post(
-        self, user: dict, request: Request, task_id: str
-    ) -> Response:
-        return tasks_handlers.on_tasks_remove_post(self, user, request, task_id)
-
-    def on_metadata_get(self, user: dict, request: Request) -> Response:
-        return metadata_handlers.on_metadata_get(self, user, request)
-
-    def on_metadata_post(self, user: dict, request: Request) -> Response:
-        return metadata_handlers.on_metadata_post(self, user, request)
-
-    def on_processing_get(self, user: dict, request: Request) -> Response:
-        return processing_handlers.on_processing_get(self, user, request)
-
-    def on_processing_reset_post(self, user: dict, request: Request) -> Response:
-        return processing_handlers.on_processing_reset_post(self, user, request)
 
     def on_error(self, _: Optional[dict], __: Request, e: HTTPException) -> Response:
         page = self.template_env.get_template("error.html")
@@ -538,29 +529,6 @@ class RSSTagApplication(object):
             mimetype="text/html",
         )
 
-    def on_category_get(
-        self, user: dict, request: Request, quoted_category: str
-    ) -> Response:
-        return posts_handlers.on_category_get(self, user, request, quoted_category)
-
-    def on_tag_get(self, user: dict, request: Request, quoted_tag: str) -> Response:
-        return posts_handlers.on_tag_get(self, user, request, quoted_tag)
-
-    def on_bi_gram_get(self, user: dict, request: Request, bi_gram: str) -> Response:
-        return posts_handlers.on_bi_gram_get(self, user, request, bi_gram)
-
-    def on_feed_get(self, user: dict, request: Request, quoted_feed: str) -> Response:
-        return posts_handlers.on_feed_get(self, user, request, quoted_feed)
-
-    def on_canvas_get(self, user: dict, request: Request) -> Response:
-        return posts_handlers.on_canvas_get(self, user, request)
-
-    def on_hierarchy_get(self, user: dict, request: Request) -> Response:
-        return posts_handlers.on_hierarchy_get(self, user, request)
-
-    def on_read_posts_post(self, user: dict, request: Request) -> Response:
-        return posts_handlers.on_read_posts_post(self, user, request)
-
     def calc_pager_data(
         self,
         p_number,
@@ -637,9 +605,6 @@ class RSSTagApplication(object):
         end_tags_range = round(start_tags_range + items_per_page)
         return (pages_map, start_tags_range, end_tags_range)
 
-    def on_get_tag_page(self, user: dict, request: Request, tag: str) -> Response:
-        return tags_handlers.on_get_tag_page(self, user, request, tag)
-
     def on_group_by_tags_get(
         self, user: dict, _: Request, page_number: int = 1
     ) -> Response:
@@ -688,77 +653,13 @@ class RSSTagApplication(object):
     ) -> Response:
         return bigrams_handlers.on_get_tag_bi_grams_graph_debug(self, user, tag)
 
-    def on_posts_content_post(self, user: dict, request: Request) -> Response:
-        return posts_handlers.on_posts_content_post(self, user, request)
-
     def on_post_links_get(self, user: dict, _: Request, post_id: str) -> Response:
         return posts_handlers.on_post_links_get(self, user, post_id)
-
-    def on_post_snippet_tags_post(self, user: dict, request: Request, post_id: str) -> Response:
-        return posts_handlers.on_post_snippet_tags_post(self, user, request, post_id)
-
-    def on_post_grouped_get(self, user: dict, request: Request, pids: str) -> Response:
-        return posts_handlers.on_post_grouped_get(self, user, request, pids)
-
-    def on_post_compare_get(self, user: dict, request: Request, pids: str) -> Response:
-        return posts_handlers.on_post_compare_get(self, user, request, pids)
-
-    def on_post_grouped_snippets_get(
-        self, user: dict, request: Request, pids: str
-    ) -> Response:
-        return posts_handlers.on_post_grouped_snippets_get(self, user, request, pids)
-
-    def on_tag_grouped_snippets_get(
-        self, user: dict, request: Request, tag: str
-    ) -> Response:
-        return posts_handlers.on_tag_grouped_snippets_get(self, user, request, tag)
-
-    def on_topic_snippets_api_get(
-        self, user: dict, request: Request, pids: str
-    ) -> Response:
-        return posts_handlers.on_topic_snippets_api_get(self, user, request, pids)
-
-    def on_mindmap_node_data_post(self, user: dict, request: Request) -> Response:
-        return posts_handlers.on_mindmap_node_data_post(self, user, request)
-
-    def on_sentence_clusters_get(self, user: dict, request: Request) -> Response:
-        return posts_handlers.on_sentence_clusters_get(self, user, request)
-
-    def on_sentence_cluster_get(
-        self, user: dict, request: Request, cluster_id: int
-    ) -> Response:
-        return posts_handlers.on_sentence_cluster_get(self, user, request, cluster_id)
-
-    def on_sentence_cluster_topic_snippets_get(
-        self, user: dict, request: Request, cluster_id: int
-    ) -> Response:
-        return posts_handlers.on_sentence_cluster_topic_snippets_get(
-            self, user, request, cluster_id
-        )
-
-    def on_post_snippet_context_post(
-        self, user: dict, request: Request, post_id: str
-    ) -> Response:
-        return posts_handlers.on_post_snippet_context_post(
-            self, user, request, post_id
-        )
-
-    def on_topics_mindmap_get(self, user: dict, request: Request) -> Response:
-        return posts_handlers.on_topics_mindmap_get(self, user, request)
-
-    def on_topic_hierarchy_get(self, user: dict, request: Request) -> Response:
-        return posts_handlers.on_topic_hierarchy_get(self, user, request)
 
     def on_topics_list_get(
         self, user: dict, request: Request, page_number: int = 1
     ) -> Response:
         return posts_handlers.on_topics_list_get(self, user, request, page_number)
-
-    def on_topics_search(self, user: dict, request: Request) -> Response:
-        return posts_handlers.on_topics_search(self, user, request)
-
-    def on_mindmap_tag_search_get(self, user: dict, request: Request) -> Response:
-        return posts_handlers.on_mindmap_tag_search_get(self, user, request)
 
     def on_download_posts_get(self, user: dict, request: Request) -> Response:
         page_number = int(request.args.get("page", 1))
@@ -817,9 +718,6 @@ class RSSTagApplication(object):
             mimetype="text/plain",
             headers={"Content-Disposition": f'attachment; filename="{post_id}_{safe_title}.txt"'},
         )
-
-    def on_post_graph_get(self, user: dict, request: Request, pids: str) -> Response:
-        return posts_handlers.on_post_graph_get(self, user, request, pids)
 
     def _handle_sentence_grouping_chunking(
         self,
@@ -907,9 +805,6 @@ class RSSTagApplication(object):
     # TODO: delete or change or something other
     def on_get_posts_with_tags(self, user: dict, _: Request, s_tags: str) -> Response:
         return posts_handlers.on_get_posts_with_tags(self, user, s_tags)
-
-    def on_post_tags_search(self, user: dict, request: Request) -> Response:
-        return tags_handlers.on_post_tags_search(self, user, request)
 
     def on_get_map(self, user: dict, request: Request) -> Response:
         projection = {"_id": False}
@@ -1026,9 +921,6 @@ class RSSTagApplication(object):
 
     def on_bigrams_dates_get(self, user: dict, _: Request, tag: str) -> Response:
         return bigrams_handlers.on_bigrams_dates_get(self, user, tag)
-
-    def on_tag_context_tree_get(self, user: dict, request: Request, tag: str) -> Response:
-        return tags_handlers.on_tag_context_tree_get(self, user, request, tag)
 
     def on_wordtree_texts_get(self, user: dict, request: Request, tag: str) -> Response:
         if tag:
@@ -1193,16 +1085,6 @@ class RSSTagApplication(object):
     def on_tag_clusters_get(self, user: dict, _: Request, tag: str) -> Response:
         return tags_handlers.on_tag_clusters_get(self, user, tag)
 
-    def on_tag_contexts_classification_get(
-        self, user: dict, request: Request, tag: str
-    ) -> Response:
-        return tags_handlers.on_tag_contexts_classification_get(
-            self, user, request, tag
-        )
-
-    def on_posts_get(self, user: dict, request: Request, pids: str) -> Response:
-        return posts_handlers.on_posts_get(self, user, request, pids)
-
     def on_get_tag_pmi(self, user: dict, _: Request, tag: str) -> Response:
         return tags_handlers.on_get_tag_pmi(self, user, tag)
 
@@ -1272,9 +1154,6 @@ class RSSTagApplication(object):
             ),
             mimetype="text/html",
         )
-
-    def on_s_tree_get(self, user: dict, request: Request, tag: str) -> Response:
-        return tags_handlers.on_s_tree_get(self, user, request, tag)
 
     def on_cluster_get(self, user: dict, _: Request, cluster: int) -> Response:
         return posts_handlers.on_cluster_get(self, user, cluster)
@@ -1883,17 +1762,11 @@ class RSSTagApplication(object):
             status=200,
         )
 
-    def on_telegram_auth_post(self, user: dict, request: Request) -> Response:
-        return users_handlers.on_telegram_auth_post(self, user, request)
-
     def on_tag_specific_get(self, user: dict, _: Request, tag: str):
         return tags_handlers.on_tag_specific_get(self, user, tag)
 
     def on_tag_specific1_get(self, user: dict, _: Request, tag: str):
         return tags_handlers.on_tag_specific1_get(self, user, tag)
-
-    def on_get_context_tags(self, user: dict, request: Request, tags: str):
-        return tags_handlers.on_get_context_tags(self, user, request, tags)
 
     def on_get_tag_similar_tags(self, user: dict, _: Request, tags: str):
         return tags_handlers.on_get_tag_similar_tags(self, user, tags)
@@ -1919,144 +1792,14 @@ class RSSTagApplication(object):
     def on_group_by_yake_dyn_get(self, user: dict, _: Request, page_number: int):
         return keywords_handlers.on_group_by_yake_dyn_get(self, user, page_number)
 
-    def on_mark_telegram_posts_post(self, user: dict, request: Request):
-        return posts_handlers.on_mark_telegram_posts_post(self, user, request)
-
-    def on_read_snippets_post(self, user: dict, request: Request) -> Response:
-        return posts_handlers.on_read_snippets_post(self, user, request)
-
-    def on_gmail_sort_post(self, user: dict, request: Request):
-        return posts_handlers.on_gmail_sort_post(self, user, request)
-
     def on_tfidf_tags_get(self, user: dict, rqst: Request):
         return tags_handlers.on_get_tfidf_tags(self, user, rqst)
-
-    def on_ba_surprise_get(self, user: dict, rqst: Request):
-        return tags_handlers.on_ba_surprise_get(self, user, rqst)
 
     def on_sunburst_get(self, user: dict, _: Request, tags: str):
         return tags_handlers.on_get_sunburst(self, user, tags)
 
     def on_chain_get(self, user: dict, _: Request, tags: str):
         return tags_handlers.on_get_chain(self, user, tags)
-
-    def on_openai_post(self, user: dict, request: Request):
-        return openai_handlers.on_openai_post(self, user, request)
-
-    def on_openai_summary_post(self, user: dict, request: Request) -> Response:
-        return openai_handlers.on_openai_summary_post(self, user, request)
-
-    def on_chat_post(self, user: dict, request: Request):
-        return chat_handlers.on_chat_post(self, user, request)
-
-    def on_chats_list_get(self, user: dict, request: Request):
-        return chats_handlers.on_chats_list_get(self, user, request)
-
-    def on_chats_create_post(self, user: dict, request: Request):
-        return chats_handlers.on_chats_create_post(self, user, request)
-
-    def on_chats_detail_get(self, user: dict, request: Request, chat_id: str):
-        return chats_handlers.on_chats_detail_get(self, user, request, chat_id)
-
-    def on_chats_message_post(self, user: dict, request: Request, chat_id: str):
-        return chats_handlers.on_chats_message_post(self, user, request, chat_id)
-
-    def on_chats_rename_post(self, user: dict, request: Request, chat_id: str):
-        return chats_handlers.on_chats_rename_post(self, user, request, chat_id)
-
-    def on_chats_delete_post(self, user: dict, request: Request, chat_id: str):
-        return chats_handlers.on_chats_delete_post(self, user, request, chat_id)
-
-    def on_chats_fork_post(self, user: dict, request: Request, chat_id: str):
-        return chats_handlers.on_chats_fork_post(self, user, request, chat_id)
-
-    def on_chats_context_post(self, user: dict, request: Request, chat_id: str):
-        return chats_handlers.on_chats_context_post(self, user, request, chat_id)
-
-    def on_anthologies_get(self, user: dict, request: Request):
-        return anthologies_handlers.on_anthologies_get(self, user, request)
-
-    def on_anthologies_detail_get(
-        self, user: dict, request: Request, anthology_id: str
-    ):
-        return anthologies_handlers.on_anthologies_detail_get(
-            self, user, request, anthology_id
-        )
-
-    def on_anthologies_api_list_get(self, user: dict, request: Request):
-        return anthologies_handlers.on_anthologies_api_list_get(self, user, request)
-
-    def on_anthologies_api_create_post(self, user: dict, request: Request):
-        return anthologies_handlers.on_anthologies_api_create_post(self, user, request)
-
-    def on_anthologies_api_detail_get(
-        self, user: dict, request: Request, anthology_id: str
-    ):
-        return anthologies_handlers.on_anthologies_api_detail_get(
-            self, user, request, anthology_id
-        )
-
-    def on_anthologies_api_delete(
-        self, user: dict, request: Request, anthology_id: str
-    ):
-        return anthologies_handlers.on_anthologies_api_delete(
-            self, user, request, anthology_id
-        )
-
-    def on_anthologies_api_run_get(
-        self, user: dict, request: Request, anthology_id: str
-    ):
-        return anthologies_handlers.on_anthologies_api_run_get(
-            self, user, request, anthology_id
-        )
-
-    def on_anthologies_api_retry_post(
-        self, user: dict, request: Request, anthology_id: str
-    ):
-        return anthologies_handlers.on_anthologies_api_retry_post(
-            self, user, request, anthology_id
-        )
-
-    def on_anthologies_api_read_post(
-        self, user: dict, request: Request, anthology_id: str
-    ):
-        return anthologies_handlers.on_anthologies_api_read_post(
-            self, user, request, anthology_id
-        )
-
-    def on_anthologies_api_export_get(
-        self, user: dict, request: Request, anthology_id: str
-    ):
-        return anthologies_handlers.on_anthologies_api_export_get(
-            self, user, request, anthology_id
-        )
-
-    def on_paths_page_get(self, user: dict, request: Request):
-        return paths_handlers.on_paths_page_get(self, user, request)
-
-    def on_paths_list_get(self, user: dict, request: Request):
-        return paths_handlers.on_paths_list_get(self, user, request)
-
-    def on_paths_create_post(self, user: dict, request: Request):
-        return paths_handlers.on_paths_create_post(self, user, request)
-
-    def on_paths_detail_get(self, user: dict, request: Request, path_id: str):
-        return paths_handlers.on_paths_detail_get(self, user, request, path_id)
-
-    def on_path_recommendations_get(self, user: dict, request: Request, path_id: str):
-        return paths_handlers.on_path_recommendations_get(self, user, request, path_id)
-
-    def on_path_cluster_recommendations_get(self, user: dict, request: Request, path_id: str):
-        return paths_handlers.on_path_cluster_recommendations_get(self, user, request, path_id)
-
-    def on_paths_delete(self, user: dict, request: Request, path_id: str):
-        return paths_handlers.on_paths_delete(self, user, request, path_id)
-
-    def on_path_posts_get(self, user: dict, request: Request, path_id: str):
-        return paths_handlers.on_path_posts_get(self, user, request, path_id)
-
-    def on_path_sentences_get(self, user: dict, request: Request, path_id: str):
-        return paths_handlers.on_path_sentences_get(self, user, request, path_id)
 
     def on_prefixes_all_get(self, user: dict, _: Request, prefix_len: int):
         return prefixes_handlers.on_prefixes_all_get(self, user, prefix_len)
@@ -2066,27 +1809,6 @@ class RSSTagApplication(object):
 
     def on_prefixes_prefix_get(self, user: dict, _: Request, prefix: str):
         return prefixes_handlers.on_prefixes_prefix_get(self, user, prefix)
-
-    def on_context_filter_get(self, user: dict, request: Request) -> Response:
-        return context_filter_handlers.on_context_filter_get(self, user, request)
-
-    def on_context_filter_add_tag(self, user: dict, request: Request) -> Response:
-        return context_filter_handlers.on_context_filter_add_tag(self, user, request)
-
-    def on_context_filter_remove_tag(self, user: dict, request: Request) -> Response:
-        return context_filter_handlers.on_context_filter_remove_tag(self, user, request)
-
-    def on_context_filter_clear(self, user: dict, request: Request) -> Response:
-        return context_filter_handlers.on_context_filter_clear(self, user, request)
-
-    def on_context_filter_add_item(self, user: dict, request: Request) -> Response:
-        return context_filter_handlers.on_context_filter_add_item(self, user, request)
-
-    def on_context_filter_remove_item(self, user: dict, request: Request) -> Response:
-        return context_filter_handlers.on_context_filter_remove_item(self, user, request)
-
-    def on_context_filter_suggestions(self, user: dict, request: Request) -> Response:
-        return context_filter_handlers.on_context_filter_suggestions(self, user, request)
 
     def on_workers_get(self, user: dict, _: Request) -> Response:
         workers = self.workers.get_all_workers()
