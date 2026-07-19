@@ -17,27 +17,47 @@
     </div>
 </div>
 {% import 'providers.html' as providers with context %}
-<div class="page screen_middle">
-    <h1>Data sources</h1>
-    <div class="provider-list">
+<main class="page data-sources-page">
+    <header class="source-page-header">
+        <p class="source-page-eyebrow">Settings</p>
+        <h1>Data sources</h1>
+        <p>Connect and manage the services RSSTag uses to collect your reading list.</p>
+    </header>
+
+    <section class="provider-list" aria-label="Available data sources">
         {% for source in sources %}
-            <div class="root_item">
-                <a href="{{ source.detail_url }}">
-                    {{ providers.getName(source.id) }}
-                    {% if source.connected %}
-                        (connected)
-                    {% else %}
-                        (not connected)
-                    {% endif %}
+            <a href="{{ source.detail_url }}" class="provider-card">
+                <span class="provider-card-content">
+                    <span class="provider-card-name">{{ providers.getName(source.id) }}</span>
+                    <span class="provider-card-description">
+                        {% if source.connected %}
+                            {% if source.retoken %}
+                                Reconnect this source to continue syncing.
+                            {% else %}
+                                Connected and ready to sync.
+                            {% endif %}
+                        {% else %}
+                            Connect this source to start importing content.
+                        {% endif %}
+                    </span>
+                </span>
+                <span class="provider-card-meta">
+                    <span class="provider-status {% if source.connected %}provider-status-connected{% else %}provider-status-disconnected{% endif %}">
+                        {% if source.connected %}Connected{% else %}Not connected{% endif %}
+                    </span>
                     {% if source.retoken %}
-                        - needs relogin
+                        <span class="provider-status provider-status-attention">Needs relogin</span>
                     {% endif %}
-                </a>
-            </div>
+                    <span class="provider-card-action">Manage <span aria-hidden="true">→</span></span>
+                </span>
+            </a>
         {% endfor %}
+    </section>
+
+    <div class="source-page-footer">
+        <a href="/" class="provider-button provider-button-secondary">Back to home</a>
     </div>
-    <div class="root_item"><a href="/">Back to Home</a></div>
-</div>
+</main>
 
 <div id="status"><span></span></div>
 {% include "root-footer.html" %}

@@ -17,53 +17,83 @@
     </div>
 </div>
 {% import 'providers.html' as providers with context %}
-<div class="page screen_middle">
-    <h1>{{ providers.getName(provider) }}</h1>
+<main class="page provider-page">
+    <header class="source-page-header">
+        <p class="source-page-eyebrow">Data source</p>
+        <h1>{{ providers.getName(provider) }}</h1>
+        <p>Review the connection and choose what RSSTag should import.</p>
+    </header>
+
     {% for e in err %}
-        <p id="error">{{e}}</p>
+        <p class="provider-error" role="alert">{{e}}</p>
     {% endfor %}
-    {% if entry %}
-        <p>Status: connected</p>
-        {% if entry.login %}
-            <p>Login: {{ entry.login }}</p>
-        {% endif %}
-        {% if entry.retoken %}
-            <p>Token expired. Please relogin.</p>
-        {% endif %}
-    {% else %}
-        <p>Status: not connected</p>
-    {% endif %}
 
-    {% if provider == "gmail" %}
-        <a href="{{ google_auth_url }}" class="link_in_form">Connect Gmail</a>
-    {% elif provider == "x" %}
-        <a href="{{ x_auth_url }}" class="link_in_form">Connect X</a>
-    {% else %}
-        <form action="{{ login_url }}" method="POST" id="provider_login_form">
-            <label for="login">Login</label><br /><input type="text" name="login" id="login" /><br /><br />
-            <label for="password">Password</label><br /><input type="password" name="password" id="password" /><br /><br />
-            <input type="submit" value="{% if entry %}Relogin{% else %}Connect{% endif %}" />
+    <section class="provider-panel">
+        <div class="provider-connection-summary">
+            <div>
+                <p class="provider-section-label">Connection status</p>
+                <p class="provider-connection-state">
+                    {% if entry %}Connected{% else %}Not connected{% endif %}
+                </p>
+                {% if entry.login %}
+                    <p class="provider-connection-detail">Signed in as {{ entry.login }}</p>
+                {% endif %}
+                {% if entry.retoken %}
+                    <p class="provider-connection-warning">Your access token has expired. Reconnect this source to continue syncing.</p>
+                {% endif %}
+            </div>
+            <span class="provider-status {% if entry %}provider-status-connected{% else %}provider-status-disconnected{% endif %}">
+                {% if entry %}Connected{% else %}Not connected{% endif %}
+            </span>
+        </div>
+
+        <div class="provider-actions">
+            {% if provider == "gmail" %}
+                <a href="{{ google_auth_url }}" class="provider-button provider-button-primary">{% if entry %}Reconnect Gmail{% else %}Connect Gmail{% endif %}</a>
+            {% elif provider == "x" %}
+                <a href="{{ x_auth_url }}" class="provider-button provider-button-primary">{% if entry %}Reconnect X{% else %}Connect X{% endif %}</a>
+            {% else %}
+                <form action="{{ login_url }}" method="POST" id="provider_login_form" class="provider-login-form">
+                    <div class="provider-field">
+                        <label for="login">Login</label>
+                        <input type="text" name="login" id="login" autocomplete="username" />
+                    </div>
+                    <div class="provider-field">
+                        <label for="password">Password</label>
+                        <input type="password" name="password" id="password" autocomplete="current-password" />
+                    </div>
+                    <button type="submit" class="provider-button provider-button-primary">{% if entry %}Relogin{% else %}Connect{% endif %}</button>
+                </form>
+            {% endif %}
+
+            {% if entry %}
+                <form action="{{ login_url }}" method="POST" class="provider-action-form">
+                    <input type="hidden" name="action" value="download" />
+                    <button type="submit" class="provider-button provider-button-secondary">Download now</button>
+                </form>
+            {% endif %}
+
+            {% if provider == "telegram" or provider == "bazqux" or provider == "x" %}
+                <a href="{{ feeds_url }}" class="provider-button provider-button-secondary">Select channels or feeds</a>
+            {% endif %}
+        </div>
+    </section>
+
+    <section class="provider-danger-zone" aria-labelledby="provider-data-heading">
+        <div>
+            <h2 id="provider-data-heading">Downloaded data</h2>
+            <p>Remove downloaded posts, raw data, and queued tasks. This source stays connected.</p>
+        </div>
+        <form action="{{ prune_url }}" method="POST"
+              onsubmit="return confirm('Remove downloaded posts, raw data and queued tasks for this provider? Generated tags/topics are shared across providers and will be rebuilt on next refresh. The provider stays connected.');">
+            <button type="submit" class="provider-button provider-button-danger">Prune provider data</button>
         </form>
-    {% endif %}
+    </section>
 
-    {% if entry %}
-        <form action="{{ login_url }}" method="POST">
-            <input type="hidden" name="action" value="download" />
-            <input type="submit" value="Download" />
-        </form>
-    {% endif %}
-
-    {% if provider == "telegram" or provider == "bazqux" or provider == "x" %}
-        <div class="root_item"><a href="{{ feeds_url }}">Select channels/feeds</a></div>
-    {% endif %}
-
-    <form action="{{ prune_url }}" method="POST" class="prune-data-form"
-          onsubmit="return confirm('Remove downloaded posts, raw data and queued tasks for this provider? Generated tags/topics are shared across providers and will be rebuilt on next refresh. The provider stays connected.');">
-        <button type="submit" class="prune-data-button">Prune provider data</button>
-    </form>
-
-    <div class="root_item"><a href="{{ data_sources_url }}">Back to data sources</a></div>
-</div>
+    <div class="source-page-footer">
+        <a href="{{ data_sources_url }}" class="provider-button provider-button-secondary">Back to data sources</a>
+    </div>
+</main>
 
 <div id="status"><span></span></div>
 {% include "root-footer.html" %}

@@ -1,6 +1,6 @@
 ﻿<html>
 <head>
-<title>Cloud</title>
+<title>RSSTag - Choose a data source</title>
 {%  include "head-data.html" %}
 </head>
 <body>
@@ -12,21 +12,28 @@
     </div>
 </div>
 {% import 'providers.html' as providers with context %}
-<div class="page screen_middle">
-    <div class="middle_screen_middle">
-        <form action="{{select_provider_url}}" method="POST">
+<main class="page provider-page provider-picker-page">
+    <header class="source-page-header">
+        <p class="source-page-eyebrow">Data sources</p>
+        <h1>Choose a source</h1>
+        <p>Select the service you want RSSTag to connect to.</p>
+    </header>
+    <form action="{{select_provider_url}}" method="POST" class="provider-picker-form">
+        <div class="provider-picker-options">
             <!--input type="radio" name="provider" value="yandex" id="yandex" /><label for="yandex">{{ providers.getName('yandex') }}</label><br /><br /-->
-            <input type="radio" name="provider" value="bazqux" id="bazqux" /><label for="bazqux">{{ providers.getName('bazqux') }}</label><br /><br />
-            <input type="radio" name="provider" value="gmail" id="gmail" /><label for="gmail">{{ providers.getName('gmail') }}</label><br /><br />
-            <input type="radio" name="provider" value="x" id="x" /><label for="x">{{ providers.getName('x') }}</label><br /><br />
-            <input type="radio" name="provider" value="telegram" id="telegram" /><label for="telegram">{{ providers.getName('telegram') }}</label><br /><br />
-            <input type="radio" name="provider" value="textfile" id="textfile" /><label for="textfile">{{ providers.getName('textfile') }}</label><br /><br />
+            <label class="provider-picker-option" for="bazqux"><input type="radio" name="provider" value="bazqux" id="bazqux" /><span>{{ providers.getName('bazqux') }}</span></label>
+            <label class="provider-picker-option" for="gmail"><input type="radio" name="provider" value="gmail" id="gmail" /><span>{{ providers.getName('gmail') }}</span></label>
+            <label class="provider-picker-option" for="x"><input type="radio" name="provider" value="x" id="x" /><span>{{ providers.getName('x') }}</span></label>
+            <label class="provider-picker-option" for="telegram"><input type="radio" name="provider" value="telegram" id="telegram" /><span>{{ providers.getName('telegram') }}</span></label>
+            <label class="provider-picker-option" for="textfile"><input type="radio" name="provider" value="textfile" id="textfile" /><span>{{ providers.getName('textfile') }}</span></label>
             <!--input type="radio" name="provider" value="inoreader" id="inoreader" /><label for="inoreader">{{ providers.getName('inoreader') }}</label><br /><br /-->
-            <input type="submit" value="Select" />
-            <a href="/" class="link_in_form">Cancel</a>
-        </form>
-    </div>
-</div>
+        </div>
+        <div class="provider-picker-actions">
+            <button type="submit" class="provider-button provider-button-primary">Continue</button>
+            <a href="/" class="provider-button provider-button-secondary">Cancel</a>
+        </div>
+    </form>
+</main>
 {% include "root-footer.html" %}
 <div id="progressbar"></div></body>
 </html>
