@@ -83,6 +83,59 @@ def on_prune_data_post(app: "RSSTagApplication", user: dict, request: Request) -
     return redirect(app.routes.get_url_by_endpoint("on_root_get"))
 
 
+def _prune_provider_data(
+    app: "RSSTagApplication", owner: str, provider: str
+) -> Dict[str, int]:
+    collection_names: List[str] = ["posts", "raw_posts", "raw_download_state"]
+    deleted_counts: Dict[str, int] = {}
+    for collection_name in collection_names:
+        result = app.db[collection_name].delete_many(
+            {"owner": owner, "provider": provider}
+        )
+        deleted_counts[collection_name] = int(result.deleted_count)
+    tasks_result = app.db.tasks.delete_many({"user": owner, "provider": provider})
+    deleted_counts["tasks"] = int(tasks_result.deleted_count)
+    app.users.update_by_sid(owner, {f"in_queue.{provider}": False})
+    return deleted_counts
+
+
+def on_provider_prune_data_post(
+    app: "RSSTagApplication", user: dict, request: Request, provider: str
+) -> Response:
+    if provider not in app.providers:
+        return redirect(app.routes.get_url_by_endpoint(endpoint="on_data_sources_get"))
+
+    try:
+        deleted_counts: Dict[str, int] = _prune_provider_data(
+            app, user["sid"], provider
+        )
+        logging.info(
+            "Pruned downloaded data for user %s, provider %s. Deleted counts: %s",
+            user["sid"],
+            provider,
+            deleted_counts,
+        )
+    except Exception as e:
+        logging.error(
+            "Can`t prune downloaded data for user %s, provider %s. Info: %s",
+            user.get("sid"),
+            provider,
+            e,
+        )
+        return users_handlers.on_provider_detail_get(
+            app,
+            user,
+            provider,
+            err=["Unable to prune downloaded data for this provider. Please check logs and try again."],
+        )
+
+    return redirect(
+        app.routes.get_url_by_endpoint(
+            endpoint="on_provider_detail_get", params={"provider": provider}
+        )
+    )
+
+
 def _get_worker_token_context(
     app: "RSSTagApplication", request: Request
 ) -> Optional[Dict[str, str]]:

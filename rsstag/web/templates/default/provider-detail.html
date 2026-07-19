@@ -56,6 +56,12 @@
     {% if provider == "telegram" or provider == "bazqux" or provider == "x" %}
         <div class="root_item"><a href="{{ feeds_url }}">Select channels/feeds</a></div>
     {% endif %}
+
+    <form action="{{ prune_url }}" method="POST" class="prune-data-form"
+          onsubmit="return confirm('Remove downloaded posts, raw data and queued tasks for this provider? Generated tags/topics are shared across providers and will be rebuilt on next refresh. The provider stays connected.');">
+        <button type="submit" class="prune-data-button">Prune provider data</button>
+    </form>
+
     <div class="root_item"><a href="{{ data_sources_url }}">Back to data sources</a></div>
 </div>
 

@@ -93,6 +93,11 @@ class RSSTagRoutes:
                 "methods": ["GET", "POST"],
             },
             {
+                "url": "/provider/<string:provider>/prune-data",
+                "endpoint": "on_provider_prune_data_post",
+                "methods": ["POST"],
+            },
+            {
                 "url": "/group/tag/<int:page_number>",
                 "endpoint": "on_group_by_tags_get",
                 "methods": ["GET"],

@@ -260,5 +260,86 @@ class TestPruneDownloadedData(MongoWebTestCase):
         )
 
 
+class TestPruneProviderData(MongoWebTestCase):
+    """Tests for pruning downloaded data scoped to a single provider."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        super().setUpClass()
+        cls.user_doc, cls.user_sid = cls.seed_test_user("pruneproviderus", "prunepass")
+        cls.auth_client: Client = cls.get_authenticated_client(cls.user_sid)
+        cls.app.users.add_provider(
+            cls.user_sid,
+            "telegram",
+            {"login": "prune-channel", "token": "provider-token", "retoken": False},
+        )
+        cls.app.users.update_by_sid(cls.user_sid, {"in_queue.telegram": True})
+
+    def _seed_provider_docs(self, owner: str, provider: str) -> None:
+        compressed = json.dumps({"noop": True}).encode("utf-8")
+        self.test_db.posts.insert_one(
+            {"owner": owner, "provider": provider, "pid": f"{provider}-post-1"}
+        )
+        self.test_db.raw_posts.insert_one(
+            {"owner": owner, "provider": provider, "raw": compressed}
+        )
+        self.test_db.raw_download_state.insert_one(
+            {"owner": owner, "provider": provider, "state": "done"}
+        )
+        self.test_db.tasks.insert_one({"user": owner, "provider": provider})
+
+    def test_prune_provider_data_removes_only_that_provider(self) -> None:
+        owner: str = self.user_sid
+        self._seed_provider_docs(owner, "telegram")
+        self._seed_provider_docs(owner, "bazqux")
+
+        response = self.auth_client.post("/provider/telegram/prune-data")
+
+        self.assertIn(response.status_code, (301, 302))
+
+        for collection_name in ["posts", "raw_posts", "raw_download_state"]:
+            with self.subTest(collection=collection_name):
+                self.assertEqual(
+                    0,
+                    self.test_db[collection_name].count_documents(
+                        {"owner": owner, "provider": "telegram"}
+                    ),
+                )
+                self.assertEqual(
+                    1,
+                    self.test_db[collection_name].count_documents(
+                        {"owner": owner, "provider": "bazqux"}
+                    ),
+                )
+
+        self.assertEqual(
+            0, self.test_db.tasks.count_documents({"user": owner, "provider": "telegram"})
+        )
+        self.assertEqual(
+            1, self.test_db.tasks.count_documents({"user": owner, "provider": "bazqux"})
+        )
+
+        user: Optional[dict] = self.app.users.get_by_sid(owner)
+        self.assertIsNotNone(user)
+        self.assertIn("telegram", user.get("providers", {}))
+        self.assertFalse(user.get("in_queue", {}).get("telegram", True))
+
+    def test_prune_unknown_provider_redirects_without_deleting(self) -> None:
+        owner: str = self.user_sid
+        self._seed_provider_docs(owner, "telegram")
+
+        posts_before: int = self.test_db.posts.count_documents(
+            {"owner": owner, "provider": "telegram"}
+        )
+
+        response = self.auth_client.post("/provider/nosuchprovider/prune-data")
+
+        self.assertIn(response.status_code, (301, 302))
+        self.assertEqual(
+            posts_before,
+            self.test_db.posts.count_documents({"owner": owner, "provider": "telegram"}),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

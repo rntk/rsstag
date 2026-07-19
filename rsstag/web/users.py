@@ -716,6 +716,9 @@ def on_provider_detail_get(
             data_sources_url=app.routes.get_url_by_endpoint(
                 endpoint="on_data_sources_get"
             ),
+            prune_url=app.routes.get_url_by_endpoint(
+                endpoint="on_provider_prune_data_post", params={"provider": provider}
+            ),
             version=app.config["settings"]["version"],
             support=app.config["settings"]["support"],
             user_settings=user["settings"],
