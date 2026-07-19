@@ -9,6 +9,12 @@ from rsstag.llm.batch import BatchTaskStatus
 from rsstag.post_grouping import RssTagPostGrouping
 from rsstag.tags import RssTagTags
 from rsstag.topic_merge import build_pending_topic_merge_query
+from rsstag.task_state import (
+    TaskStateMachine,
+    TASK_STATUS_PENDING,
+    TASK_STATUS_DEAD,
+    DEFAULT_LEASE_SECONDS,
+)
 
 TASK_ALL = -1
 TASK_NOOP = 0
@@ -108,12 +114,39 @@ TASK_NOT_IN_PROCESSING = 0
 TASK_FREEZED = -1
 TAG_NOT_IN_PROCESSING = 0
 POST_GROUPING_NOT_IN_PROCESSING = 0
+# An item-level ``processing`` lock (posts/tags/bi_grams) older than this is
+# considered leaked by a crashed worker and becomes claimable again.
+ITEM_LOCK_MAX_AGE_SECONDS = 3600.0
 MAX_EXTERNAL_ERROR_LENGTH = 1000
 MAX_TOPIC_MERGE_FAILED_ATTEMPTS = 3
 EXTERNAL_WORKER_ALLOWED_TASK_TYPES: Set[int] = {
     TASK_POST_GROUPING,
     TASK_TAG_CLASSIFICATION,
 }
+
+# Per-type lease durations (seconds). Long-lived model/merge tasks get a much
+# longer lease than incremental download/conversion tasks. Types not listed
+# here fall back to ``DEFAULT_LEASE_SECONDS`` from ``rsstag.task_state``.
+TASK_LEASE_SECONDS: Dict[int, float] = {
+    TASK_TOPIC_MERGE: 7200.0,
+    TASK_W2V: 7200.0,
+    TASK_FASTTEXT: 7200.0,
+    TASK_CLUSTERING: 7200.0,
+    TASK_DOWNLOAD: 3600.0,
+    TASK_RAW_DOWNLOAD: 3600.0,
+    TASK_RAW_TO_POSTS: 3600.0,
+    TASK_ANTHOLOGY: 3600.0,
+}
+
+
+def claimable_item_processing() -> Dict[str, Any]:
+    """Match items that are idle (processing == 0) or whose lock is stale.
+
+    Idle items always match because 0 is far below the cutoff timestamp, so
+    this both claims fresh items and self-heals locks leaked by crashed
+    workers without a separate sweep.
+    """
+    return {"$lt": time.time() - ITEM_LOCK_MAX_AGE_SECONDS}
 
 
 class RssTagTasks:
@@ -140,6 +173,7 @@ class RssTagTasks:
     def __init__(self, db: MongoClient) -> None:
         self._db = db
         self._log = logging.getLogger("tasks")
+        self._state = TaskStateMachine(db)
         self._posts_bath_size = 200
         self._bigrams_bath_size = 1000
         self._tags_bath_size = 1000
@@ -158,6 +192,7 @@ class RssTagTasks:
                 self._log.warning(
                     "Can`t create index %s. May be already exists. Info: %s", index, e
                 )
+        self._state.ensure_indexes()
 
     def _normalize_scope(self, scope: Optional[dict]) -> Dict[str, Any]:
         normalized: Dict[str, Any] = {
@@ -223,6 +258,7 @@ class RssTagTasks:
             {"_id": task_id},
             {
                 "$set": {
+                    "status": TASK_STATUS_DEAD,
                     "processing": TASK_FREEZED,
                     "failed": True,
                     "failed_at": time.time(),
@@ -308,78 +344,79 @@ class RssTagTasks:
                     )
                     return False
 
-                if data["type"] == TASK_DOWNLOAD:  # TODO: check insertion results
-                    self._db.tasks.update_one(
-                        {"user": data["user"], "provider": data.get("provider", "")},
+                if data["type"] == TASK_DOWNLOAD:
+                    # Key on (user, type, provider) so a download task never
+                    # collides with the TASK_RAW_DOWNLOAD doc for the same
+                    # user+provider. Old docs still match because they carry
+                    # the type field.
+                    result = self._state.enqueue(
                         {
-                            "$set": {
-                                "user": data["user"],
-                                "type": TASK_DOWNLOAD,
-                                "processing": TASK_NOT_IN_PROCESSING,
-                                "host": data["host"],
-                                "manual": manual,
-                                "selection": data.get("selection", {}),
-                                "provider": data.get("provider", ""),
-                            }
+                            "user": data["user"],
+                            "type": TASK_DOWNLOAD,
+                            "provider": data.get("provider", ""),
                         },
-                        upsert=True,
+                        {
+                            "host": data["host"],
+                            "manual": manual,
+                            "selection": data.get("selection", {}),
+                            "provider": data.get("provider", ""),
+                            "user": data["user"],
+                            "type": TASK_DOWNLOAD,
+                        },
                     )
                 elif data["type"] == TASK_RAW_DOWNLOAD:
                     # One incremental raw-download task per (user, provider):
                     # re-adding it on a schedule must not pile up duplicates.
                     # Keyed by type too so it never collides with the regular
                     # TASK_DOWNLOAD doc for the same user+provider.
-                    self._db.tasks.update_one(
+                    result = self._state.enqueue(
                         {
                             "user": data["user"],
                             "type": TASK_RAW_DOWNLOAD,
                             "provider": data.get("provider", ""),
                         },
                         {
-                            "$set": {
-                                "user": data["user"],
-                                "type": TASK_RAW_DOWNLOAD,
-                                "processing": TASK_NOT_IN_PROCESSING,
-                                "host": data.get("host", ""),
-                                "manual": manual,
-                                "selection": data.get("selection", {}),
-                                "provider": data.get("provider", ""),
-                            }
+                            "user": data["user"],
+                            "type": TASK_RAW_DOWNLOAD,
+                            "host": data.get("host", ""),
+                            "manual": manual,
+                            "selection": data.get("selection", {}),
+                            "provider": data.get("provider", ""),
                         },
-                        upsert=True,
                     )
                 elif data["type"] == TASK_RAW_TO_POSTS:
                     # One conversion task per (user, provider). Keyed by type
                     # so it never collides with the download/raw-download
                     # docs for the same user+provider.
-                    self._db.tasks.update_one(
+                    result = self._state.enqueue(
                         {
                             "user": data["user"],
                             "type": TASK_RAW_TO_POSTS,
                             "provider": data.get("provider", ""),
                         },
                         {
-                            "$set": {
-                                "user": data["user"],
-                                "type": TASK_RAW_TO_POSTS,
-                                "processing": TASK_NOT_IN_PROCESSING,
-                                "host": data.get("host", ""),
-                                "manual": manual,
-                                "provider": data.get("provider", ""),
-                            }
+                            "user": data["user"],
+                            "type": TASK_RAW_TO_POSTS,
+                            "host": data.get("host", ""),
+                            "manual": manual,
+                            "provider": data.get("provider", ""),
                         },
-                        upsert=True,
                     )
                 elif data["type"] in [TASK_MARK, TASK_MARK_TELEGRAM]:
                     if data["data"]:
+                        # Many docs per user is intended for mark tasks; just
+                        # normalize each so it carries the state-machine fields.
+                        for doc in data["data"]:
+                            doc.setdefault("processing", TASK_NOT_IN_PROCESSING)
+                            doc.setdefault("status", TASK_STATUS_PENDING)
+                            doc.setdefault("attempts", 0)
                         self._db.tasks.insert_many(data["data"])
                     else:
                         result = False
                 else:
-                    update_data = {
+                    fields = {
                         "user": data["user"],
                         "type": data["type"],
-                        "processing": TASK_NOT_IN_PROCESSING,
                         "manual": manual,
                         "provider": data.get("provider", ""),
                     }
@@ -390,14 +427,13 @@ class RssTagTasks:
                         TASK_ANTHOLOGY,
                         TASK_TOPIC_MERGE,
                     ):
-                        update_data["scope"] = normalized_scope
+                        fields["scope"] = normalized_scope
                     for key in data:
-                        if key not in update_data:
-                            update_data[key] = data[key]
-                    self._db.tasks.update_one(
+                        if key not in fields and key != "processing":
+                            fields[key] = data[key]
+                    result = self._state.enqueue(
                         {"user": data["user"], "type": data["type"]},
-                        {"$set": update_data},
-                        upsert=True,
+                        fields,
                     )
             except Exception as e:
                 result = None
@@ -416,18 +452,15 @@ class RssTagTasks:
     def add_next_tasks(self, user: str, task_type: int) -> Optional[bool]:
         result = False
         if task_type in self._tasks_after:
-            for_insert = [
-                {
-                    "user": user,
-                    "type": task,
-                    "processing": TASK_NOT_IN_PROCESSING,
-                    "manual": False,
-                }
-                for task in self._tasks_after[task_type]
-            ]
             try:
-                self._db.tasks.insert_many(for_insert)
-                result = True
+                # Idempotent per-successor enqueue: a crash/retry between
+                # successors no longer duplicates chain docs.
+                result = all(
+                    self._state.enqueue(
+                        {"user": user, "type": t}, {"manual": False}
+                    )
+                    for t in self._tasks_after[task_type]
+                )
             except Exception as e:
                 result = None
                 self._log.warning(
@@ -449,45 +482,23 @@ class RssTagTasks:
     def get_task(self, users: RssTagUsers) -> dict:
         task = {"type": TASK_NOOP, "user": None, "data": None, "_id": ""}
         try:
-            # Use aggregation with $sample to randomize task selection.
-            # This ensures that if multiple tasks are in the queue, all of them
-            # get a chance to be processed, preventing one large task from
-            # monopolizing the workers through its subtasks/batches.
-            pipeline = [
-                {"$match": {"processing": TASK_NOT_IN_PROCESSING}},
-                {"$sample": {"size": 5}},
-            ]
-            candidates = list(self._db.tasks.aggregate(pipeline))
-            if not candidates:
-                return task
-
-            user_task = None
-            for candidate in candidates:
-                user_task = self._db.tasks.find_one_and_update(
-                    {"_id": candidate["_id"], "processing": TASK_NOT_IN_PROCESSING},
-                    {"$set": {"processing": time.time()}},
-                )
-                if user_task:
-                    break
-
+            # Claim one task atomically via the state machine. It samples the
+            # claimable set so no single large task monopolizes the workers.
+            user_task = self._state.claim()
             if not user_task:
                 return task
 
+            # Give long-lived task types a per-type lease so their claim is not
+            # reclaimed mid-run by the stale-lease path in ``claim``.
+            lease = TASK_LEASE_SECONDS.get(user_task["type"])
+            if lease is not None:
+                self._state.renew(user_task["_id"], lease)
+
             user = users.get_by_sid(user_task["user"])
             if not user:
-                # Claim already set processing; release so the task is not deadlocked
-                # forever when the owning user document is missing.
-                try:
-                    self._db.tasks.update_one(
-                        {"_id": user_task["_id"]},
-                        {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
-                    )
-                except Exception as unlock_exc:
-                    self._log.error(
-                        "Can`t unlock task %s after missing user. Info: %s",
-                        user_task.get("_id"),
-                        unlock_exc,
-                    )
+                # Claim already set processing; release so the task is not
+                # deadlocked forever when the owning user document is missing.
+                self._state.release(user_task["_id"])
                 return task
 
             task.update(user_task)
@@ -517,7 +528,7 @@ class RssTagTasks:
                     {
                         "owner": task["user"]["sid"],
                         "tags": [],
-                        "processing": POST_NOT_IN_PROCESSING,
+                        "processing": claimable_item_processing(),
                     }
                 ).limit(self._posts_bath_size)
                 ids = []
@@ -541,20 +552,17 @@ class RssTagTasks:
                     if psc == 0:
                         can_delete = self._can_finalize_completed_task(user_task)
                         if can_delete:
-                            self._db.tasks.delete_one({"_id": user_task["_id"]})
+                            self._state.complete(user_task["_id"])
                             unlock_task = False
                 if unlock_task:
-                    self._db.tasks.update_one(
-                        {"_id": user_task["_id"]},
-                        {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
-                    )
+                    self._state.release(user_task["_id"])
             elif user_task["type"] == TASK_BIGRAMS_RANK:
                 data = []
                 bis_dt = self._db.bi_grams.find(
                     {
                         "owner": task["user"]["sid"],
                         "temperature": 0,
-                        "processing": BIGRAM_NOT_IN_PROCESSING,
+                        "processing": claimable_item_processing(),
                     },
                     projection={"tag": True, "posts_count": True},
                 ).limit(self._bigrams_bath_size)
@@ -567,15 +575,12 @@ class RssTagTasks:
                         {"_id": {"$in": ids}},
                         {"$set": {"processing": time.time()}},
                     )
-                    self._db.tasks.update_one(
-                        {"_id": user_task["_id"]},
-                        {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
-                    )
+                    self._state.release(user_task["_id"])
                 else:
                     task["type"] = TASK_NOOP
                     can_delete = self._can_finalize_completed_task(user_task)
                     if can_delete:
-                        self._db.tasks.delete_one({"_id": user_task["_id"]})
+                        self._state.complete(user_task["_id"])
             elif user_task["type"] == TASK_POST_GROUPING:
                 data = []
                 scope_query = self._build_post_scope_predicate(task["user"]["sid"], user_task)
@@ -584,7 +589,7 @@ class RssTagTasks:
                     {
                         **scope_query,
                         "grouping": {"$exists": False},
-                        "processing": POST_NOT_IN_PROCESSING,
+                        "processing": claimable_item_processing(),
                     }
                 ).limit(1)
                 ids = []
@@ -605,13 +610,10 @@ class RssTagTasks:
                     if psc == 0:
                         can_delete = self._can_finalize_completed_task(user_task)
                         if can_delete:
-                            self._db.tasks.delete_one({"_id": user_task["_id"]})
+                            self._state.complete(user_task["_id"])
                             unlock_task = False
                 if unlock_task:
-                    self._db.tasks.update_one(
-                        {"_id": user_task["_id"]},
-                        {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
-                    )
+                    self._state.release(user_task["_id"])
             elif user_task["type"] == TASK_POST_GROUPING_BATCH:
                 data = []
                 scope_query = self._build_post_scope_predicate(task["user"]["sid"], user_task)
@@ -632,7 +634,7 @@ class RssTagTasks:
                         {
                             **scope_query,
                             "grouping": {"$exists": False},
-                            "processing": POST_NOT_IN_PROCESSING,
+                            "processing": claimable_item_processing(),
                         }
                     ).limit(10000)
                     for p in ps:
@@ -654,19 +656,13 @@ class RssTagTasks:
                         if psc == 0:
                             can_delete = self._can_finalize_completed_task(user_task)
                             if can_delete:
-                                self._db.tasks.delete_one({"_id": user_task["_id"]})
+                                self._state.complete(user_task["_id"])
                                 unlock_task = False
                 if unlock_task:
-                    self._db.tasks.update_one(
-                        {"_id": user_task["_id"]},
-                        {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
-                    )
+                    self._state.release(user_task["_id"])
             elif user_task["type"] == TASK_POST_GROUPING_CLEANUP:
                 data = []
-                self._db.tasks.update_one(
-                    {"_id": user_task["_id"]},
-                    {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
-                )
+                self._state.release(user_task["_id"])
             elif user_task["type"] == TASK_TOPIC_MERGE:
                 pending_docs: int = self._count_pending_topic_merge_docs(
                     task["user"]["sid"], user_task
@@ -675,12 +671,9 @@ class RssTagTasks:
                     task["type"] = TASK_NOOP
                     can_delete = self._can_finalize_completed_task(user_task)
                     if can_delete:
-                        self._db.tasks.delete_one({"_id": user_task["_id"]})
+                        self._state.complete(user_task["_id"])
                     else:
-                        self._db.tasks.update_one(
-                            {"_id": user_task["_id"]},
-                            {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
-                        )
+                        self._state.release(user_task["_id"])
                 data = {"pending_topic_groupings": pending_docs}
             elif user_task["type"] == TASK_ANTHOLOGY:
                 data = self._db.anthologies.find_one_and_update(
@@ -694,20 +687,17 @@ class RssTagTasks:
                     if self._count_pending_anthologies(task["user"]["sid"]) == 0:
                         can_delete = self._can_finalize_completed_task(user_task)
                         if can_delete:
-                            self._db.tasks.delete_one({"_id": user_task["_id"]})
+                            self._state.complete(user_task["_id"])
                             unlock_task = False
                 if unlock_task:
-                    self._db.tasks.update_one(
-                        {"_id": user_task["_id"]},
-                        {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
-                    )
+                    self._state.release(user_task["_id"])
             elif user_task["type"] == TASK_TAGS_RANK:
                 data = []
                 tags_dt = self._db.tags.find(
                     {
                         "owner": task["user"]["sid"],
                         "temperature": 0,
-                        "processing": TAG_NOT_IN_PROCESSING,
+                        "processing": claimable_item_processing(),
                     },
                     projection={"tag": True, "posts_count": True, "freq": True},
                 ).limit(self._tags_bath_size)
@@ -720,22 +710,19 @@ class RssTagTasks:
                         {"_id": {"$in": ids}},
                         {"$set": {"processing": time.time()}},
                     )
-                    self._db.tasks.update_one(
-                        {"_id": user_task["_id"]},
-                        {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
-                    )
+                    self._state.release(user_task["_id"])
                 else:
                     task["type"] = TASK_NOOP
                     can_delete = self._can_finalize_completed_task(user_task)
                     if can_delete:
-                        self._db.tasks.delete_one({"_id": user_task["_id"]})
+                        self._state.complete(user_task["_id"])
             elif user_task["type"] == TASK_NER:
                 data = []
                 ps = self._db.posts.find(
                     {
                         "owner": task["user"]["sid"],
                         "ner": {"$exists": False},
-                        "processing": POST_NOT_IN_PROCESSING,
+                        "processing": claimable_item_processing(),
                     }
                 ).limit(self._posts_bath_size)
                 ids = []
@@ -756,13 +743,10 @@ class RssTagTasks:
                     if psc == 0:
                         can_delete = self._can_finalize_completed_task(user_task)
                         if can_delete:
-                            self._db.tasks.delete_one({"_id": user_task["_id"]})
+                            self._state.complete(user_task["_id"])
                             unlock_task = False
                 if unlock_task:
-                    self._db.tasks.update_one(
-                        {"_id": user_task["_id"]},
-                        {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
-                    )
+                    self._state.release(user_task["_id"])
             elif user_task["type"] == TASK_TAG_CLASSIFICATION_BATCH:
                 data = []
                 unlock_task = True
@@ -782,7 +766,7 @@ class RssTagTasks:
                         {
                             "owner": task["user"]["sid"],
                             "classifications": {"$exists": False},
-                            "processing": TAG_NOT_IN_PROCESSING,
+                            "processing": claimable_item_processing(),
                         }
                     ).limit(10000)
                     for tag_dt in tags_dt:
@@ -804,13 +788,10 @@ class RssTagTasks:
                         if psc == 0:
                             can_delete = self._can_finalize_completed_task(user_task)
                             if can_delete:
-                                self._db.tasks.delete_one({"_id": user_task["_id"]})
+                                self._state.complete(user_task["_id"])
                                 unlock_task = False
                 if unlock_task:
-                    self._db.tasks.update_one(
-                        {"_id": user_task["_id"]},
-                        {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
-                    )
+                    self._state.release(user_task["_id"])
             elif user_task["type"] == TASK_TAG_CLASSIFICATION:
                 data = []
                 unlock_task = True
@@ -818,7 +799,7 @@ class RssTagTasks:
                     {
                         "owner": task["user"]["sid"],
                         "classifications": {"$exists": False},
-                        "processing": TAG_NOT_IN_PROCESSING,
+                        "processing": claimable_item_processing(),
                     }
                 ).limit(self._tags_bath_size)
                 ids = []
@@ -841,13 +822,10 @@ class RssTagTasks:
                     if psc == 0:
                         can_delete = self._can_finalize_completed_task(user_task)
                         if can_delete:
-                            self._db.tasks.delete_one({"_id": user_task["_id"]})
+                            self._state.complete(user_task["_id"])
                             unlock_task = False
                 if unlock_task:
-                    self._db.tasks.update_one(
-                        {"_id": user_task["_id"]},
-                        {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
-                    )
+                    self._state.release(user_task["_id"])
 
             """if task_type == TASK_WORDS:
                 if task['type'] == TASK_NOOP:
@@ -893,46 +871,27 @@ class RssTagTasks:
         if not task_id:
             return False
 
-        try:
-            failed_attempts: int = int(task.get("failed_attempts", 0)) + 1
-            max_failed_attempts: int = int(
+        return self._state.fail(
+            task,
+            error or f"Task handler returned false for type {task.get('type')}",
+            max_attempts=int(
                 task.get("max_failed_attempts", MAX_TOPIC_MERGE_FAILED_ATTEMPTS)
-            )
-            message: str = error or (
-                f"Task handler returned false for type {task.get('type')}"
-            )
-            if failed_attempts >= max_failed_attempts:
-                self.mark_task_failed(task_id, message)
-                return True
-
-            self._db.tasks.update_one(
-                {"_id": task_id},
-                {
-                    "$set": {
-                        "processing": TASK_NOT_IN_PROCESSING,
-                        "failed_attempts": failed_attempts,
-                        "last_error": message[:MAX_EXTERNAL_ERROR_LENGTH],
-                        "updated_at": time.time(),
-                    }
-                },
-            )
-            return True
-        except Exception as e:
-            self._log.error(
-                "Can`t release failed task %s, type %s. Info: %s",
-                task_id,
-                task.get("type"),
-                e,
-            )
-            return False
+            ),
+        )
 
     def release_stale_tasks(self, max_age_seconds: float) -> int:
-        """Reclaim tasks whose ``processing`` lock is a stale timestamp.
+        """Reclaim LEGACY tasks whose ``processing`` lock is a stale timestamp.
 
-        Some task types (e.g. TASK_TOPIC_MERGE) stay claimed for a whole agent
-        run instead of being unlocked immediately. If the worker crashes mid-run
-        the lock is never released and the task deadlocks. This resets any lock
-        that is a positive timestamp older than ``max_age_seconds`` back to
+        This is a safety net for legacy (status-less) docs only. New-style docs
+        carry a ``status`` field and self-heal through lease expiry in
+        ``TaskStateMachine.claim``; blindly resetting ``processing`` on a
+        status-bearing doc would desync the two representations, so the query is
+        restricted with ``status: {"$exists": False}``.
+
+        Some legacy task types stayed claimed for a whole agent run instead of
+        being unlocked immediately. If the worker crashed mid-run the lock was
+        never released and the task deadlocked. This resets any legacy lock that
+        is a positive timestamp older than ``max_age_seconds`` back to
         TASK_NOT_IN_PROCESSING. Frozen (TASK_FREEZED == -1) and idle
         (TASK_NOT_IN_PROCESSING == 0) tasks are never touched because the
         ``$gt: 0`` bound excludes them.
@@ -940,7 +899,10 @@ class RssTagTasks:
         try:
             cutoff: float = time.time() - max_age_seconds
             result = self._db.tasks.update_many(
-                {"processing": {"$gt": TASK_NOT_IN_PROCESSING, "$lt": cutoff}},
+                {
+                    "status": {"$exists": False},
+                    "processing": {"$gt": TASK_NOT_IN_PROCESSING, "$lt": cutoff},
+                },
                 {"$set": {"processing": TASK_NOT_IN_PROCESSING}},
             )
             reclaimed: int = int(result.modified_count)
@@ -1093,14 +1055,20 @@ class RssTagTasks:
                 )
                 if not remove_task:
                     # Keep the long-lived task in the queue, but always clear
-                    # the claim so another worker can pick it up. Also clear
-                    # the failure budget on a successful run so intermittent
-                    # failures don't accumulate to the freeze threshold.
-                    self._unlock_topic_merge_task(task["_id"], clear_failures=True)
+                    # the claim so another worker can pick it up. The failure
+                    # budget is cleared at the tail for every batch-continuation
+                    # path.
+                    self._state.release(task["_id"])
             if remove_task:
-                self.remove_task(task["_id"])
+                # Chain-first: enqueue successors (idempotently) BEFORE deleting
+                # so a crash between the two never loses the chain.
                 if not task.get("manual", False):
                     self.add_next_tasks(task["user"]["sid"], task["type"])
+                self._state.complete(task["_id"])
+            else:
+                # Intermittent failures during a long batch run must not
+                # accumulate toward the dead-letter threshold.
+                self._clear_failure_budget(task["_id"])
 
             result = True
         except Exception as e:
@@ -1113,31 +1081,25 @@ class RssTagTasks:
                 task_type,
                 e,
             )
-            # Long-lived claims (topic merge) must not stay stuck on processing
-            # if finish_task itself throws after a successful handler run.
-            if (
-                isinstance(task, dict)
-                and task.get("type") == TASK_TOPIC_MERGE
-                and task.get("_id")
-            ):
-                self._unlock_topic_merge_task(task["_id"], clear_failures=False)
 
         return result
 
-    def _unlock_topic_merge_task(
-        self, task_id: Any, clear_failures: bool = False
-    ) -> None:
-        """Release a TOPIC_MERGE claim so the task can be retried or finalized."""
+    def _clear_failure_budget(self, task_id: Any) -> None:
+        """Clear accumulated failure bookkeeping on a task doc."""
         try:
-            update: Dict[str, Any] = {
-                "$set": {"processing": TASK_NOT_IN_PROCESSING}
-            }
-            if clear_failures:
-                update["$unset"] = {"failed_attempts": "", "last_error": ""}
-            self._db.tasks.update_one({"_id": task_id}, update)
+            self._db.tasks.update_one(
+                {"_id": task_id},
+                {
+                    "$unset": {
+                        "attempts": "",
+                        "last_error": "",
+                        "backoff_until": "",
+                    }
+                },
+            )
         except Exception as e:
             self._log.error(
-                "Can`t unlock topic merge task %s. Info: %s", task_id, e
+                "Can`t clear failure budget for task %s. Info: %s", task_id, e
             )
 
     def get_current_tasks(self, user_id: str) -> List[dict]:
@@ -1404,7 +1366,7 @@ class RssTagTasks:
             post = self._find_pending_grouping_post(
                 owner,
                 user_task,
-                extra_query={"processing": POST_NOT_IN_PROCESSING},
+                extra_query={"processing": claimable_item_processing()},
                 claim_set=claim_set,
             )
             if not post:
@@ -1440,7 +1402,7 @@ class RssTagTasks:
                 {
                     "owner": owner,
                     "classifications": {"$exists": False},
-                    "processing": TAG_NOT_IN_PROCESSING,
+                    "processing": claimable_item_processing(),
                 },
                 {"$set": claim_set},
             )
@@ -1714,13 +1676,13 @@ class RssTagTasks:
         return False
 
     def freeze_tasks(self, user: dict, type: int) -> Optional[bool]:
+        """Pause a user's tasks (all types when ``type == TASK_ALL``).
+
+        Delegates to the state machine, which marks matching non-dead docs
+        ``paused`` and dual-writes ``processing = TASK_FREEZED``.
+        """
         try:
-            query = {"user": user["sid"]}
-            if type != TASK_ALL:
-                query["type"] = type
-            self._db.tasks.update_many(
-                query, {"$set": {"processing": TASK_FREEZED}}
-            )  # TODO: check result?
+            self._state.pause(user["sid"], None if type == TASK_ALL else type)
             result = True
         except Exception as e:
             result = None
@@ -1731,18 +1693,19 @@ class RssTagTasks:
         return result
 
     def unfreeze_tasks(self, user: dict, type: int) -> Optional[bool]:
+        """Resume a user's paused/dead tasks (all types when ``type == TASK_ALL``).
+
+        Deliberate behavior change: resume only touches ``paused``/``dead`` docs
+        and never running ones. Stuck claims are no longer force-reset here; they
+        self-heal via lease expiry in ``TaskStateMachine.claim``.
+        """
         try:
-            query = {"user": user["sid"]}
-            if type != TASK_ALL:
-                query["type"] = type
-            self._db.tasks.update_many(
-                query, {"$set": {"processing": TASK_NOT_IN_PROCESSING}}
-            )  # TODO: check result?
+            self._state.resume(user["sid"], None if type == TASK_ALL else type)
             result = True
         except Exception as e:
             result = None
             self._log.error(
-                "Can`t freeze tasks? user %s, type %s. Info: %s", user["sid"], type, e
+                "Can`t unfreeze tasks? user %s, type %s. Info: %s", user["sid"], type, e
             )
 
         return result

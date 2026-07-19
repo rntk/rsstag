@@ -56,14 +56,14 @@ from rsstag.workers.tag_worker import TagWorker
 from rsstag.workers.provider_worker import ProviderWorker
 from rsstag.workers_db import RssTagWorkers
 
-# How often a worker sweeps for stale task locks, and how old a lock must be
-# before it is reclaimed. Long-lived claims (e.g. TASK_TOPIC_MERGE) can leave a
-# task stuck on ``processing`` if the worker crashes mid-run, so a periodic
-# sweep at a much slower cadence than the heartbeat frees them for retry.
+# Legacy-doc safety net. Lease expiry in ``TaskStateMachine.claim`` is now the
+# primary reclaim mechanism for new-style (status-bearing) task docs; this
+# periodic sweep only touches LEGACY (status-less) docs whose ``processing``
+# lock is a stale timestamp left by a crashed worker mid-run.
 STALE_TASK_RECLAIM_INTERVAL_SECONDS = 300  # 5 minutes
-# Topic merge can run for a long time; keep the age high enough not to steal a
-# live claim, but low enough that a crashed worker does not freeze the queue
-# for an entire day. 1 hour balances both.
+# Keep the age high enough not to steal a live legacy claim, but low enough that
+# a crashed worker does not freeze the queue for an entire day. 1 hour balances
+# both.
 STALE_TASK_MAX_AGE_SECONDS = 3600  # 1 hour
 
 
@@ -310,16 +310,13 @@ def worker(config: Dict[str, Any]) -> None:
 
                 if task_done:
                     finished = tasks.finish_task(task)
-                    # Topic merge stays claimed for the whole handler run. If
-                    # finish_task itself fails, unlock (or freeze after budget)
-                    # so the queue cannot sit forever on a stuck claim with a
-                    # large pending count and idle workers.
-                    if (
-                        not finished
-                        and task.get("type") == TASK_TOPIC_MERGE
-                    ):
+                    # Uniform failure path: if finish_task itself fails, run the
+                    # task through the state machine's fail/backoff/dead-letter
+                    # logic so no claim sits stuck with idle workers.
+                    if not finished:
                         tasks.release_failed_task(
-                            task, "Topic merge finish_task returned false"
+                            task,
+                            f"finish_task returned false for type {task['type']}",
                         )
                     if task["type"] == TASK_DOWNLOAD:
                         provider = task.get("provider", "")
@@ -331,25 +328,26 @@ def worker(config: Dict[str, Any]) -> None:
                     elif task["type"] == TASK_CLUSTERING:
                         users.update_by_sid(task["user"]["sid"], {"in_queue": {}})
                 else:
-                    if task["type"] == TASK_TOPIC_MERGE:
-                        tasks.release_failed_task(
-                            task, "Topic merge handler returned false"
-                        )
+                    # Uniform failure path for every task type: the handler
+                    # returned false, so run it through fail/backoff/dead-letter.
+                    tasks.release_failed_task(
+                        task,
+                        f"Handler returned false for type {task['type']}",
+                    )
                     time.sleep(randint(3, 8))
             except Exception as e:
                 logging.error(
                     "worker got exception: {}. {}".format(e, traceback.format_exc())
                 )
-                # The topic-merge task is claimed (processing set) before it is
-                # handed to the handler. If the handler raised, releasing the
-                # lock here keeps the task retryable instead of deadlocking it
-                # with processing stuck set until a manual unfreeze.
-                if task is not None and task.get("type") == TASK_TOPIC_MERGE:
+                # A claimed task (processing/lease set) that raised must be
+                # released so it stays retryable instead of deadlocking until a
+                # lease expiry or manual unfreeze. Uniform across all task types.
+                if task is not None and task.get("_id"):
                     try:
-                        tasks.release_failed_task(task, "Topic merge raised: {}".format(e))
+                        tasks.release_failed_task(task, "Handler raised: {}".format(e))
                     except Exception as release_exc:
                         logging.error(
-                            "Failed to release topic merge task after exception: %s",
+                            "Failed to release task after exception: %s",
                             release_exc,
                         )
                 time.sleep(randint(3, 8))
