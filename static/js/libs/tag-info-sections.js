@@ -46,10 +46,11 @@ export function initTagInfoEmptySections() {
       const state = computeSectionState(block);
       if (state === 'hidden') {
         section.hidden = true;
-        section.classList.remove('tag-info-section--unloaded');
+        section.classList.remove('tag-info-section--loaded', 'tag-info-section--unloaded');
       } else {
         section.hidden = false;
         section.classList.toggle('tag-info-section--unloaded', state === 'unloaded');
+        section.classList.toggle('tag-info-section--loaded', state === 'loaded');
       }
     };
 

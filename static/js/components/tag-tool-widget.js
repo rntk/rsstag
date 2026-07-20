@@ -80,12 +80,28 @@ export default class TagToolWidget extends React.Component {
 
   render() {
     const prefix = this.state.hidden ? 'Load ' : 'Hide ';
+    const buttonLabel = this.state.loading
+      ? `Loading ${this.props.title}…`
+      : prefix + this.props.title;
     const container = !this.props.renderData && document.getElementById(this.props.listContainerId);
 
     return (
       <React.Fragment>
-        <button onClick={this.loadData}>{prefix + this.props.title}</button>
-        {this.state.error ? <span>{this.state.error}</span> : null}
+        <button
+          type="button"
+          className={`tag-info-control${this.state.hidden ? '' : ' tag-info-control--active'}`}
+          onClick={this.loadData}
+          aria-controls={this.props.listContainerId}
+          aria-expanded={!this.state.hidden}
+          disabled={this.state.loading}
+        >
+          {buttonLabel}
+        </button>
+        {this.state.error ? (
+          <span className="tag-info-control__error" role="alert">
+            {this.state.error}
+          </span>
+        ) : null}
         {!this.state.hidden && container
           ? createPortal(
               <TagsList

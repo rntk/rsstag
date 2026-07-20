@@ -157,21 +157,37 @@ test('normalizedTags sets root:true on each tag and keys the Map by tag.tag', ()
 // render tests
 // ============================================================
 
-test('render toggles button label between Load <title> and Hide <title>', () => {
+test('render toggles button label and exposes a loading label', () => {
   const src = readSource();
   assert.ok(
     /const prefix\s*=\s*this\.state\.hidden\s*\?\s*['"]Load\s*['"]\s*:\s*['"]Hide\s*['"]/.test(src),
     'should compute Load/Hide prefix from state.hidden'
   );
-  assert.ok(/\{prefix\s*\+\s*this\.props\.title\}/.test(src), 'should render prefix + title');
+  assert.ok(
+    /const buttonLabel\s*=\s*this\.state\.loading[\s\S]*?prefix\s*\+\s*this\.props\.title/.test(
+      src
+    ),
+    'should render a loading label while preserving the Load/Hide title label'
+  );
+  assert.ok(/\{buttonLabel\}/.test(src), 'should render the computed button label');
 });
 
-test('render shows the inline error text when present', () => {
+test('render shows an accessible inline error when present', () => {
   const src = readSource();
   assert.ok(
-    /this\.state\.error\s*\?\s*<span>\{this\.state\.error\}<\/span>/.test(src),
-    'should render the error inline'
+    /this\.state\.error\s*\?[\s\S]*?<span className="tag-info-control__error" role="alert">[\s\S]*?\{this\.state\.error\}[\s\S]*?<\/span>/.test(
+      src
+    ),
+    'should render the error inline with an alert role'
   );
+});
+
+test('render exposes styled loading and expanded button states', () => {
+  const src = readSource();
+  assert.ok(/className=\{`tag-info-control/.test(src));
+  assert.ok(/aria-controls=\{this\.props\.listContainerId\}/.test(src));
+  assert.ok(/aria-expanded=\{!this\.state\.hidden\}/.test(src));
+  assert.ok(/disabled=\{this\.state\.loading\}/.test(src));
 });
 
 test('render portals TagsList into the list container when not hidden and renderData is absent', () => {

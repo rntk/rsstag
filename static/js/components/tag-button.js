@@ -20,6 +20,16 @@ export default class TagTool extends React.Component {
 
   render() {
     const prefix = this.state.list_hidden ? 'Load ' : 'Hide ';
-    return <button onClick={this.loadData}>{prefix + this.props.title}</button>;
+    return (
+      <button
+        type="button"
+        className={`tag-info-control${this.state.list_hidden ? '' : ' tag-info-control--active'}`}
+        onClick={this.loadData}
+        aria-controls={this.props.controls}
+        aria-expanded={!this.state.list_hidden}
+      >
+        {prefix + this.props.title}
+      </button>
+    );
   }
 }

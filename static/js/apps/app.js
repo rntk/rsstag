@@ -477,6 +477,64 @@ export function resolvePageType(path) {
   return 'unknown';
 }
 
+/**
+ * @param {HTMLButtonElement} button
+ * @param {HTMLElement} statusNode
+ * @param {string} message
+ * @param {boolean} isLoading
+ */
+function setAnthologyActionState(button, statusNode, message, isLoading) {
+  button.disabled = isLoading;
+  button.setAttribute('aria-busy', String(isLoading));
+  statusNode.textContent = message;
+}
+
+/**
+ * @param {HTMLButtonElement} button
+ * @param {HTMLElement} statusNode
+ * @returns {Promise<void>}
+ */
+async function startTagAnthology(button, statusNode) {
+  setAnthologyActionState(button, statusNode, 'Starting anthology…', true);
+
+  try {
+    const response = await fetch('/api/anthologies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        seed_type: 'tag',
+        seed_value: button.dataset.seedValue || '',
+        scope: { mode: 'all' },
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok || payload.error) {
+      throw new Error(payload.error || 'Failed to start anthology');
+    }
+
+    const anthologyId = payload.data && payload.data.anthology_id;
+    window.location.href = anthologyId ? `/anthologies/${anthologyId}` : '/anthologies';
+  } catch (error) {
+    console.error('Unable to start tag anthology', error);
+    const message = error instanceof Error ? error.message : 'Failed to start anthology';
+    setAnthologyActionState(button, statusNode, message, false);
+  }
+}
+
+/** @returns {void} */
+function initTagAnthologyAction() {
+  const button = document.getElementById('start_tag_anthology');
+  const statusNode = document.getElementById('start_tag_anthology_status');
+  if (!button || !statusNode) {
+    return;
+  }
+
+  button.addEventListener('click', () => {
+    startTagAnthology(button, statusNode);
+  });
+}
+
 export function initApp() {
   if (window.EVSYS === undefined) {
     window.EVSYS = new EventsSystem();
@@ -630,6 +688,7 @@ export function initApp() {
     posts_storage.start();
   } else if (pageType === 'tag-info') {
     let tag = window.initial_tag;
+    initTagAnthologyAction();
     tagWithContextInfoPage(tag);
     tagNoContextInfoPage(tag);
     initTagInfoEmptySections();
@@ -694,7 +753,12 @@ function tagNoContextInfoPage(tag) {
   const bigrams_mentions_storage = new BiGramsMentionsStorage(tag.tag, bigrams_mentions_evsys);
   renderToRoot(
     'load_bigrams_mentions',
-    <TagButton ES={bigrams_mentions_evsys} title="mentions" tag={tag} />
+    <TagButton
+      ES={bigrams_mentions_evsys}
+      title="mentions"
+      tag={tag}
+      controls="bigrams_mentions_chart"
+    />
   );
   bigrams_mentions_chart.start();
   bigrams_mentions_storage.start();
@@ -702,7 +766,10 @@ function tagNoContextInfoPage(tag) {
   const wordtree_evsys = new EventsSystem();
   const wordtree = new WordTree('#wordtree', wordtree_evsys);
   const wordtree_storage = new WordTreeStorage(tag.tag, wordtree_evsys);
-  renderToRoot('load_wordtree', <TagButton ES={wordtree_evsys} title="wordtree" tag={tag} />);
+  renderToRoot(
+    'load_wordtree',
+    <TagButton ES={wordtree_evsys} title="wordtree" tag={tag} controls="wordtree_block" />
+  );
   wordtree.start();
   wordtree_storage.start();
   renderToRoot('tag_contexts', <TagContexts ES={wordtree_evsys} tag={tag} />);
@@ -757,7 +824,10 @@ function tagWithContextInfoPage(tag) {
   const clusters_evsys = new EventsSystem();
   const clusters_storage = new TagsClustersStorage(clusters_evsys);
   renderToRoot('tag_clusters', <TagsClustersList ES={clusters_evsys} tag={tag.tag} />);
-  renderToRoot('load_clusters', <TagButton ES={clusters_evsys} title="clusters" tag={tag} />);
+  renderToRoot(
+    'load_clusters',
+    <TagButton ES={clusters_evsys} title="clusters" tag={tag} controls="tag_clusters" />
+  );
   clusters_storage.start();
 
   const contexts_classification_evsys = new EventsSystem();
@@ -767,7 +837,12 @@ function tagWithContextInfoPage(tag) {
   renderToRoot('tag_contexts_classification', <TagsList ES={contexts_classification_evsys} />);
   renderToRoot(
     'load_contexts_classification',
-    <TagButton ES={contexts_classification_evsys} title="contexts" tag={tag} />
+    <TagButton
+      ES={contexts_classification_evsys}
+      title="contexts"
+      tag={tag}
+      controls="tag_contexts_classification"
+    />
   );
   contexts_classification_storage.start();
 
@@ -810,7 +885,11 @@ function tagWithContextInfoPage(tag) {
   let isGraphVisible = false;
 
   const loadGraphButton = document.createElement('button');
+  loadGraphButton.type = 'button';
+  loadGraphButton.className = 'tag-info-control tag-info-graph-control';
   loadGraphButton.textContent = 'Load bi-grams graph';
+  loadGraphButton.setAttribute('aria-controls', 'bi_grams_graph');
+  loadGraphButton.setAttribute('aria-expanded', 'false');
   loadGraphButton.addEventListener('click', () => {
     if (!isGraphLoaded) {
       // Loading the graph for the first time
@@ -831,6 +910,8 @@ function tagWithContextInfoPage(tag) {
         isGraphVisible = true;
         loadGraphButton.disabled = false;
         loadGraphButton.textContent = 'Hide bi-grams graph';
+        loadGraphButton.classList.add('tag-info-control--active');
+        loadGraphButton.setAttribute('aria-expanded', 'true');
       }, 500);
     } else {
       // Toggle visibility
@@ -842,6 +923,8 @@ function tagWithContextInfoPage(tag) {
           biGramsGraphContainer.style.minHeight = '0';
         }
         loadGraphButton.textContent = 'Show bi-grams graph';
+        loadGraphButton.classList.remove('tag-info-control--active');
+        loadGraphButton.setAttribute('aria-expanded', 'false');
         isGraphVisible = false;
       } else {
         // Show the graph - restore full size and re-render
@@ -851,6 +934,8 @@ function tagWithContextInfoPage(tag) {
         }
         bi_grams_graph.start();
         loadGraphButton.textContent = 'Hide bi-grams graph';
+        loadGraphButton.classList.add('tag-info-control--active');
+        loadGraphButton.setAttribute('aria-expanded', 'true');
         isGraphVisible = true;
       }
     }
@@ -914,7 +999,12 @@ function tagWithContextInfoPage(tag) {
   });
   renderToRoot(
     'load_topics_radar',
-    <TagButton ES={tag_topics_radar_evsys} title="topics radar" tag={tag} />
+    <TagButton
+      ES={tag_topics_radar_evsys}
+      title="topics radar"
+      tag={tag}
+      controls="tag_topics_radar"
+    />
   );
   topics_radar.start();
   tag_topics_radar_storage.start();
@@ -922,7 +1012,10 @@ function tagWithContextInfoPage(tag) {
   const tag_mentions_evsys = new EventsSystem();
   const tag_mentions_chart = new TagMentionsChart('#mentions_chart', tag_mentions_evsys);
   const tag_mentions_storage = new TagMentionsStorage(tag.tag, tag_mentions_evsys);
-  renderToRoot('load_mentions', <TagButton ES={tag_mentions_evsys} title="mentions" tag={tag} />);
+  renderToRoot(
+    'load_mentions',
+    <TagButton ES={tag_mentions_evsys} title="mentions" tag={tag} controls="mentions_chart" />
+  );
   tag_mentions_chart.start();
   tag_mentions_storage.start();
 
