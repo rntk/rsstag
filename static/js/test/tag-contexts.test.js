@@ -208,12 +208,18 @@ test('source declares render method', () => {
 
 test('render checks this.state.texts for empty data', () => {
   const src = readSource();
-  assert.ok(/if\s*\(\s*!this\.state\.texts\s*\)/.test(src), 'should check !this.state.texts');
+  assert.ok(
+    /if\s*\(\s*!this\.state\.texts\s*\|\|\s*this\.state\.texts\.length\s*===\s*0\s*\)/.test(src),
+    'should treat missing or empty texts as no data'
+  );
 });
 
 test('render returns "No data yet" when no texts', () => {
   const src = readSource();
-  assert.ok(/<p>No data yet<\/p>/.test(src), 'should return <p>No data yet</p> when no texts');
+  assert.ok(
+    /<p className="tag-info-empty-state">No data yet<\/p>/.test(src),
+    'should return <p className="tag-info-empty-state">No data yet</p> when no texts'
+  );
 });
 
 test('render uses Set to deduplicate texts', () => {

@@ -110,7 +110,10 @@ test('TagsClustersTxtList render checks state and clusters', () => {
 
 test('TagsClustersTxtList render returns "No tags" paragraph when empty', () => {
   const src = readSource();
-  assert.ok(/<p>No tags<\/p>/.test(src), 'should return <p>No tags</p> when no clusters');
+  assert.ok(
+    /<p className="tag-info-empty-state">No tags<\/p>/.test(src),
+    'should return <p className="tag-info-empty-state">No tags</p> when no clusters'
+  );
 });
 
 test('TagsClustersTxtList render returns table with cloud class', () => {
@@ -223,7 +226,10 @@ test('TagsClustersList declares componentWillUnmount', () => {
 
 test('TagsClustersList render returns "No clusters" paragraph when empty', () => {
   const src = readSource();
-  assert.ok(/<p>No clusters<\/p>/.test(src), 'should return <p>No clusters</p> when no clusters');
+  assert.ok(
+    /<p className="tag-info-empty-state">No clusters<\/p>/.test(src),
+    'should return <p className="tag-info-empty-state">No clusters</p> when no clusters'
+  );
 });
 
 test('TagsClustersList render returns div with cloud class', () => {

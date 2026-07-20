@@ -61,6 +61,7 @@ import ClustersTopics from '../components/ClustersTopics.js';
 import { initTopicsPage } from '../topics-list.js';
 import TopicsMindmap from '../components/topics-mindmap.js';
 import { initTopicHierarchyCanvasPage, renderTopicsHierarchy } from '../topics-hierarchy.js';
+import { initTagInfoEmptySections } from '../libs/tag-info-sections.js';
 
 function buildGroupedTopicsHierarchy(flatTopics, tagName) {
   const root = { name: 'root', children: [] };
@@ -631,6 +632,7 @@ export function initApp() {
     let tag = window.initial_tag;
     tagWithContextInfoPage(tag);
     tagNoContextInfoPage(tag);
+    initTagInfoEmptySections();
   } else if (pageType === 'context-tags') {
     let tag = window.initial_tag;
     tagWithContextInfoPage(tag);
@@ -784,13 +786,12 @@ function tagWithContextInfoPage(tag) {
   const bi_grams_graph_evsys = new EventsSystem();
   let bi_grams_graph;
 
-  // Add placeholder message to the graph container and make it small
+  // Leave the graph container empty until loaded, so it collapses into the
+  // same compact "unloaded" row as the other on-demand sections.
   const biGramsGraphContainer = document.getElementById('bi_grams_graph');
   const loadGraphSpan = document.getElementById('load_bi_grams_graph');
 
   if (biGramsGraphContainer) {
-    biGramsGraphContainer.innerHTML = '<div class="placeholder-message">No graph loaded</div>';
-    // Make the container small initially
     biGramsGraphContainer.style.height = 'auto';
     biGramsGraphContainer.style.minHeight = '0';
   }
@@ -834,9 +835,9 @@ function tagWithContextInfoPage(tag) {
     } else {
       // Toggle visibility
       if (isGraphVisible) {
-        // Hide the graph - restore placeholder and small height
+        // Hide the graph - clear it and collapse back to a small height
         if (biGramsGraphContainer) {
-          biGramsGraphContainer.innerHTML = '<div class="placeholder-message">Graph hidden</div>';
+          biGramsGraphContainer.innerHTML = '';
           biGramsGraphContainer.style.height = 'auto';
           biGramsGraphContainer.style.minHeight = '0';
         }

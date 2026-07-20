@@ -44,8 +44,8 @@ export default class TagContexts extends React.Component {
   }
 
   render() {
-    if (!this.state.texts) {
-      return <p>No data yet</p>;
+    if (!this.state.texts || this.state.texts.length === 0) {
+      return <p className="tag-info-empty-state">No data yet</p>;
     }
     let texts = [];
     let texts_s = Array.from(new Set(this.state.texts));

@@ -245,8 +245,10 @@ test('source declares hideChart method', () => {
 test('hideChart sets innerHTML to "No mentions" paragraph', () => {
   const src = readSource();
   assert.ok(
-    /this\._container\.innerHTML\s*=\s*['"]<p>No mentions<\/p>['"]/.test(src),
-    'should set innerHTML to <p>No mentions</p>'
+    /this\._container\.innerHTML\s*=\s*['"]<p class="tag-info-empty-state">No mentions<\/p>['"]/.test(
+      src
+    ),
+    'should set innerHTML to <p class="tag-info-empty-state">No mentions</p>'
   );
 });
 

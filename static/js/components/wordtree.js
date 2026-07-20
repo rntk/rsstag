@@ -10,7 +10,7 @@ export default class WordTree {
 
   updateWordTree(data) {
     if (!data.texts.length) {
-      this._container.innerHTML = '<p>No texts</p>';
+      this._container.innerHTML = '<p class="tag-info-empty-state">No texts</p>';
       return;
     }
     this._container.innerHTML = '';

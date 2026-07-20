@@ -163,7 +163,10 @@ test('render checks for state and tags existence', () => {
 
 test('render returns "No tags" paragraph when no tags', () => {
   const src = readSource();
-  assert.ok(/<p>No tags<\/p>/.test(src), 'should return <p>No tags</p> when empty');
+  assert.ok(
+    /<p className="tag-info-empty-state">No tags<\/p>/.test(src),
+    'should return <p className="tag-info-empty-state">No tags</p> when empty'
+  );
 });
 
 test('render sets mode to grouped or flat', () => {

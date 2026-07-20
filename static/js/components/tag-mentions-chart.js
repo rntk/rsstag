@@ -77,7 +77,7 @@ export default class TagMentionsChart {
   }
 
   hideChart() {
-    this._container.innerHTML = '<p>No mentions</p>';
+    this._container.innerHTML = '<p class="tag-info-empty-state">No mentions</p>';
   }
 
   bindEvents() {

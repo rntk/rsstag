@@ -144,7 +144,7 @@ export default class TagTopicsRadar {
     if (!tags || tags.size === 0) {
       this.destroyChart();
       this._items = [];
-      this._container.innerHTML = '<p>No topics data</p>';
+      this._container.innerHTML = '<p class="tag-info-empty-state">No topics data</p>';
       return;
     }
 
@@ -269,7 +269,7 @@ export default class TagTopicsRadar {
     }
     this._container.insertAdjacentHTML(
       'beforeend',
-      '<p class="tag-topics-radar-empty">No topics found for this level</p>'
+      '<p class="tag-topics-radar-empty tag-info-empty-state">No topics found for this level</p>'
     );
   }
 

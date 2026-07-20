@@ -1448,6 +1448,193 @@ body.anthology-compare-modal-open {
   padding: 0.5em;
 }
 
+/* ── /tag-info/<tag> page ──────────────────────────────────────────────
+   All rules are scoped under .tag-info-page so shared classes
+   (.global_tools_button, .group_title, .anthology-action-button, and the
+   base .tag_info_block used on other flows) keep their app-wide look. */
+.tag-info-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: var(--rsst-space-5) var(--rsst-space-4);
+}
+
+.tag-info-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rsst-space-3);
+  padding: var(--rsst-space-5);
+  margin-bottom: var(--rsst-space-5);
+  background: var(--rsst-surface-canvas);
+  border: 1px solid var(--rsst-border);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgb(32 35 31 / 6%);
+}
+
+.tag-info-header__main {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--rsst-space-3);
+}
+
+.tag-info-header__title {
+  margin: 0;
+  font: 700 26px/1.15 var(--rsst-font-head);
+
+  a {
+    color: var(--rsst-ink);
+    text-decoration: none;
+
+    &:hover,
+    &:focus-visible {
+      text-decoration: underline;
+    }
+  }
+}
+
+.tag-info-header__count {
+  padding: var(--rsst-space-1) var(--rsst-space-3);
+  font: 500 13px/1 var(--rsst-font-body);
+  color: var(--rsst-ink-tertiary);
+  background: var(--rsst-surface-sunken);
+  border: 1px solid var(--rsst-border);
+  border-radius: 999px;
+}
+
+.tag-info-header__words {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--rsst-ink-secondary);
+}
+
+.tag-info-header__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--rsst-space-2);
+  padding-top: var(--rsst-space-3);
+  border-top: 1px solid var(--rsst-border);
+}
+
+// Shared button / link-button styling for the header actions
+.tag-info-button,
+.tag-info-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--rsst-space-1);
+  padding: 7px 14px;
+  font: 500 13px/1 var(--rsst-font-body);
+  color: var(--rsst-ink-secondary);
+  background: var(--rsst-surface-canvas);
+  border: 1px solid var(--rsst-border);
+  border-radius: 8px;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+
+  &:hover,
+  &:focus-visible {
+    color: var(--rsst-ink);
+    background: var(--rsst-surface-container-high);
+    border-color: var(--rsst-border-strong);
+  }
+}
+
+.tag-info-button--primary {
+  color: var(--rsst-on-primary);
+  background: var(--rsst-primary);
+  border-color: var(--rsst-primary);
+
+  &:hover,
+  &:focus-visible {
+    color: var(--rsst-on-primary);
+    background: var(--rsst-primary-container);
+    border-color: var(--rsst-primary-container);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: wait;
+  }
+}
+
+// Section cards
+.tag-info-sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rsst-space-4);
+}
+
+.tag-info-section {
+  overflow: hidden;
+  background: var(--rsst-surface-canvas);
+  border: 1px solid var(--rsst-border);
+  border-radius: 12px;
+}
+
+.tag-info-section__head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--rsst-space-3);
+  padding: var(--rsst-space-3) var(--rsst-space-4);
+  background: var(--rsst-surface-sunken);
+  border-bottom: 1px solid var(--rsst-border);
+}
+
+.tag-info-section__title {
+  margin: 0;
+  font: 700 13px/1.2 var(--rsst-font-head);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--rsst-ink-secondary);
+}
+
+.tag-info-section__loader {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--rsst-space-2);
+}
+
+// Content wells inside the cards: drop the standalone border/margins so the
+// card provides the framing. Empty wells (not yet loaded) collapse away.
+.tag-info-page .tag_info_block {
+  margin: 0;
+  padding: var(--rsst-space-4);
+  border: 0;
+  border-radius: 0;
+}
+
+.tag-info-page .tag_info_block:empty {
+  display: none;
+}
+
+.tag-info-page .openai_info_block {
+  padding: var(--rsst-space-4);
+}
+
+.tag-info-page .tag-info-section[hidden] {
+  display: none;
+}
+
+// On-demand sections that haven't been loaded yet collapse to a light,
+// consistent row instead of a full bordered card.
+.tag-info-section.tag-info-section--unloaded {
+  background: transparent;
+  border-color: transparent;
+  border-radius: 0;
+}
+
+.tag-info-section.tag-info-section--unloaded .tag-info-section__head {
+  padding: var(--rsst-space-2) 0;
+  background: transparent;
+  border-bottom: 0;
+}
+
 .tag-topics-radar-controls {
   display: flex;
   flex-wrap: wrap;

@@ -78,13 +78,18 @@ test('updateWordTree checks data.texts.length for empty data', () => {
 
 test('updateWordTree shows "No texts" when texts array is empty', () => {
   const src = readSource();
-  assert.ok(/<p>No texts<\/p>/.test(src), 'should display <p>No texts</p>');
+  assert.ok(
+    /<p class="tag-info-empty-state">No texts<\/p>/.test(src),
+    'should display <p class="tag-info-empty-state">No texts</p>'
+  );
 });
 
 test('updateWordTree sets container innerHTML when no texts', () => {
   const src = readSource();
   assert.ok(
-    /this\._container\.innerHTML\s*=\s*['"]<p>No texts<\/p>['"]/.test(src),
+    /this\._container\.innerHTML\s*=\s*['"]<p class="tag-info-empty-state">No texts<\/p>['"]/.test(
+      src
+    ),
     'should set innerHTML to "No texts" message'
   );
 });

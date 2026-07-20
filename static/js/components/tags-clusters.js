@@ -71,7 +71,7 @@ export class TagsClustersTxtList extends React.Component {
       }
       return <table className="cloud">{tbodies}</table>;
     } else {
-      return <p>No tags</p>;
+      return <p className="tag-info-empty-state">No tags</p>;
     }
   }
 }
@@ -98,7 +98,7 @@ export default class TagsClustersList extends React.Component {
 
   render() {
     if (!this.state || !this.state.clusters) {
-      return <p>No clusters</p>;
+      return <p className="tag-info-empty-state">No clusters</p>;
     }
     let pids_labels = [];
     for (let label in this.state.clusters) {

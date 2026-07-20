@@ -144,7 +144,7 @@ export default class TagsList extends React.Component {
         </div>
       );
     } else {
-      return <p>No tags</p>;
+      return <p className="tag-info-empty-state">No tags</p>;
     }
   }
 }
