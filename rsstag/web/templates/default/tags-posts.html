@@ -5,24 +5,11 @@
 {% include "head-data.html" %}
 </head>
 <body>
-{% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
-<div id="global_tools">
-    <div class="left_half">
-        <div id="link_on_root" class="global_tools_button">
-            <a href="/">main</a>
-        </div>
-        <div id="help_button" class="global_tools_button">
-            <a href="#">help</a>
-        </div>
-    </div>
-    <div class="right_half">
-        <div id="posts_stat" class="global_tools_button"></div>
-        <div id="read_all" class="global_tools_button"><span>read all</span></div>
-        <div id="show_all" class="global_tools_button"><span>show all</span></div>
-        <div id="main_menu_button" class="global_tools_button">
-            {{ menu.menu_button() }}
-            {{ g_status.global_status() }}
-        </div>
+{% from 'site-header.html' import site_header with context %}
+{{ site_header(active='tags', show_posts_tools=True) }}
+<div class="flex items-center p-4 border-b border-outline-variant/10">
+    <div id="help_button" class="global_tools_button">
+        <a href="#">help</a>
     </div>
 </div>
 <div id="help_window">
@@ -38,7 +25,6 @@
     <li><b>H</b> - show\hide this window</li>
 </ul>
 </div>
-{{ menu.menu_window() }}
 <div id="post_links">
     <span class="post_links_close">x</span>
     <span class="post_links_content"></span>

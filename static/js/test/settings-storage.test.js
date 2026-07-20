@@ -93,7 +93,7 @@ test('saveSettings posts to /settings and updates state + closes panel on succes
     assert.deepEqual(storage.getState().settings, settings);
     assert.deepEqual(
       es.triggered.map((call) => call[0]),
-      [es.SETTINGS_UPDATED, es.SETTINGS_UPDATED],
+      [es.SETTINGS_UPDATED, es.SETTINGS_UPDATED]
     );
   } finally {
     globalThis.fetch = previousFetch;
@@ -178,6 +178,6 @@ test('bindEvents registers handlers for settings/telegram actions', () => {
       es.CHANGE_SETTINGS_WINDOW_STATE,
       es.SAVE_TELEGRAM_CODE,
       es.SAVE_TELEGRAM_PASSWORD,
-    ],
+    ]
   );
 });

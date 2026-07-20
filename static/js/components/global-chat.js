@@ -4,7 +4,9 @@ import React, { useState, useEffect, useRef } from 'react';
 function formatDate(ts) {
   if (!ts) return '';
   const d = new Date(ts * 1000);
-  return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return (
+    d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  );
 }
 
 function ChatContext({ context, chatId, ES }) {
@@ -13,16 +15,36 @@ function ChatContext({ context, chatId, ES }) {
 
   return (
     <div className="p-3 border-b border-outline-variant/10 bg-surface-container-low/50">
-      <div className="flex items-center gap-2 cursor-pointer select-none" onClick={() => setCollapsed(!collapsed)}>
-        <span className="material-symbols-outlined text-sm text-on-surface-variant transition-transform duration-200" style={{ transform: collapsed ? 'none' : 'rotate(90deg)' }}>chevron_right</span>
-        <span className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-wider">Context ({context.type})</span>
+      <div
+        className="flex items-center gap-2 cursor-pointer select-none"
+        onClick={() => setCollapsed(!collapsed)}
+      >
+        <span
+          className="material-symbols-outlined text-sm text-on-surface-variant transition-transform duration-200"
+          style={{ transform: collapsed ? 'none' : 'rotate(90deg)' }}
+        >
+          chevron_right
+        </span>
+        <span className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-wider">
+          Context ({context.type})
+        </span>
       </div>
       {!collapsed && (
         <div className="mt-2 space-y-2">
-          <div className="text-sm text-on-surface-variant leading-relaxed bg-surface-container-lowest p-2 rounded border border-outline-variant/10 italic font-body">{context.text}</div>
+          <div className="text-sm text-on-surface-variant leading-relaxed bg-surface-container-lowest p-2 rounded border border-outline-variant/10 italic font-body">
+            {context.text}
+          </div>
           {context.source_url && (
             <div className="text-xs text-primary hover:text-primary-container truncate">
-              Source: <a href={context.source_url} target="_blank" rel="noopener noreferrer" className="underline font-medium">{context.source_url}</a>
+              Source:{' '}
+              <a
+                href={context.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline font-medium"
+              >
+                {context.source_url}
+              </a>
             </div>
           )}
         </div>
@@ -35,11 +57,17 @@ function MessageBubble({ message, index, onFork }) {
   const isUser = message.role === 'user';
   return (
     <div className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} mb-4 group font-body`}>
-      <div className={`max-w-[85%] px-4 py-2 rounded-xl shadow-sm ${isUser ? 'bg-primary text-on-primary' : 'bg-surface-container-lowest text-on-surface border border-outline-variant/30'}`}>
+      <div
+        className={`max-w-[85%] px-4 py-2 rounded-xl shadow-sm ${isUser ? 'bg-primary text-on-primary' : 'bg-surface-container-lowest text-on-surface border border-outline-variant/30'}`}
+      >
         <div className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</div>
       </div>
-      <div className={`flex items-center gap-2 mt-1 px-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
-        <span className="text-[10px] text-on-surface-variant font-medium">{formatDate(message.timestamp)}</span>
+      <div
+        className={`flex items-center gap-2 mt-1 px-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}
+      >
+        <span className="text-[10px] text-on-surface-variant font-medium">
+          {formatDate(message.timestamp)}
+        </span>
         <button
           className="p-1 hover:bg-surface-container-high rounded text-on-surface-variant hover:text-primary transition-colors"
           title="Fork conversation from here"
@@ -164,7 +192,10 @@ function ChatView({ chat, onBack, ES }) {
   return (
     <div className="flex flex-col h-full bg-surface-container-lowest overflow-hidden font-body">
       <div className="flex items-center gap-3 p-4 bg-surface border-b border-outline-variant/10 shrink-0">
-        <button className="p-1.5 hover:bg-surface-container-high rounded-full text-on-surface-variant transition-colors" onClick={onBack}>
+        <button
+          className="p-1.5 hover:bg-surface-container-high rounded-full text-on-surface-variant transition-colors"
+          onClick={onBack}
+        >
           <span className="material-symbols-outlined text-xl">arrow_back</span>
         </button>
         {editingTitle ? (
@@ -173,11 +204,18 @@ function ChatView({ chat, onBack, ES }) {
             value={titleValue}
             onChange={(e) => setTitleValue(e.target.value)}
             onBlur={handleRenameSubmit}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleRenameSubmit(); if (e.key === 'Escape') setEditingTitle(false); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleRenameSubmit();
+              if (e.key === 'Escape') setEditingTitle(false);
+            }}
             autoFocus
           />
         ) : (
-          <span className="flex-1 text-sm font-headline font-bold text-on-surface truncate cursor-pointer hover:text-primary transition-colors" onClick={() => setEditingTitle(true)} title="Click to rename">
+          <span
+            className="flex-1 text-sm font-headline font-bold text-on-surface truncate cursor-pointer hover:text-primary transition-colors"
+            onClick={() => setEditingTitle(true)}
+            title="Click to rename"
+          >
             {chat.title || 'Chat'}
           </span>
         )}
@@ -228,7 +266,9 @@ function ConversationList({ chats, onSelect, onCreate, onDelete }) {
   return (
     <div className="flex flex-col h-full bg-surface-container-lowest font-body">
       <div className="p-4 border-b border-outline-variant/10 flex justify-between items-center bg-surface-container-low/30">
-        <h2 className="text-sm font-headline font-bold text-on-surface uppercase tracking-wider">Recent Chats</h2>
+        <h2 className="text-sm font-headline font-bold text-on-surface uppercase tracking-wider">
+          Recent Chats
+        </h2>
         <button
           className="flex items-center gap-1.5 px-3 py-1.5 bg-primary hover:bg-primary-container text-on-primary text-xs font-semibold rounded-lg transition-all shadow-sm hover:shadow-md active:scale-95"
           onClick={onCreate}
@@ -269,7 +309,10 @@ function ConversationList({ chats, onSelect, onCreate, onDelete }) {
                 <button
                   className="absolute right-4 top-1/2 -translate-y-1/2 p-1.5 opacity-0 group-hover:opacity-100 hover:bg-error-container hover:text-error text-on-surface-variant rounded-full transition-all duration-200"
                   title="Delete conversation"
-                  onClick={(e) => { e.stopPropagation(); onDelete(chat._id); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete(chat._id);
+                  }}
                 >
                   <span className="material-symbols-outlined text-lg">delete</span>
                 </button>
@@ -385,7 +428,9 @@ export default function GlobalChatPanel({ ES }) {
         onClick={handleToggle}
         title={state.isOpen ? 'Close Chat' : 'Open Chat'}
       >
-        <span className="material-symbols-outlined text-2xl group-hover:scale-110 transition-transform">{state.isOpen ? 'close' : 'chat_bubble'}</span>
+        <span className="material-symbols-outlined text-2xl group-hover:scale-110 transition-transform">
+          {state.isOpen ? 'close' : 'chat_bubble'}
+        </span>
       </button>
 
       {state.isOpen && (
@@ -396,7 +441,9 @@ export default function GlobalChatPanel({ ES }) {
                 <span className="material-symbols-outlined text-on-primary text-lg">robot_2</span>
               </div>
               <div>
-                <h1 className="text-sm font-headline font-bold text-on-surface leading-none">Global Chat</h1>
+                <h1 className="text-sm font-headline font-bold text-on-surface leading-none">
+                  Global Chat
+                </h1>
                 <span className="text-[10px] font-label font-medium text-green-600 flex items-center gap-0.5 mt-1">
                   <span className="w-1.5 h-1.5 bg-green-600 rounded-full"></span>
                   Online

@@ -4,10 +4,38 @@ import rsstag_utils from '../libs/rsstag_utils.js';
 
 const FILTER_TYPES = [
   { type: 'tags', label: 'Tags', searchUrl: '/tags-search', field: 'tag' },
-  { type: 'feeds', label: 'Feeds', searchUrl: '/api/context-filter/suggestions', field: 'value', itemType: 'feed', requireSuggestion: true },
-  { type: 'categories', label: 'Categories', searchUrl: '/api/context-filter/suggestions', field: 'value', itemType: 'category', requireSuggestion: true },
-  { type: 'topics', label: 'Topics', searchUrl: '/api/context-filter/suggestions', field: 'value', itemType: 'topic', requireSuggestion: true },
-  { type: 'subtopics', label: 'Subtopics', searchUrl: '/api/context-filter/suggestions', field: 'value', itemType: 'subtopic', requireSuggestion: true },
+  {
+    type: 'feeds',
+    label: 'Feeds',
+    searchUrl: '/api/context-filter/suggestions',
+    field: 'value',
+    itemType: 'feed',
+    requireSuggestion: true,
+  },
+  {
+    type: 'categories',
+    label: 'Categories',
+    searchUrl: '/api/context-filter/suggestions',
+    field: 'value',
+    itemType: 'category',
+    requireSuggestion: true,
+  },
+  {
+    type: 'topics',
+    label: 'Topics',
+    searchUrl: '/api/context-filter/suggestions',
+    field: 'value',
+    itemType: 'topic',
+    requireSuggestion: true,
+  },
+  {
+    type: 'subtopics',
+    label: 'Subtopics',
+    searchUrl: '/api/context-filter/suggestions',
+    field: 'value',
+    itemType: 'subtopic',
+    requireSuggestion: true,
+  },
 ];
 
 const FILTER_TYPE_MAP = FILTER_TYPES.reduce((acc, item) => {
@@ -109,7 +137,8 @@ export default class ContextFilterBar {
       html += '<button class="context-filter-clear" title="Clear all filters">Clear</button>';
     }
 
-    html += '<button class="context-filter-add" title="Add filter to context">+ Add Filter</button>';
+    html +=
+      '<button class="context-filter-add" title="Add filter to context">+ Add Filter</button>';
     html += '</div>';
 
     container.innerHTML = html;
@@ -327,7 +356,7 @@ export default class ContextFilterBar {
 
     container.querySelectorAll('.context-tag-suggestion').forEach((el) => {
       el.addEventListener('click', (e) => {
-        const value = decodeURIComponent(e.currentTarget.dataset.value || "");
+        const value = decodeURIComponent(e.currentTarget.dataset.value || '');
         this.ES.trigger(this.ES.CONTEXT_FILTER_ADD, {
           type: this._modalState.type,
           value,

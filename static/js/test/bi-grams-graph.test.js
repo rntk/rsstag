@@ -20,22 +20,42 @@ function createMockContainer() {
   const children = [];
   return {
     selector: '#test-container',
-    selectAll() { return this; },
-    remove() { children.length = 0; },
+    selectAll() {
+      return this;
+    },
+    remove() {
+      children.length = 0;
+    },
     append() {
       const el = {
-        style() { return this; },
-        text() { return this; },
-        html() { return this; },
-        attr() { return this; },
-        on() { return this; },
-        append() { return this; },
-        select() { return this; },
+        style() {
+          return this;
+        },
+        text() {
+          return this;
+        },
+        html() {
+          return this;
+        },
+        attr() {
+          return this;
+        },
+        on() {
+          return this;
+        },
+        append() {
+          return this;
+        },
+        select() {
+          return this;
+        },
       };
       children.push(el);
       return el;
     },
-    get childNodes() { return children; },
+    get childNodes() {
+      return children;
+    },
   };
 }
 
@@ -55,7 +75,10 @@ function createMockEventSystem() {
     },
     unbind(event, handler) {
       const handlers = this.bindings.get(event) || [];
-      this.bindings.set(event, handlers.filter((h) => h !== handler));
+      this.bindings.set(
+        event,
+        handlers.filter((h) => h !== handler)
+      );
     },
   };
 }
@@ -149,9 +172,7 @@ test('normalizeGraphData with integer node IDs in links', () => {
       { id: 'alpha', frequency: 10 },
       { id: 'beta', frequency: 5 },
     ],
-    links: [
-      { source: 0, target: 1, weight: 3 },
-    ],
+    links: [{ source: 0, target: 1, weight: 3 }],
   };
 
   const result = graph.normalizeGraphData(rawData);
@@ -173,9 +194,7 @@ test('normalizeGraphData with object node IDs in links', () => {
       { id: 'alpha', frequency: 8 },
       { id: 'beta', frequency: 4 },
     ],
-    links: [
-      { source: { id: 'alpha' }, target: { id: 'beta' }, weight: 2 },
-    ],
+    links: [{ source: { id: 'alpha' }, target: { id: 'beta' }, weight: 2 }],
   };
 
   const result = graph.normalizeGraphData(rawData);
@@ -196,9 +215,7 @@ test('normalizeGraphData resolves object IDs with .tag property', () => {
       { id: 'alpha', frequency: 8 },
       { id: 'beta', frequency: 4 },
     ],
-    links: [
-      { source: { tag: 'alpha' }, target: { tag: 'beta' }, weight: 1 },
-    ],
+    links: [{ source: { tag: 'alpha' }, target: { tag: 'beta' }, weight: 1 }],
   };
 
   const result = graph.normalizeGraphData(rawData);
@@ -219,9 +236,7 @@ test('normalizeGraphData resolves object IDs with .name property', () => {
       { id: 'alpha', frequency: 8 },
       { id: 'beta', frequency: 4 },
     ],
-    links: [
-      { source: { name: 'alpha' }, target: { name: 'beta' }, weight: 1 },
-    ],
+    links: [{ source: { name: 'alpha' }, target: { name: 'beta' }, weight: 1 }],
   };
 
   const result = graph.normalizeGraphData(rawData);
@@ -243,9 +258,7 @@ test('normalizeGraphData falls back to this.tag when meta.main_tag mismatches', 
       { id: 'beta', frequency: 5 },
       { id: 'gamma', frequency: 3 },
     ],
-    links: [
-      { source: 'beta', target: 'gamma', weight: 2 },
-    ],
+    links: [{ source: 'beta', target: 'gamma', weight: 2 }],
   };
 
   const result = graph.normalizeGraphData(rawData);
@@ -411,9 +424,7 @@ test('normalizeGraphData uses bigram_frequency on related nodes', () => {
       { id: 'alpha', frequency: 20 },
       { id: 'beta', frequency: 5, bigram_frequency: 3 },
     ],
-    links: [
-      { source: 'alpha', target: 'beta', weight: 3 },
-    ],
+    links: [{ source: 'alpha', target: 'beta', weight: 3 }],
   };
 
   const result = graph.normalizeGraphData(rawData);
@@ -429,9 +440,7 @@ test('normalizeGraphData handles nodes as plain strings', () => {
 
   const rawData = {
     nodes: ['alpha', 'beta', 'gamma'],
-    links: [
-      { source: 'alpha', target: 'beta', weight: 2 },
-    ],
+    links: [{ source: 'alpha', target: 'beta', weight: 2 }],
   };
 
   const result = graph.normalizeGraphData(rawData);
@@ -452,9 +461,7 @@ test('normalizeGraphData handles links with alternative property names', () => {
       { id: 'alpha', frequency: 10 },
       { id: 'beta', frequency: 5 },
     ],
-    links: [
-      { from: 'alpha', to: 'beta', posts_count: 4 },
-    ],
+    links: [{ from: 'alpha', to: 'beta', posts_count: 4 }],
   };
 
   const result = graph.normalizeGraphData(rawData);
@@ -474,9 +481,7 @@ test('normalizeGraphData handles links with src/dst property names', () => {
       { id: 'alpha', frequency: 10 },
       { id: 'beta', frequency: 5 },
     ],
-    links: [
-      { src: 'alpha', dst: 'beta', value: 6 },
-    ],
+    links: [{ src: 'alpha', dst: 'beta', value: 6 }],
   };
 
   const result = graph.normalizeGraphData(rawData);
@@ -496,9 +501,7 @@ test('normalizeGraphData uses edges as fallback for links', () => {
       { id: 'alpha', frequency: 10 },
       { id: 'beta', frequency: 5 },
     ],
-    edges: [
-      { source: 'alpha', target: 'beta', weight: 2 },
-    ],
+    edges: [{ source: 'alpha', target: 'beta', weight: 2 }],
   };
 
   const result = graph.normalizeGraphData(rawData);
@@ -515,12 +518,8 @@ test('normalizeGraphData ensures main node exists even without explicit node ent
   graph.meta = { main_tag: 'alpha', main_tag_frequency: 15 };
 
   const rawData = {
-    nodes: [
-      { id: 'beta', frequency: 5 },
-    ],
-    links: [
-      { source: 'alpha', target: 'beta', weight: 3 },
-    ],
+    nodes: [{ id: 'beta', frequency: 5 }],
+    links: [{ source: 'alpha', target: 'beta', weight: 3 }],
   };
 
   const result = graph.normalizeGraphData(rawData);
@@ -584,11 +583,7 @@ test('normalizeGraphData handles null/undefined link entries', () => {
       { id: 'alpha', frequency: 10 },
       { id: 'beta', frequency: 5 },
     ],
-    links: [
-      null,
-      undefined,
-      { source: 'alpha', target: 'beta', weight: 1 },
-    ],
+    links: [null, undefined, { source: 'alpha', target: 'beta', weight: 1 }],
   };
 
   const result = graph.normalizeGraphData(rawData);
@@ -709,8 +704,12 @@ test('fetchData calls fetch and processes response with data', async () => {
 
   // Stub renderGraph and renderError to avoid D3
   let renderGraphCalled = false;
-  graph.renderGraph = () => { renderGraphCalled = true; };
-  graph.renderError = () => { throw new Error('renderError called unexpectedly'); };
+  graph.renderGraph = () => {
+    renderGraphCalled = true;
+  };
+  graph.renderError = () => {
+    throw new Error('renderError called unexpectedly');
+  };
   graph.showLoading = () => {};
 
   graph.fetchData();
@@ -736,8 +735,12 @@ test('fetchData handles response without data', async () => {
 
   let renderErrorCalled = false;
   let renderGraphCalled = false;
-  graph.renderGraph = () => { renderGraphCalled = true; };
-  graph.renderError = (msg) => { renderErrorCalled = true; };
+  graph.renderGraph = () => {
+    renderGraphCalled = true;
+  };
+  graph.renderError = (msg) => {
+    renderErrorCalled = true;
+  };
   graph.showLoading = () => {};
 
   graph.fetchData();
@@ -759,7 +762,9 @@ test('fetchData handles fetch error', async () => {
   };
 
   let renderErrorCalled = false;
-  graph.renderError = (msg) => { renderErrorCalled = true; };
+  graph.renderError = (msg) => {
+    renderErrorCalled = true;
+  };
   graph.showLoading = () => {};
 
   graph.fetchData();
@@ -805,7 +810,9 @@ test('handleNodeClick opens entity page for main tag', () => {
   graph.meta = { main_tag: 'alpha' };
 
   let openedUrl = null;
-  globalThis.window.open = (url) => { openedUrl = url; };
+  globalThis.window.open = (url) => {
+    openedUrl = url;
+  };
 
   graph.handleNodeClick('alpha');
   assert.ok(openedUrl.includes('/entity/'));
@@ -818,7 +825,9 @@ test('handleNodeClick opens bi-gram page for related tag', () => {
   graph.meta = { main_tag: 'alpha' };
 
   let openedUrl = null;
-  globalThis.window.open = (url) => { openedUrl = url; };
+  globalThis.window.open = (url) => {
+    openedUrl = url;
+  };
 
   graph.handleNodeClick('beta');
   assert.ok(openedUrl.includes('/bi-gram/'));
@@ -832,7 +841,9 @@ test('handleNodeClick uses this.tag as main when meta.main_tag is absent', () =>
   graph.meta = null;
 
   let openedUrl = null;
-  globalThis.window.open = (url) => { openedUrl = url; };
+  globalThis.window.open = (url) => {
+    openedUrl = url;
+  };
 
   graph.handleNodeClick('other');
   assert.ok(openedUrl.includes('mytag'));
@@ -848,7 +859,9 @@ test('start calls fetchData', async () => {
   const graph = new BiGramsGraph('#c', 'alpha', es);
 
   let fetchDataCalled = false;
-  graph.fetchData = () => { fetchDataCalled = true; };
+  graph.fetchData = () => {
+    fetchDataCalled = true;
+  };
 
   graph.start();
   assert.equal(fetchDataCalled, true);

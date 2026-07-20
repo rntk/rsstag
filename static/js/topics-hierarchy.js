@@ -305,10 +305,7 @@ export function initTopicHierarchyCanvasPage({
     const contentWidth = Math.max(root.scrollWidth, root.offsetWidth, 1);
     const contentHeight = Math.max(root.scrollHeight, root.offsetHeight, 1);
     const fitScale = clampScale(
-      Math.min(
-        (viewportRect.width - 48) / contentWidth,
-        (viewportRect.height - 48) / contentHeight,
-      ),
+      Math.min((viewportRect.width - 48) / contentWidth, (viewportRect.height - 48) / contentHeight)
     );
     scale = fitScale;
     translate = {
@@ -318,15 +315,19 @@ export function initTopicHierarchyCanvasPage({
     updateTransform();
   };
 
-  viewport.addEventListener('wheel', (event) => {
-    event.preventDefault();
-    const rect = viewport.getBoundingClientRect();
-    const factor = event.deltaY > 0 ? 0.88 : 1.14;
-    setScaleAt(scale * factor, {
-      x: event.clientX - rect.left,
-      y: event.clientY - rect.top,
-    });
-  }, { passive: false });
+  viewport.addEventListener(
+    'wheel',
+    (event) => {
+      event.preventDefault();
+      const rect = viewport.getBoundingClientRect();
+      const factor = event.deltaY > 0 ? 0.88 : 1.14;
+      setScaleAt(scale * factor, {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+      });
+    },
+    { passive: false }
+  );
 
   viewport.addEventListener('mousedown', (event) => {
     if (event.button !== 0 || event.target.closest('a, button, input, textarea, select')) {

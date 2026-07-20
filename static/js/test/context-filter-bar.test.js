@@ -41,8 +41,10 @@ test('normalizeFilters is declared as a function', () => {
 });
 
 test('normalizeFilters accepts filters parameter with default empty object', () => {
-  assert.ok(/normalizeFilters\s*\(\s*filters\s*=\s*\{}/.test(source),
-    'should have filters={} default parameter');
+  assert.ok(
+    /normalizeFilters\s*\(\s*filters\s*=\s*\{}/.test(source),
+    'should have filters={} default parameter'
+  );
 });
 
 test('normalizeFilters iterates over FILTER_TYPES to normalize each type', () => {
@@ -73,37 +75,44 @@ test('normalizeState is declared as a function', () => {
 });
 
 test('normalizeState accepts rawState parameter with default', () => {
-  assert.ok(/normalizeState\s*\(\s*rawState\s*=\s*\{}/.test(source),
-    'should have rawState={} default');
+  assert.ok(
+    /normalizeState\s*\(\s*rawState\s*=\s*\{}/.test(source),
+    'should have rawState={} default'
+  );
 });
 
 test('normalizeState extracts filters from rawState.filters or rawState', () => {
-  assert.ok(/rawState\.filters\s*\|\|\s*rawState/.test(source),
-    'should use rawState.filters || rawState');
+  assert.ok(
+    /rawState\.filters\s*\|\|\s*rawState/.test(source),
+    'should use rawState.filters || rawState'
+  );
 });
 
 test('normalizeState calls normalizeFilters on extracted filters', () => {
-  assert.ok(/normalizeFilters\(filters\)/.test(source),
-    'should call normalizeFilters');
+  assert.ok(/normalizeFilters\(filters\)/.test(source), 'should call normalizeFilters');
 });
 
 test('normalizeState derives active from non-empty filters', () => {
-  assert.ok(/Object\.values\(normalizedFilters\)\.some/.test(source),
-    'should use .some to check for non-empty filters');
-  assert.ok(/values\.length > 0/.test(source),
-    'should check values.length > 0');
+  assert.ok(
+    /Object\.values\(normalizedFilters\)\.some/.test(source),
+    'should use .some to check for non-empty filters'
+  );
+  assert.ok(/values\.length > 0/.test(source), 'should check values.length > 0');
 });
 
 test('normalizeState respects explicit boolean active flag', () => {
-  assert.ok(/typeof rawState\.active === 'boolean'/.test(source),
-    'should check if active is boolean');
+  assert.ok(
+    /typeof rawState\.active === 'boolean'/.test(source),
+    'should check if active is boolean'
+  );
 });
 
 test('normalizeState returns object with active and filters', () => {
-  assert.ok(/active:.*rawState\.active/.test(source),
-    'should include active in return value');
-  assert.ok(/filters:.*normalizedFilters/.test(source),
-    'should include normalized filters in return value');
+  assert.ok(/active:.*rawState\.active/.test(source), 'should include active in return value');
+  assert.ok(
+    /filters:.*normalizedFilters/.test(source),
+    'should include normalized filters in return value'
+  );
 });
 
 // ============================================================
@@ -111,30 +120,29 @@ test('normalizeState returns object with active and filters', () => {
 // ============================================================
 
 test('normalizeSuggestion is declared as a function', () => {
-  assert.ok(/function\s+normalizeSuggestion\s*\(/.test(source), 'should declare normalizeSuggestion');
+  assert.ok(
+    /function\s+normalizeSuggestion\s*\(/.test(source),
+    'should declare normalizeSuggestion'
+  );
 });
 
 test('normalizeSuggestion handles string input by trimming and returning value/label/meta', () => {
-  assert.ok(/typeof rawSuggestion === 'string'/.test(source),
-    'should check if input is string');
-  assert.ok(/rawSuggestion\.trim\(\)/.test(source),
-    'should trim string input');
-  assert.ok(/\{ value, label: value, meta: '' \}/.test(source),
-    'should return {value, label, meta} for string');
+  assert.ok(/typeof rawSuggestion === 'string'/.test(source), 'should check if input is string');
+  assert.ok(/rawSuggestion\.trim\(\)/.test(source), 'should trim string input');
+  assert.ok(
+    /\{ value, label: value, meta: '' \}/.test(source),
+    'should return {value, label, meta} for string'
+  );
 });
 
 test('normalizeSuggestion returns null for empty or whitespace-only string', () => {
-  assert.ok(/if\s*\(\s*!value\s*\)/.test(source),
-    'should check for empty value after trim');
-  assert.ok(/return null/.test(source),
-    'should return null for empty');
+  assert.ok(/if\s*\(\s*!value\s*\)/.test(source), 'should check for empty value after trim');
+  assert.ok(/return null/.test(source), 'should return null for empty');
 });
 
 test('normalizeSuggestion returns null for null/undefined/non-object input', () => {
-  assert.ok(/!rawSuggestion/.test(source),
-    'should check for falsy input');
-  assert.ok(/typeof rawSuggestion !== 'object'/.test(source),
-    'should check type is object');
+  assert.ok(/!rawSuggestion/.test(source), 'should check for falsy input');
+  assert.ok(/typeof rawSuggestion !== 'object'/.test(source), 'should check type is object');
 });
 
 test('normalizeSuggestion handles object with value/label/meta fields', () => {
@@ -206,7 +214,9 @@ test('showAddFilterModal method is declared', () => {
 });
 
 test('searchFilters method is declared as async', () => {
-  assert.ok(/async\s+searchFilters\s*\(\s*type\s*,\s*query\s*,\s*resultsContainer\s*\)/.test(source));
+  assert.ok(
+    /async\s+searchFilters\s*\(\s*type\s*,\s*query\s*,\s*resultsContainer\s*\)/.test(source)
+  );
 });
 
 test('renderHints method is declared', () => {

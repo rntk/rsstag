@@ -249,7 +249,6 @@ test('initSentenceClusterPage is a no-op when tabs container is missing', () => 
   });
 });
 
-
 // ============================================================
 // Section: syncGlobalToolsOffset — fixed toolbar content gap
 // ============================================================

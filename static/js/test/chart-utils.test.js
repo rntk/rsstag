@@ -96,10 +96,7 @@ test('smoothBins smooths non-zero values with weighted average', () => {
 });
 
 test('smoothBins preserves structure with multiple topics', () => {
-  const topics = [
-    { name: 'A' },
-    { name: 'B' },
-  ];
+  const topics = [{ name: 'A' }, { name: 'B' }];
   const bins = [
     { x: 0, A: 5, B: 3 },
     { x: 1, A: 0, B: 0 },
@@ -117,9 +114,7 @@ test('estimateCharacterCounts multiplies sentence counts by avgCharsPerSentence'
     { name: 'A', avgCharsPerSentence: 100 },
     { name: 'B', avgCharsPerSentence: 50 },
   ];
-  const bins = [
-    { x: 0, A: 3, B: 2 },
-  ];
+  const bins = [{ x: 0, A: 3, B: 2 }];
 
   const result = estimateCharacterCounts(bins, topics);
 

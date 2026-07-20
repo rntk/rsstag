@@ -363,11 +363,7 @@ test('calculateRectangles handles children without explicit value (uses size fal
 test('calculateRectangles handles children with neither value nor size (defaults to 1)', () => {
   const data = {
     name: 'defaults',
-    children: [
-      { name: 'A' },
-      { name: 'B' },
-      { name: 'C' },
-    ],
+    children: [{ name: 'A' }, { name: 'B' }, { name: 'C' }],
   };
 
   const treemap = new TagTreemap(data);
@@ -485,14 +481,23 @@ test('findBestRow handles children with mixed value/size fields', () => {
 // ============================================================
 
 test('TagTreemap render handles missing container gracefully', () => {
-  assert.ok(/const\s+container\s*=\s*document\.querySelector\s*\(\s*selector\s*\)/.test(source), 'render should query selector');
-  assert.ok(/if\s*\(\s*!container\s*\)\s*\{[\s\S]*?return;/.test(source), 'render should return early when container not found');
+  assert.ok(
+    /const\s+container\s*=\s*document\.querySelector\s*\(\s*selector\s*\)/.test(source),
+    'render should query selector'
+  );
+  assert.ok(
+    /if\s*\(\s*!container\s*\)\s*\{[\s\S]*?return;/.test(source),
+    'render should return early when container not found'
+  );
   assert.ok(/console\.error/.test(source), 'render should log error when container not found');
 });
 
 test('TagTreemap render creates navigation when split data has multiple pages', () => {
   assert.ok(/this\.splitData\.length\s*>\s*1/.test(source), 'should check for multi-page');
-  assert.ok(/this\.createNavigation\s*\(\s*container\s*\)/.test(source), 'should call createNavigation');
+  assert.ok(
+    /this\.createNavigation\s*\(\s*container\s*\)/.test(source),
+    'should call createNavigation'
+  );
   assert.ok(/className\s*=\s*['"]treemap-navigation['"]/.test(source), 'should set nav class');
 });
 
@@ -508,6 +513,11 @@ test('TagTreemap navigateToPage is a no-op for out-of-range indices', () => {
 });
 
 test('TagTreemap renderCurrentChart shows no-data message for empty children', () => {
-  assert.ok(/if\s*\(\s*!currentData\s*\|\|\s*!currentData\.children\s*\|\|\s*currentData\.children\.length\s*===\s*0\s*\)/.test(source), 'should check for empty data');
+  assert.ok(
+    /if\s*\(\s*!currentData\s*\|\|\s*!currentData\.children\s*\|\|\s*currentData\.children\.length\s*===\s*0\s*\)/.test(
+      source
+    ),
+    'should check for empty data'
+  );
   assert.ok(/No data available/.test(source), 'should show no-data message');
 });

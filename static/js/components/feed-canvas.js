@@ -243,9 +243,7 @@ class FeedCanvas {
       this.showStatus(`All posts are already ${read ? 'read' : 'unread'}.`);
       return;
     }
-    const buttons = document.querySelectorAll(
-      '[data-post-read-toggle], [data-canvas-read-all]'
-    );
+    const buttons = document.querySelectorAll('[data-post-read-toggle], [data-canvas-read-all]');
     buttons.forEach((button) => button.setAttribute('disabled', ''));
     try {
       const response = await fetch('/read/posts', {
@@ -359,7 +357,7 @@ class FeedCanvas {
       '+': () => this.zoomByFactor(ZOOM_FACTOR),
       '=': () => this.zoomByFactor(ZOOM_FACTOR),
       '-': () => this.zoomByFactor(1 / ZOOM_FACTOR),
-      '0': () => this.reset(),
+      0: () => this.reset(),
     };
     const action = actions[event.key];
     if (!action) return;
@@ -571,7 +569,9 @@ class FeedCanvas {
     menu.setAttribute('role', 'menu');
     const summaryButton = document.createElement('button');
     summaryButton.type = 'button';
-    summaryButton.textContent = this.summaries.has(this.summaryKey(layout)) ? 'Show summary' : 'Summary';
+    summaryButton.textContent = this.summaries.has(this.summaryKey(layout))
+      ? 'Show summary'
+      : 'Summary';
     summaryButton.addEventListener('click', () => {
       this.closeContextMenu();
       this.requestSummary(layout, card);
@@ -618,12 +618,17 @@ class FeedCanvas {
         body: JSON.stringify({ topic: layout.node.path, sentences: this.summarySentences(layout) }),
       });
       const payload = await response.json();
-      if (!response.ok || !payload.data) throw new Error(payload.error || 'Unable to generate summary.');
+      if (!response.ok || !payload.data)
+        throw new Error(payload.error || 'Unable to generate summary.');
       const summary = String(payload.data).trim();
       this.summaries.set(key, summary);
       this.showSummary(layout.node.path, summary);
     } catch (error) {
-      this.showSummary(layout.node.path, error instanceof Error ? error.message : 'Unable to generate summary.', true);
+      this.showSummary(
+        layout.node.path,
+        error instanceof Error ? error.message : 'Unable to generate summary.',
+        true
+      );
     } finally {
       card.classList.remove('is-summary-loading');
     }
@@ -633,7 +638,9 @@ class FeedCanvas {
     const dialog = document.createElement('dialog');
     dialog.className = 'canvas-summary-dialog';
     dialog.innerHTML = `<button type="button" class="canvas-summary-dialog__close" aria-label="Close">×</button><p class="canvas-summary-dialog__kicker">Summary</p><h2></h2><div class="canvas-summary-dialog__text"></div>`;
-    dialog.querySelector('.canvas-summary-dialog__close')?.addEventListener('click', () => dialog.close());
+    dialog
+      .querySelector('.canvas-summary-dialog__close')
+      ?.addEventListener('click', () => dialog.close());
     dialog.addEventListener('click', (event) => {
       if (event.target === dialog) dialog.close();
     });

@@ -14,8 +14,12 @@ function createMockElement(overrides = {}) {
   return {
     tagName: overrides.tagName || 'INPUT',
     id: overrides.id || '',
-    get checked() { return checkedState.value; },
-    set checked(val) { checkedState.value = val; },
+    get checked() {
+      return checkedState.value;
+    },
+    set checked(val) {
+      checkedState.value = val;
+    },
     addEventListener(event, handler) {
       listeners.set(event, handler);
     },
@@ -52,10 +56,7 @@ function createMockDocument(elementsById = {}) {
 }
 
 function runProviderFeeds(overrides = {}) {
-  const source = fs.readFileSync(
-    new URL('../provider-feeds.js', import.meta.url),
-    'utf8'
-  );
+  const source = fs.readFileSync(new URL('../provider-feeds.js', import.meta.url), 'utf8');
 
   const context = {
     document: createMockDocument(),
@@ -90,7 +91,7 @@ test('select-all checkbox checks all items when changed to checked', () => {
     select_all: selectAll,
   });
   // Manually add items to the document's allItems
-  doc.querySelectorAll = function(sel) {
+  doc.querySelectorAll = function (sel) {
     if (sel === '.selection-item') return items;
     return [];
   };
@@ -112,10 +113,7 @@ test('select-all checkbox unchecks all items when changed to unchecked', () => {
     checked: true,
   });
 
-  const items = [
-    createMockElement({ checked: true }),
-    createMockElement({ checked: true }),
-  ];
+  const items = [createMockElement({ checked: true }), createMockElement({ checked: true })];
 
   for (const item of items) {
     item.classList = { includes: () => true };
@@ -124,7 +122,7 @@ test('select-all checkbox unchecks all items when changed to unchecked', () => {
   const doc = createMockDocument({
     select_all: selectAll,
   });
-  doc.querySelectorAll = function(sel) {
+  doc.querySelectorAll = function (sel) {
     if (sel === '.selection-item') return items;
     return [];
   };

@@ -67,7 +67,7 @@ export default class TagItem extends React.Component {
           </a>{' '}
           <span className="cloud_item_count">({this.state.tag.count})</span>
         </div>
-        {(sub_tags.length > 0 || words) ? (
+        {sub_tags.length > 0 || words ? (
           <div className="cloud_item_info">
             {sub_tags}
             {sub_tags.length ? sents_link : null}

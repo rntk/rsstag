@@ -3,29 +3,11 @@
 <head>
 <title>RSSTag - API Tokens</title>
 {% include 'head-data.html' %}
-<style>
-.tokens-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-.tokens-table th, .tokens-table td { padding: 10px; border: 1px solid #ddd; text-align: left; }
-.tokens-table th { background-color: #f4f4f4; }
-.token-value { font-family: monospace; word-break: break-all; }
-.expired { color: red; }
-.create-form { margin: 20px 0; }
-.create-form input[type="number"] { width: 80px; }
-</style>
 </head>
 <body>
-{% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
-<div id="global_tools">
-    {% include "logo.html" %}
-    <div class="panel right_half">
-        <span class="login_button global_tools_button">
-            <a href="/data-sources">Data sources</a>
-        </span>
-        {{ g_status.global_status() }}
-        {{ menu.settings_menu() }}
-    </div>
-</div>
-<div class="page screen_middle">
+{% from 'site-header.html' import site_header with context %}
+{{ site_header(active='') }}
+<div class="page screen_middle tokens-page">
     <h1>API Tokens</h1>
     
     <div class="create-form">
@@ -53,7 +35,7 @@
                     {{ token.expires.strftime('%Y-%m-%d %H:%M') }}
                 </td>
                 <td>
-                    <form action="/tokens/delete/{{ token.token }}" method="post" style="display: inline;">
+                    <form action="/tokens/delete/{{ token.token }}" method="post" class="inline-form">
                         <input type="submit" value="Delete" onclick="return confirm('Delete this token?')">
                     </form>
                 </td>

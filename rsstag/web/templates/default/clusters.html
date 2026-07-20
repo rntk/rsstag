@@ -6,50 +6,9 @@
 </head>
 
 <body class="font-body selection:bg-secondary-container bg-background flex flex-col min-h-screen">
-    {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
+    {% from 'site-header.html' import site_header with context %}
 
-    <!-- Top Navigation Bar -->
-    <header class="sticky top-0 z-40 bg-surface/80 backdrop-blur-xl border-b border-outline-variant/10">
-        <div class="px-4 md:px-6 h-16 flex justify-between items-center w-full max-w-[1600px] mx-auto">
-            <div class="flex items-center space-x-10">
-                <a href="/" class="font-headline font-extrabold text-primary text-xl tracking-tight">RSSTag</a>
-                <nav class="hidden md:flex items-center space-x-1">
-                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/">
-                        <span class="material-symbols-outlined text-lg">dashboard</span>
-                        <span class="text-sm">Dashboard</span>
-                    </a>
-                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/group/category">
-                        <span class="material-symbols-outlined text-lg">category</span>
-                        <span class="text-sm">Categories</span>
-                    </a>
-                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/group/tag/1">
-                        <span class="material-symbols-outlined text-lg">sell</span>
-                        <span class="text-sm">Tags</span>
-                    </a>
-                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/topics/1">
-                        <span class="material-symbols-outlined text-lg">topic</span>
-                        <span class="text-sm">Topics</span>
-                    </a>
-                    <a class="sidebar-item-active flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/clusters">
-                        <span class="material-symbols-outlined text-lg">hub</span>
-                        <span class="text-sm">Clusters</span>
-                    </a>
-                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/map">
-                        <span class="material-symbols-outlined text-lg">map</span>
-                        <span class="text-sm">Map</span>
-                    </a>
-                </nav>
-            </div>
-            
-            <div class="flex items-center space-x-4">
-                {{ g_status.global_status() }}
-                {{ menu.settings_menu() }}
-                <a class="text-on-surface-variant hover:text-primary p-2 transition-colors" href="/logout" title="Log Out">
-                    <span class="material-symbols-outlined">logout</span>
-                </a>
-            </div>
-        </div>
-    </header>
+    {{ site_header(active='') }}
 
     <!-- Main Content Area -->
     <main class="flex-grow max-w-[1600px] w-full mx-auto px-4 md:px-6 py-8">

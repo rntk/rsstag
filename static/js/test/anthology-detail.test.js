@@ -39,7 +39,9 @@ function createMockElement(overrides = {}) {
   const listeners = new Map();
   const initialClasses = Array.isArray(overrides.classList)
     ? overrides.classList
-    : (overrides.classList instanceof Set ? [...overrides.classList] : []);
+    : overrides.classList instanceof Set
+      ? [...overrides.classList]
+      : [];
   const classSet = new Set(initialClasses);
   const attrMap = new Map(Object.entries(overrides.attrs || {}));
   const overrideDataset = overrides.dataset || {};
@@ -50,40 +52,63 @@ function createMockElement(overrides = {}) {
     innerHTML: { value: overrides.innerHTML || '', writable: true, enumerable: true },
     classList: {
       value: {
-        add(name) { classSet.add(name); },
-        remove(name) { classSet.delete(name); },
-        contains(name) { return classSet.has(name); },
+        add(name) {
+          classSet.add(name);
+        },
+        remove(name) {
+          classSet.delete(name);
+        },
+        contains(name) {
+          return classSet.has(name);
+        },
         toggle(name, force) {
           if (force === undefined) {
-            if (classSet.has(name)) { classSet.delete(name); return false; }
-            classSet.add(name); return true;
+            if (classSet.has(name)) {
+              classSet.delete(name);
+              return false;
+            }
+            classSet.add(name);
+            return true;
           }
-          if (force) { classSet.add(name); } else { classSet.delete(name); }
+          if (force) {
+            classSet.add(name);
+          } else {
+            classSet.delete(name);
+          }
           return force;
         },
       },
-      writable: true, enumerable: true,
+      writable: true,
+      enumerable: true,
     },
     dataset: { value: { ...overrideDataset }, writable: true, enumerable: true },
   });
 
-  el.getAttribute = function(name) { return attrMap.has(name) ? attrMap.get(name) : null; };
-  el.setAttribute = function(name, value) { attrMap.set(name, value); };
-  el.appendChild = function(child) {
+  el.getAttribute = function (name) {
+    return attrMap.has(name) ? attrMap.get(name) : null;
+  };
+  el.setAttribute = function (name, value) {
+    attrMap.set(name, value);
+  };
+  el.appendChild = function (child) {
     if (!this.children) this.children = [];
     this.children.push(child);
     return child;
   };
-  el.addEventListener = function(event, handler) {
+  el.addEventListener = function (event, handler) {
     const existing = listeners.get(event) || [];
     listeners.set(event, [...existing, handler]);
   };
-  el.trigger = function(eventOverrides = {}) {
+  el.trigger = function (eventOverrides = {}) {
     const handlers = listeners.get('click') || [];
     handlers.forEach((h) => h(eventOverrides));
   };
-  el.querySelector = function() { return null; };
-  el.querySelectorAll = function() { return []; };
+  el.querySelector = function () {
+    return null;
+  };
+  el.querySelectorAll = function () {
+    return [];
+  };
 
   // Apply remaining overrides (excluding classList and dataset which are handled above)
   for (const key of Object.keys(overrides)) {
@@ -107,17 +132,18 @@ function createMockDocument(elementsById = {}) {
     addEventListener() {},
     body: createMockElement({ tagName: 'BODY' }),
     title: '',
-    get title() { return this._title || ''; },
-    set title(val) { this._title = val; },
+    get title() {
+      return this._title || '';
+    },
+    set title(val) {
+      this._title = val;
+    },
     hidden: false,
   };
 }
 
 function loadAnthologyDetailFunctions(overrides = {}) {
-  const source = fs.readFileSync(
-    new URL('../anthology-detail.js', import.meta.url),
-    'utf8'
-  );
+  const source = fs.readFileSync(new URL('../anthology-detail.js', import.meta.url), 'utf8');
 
   const funcNames = [
     'getInitialPayload',
@@ -154,12 +180,15 @@ function loadAnthologyDetailFunctions(overrides = {}) {
     document: createMockDocument(),
     window: {
       clearInterval() {},
-      setInterval() { return 123; },
+      setInterval() {
+        return 123;
+      },
     },
-    fetch: () => Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve({}),
-    }),
+    fetch: () =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      }),
     ...overrides,
   };
 
@@ -177,7 +206,7 @@ test('escapeHtml escapes special characters', () => {
   assert.equal(escapeHtml('<script>'), '&lt;script&gt;');
   assert.equal(escapeHtml('a&b'), 'a&amp;b');
   assert.equal(escapeHtml('"quoted"'), '&quot;quoted&quot;');
-  assert.equal(escapeHtml("it's"), "it&#39;s");
+  assert.equal(escapeHtml("it's"), 'it&#39;s');
 });
 
 test('escapeHtml handles null and undefined via String()', () => {
@@ -289,9 +318,7 @@ test('renderSourceRefs returns empty state for non-array input', () => {
 test('renderSourceRefs renders list of source refs', () => {
   const { renderSourceRefs } = loadAnthologyDetailFunctions();
 
-  const refs = [
-    { topic_path: 'topic/a', post_id: 'p1', sentence_indices: [1, 2] },
-  ];
+  const refs = [{ topic_path: 'topic/a', post_id: 'p1', sentence_indices: [1, 2] }];
   const html = renderSourceRefs(refs);
 
   assert.ok(html.includes('anthology-source-list'));
@@ -354,9 +381,7 @@ test('renderSourceRefs includes Mark unread button for read items', () => {
 test('renderSourceRefs omits action when no sentence_indices', () => {
   const { renderSourceRefs } = loadAnthologyDetailFunctions();
 
-  const refs = [
-    { topic_path: 't', post_id: 'p1' },
-  ];
+  const refs = [{ topic_path: 't', post_id: 'p1' }];
   const html = renderSourceRefs(refs);
 
   assert.ok(!html.includes('anthology-read-action'));
@@ -393,9 +418,7 @@ test('renderFindings renders disputed claims with their evidence', () => {
           text: 'The launch is in June.',
           kind: 'forecast',
           stance: 'disputes',
-          source_refs: [
-            { post_id: 'p1', topic_path: 'Launch', sentence_indices: [1] },
-          ],
+          source_refs: [{ post_id: 'p1', topic_path: 'Launch', sentence_indices: [1] }],
         },
       ],
     },
@@ -475,9 +498,7 @@ test('renderTreeNode renders a parent node with children', () => {
   const node = {
     title: 'Parent',
     summary: 'Parent summary',
-    sub_anthologies: [
-      { title: 'Child', source_refs: [], read_state: {}, node_id: 'c1' },
-    ],
+    sub_anthologies: [{ title: 'Child', source_refs: [], read_state: {}, node_id: 'c1' }],
     source_refs: [],
     read_state: {},
   };
@@ -497,9 +518,7 @@ test('renderTreeNode renders nested children recursively', () => {
     sub_anthologies: [
       {
         title: 'Mid',
-        sub_anthologies: [
-          { title: 'Leaf', source_refs: [], read_state: {}, node_id: 'l1' },
-        ],
+        sub_anthologies: [{ title: 'Leaf', source_refs: [], read_state: {}, node_id: 'l1' }],
         source_refs: [],
         read_state: {},
         node_id: 'm1',
@@ -536,9 +555,7 @@ test('renderTreeNode does not show Read side-by-side for non-leaf', () => {
 
   const node = {
     title: 'Parent',
-    sub_anthologies: [
-      { title: 'Child', source_refs: [], read_state: {}, node_id: 'c1' },
-    ],
+    sub_anthologies: [{ title: 'Child', source_refs: [], read_state: {}, node_id: 'c1' }],
     source_refs: [{ post_id: 'p1' }],
     read_state: {},
   };
@@ -758,28 +775,32 @@ function createFullMockDocument(elementsById = {}) {
     addEventListener() {},
     body: createMockElement({ tagName: 'BODY' }),
     _title: '',
-    get title() { return this._title; },
-    set title(val) { this._title = val; },
+    get title() {
+      return this._title;
+    },
+    set title(val) {
+      this._title = val;
+    },
     hidden: false,
   };
 }
 
 function runIIFE(overrides = {}) {
-  const source = fs.readFileSync(
-    new URL('../anthology-detail.js', import.meta.url),
-    'utf8'
-  );
+  const source = fs.readFileSync(new URL('../anthology-detail.js', import.meta.url), 'utf8');
 
   const context = {
     document: createFullMockDocument(),
     window: {
       clearInterval() {},
-      setInterval() { return 42; },
+      setInterval() {
+        return 42;
+      },
     },
-    fetch: () => Promise.resolve({
-      ok: true,
-      json: () => Promise.resolve({}),
-    }),
+    fetch: () =>
+      Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({}),
+      }),
     HTMLElement: MockHTMLElement,
     ...overrides,
   };
@@ -865,8 +886,12 @@ test('IIFE renders payload into DOM elements', () => {
   let titleWasSet = '';
   const doc = createFullMockDocument(elements);
   Object.defineProperty(doc, 'title', {
-    get() { return titleWasSet; },
-    set(val) { titleWasSet = val; },
+    get() {
+      return titleWasSet;
+    },
+    set(val) {
+      titleWasSet = val;
+    },
   });
 
   assert.doesNotThrow(() => {
@@ -944,16 +969,26 @@ test('retry button queues anthology retry and starts polling', async () => {
     if (fetchCount === 1) {
       return {
         ok: true,
-        json: () => Promise.resolve({
-          data: { id: '1', status: 'processing', result: { title: 'R', source_refs: [], read_state: {}, node_id: 'r1' } },
-        }),
+        json: () =>
+          Promise.resolve({
+            data: {
+              id: '1',
+              status: 'processing',
+              result: { title: 'R', source_refs: [], read_state: {}, node_id: 'r1' },
+            },
+          }),
       };
     }
     return {
       ok: true,
-      json: () => Promise.resolve({
-        data: { id: '1', status: 'done', result: { title: 'R', source_refs: [], read_state: {}, node_id: 'r1' } },
-      }),
+      json: () =>
+        Promise.resolve({
+          data: {
+            id: '1',
+            status: 'done',
+            result: { title: 'R', source_refs: [], read_state: {}, node_id: 'r1' },
+          },
+        }),
     };
   };
 
@@ -963,7 +998,9 @@ test('retry button queues anthology retry and starts polling', async () => {
     }),
     'anthology-detail-data': {
       textContent: JSON.stringify({
-        id: '1', title: 'Retry Me', status: 'failed',
+        id: '1',
+        title: 'Retry Me',
+        status: 'failed',
         result: { title: 'R', source_refs: [], read_state: {}, node_id: 'r1' },
       }),
     },
@@ -977,8 +1014,12 @@ test('retry button queues anthology retry and starts polling', async () => {
 
   let clickHandler = null;
   const doc = {
-    getElementById(id) { return elements[id] || null; },
-    createElement(tagName) { return createMockElement({ tagName }); },
+    getElementById(id) {
+      return elements[id] || null;
+    },
+    createElement(tagName) {
+      return createMockElement({ tagName });
+    },
     addEventListener(event, handler) {
       if (event === 'click') {
         clickHandler = handler;
@@ -986,8 +1027,12 @@ test('retry button queues anthology retry and starts polling', async () => {
     },
     body: createMockElement({ tagName: 'BODY' }),
     _title: '',
-    get title() { return this._title; },
-    set title(val) { this._title = val; },
+    get title() {
+      return this._title;
+    },
+    set title(val) {
+      this._title = val;
+    },
     hidden: false,
   };
 
@@ -1011,8 +1056,12 @@ test('retry button queues anthology retry and starts polling', async () => {
 test('export button navigates to export URL with format=json', () => {
   let redirectedUrl = '';
   const mockLocation = {
-    set href(url) { redirectedUrl = url; },
-    get href() { return redirectedUrl; },
+    set href(url) {
+      redirectedUrl = url;
+    },
+    get href() {
+      return redirectedUrl;
+    },
   };
 
   const elements = {
@@ -1021,7 +1070,9 @@ test('export button navigates to export URL with format=json', () => {
     }),
     'anthology-detail-data': {
       textContent: JSON.stringify({
-        id: '42', title: 'Export Me', status: 'done',
+        id: '42',
+        title: 'Export Me',
+        status: 'done',
         result: { title: 'R', source_refs: [], read_state: {}, node_id: 'r1' },
       }),
     },
@@ -1081,7 +1132,9 @@ test('IIFE starts polling when status is processing', () => {
     }),
     'anthology-detail-data': {
       textContent: JSON.stringify({
-        id: '1', title: 'Processing', status: 'processing',
+        id: '1',
+        title: 'Processing',
+        status: 'processing',
         result: { title: 'R', source_refs: [], read_state: {}, node_id: 'r1' },
       }),
     },
@@ -1116,12 +1169,15 @@ test('IIFE stops polling when status changes to done', async () => {
     if (fetchCallCount === 1) {
       return {
         ok: true,
-        json: () => Promise.resolve({
-          data: {
-            id: '1', title: 'Done Now', status: 'done',
-            result: { title: 'R', source_refs: [], read_state: {}, node_id: 'r1' },
-          },
-        }),
+        json: () =>
+          Promise.resolve({
+            data: {
+              id: '1',
+              title: 'Done Now',
+              status: 'done',
+              result: { title: 'R', source_refs: [], read_state: {}, node_id: 'r1' },
+            },
+          }),
       };
     }
     return { ok: true, json: () => Promise.resolve({}) };
@@ -1133,7 +1189,9 @@ test('IIFE stops polling when status changes to done', async () => {
     }),
     'anthology-detail-data': {
       textContent: JSON.stringify({
-        id: '1', title: 'Processing', status: 'processing',
+        id: '1',
+        title: 'Processing',
+        status: 'processing',
         result: { title: 'R', source_refs: [], read_state: {}, node_id: 'r1' },
       }),
     },
@@ -1169,7 +1227,9 @@ test('refresh failure shows error note', async () => {
     }),
     'anthology-detail-data': {
       textContent: JSON.stringify({
-        id: '1', title: 'Test', status: 'done',
+        id: '1',
+        title: 'Test',
+        status: 'done',
         result: { title: 'R', source_refs: [], read_state: {}, node_id: 'r1' },
       }),
     },
@@ -1195,7 +1255,9 @@ test('fetch with non-ok response throws in refreshPayload', async () => {
     }),
     'anthology-detail-data': {
       textContent: JSON.stringify({
-        id: '1', title: 'Test', status: 'done',
+        id: '1',
+        title: 'Test',
+        status: 'done',
         result: { title: 'R', source_refs: [], read_state: {}, node_id: 'r1' },
       }),
     },
@@ -1219,7 +1281,9 @@ test('compare action opens modal with correct URL', () => {
     }),
     'anthology-detail-data': {
       textContent: JSON.stringify({
-        id: '1', title: 'Test', status: 'done',
+        id: '1',
+        title: 'Test',
+        status: 'done',
         result: { title: 'R', source_refs: [], read_state: {}, node_id: 'r1' },
       }),
     },
@@ -1249,22 +1313,33 @@ test('read action sends POST to update read state', async () => {
       postedPayload = JSON.parse(options.body);
       return {
         ok: true,
-        json: () => Promise.resolve({
-          data: {
-            id: '1', title: 'Test', status: 'done',
-            result: { title: 'R', source_refs: [], read_state: { all_read: true }, node_id: 'r1' },
-          },
-        }),
+        json: () =>
+          Promise.resolve({
+            data: {
+              id: '1',
+              title: 'Test',
+              status: 'done',
+              result: {
+                title: 'R',
+                source_refs: [],
+                read_state: { all_read: true },
+                node_id: 'r1',
+              },
+            },
+          }),
       };
     }
     return {
       ok: true,
-      json: () => Promise.resolve({
-        data: {
-          id: '1', title: 'Test', status: 'done',
-          result: { title: 'R', source_refs: [], read_state: {}, node_id: 'r1' },
-        },
-      }),
+      json: () =>
+        Promise.resolve({
+          data: {
+            id: '1',
+            title: 'Test',
+            status: 'done',
+            result: { title: 'R', source_refs: [], read_state: {}, node_id: 'r1' },
+          },
+        }),
     };
   };
 
@@ -1274,7 +1349,9 @@ test('read action sends POST to update read state', async () => {
     }),
     'anthology-detail-data': {
       textContent: JSON.stringify({
-        id: '1', title: 'Test', status: 'done',
+        id: '1',
+        title: 'Test',
+        status: 'done',
         result: { title: 'R', source_refs: [], read_state: {}, node_id: 'r1' },
       }),
     },

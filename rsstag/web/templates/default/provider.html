@@ -4,13 +4,8 @@
 {%  include "head-data.html" %}
 </head>
 <body>
-<div id="global_tools">
-    <div class="left_half">
-        {% include "logo.html" %}
-    </div>
-    <div class="right_half">
-    </div>
-</div>
+{% from 'site-header.html' import site_header with context %}
+{{ site_header(active='') }}
 {% import 'providers.html' as providers with context %}
 <main class="page provider-page provider-picker-page">
     <header class="source-page-header">

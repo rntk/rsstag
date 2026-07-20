@@ -221,7 +221,10 @@ test('sendMessage(chatId, content) posts to messages URL, updates messages throu
     { role: 'user', content: 'How are you?' },
     { role: 'assistant', content: 'I am well.' },
   ]);
-  assert.equal(es.calls.some((call) => call.event === es.CHAT_UPDATED), true);
+  assert.equal(
+    es.calls.some((call) => call.event === es.CHAT_UPDATED),
+    true
+  );
 });
 
 test('sendMessage(chatId, content) handles API error response path', async (t) => {

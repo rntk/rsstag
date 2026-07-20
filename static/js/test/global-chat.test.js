@@ -6,10 +6,7 @@ import fs from 'node:fs';
 // Setup: Extract formatDate from source
 // ============================================================
 
-const source = fs.readFileSync(
-  new URL('../components/global-chat.js', import.meta.url),
-  'utf8',
-);
+const source = fs.readFileSync(new URL('../components/global-chat.js', import.meta.url), 'utf8');
 
 // Extract and test the pure formatDate function
 function extractFormatDate() {
@@ -60,16 +57,13 @@ test('formatDate includes time with hour and minute digits', () => {
 // ============================================================
 
 test('source declares formatDate function', () => {
-  assert.ok(
-    /function formatDate\(ts\)/.test(source),
-    'formatDate function should be declared',
-  );
+  assert.ok(/function formatDate\(ts\)/.test(source), 'formatDate function should be declared');
 });
 
 test('source exports GlobalChatPanel as default', () => {
   assert.ok(
     /export default function GlobalChatPanel/.test(source),
-    'GlobalChatPanel should be default export',
+    'GlobalChatPanel should be default export'
   );
 });
 
@@ -84,16 +78,13 @@ test('source defines all expected component functions', () => {
   for (const name of expectedComponents) {
     assert.ok(
       new RegExp(`function ${name}\\b`).test(source),
-      `function ${name} should be declared in source`,
+      `function ${name} should be declared in source`
     );
   }
 });
 
 test('source imports React and hooks', () => {
-  assert.ok(
-    /import React/.test(source),
-    'should import React'
-  );
+  assert.ok(/import React/.test(source), 'should import React');
   assert.ok(
     /useState.*useEffect.*useRef/.test(source),
     'should import useState, useEffect, useRef'
@@ -147,7 +138,10 @@ test('GlobalChatPanel panel has fixed positioning and correct dimensions', () =>
 
 test('GlobalChatPanel shows Online status indicator', () => {
   assert.ok(/Online/.test(source), 'should show Online text');
-  assert.ok(/text-green-600|text-\[10px\].*font-medium/.test(source), 'should style online indicator');
+  assert.ok(
+    /text-green-600|text-\[10px\].*font-medium/.test(source),
+    'should style online indicator'
+  );
 });
 
 // ============================================================
@@ -155,9 +149,7 @@ test('GlobalChatPanel shows Online status indicator', () => {
 // ============================================================
 
 test('ConversationList source contains empty state rendering', () => {
-  const convListMatch = source.match(
-    /function ConversationList\([\s\S]*?^\}/m,
-  );
+  const convListMatch = source.match(/function ConversationList\([\s\S]*?^\}/m);
   assert.ok(convListMatch, 'ConversationList function should exist');
   if (convListMatch) {
     const body = convListMatch[0];
@@ -168,9 +160,7 @@ test('ConversationList source contains empty state rendering', () => {
 });
 
 test('ConversationList source contains delete button per chat', () => {
-  const convListMatch = source.match(
-    /function ConversationList\([\s\S]*?^\}/m,
-  );
+  const convListMatch = source.match(/function ConversationList\([\s\S]*?^\}/m);
   assert.ok(convListMatch, 'ConversationList function should exist');
   if (convListMatch) {
     const body = convListMatch[0];
@@ -181,9 +171,7 @@ test('ConversationList source contains delete button per chat', () => {
 });
 
 test('ConversationList source contains New Chat button', () => {
-  const convListMatch = source.match(
-    /function ConversationList\([\s\S]*?^\}/m,
-  );
+  const convListMatch = source.match(/function ConversationList\([\s\S]*?^\}/m);
   assert.ok(convListMatch, 'ConversationList function should exist');
   if (convListMatch) {
     const body = convListMatch[0];
@@ -194,9 +182,7 @@ test('ConversationList source contains New Chat button', () => {
 });
 
 test('ConversationList source displays formatDate for chat timestamps', () => {
-  const convListMatch = source.match(
-    /function ConversationList\([\s\S]*?^\}/m,
-  );
+  const convListMatch = source.match(/function ConversationList\([\s\S]*?^\}/m);
   assert.ok(convListMatch, 'ConversationList function should exist');
   if (convListMatch) {
     const body = convListMatch[0];
@@ -205,9 +191,7 @@ test('ConversationList source displays formatDate for chat timestamps', () => {
 });
 
 test('ConversationList source shows message_count badge', () => {
-  const convListMatch = source.match(
-    /function ConversationList\([\s\S]*?^\}/m,
-  );
+  const convListMatch = source.match(/function ConversationList\([\s\S]*?^\}/m);
   assert.ok(convListMatch, 'ConversationList function should exist');
   if (convListMatch) {
     const body = convListMatch[0];
@@ -272,7 +256,7 @@ test('ChatContext source handles null/empty context', () => {
     const body = ctxMatch[0];
     assert.ok(
       /!context|context\.type === 'empty'|!context\.text/.test(body),
-      'should check for null/empty context',
+      'should check for null/empty context'
     );
     assert.ok(/return null/.test(body), 'should return null for empty context');
   }
@@ -387,10 +371,7 @@ test('fetch credentials include cookies on all API calls', () => {
   // Verify source uses credentials: 'include' on all fetch calls
   const fetchCalls = source.match(/fetch\([^)]+\)/g) || [];
   const withCredentials = fetchCalls.filter((call) => call.includes("credentials: 'include'"));
-  assert.ok(
-    withCredentials.length > 0,
-    'fetch calls should include credentials: include',
-  );
+  assert.ok(withCredentials.length > 0, 'fetch calls should include credentials: include');
 });
 
 test('source uses /api/chats endpoints', () => {

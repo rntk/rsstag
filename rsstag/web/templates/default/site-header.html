@@ -1,0 +1,61 @@
+{% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
+
+{#
+  Canonical app-wide header.
+
+  Signature: site_header(active='', show_posts_tools=False)
+    - active: one of 'dashboard', 'categories', 'tags', 'topics', 'map'
+              (empty string highlights nothing).
+    - show_posts_tools: when True, renders the posts-page tool mount points
+              (#player_block, #read_all, #show_all).
+
+  The `#global_tools` id and the mount ids (settings_menu, global_status,
+  read_all, show_all, player_block) are consumed by /app/static/js and MUST
+  stay intact. Import this file `with context` so g_status/menu see user_settings.
+#}
+{% macro site_header(active='', show_posts_tools=False) -%}
+<header id="global_tools" class="site-header">
+    <div class="site-header__inner">
+        <div class="site-header__left">
+            <a href="/" class="site-header__brand">RSSTag</a>
+            <nav class="site-header__nav">
+                <a class="site-header__link{% if active == 'dashboard' %} site-header__link--active{% endif %}" href="/">
+                    <span class="material-symbols-outlined">dashboard</span>
+                    <span>Dashboard</span>
+                </a>
+                <a class="site-header__link{% if active == 'categories' %} site-header__link--active{% endif %}" href="/group/category">
+                    <span class="material-symbols-outlined">category</span>
+                    <span>Categories</span>
+                </a>
+                <a class="site-header__link{% if active == 'tags' %} site-header__link--active{% endif %}" href="/group/tag/1">
+                    <span class="material-symbols-outlined">sell</span>
+                    <span>Tags</span>
+                </a>
+                <a class="site-header__link{% if active == 'topics' %} site-header__link--active{% endif %}" href="/topics/1">
+                    <span class="material-symbols-outlined">topic</span>
+                    <span>Topics</span>
+                </a>
+                <a class="site-header__link{% if active == 'map' %} site-header__link--active{% endif %}" href="/map">
+                    <span class="material-symbols-outlined">map</span>
+                    <span>Map</span>
+                </a>
+            </nav>
+        </div>
+
+        <div class="site-header__right">
+            {% if show_posts_tools %}
+            <div class="site-header__tools">
+                <div id="player_block" class="flex items-center"></div>
+                <div id="read_all" class="flex items-center"></div>
+                <div id="show_all" class="flex items-center"></div>
+            </div>
+            {% endif %}
+            {{ g_status.global_status() }}
+            {{ menu.settings_menu() }}
+            <a class="site-header__logout" href="/logout" title="Log Out">
+                <span class="material-symbols-outlined">logout</span>
+            </a>
+        </div>
+    </div>
+</header>
+{%- endmacro %}

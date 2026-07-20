@@ -17,19 +17,31 @@ test('source declares TopicsSunburst class', () => {
 });
 
 test('source exports TopicsSunburst as default', () => {
-  assert.ok(/export\s+default\s+TopicsSunburst/.test(source), 'should export default TopicsSunburst');
+  assert.ok(
+    /export\s+default\s+TopicsSunburst/.test(source),
+    'should export default TopicsSunburst'
+  );
 });
 
 test('source imports Sunburst from sunburst-chart', () => {
-  assert.ok(/import\s+Sunburst\s+from\s+['"]sunburst-chart['"]/.test(source), 'should import Sunburst from sunburst-chart');
+  assert.ok(
+    /import\s+Sunburst\s+from\s+['"]sunburst-chart['"]/.test(source),
+    'should import Sunburst from sunburst-chart'
+  );
 });
 
 test('source imports triggerAnthology from topics-list', () => {
-  assert.ok(/import\s*\{\s*triggerAnthology\s*\}\s*from\s+['"]\.\/topics-list\.js['"]/.test(source), 'should import triggerAnthology');
+  assert.ok(
+    /import\s*\{\s*triggerAnthology\s*\}\s*from\s+['"]\.\/topics-list\.js['"]/.test(source),
+    'should import triggerAnthology'
+  );
 });
 
 test('source declares constructor with data and options params', () => {
-  assert.ok(/constructor\s*\(\s*data\s*,\s*options\s*=\s*\{/.test(source), 'constructor should accept data and options');
+  assert.ok(
+    /constructor\s*\(\s*data\s*,\s*options\s*=\s*\{/.test(source),
+    'constructor should accept data and options'
+  );
 });
 
 test('source stores data and default color properties', () => {
@@ -61,11 +73,17 @@ test('source initializes hostContainer and chartContainer to null', () => {
 // ============================================================
 
 test('source sets default valueTransform to sqrt', () => {
-  assert.ok(/this\.valueTransform\s*=\s*options\.valueTransform\s*\|\|\s*['"]sqrt['"]/.test(source), 'valueTransform should default to sqrt');
+  assert.ok(
+    /this\.valueTransform\s*=\s*options\.valueTransform\s*\|\|\s*['"]sqrt['"]/.test(source),
+    'valueTransform should default to sqrt'
+  );
 });
 
 test('source sets default minValue to 1', () => {
-  assert.ok(/this\.minValue\s*=\s*options\.minValue\s*\|\|\s*1/.test(source), 'minValue should default to 1');
+  assert.ok(
+    /this\.minValue\s*=\s*options\.minValue\s*\|\|\s*1/.test(source),
+    'minValue should default to 1'
+  );
 });
 
 test('constructor calls initializeCharts', () => {
@@ -85,11 +103,17 @@ test('source declares createSplitData method', () => {
 });
 
 test('source declares transformDataValues method', () => {
-  assert.ok(/transformDataValues\s*\(\s*node\s*\)/.test(source), 'should have transformDataValues method');
+  assert.ok(
+    /transformDataValues\s*\(\s*node\s*\)/.test(source),
+    'should have transformDataValues method'
+  );
 });
 
 test('source declares applyValueTransform method', () => {
-  assert.ok(/applyValueTransform\s*\(\s*value\s*\)/.test(source), 'should have applyValueTransform method');
+  assert.ok(
+    /applyValueTransform\s*\(\s*value\s*\)/.test(source),
+    'should have applyValueTransform method'
+  );
 });
 
 test('source declares render method', () => {
@@ -97,23 +121,38 @@ test('source declares render method', () => {
 });
 
 test('source declares createNavigation method', () => {
-  assert.ok(/createNavigation\s*\(\s*container\s*\)/.test(source), 'should have createNavigation method');
+  assert.ok(
+    /createNavigation\s*\(\s*container\s*\)/.test(source),
+    'should have createNavigation method'
+  );
 });
 
 test('source declares navigateToPage method', () => {
-  assert.ok(/navigateToPage\s*\(\s*pageIndex\s*\)/.test(source), 'should have navigateToPage method');
+  assert.ok(
+    /navigateToPage\s*\(\s*pageIndex\s*\)/.test(source),
+    'should have navigateToPage method'
+  );
 });
 
 test('source declares renderCurrentChart method', () => {
-  assert.ok(/renderCurrentChart\s*\(\s*container\s*\)/.test(source), 'should have renderCurrentChart method');
+  assert.ok(
+    /renderCurrentChart\s*\(\s*container\s*\)/.test(source),
+    'should have renderCurrentChart method'
+  );
 });
 
 test('source declares handleClick method', () => {
-  assert.ok(/handleClick\s*\(\s*d\s*,\s*event\s*,\s*currentData\s*\)/.test(source), 'should have handleClick method');
+  assert.ok(
+    /handleClick\s*\(\s*d\s*,\s*event\s*,\s*currentData\s*\)/.test(source),
+    'should have handleClick method'
+  );
 });
 
 test('source declares generateSimilarColor method', () => {
-  assert.ok(/generateSimilarColor\s*\(\s*baseColor\s*,\s*range\s*\)/.test(source), 'should have generateSimilarColor method');
+  assert.ok(
+    /generateSimilarColor\s*\(\s*baseColor\s*,\s*range\s*\)/.test(source),
+    'should have generateSimilarColor method'
+  );
 });
 
 test('source declares hexToRGB method', () => {
@@ -129,15 +168,24 @@ test('source declares rgbToHex method', () => {
 // ============================================================
 
 test('initializeCharts calls transformDataValues on data', () => {
-  assert.ok(/this\.transformDataValues\s*\(\s*this\.data\s*\)/.test(source), 'should transform data values');
+  assert.ok(
+    /this\.transformDataValues\s*\(\s*this\.data\s*\)/.test(source),
+    'should transform data values'
+  );
 });
 
 test('initializeCharts splits when transformed children exceed maxChildrenPerChart', () => {
-  assert.ok(/transformedData\.children.*this\.maxChildrenPerChart/.test(source), 'should check children count');
+  assert.ok(
+    /transformedData\.children.*this\.maxChildrenPerChart/.test(source),
+    'should check children count'
+  );
 });
 
 test('initializeCharts maps splitData to Sunburst() instances', () => {
-  assert.ok(/this\.splitData\.map\s*\(\s*\(\)\s*=>\s*Sunburst\(\)\)/.test(source), 'should create Sunburst per page');
+  assert.ok(
+    /this\.splitData\.map\s*\(\s*\(\)\s*=>\s*Sunburst\(\)\)/.test(source),
+    'should create Sunburst per page'
+  );
 });
 
 // ============================================================
@@ -145,7 +193,10 @@ test('initializeCharts maps splitData to Sunburst() instances', () => {
 // ============================================================
 
 test('createSplitData chunks children with maxChildrenPerChart slice', () => {
-  assert.ok(/children\.slice\s*\(\s*i\s*,\s*i\s*\+\s*this\.maxChildrenPerChart\s*\)/.test(source), 'should slice children array');
+  assert.ok(
+    /children\.slice\s*\(\s*i\s*,\s*i\s*\+\s*this\.maxChildrenPerChart\s*\)/.test(source),
+    'should slice children array'
+  );
 });
 
 test('createSplitData spreads data properties into chunks', () => {
@@ -165,21 +216,41 @@ test('createSplitData includes _pageInfo with all metadata fields', () => {
 // ============================================================
 
 test('transformDataValues creates shallow copy with spread', () => {
-  assert.ok(/const\s+transformed\s*=\s*\{\s*\.\.\.\s*node\s*\}/.test(source), 'should create shallow copy');
+  assert.ok(
+    /const\s+transformed\s*=\s*\{\s*\.\.\.\s*node\s*\}/.test(source),
+    'should create shallow copy'
+  );
 });
 
 test('transformDataValues transforms value if it is a number', () => {
-  assert.ok(/typeof\s+transformed\.value\s*===\s*['"]number['"]/.test(source), 'should check value is number');
-  assert.ok(/transformed\.value\s*=\s*this\.applyValueTransform/.test(source), 'should apply transform to value');
+  assert.ok(
+    /typeof\s+transformed\.value\s*===\s*['"]number['"]/.test(source),
+    'should check value is number'
+  );
+  assert.ok(
+    /transformed\.value\s*=\s*this\.applyValueTransform/.test(source),
+    'should apply transform to value'
+  );
 });
 
 test('transformDataValues recurses on children array', () => {
-  assert.ok(/transformed\.children\s*&&\s*Array\.isArray\s*\(\s*transformed\.children\s*\)/.test(source), 'should check children array');
-  assert.ok(/transformed\.children\s*=\s*transformed\.children\.map\s*\(\s*\(\s*child\s*\)\s*=>\s*this\.transformDataValues\s*\(\s*child\s*\)/.test(source), 'should recurse on children');
+  assert.ok(
+    /transformed\.children\s*&&\s*Array\.isArray\s*\(\s*transformed\.children\s*\)/.test(source),
+    'should check children array'
+  );
+  assert.ok(
+    /transformed\.children\s*=\s*transformed\.children\.map\s*\(\s*\(\s*child\s*\)\s*=>\s*this\.transformDataValues\s*\(\s*child\s*\)/.test(
+      source
+    ),
+    'should recurse on children'
+  );
 });
 
 test('applyValueTransform uses Math.max with minValue', () => {
-  assert.ok(/Math\.max\s*\(\s*value\s*,\s*this\.minValue\s*\)/.test(source), 'should enforce minimum value');
+  assert.ok(
+    /Math\.max\s*\(\s*value\s*,\s*this\.minValue\s*\)/.test(source),
+    'should enforce minimum value'
+  );
 });
 
 test('applyValueTransform handles sqrt case', () => {
@@ -189,7 +260,10 @@ test('applyValueTransform handles sqrt case', () => {
 
 test('applyValueTransform handles log case with log10', () => {
   assert.ok(/case\s+['"]log['"]/.test(source), 'should handle log case');
-  assert.ok(/Math\.log10\s*\(\s*safeValue\s*\+\s*1\s*\)/.test(source), 'should use log10 with +1 offset');
+  assert.ok(
+    /Math\.log10\s*\(\s*safeValue\s*\+\s*1\s*\)/.test(source),
+    'should use log10 with +1 offset'
+  );
 });
 
 test('applyValueTransform handles cbrt case', () => {
@@ -207,7 +281,10 @@ test('applyValueTransform handles none case returning safeValue', () => {
 // ============================================================
 
 test('generateSimilarColor uses clamp helper', () => {
-  assert.ok(/const\s+clamp\s*=\s*\(\s*value\s*\)\s*=>\s*Math\.min\s*\(\s*255/.test(source), 'should define clamp function');
+  assert.ok(
+    /const\s+clamp\s*=\s*\(\s*value\s*\)\s*=>\s*Math\.min\s*\(\s*255/.test(source),
+    'should define clamp function'
+  );
 });
 
 test('generateSimilarColor converts baseColor to RGB', () => {
@@ -215,21 +292,42 @@ test('generateSimilarColor converts baseColor to RGB', () => {
 });
 
 test('generateSimilarColor generates RGB within range and clamps', () => {
-  assert.ok(/Math\.max\s*\(\s*0\s*,\s*value\s*-\s*range/.test(source), 'should compute min within range');
-  assert.ok(/Math\.min\s*\(\s*255\s*,\s*value\s*\+\s*range/.test(source), 'should compute max within range');
-  assert.ok(/clamp\s*\(\s*Math\.floor\s*\(\s*Math\.random/.test(source), 'should clamp random result');
+  assert.ok(
+    /Math\.max\s*\(\s*0\s*,\s*value\s*-\s*range/.test(source),
+    'should compute min within range'
+  );
+  assert.ok(
+    /Math\.min\s*\(\s*255\s*,\s*value\s*\+\s*range/.test(source),
+    'should compute max within range'
+  );
+  assert.ok(
+    /clamp\s*\(\s*Math\.floor\s*\(\s*Math\.random/.test(source),
+    'should clamp random result'
+  );
 });
 
 test('hexToRGB parses hex with parseInt and slice', () => {
-  assert.ok(/parseInt\s*\(\s*hex\.slice\s*\(\s*1\s*,\s*3\s*\)\s*,\s*16\s*\)/.test(source), 'should parse R');
-  assert.ok(/parseInt\s*\(\s*hex\.slice\s*\(\s*3\s*,\s*5\s*\)\s*,\s*16\s*\)/.test(source), 'should parse G');
-  assert.ok(/parseInt\s*\(\s*hex\.slice\s*\(\s*5\s*,\s*7\s*\)\s*,\s*16\s*\)/.test(source), 'should parse B');
+  assert.ok(
+    /parseInt\s*\(\s*hex\.slice\s*\(\s*1\s*,\s*3\s*\)\s*,\s*16\s*\)/.test(source),
+    'should parse R'
+  );
+  assert.ok(
+    /parseInt\s*\(\s*hex\.slice\s*\(\s*3\s*,\s*5\s*\)\s*,\s*16\s*\)/.test(source),
+    'should parse G'
+  );
+  assert.ok(
+    /parseInt\s*\(\s*hex\.slice\s*\(\s*5\s*,\s*7\s*\)\s*,\s*16\s*\)/.test(source),
+    'should parse B'
+  );
   // Verify the method returns an array of [r, g, b]
   assert.ok(/return\s*\[\s*r\s*,\s*g\s*,\s*b\s*\]/.test(source), 'should return [r, g, b] array');
 });
 
 test('rgbToHex pads single hex digits with leading zero', () => {
-  assert.ok(/hex\.length\s*===\s*1\s*\?\s*['"]0['"]\s*\+/.test(source), 'should pad single hex digit');
+  assert.ok(
+    /hex\.length\s*===\s*1\s*\?\s*['"]0['"]\s*\+/.test(source),
+    'should pad single hex digit'
+  );
 });
 
 // ============================================================
@@ -253,16 +351,25 @@ test('render clears container innerHTML', () => {
 });
 
 test('render creates chart container div with topics-sunburst-chart-container class', () => {
-  assert.ok(/chartContainer\.className\s*=\s*['"]topics-sunburst-chart-container['"]/.test(source), 'should set chart container class');
+  assert.ok(
+    /chartContainer\.className\s*=\s*['"]topics-sunburst-chart-container['"]/.test(source),
+    'should set chart container class'
+  );
 });
 
 test('render stores chartContainer reference', () => {
-  assert.ok(/this\.chartContainer\s*=\s*chartContainer/.test(source), 'should store chart container');
+  assert.ok(
+    /this\.chartContainer\s*=\s*chartContainer/.test(source),
+    'should store chart container'
+  );
 });
 
 test('render creates navigation when splitData has multiple pages', () => {
   assert.ok(/this\.splitData\.length\s*>\s*1/.test(source), 'should check for multi-page');
-  assert.ok(/this\.createNavigation\s*\(\s*container\s*\)/.test(source), 'should call createNavigation');
+  assert.ok(
+    /this\.createNavigation\s*\(\s*container\s*\)/.test(source),
+    'should call createNavigation'
+  );
 });
 
 // ============================================================
@@ -270,7 +377,10 @@ test('render creates navigation when splitData has multiple pages', () => {
 // ============================================================
 
 test('createNavigation sets sunburst-navigation class', () => {
-  assert.ok(/nav\.className\s*=\s*['"]sunburst-navigation['"]/.test(source), 'should set nav class');
+  assert.ok(
+    /nav\.className\s*=\s*['"]sunburst-navigation['"]/.test(source),
+    'should set nav class'
+  );
 });
 
 test('createNavigation uses display flex and justify-content space-between', () => {
@@ -280,11 +390,17 @@ test('createNavigation uses display flex and justify-content space-between', () 
 
 test('createNavigation creates Previous and Next buttons with arrow characters', () => {
   assert.ok(/prevBtn\.textContent\s*=\s*['"]\u2190/.test(source), 'should create Previous button');
-  assert.ok(/nextBtn\.textContent\s*=\s*['"]Next\s*\u2192/.test(source), 'should create Next button');
+  assert.ok(
+    /nextBtn\.textContent\s*=\s*['"]Next\s*\u2192/.test(source),
+    'should create Next button'
+  );
 });
 
 test('createNavigation inserts nav before chart container', () => {
-  assert.ok(/container\.insertBefore\s*\(\s*nav\s*,\s*container\.firstChild\s*\)/.test(source), 'should insert nav before first child');
+  assert.ok(
+    /container\.insertBefore\s*\(\s*nav\s*,\s*container\.firstChild\s*\)/.test(source),
+    'should insert nav before first child'
+  );
 });
 
 // ============================================================
@@ -292,7 +408,10 @@ test('createNavigation inserts nav before chart container', () => {
 // ============================================================
 
 test('navigateToPage validates bounds with pageIndex < 0 and >= splitData.length', () => {
-  assert.ok(/pageIndex\s*<\s*0\s*\|\|\s*pageIndex\s*>=\s*this\.splitData\.length/.test(source), 'should check bounds');
+  assert.ok(
+    /pageIndex\s*<\s*0\s*\|\|\s*pageIndex\s*>=\s*this\.splitData\.length/.test(source),
+    'should check bounds'
+  );
 });
 
 test('navigateToPage updates currentPage and re-renders', () => {
@@ -316,7 +435,10 @@ test('renderCurrentChart calculates size from container clientWidth', () => {
 
 test('renderCurrentChart caps size at MAX_SIZE 700', () => {
   assert.ok(/MAX_SIZE\s*=\s*700/.test(source), 'should define MAX_SIZE as 700');
-  assert.ok(/Math\.min\s*\(\s*parentWidth\s*-\s*40\s*,\s*MAX_SIZE/.test(source), 'should cap at MAX_SIZE');
+  assert.ok(
+    /Math\.min\s*\(\s*parentWidth\s*-\s*40\s*,\s*MAX_SIZE/.test(source),
+    'should cap at MAX_SIZE'
+  );
 });
 
 test('renderCurrentChart sets width and height on chart', () => {
@@ -325,7 +447,10 @@ test('renderCurrentChart sets width and height on chart', () => {
 });
 
 test('renderCurrentChart uses generateSimilarColor for color function', () => {
-  assert.ok(/\.color\s*\(\s*\(\s*d\s*\)\s*=>\s*this\.generateSimilarColor/.test(source), 'should use generateSimilarColor for color');
+  assert.ok(
+    /\.color\s*\(\s*\(\s*d\s*\)\s*=>\s*this\.generateSimilarColor/.test(source),
+    'should use generateSimilarColor for color'
+  );
 });
 
 // ============================================================
@@ -334,19 +459,28 @@ test('renderCurrentChart uses generateSimilarColor for color function', () => {
 
 test('handleClick with shiftKey triggers triggerAnthology', () => {
   assert.ok(/event\.shiftKey/.test(source), 'should check shiftKey');
-  assert.ok(/triggerAnthology\s*\(\s*d\.name\s*\|\|\s*d\._topicPath/.test(source), 'should trigger anthology');
+  assert.ok(
+    /triggerAnthology\s*\(\s*d\.name\s*\|\|\s*d\._topicPath/.test(source),
+    'should trigger anthology'
+  );
   assert.ok(/d\._topicPosts/.test(source), 'should pass topic posts to anthology');
 });
 
 test('handleClick navigates to /post-grouped/ URL for normal click', () => {
   assert.ok(/\/post-grouped\/\$\{postIds\}/.test(source), 'should navigate to /post-grouped/');
   assert.ok(/encodeURIComponent\s*\(\s*d\._topicPath/.test(source), 'should encode topic path');
-  assert.ok(/d\._topicPosts\.join\s*\(\s*['_"]_['_"]/.test(source), 'should join post IDs with underscore');
+  assert.ok(
+    /d\._topicPosts\.join\s*\(\s*['_"]_['_"]/.test(source),
+    'should join post IDs with underscore'
+  );
 });
 
 test('handleClick opens new tab for ctrl/meta key', () => {
   assert.ok(/event\.ctrlKey\s*\|\|\s*event\.metaKey/.test(source), 'should check ctrl/meta key');
-  assert.ok(/window\.open\s*\(\s*url\s*,\s*['_"]_blank['_"]/.test(source), 'should open in new tab');
+  assert.ok(
+    /window\.open\s*\(\s*url\s*,\s*['_"]_blank['_"]/.test(source),
+    'should open in new tab'
+  );
 });
 
 test('handleClick goes to /topics-list when clicking center (no data)', () => {
@@ -374,7 +508,10 @@ function extractMethodBody(src, name) {
     if (src[i] === '(') depth += 1;
     else if (src[i] === ')') {
       depth -= 1;
-      if (depth === 0) { parenClose = i; break; }
+      if (depth === 0) {
+        parenClose = i;
+        break;
+      }
     }
   }
 
@@ -403,7 +540,10 @@ test('rgbToHex correctly converts [255, 0, 170] (source inspection)', () => {
   assert.ok(/\.map\s*\(/.test(source), 'should use map for conversion');
   assert.ok(/\.toString\s*\(\s*16\s*\)/.test(source), 'should convert to base 16');
   assert.ok(/\.join\s*\(\s*['"]["']\s*\)/.test(source), 'should join hex values');
-  assert.ok(/['"]#['"]/.test(source) || /'\\#'/.test(source) || /["']#["']/.test(source), 'should prepend #');
+  assert.ok(
+    /['"]#['"]/.test(source) || /'\\#'/.test(source) || /["']#["']/.test(source),
+    'should prepend #'
+  );
 });
 
 test('rgbToHex pads single-digit hex values (source inspection)', () => {

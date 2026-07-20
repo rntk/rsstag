@@ -13,7 +13,10 @@ const source = fs.readFileSync(SOURCE_PATH, 'utf8');
 // ============================================================
 
 test('source declares PrefixTree as a default export class', () => {
-  assert.ok(/export\s+default\s+class\s+PrefixTree\b/.test(source), 'should export default class PrefixTree');
+  assert.ok(
+    /export\s+default\s+class\s+PrefixTree\b/.test(source),
+    'should export default class PrefixTree'
+  );
 });
 
 test('source declares constructor with data param', () => {
@@ -41,31 +44,52 @@ test('source imports d3', () => {
 // ============================================================
 
 test('render creates link_fn as arrow function', () => {
-  assert.ok(/let\s+link_fn\s*=\s*\(\s*d\s*,\s*n\s*\)\s*=>/.test(source), 'should define link_fn arrow function');
+  assert.ok(
+    /let\s+link_fn\s*=\s*\(\s*d\s*,\s*n\s*\)\s*=>/.test(source),
+    'should define link_fn arrow function'
+  );
 });
 
 test('link_fn uses ancestors().reverse().map() to build path', () => {
-  assert.ok(/n\s*\.\s*ancestors\(\)\s*\.\s*reverse\(\)\s*\.\s*map/.test(source), 'link_fn should traverse ancestors in reverse');
+  assert.ok(
+    /n\s*\.\s*ancestors\(\)\s*\.\s*reverse\(\)\s*\.\s*map/.test(source),
+    'link_fn should traverse ancestors in reverse'
+  );
 });
 
 test('link_fn maps to d.data.name', () => {
-  assert.ok(/\.map\s*\(\s*\(\s*d\s*\)\s*=>\s*d\.data\.name\s*\)/.test(source), 'link_fn should map to d.data.name');
+  assert.ok(
+    /\.map\s*\(\s*\(\s*d\s*\)\s*=>\s*d\.data\.name\s*\)/.test(source),
+    'link_fn should map to d.data.name'
+  );
 });
 
 test('link_fn builds URL with /prefixes/prefix/ path', () => {
-  assert.ok(/['"]\/prefixes\/prefix\/['"]/.test(source), 'link_fn should use /prefixes/prefix/ path');
+  assert.ok(
+    /['"]\/prefixes\/prefix\/['"]/.test(source),
+    'link_fn should use /prefixes/prefix/ path'
+  );
 });
 
 test('link_fn uses document.location.origin', () => {
-  assert.ok(/document\.location\.origin/.test(source), 'link_fn should use document.location.origin');
+  assert.ok(
+    /document\.location\.origin/.test(source),
+    'link_fn should use document.location.origin'
+  );
 });
 
 test('link_fn uses encodeURIComponent for url_tag', () => {
-  assert.ok(/encodeURIComponent\s*\(\s*url_tag\s*\)/.test(source), 'link_fn should encode the URL tag');
+  assert.ok(
+    /encodeURIComponent\s*\(\s*url_tag\s*\)/.test(source),
+    'link_fn should encode the URL tag'
+  );
 });
 
 test('link_fn joins ancestor names with empty string', () => {
-  assert.ok(/lst\.join\s*\(\s*[''][''"]/.test(source), 'link_fn should join names with empty string');
+  assert.ok(
+    /lst\.join\s*\(\s*[''][''"]/.test(source),
+    'link_fn should join names with empty string'
+  );
 });
 
 // ============================================================
@@ -82,7 +106,10 @@ test('Tree called with label option returning d.name', () => {
 
 test('Tree called with title option using ancestors', () => {
   assert.ok(/title\s*:\s*\(\s*d\s*,\s*n\s*\)\s*=>/.test(source), 'should pass title option');
-  assert.ok(/ancestors\(\)\s*\.\s*reverse\(\)\s*\.\s*map/.test(source), 'title should use ancestors');
+  assert.ok(
+    /ancestors\(\)\s*\.\s*reverse\(\)\s*\.\s*map/.test(source),
+    'title should use ancestors'
+  );
   assert.ok(/\.join\s*\(\s*[''][''"]/.test(source), 'title should join ancestor names');
 });
 
@@ -123,7 +150,10 @@ test('source declares Tree function', () => {
 });
 
 test('Tree function uses d3.hierarchy for hierarchical data', () => {
-  assert.ok(/d3\.hierarchy\s*\(\s*data\s*,\s*children\s*\)/.test(source), 'should use d3.hierarchy');
+  assert.ok(
+    /d3\.hierarchy\s*\(\s*data\s*,\s*children\s*\)/.test(source),
+    'should use d3.hierarchy'
+  );
 });
 
 test('Tree function uses d3.stratify for tabular data', () => {
@@ -175,7 +205,10 @@ test('Tree function uses d3.curveBumpX as default curve', () => {
 // ============================================================
 
 test('Tree creates SVG with d3.create', () => {
-  assert.ok(/d3\s*\.\s*create\s*\(\s*['"]svg['"]\s*\)/.test(source), 'should create SVG via d3.create');
+  assert.ok(
+    /d3\s*\.\s*create\s*\(\s*['"]svg['"]\s*\)/.test(source),
+    'should create SVG via d3.create'
+  );
 });
 
 test('Tree sets viewBox attribute', () => {
@@ -183,7 +216,10 @@ test('Tree sets viewBox attribute', () => {
 });
 
 test('Tree sets font-family to sans-serif', () => {
-  assert.ok(/\.attr\s*\(\s*['"]font-family['"]\s*,\s*['"]sans-serif['"]/.test(source), 'should set font-family');
+  assert.ok(
+    /\.attr\s*\(\s*['"]font-family['"]\s*,\s*['"]sans-serif['"]/.test(source),
+    'should set font-family'
+  );
 });
 
 test('Tree sets font-size to 14', () => {
@@ -205,12 +241,18 @@ test('Tree adds style element with CSS transitions', () => {
 
 test('Tree sets transition on .link class', () => {
   assert.ok(/\.link\s*\{/.test(source), 'should style .link class');
-  assert.ok(/transition\s*:\s*stroke-opacity\s+0\.3s/.test(source), 'should set stroke-opacity transition on links');
+  assert.ok(
+    /transition\s*:\s*stroke-opacity\s+0\.3s/.test(source),
+    'should set stroke-opacity transition on links'
+  );
 });
 
 test('Tree sets transition on .node class', () => {
   assert.ok(/\.node\s*\{/.test(source), 'should style .node class');
-  assert.ok(/transition\s*:\s*fill-opacity\s+0\.3s/.test(source), 'should set fill-opacity transition on nodes');
+  assert.ok(
+    /transition\s*:\s*fill-opacity\s+0\.3s/.test(source),
+    'should set fill-opacity transition on nodes'
+  );
 });
 
 // ============================================================
@@ -231,7 +273,10 @@ test('findConnected adds nodes and links to Sets', () => {
 });
 
 test('Tree declares handleMouseOver function', () => {
-  assert.ok(/function\s+handleMouseOver\s*\(\s*event\s*,\s*d\s*\)/.test(source), 'should declare handleMouseOver');
+  assert.ok(
+    /function\s+handleMouseOver\s*\(\s*event\s*,\s*d\s*\)/.test(source),
+    'should declare handleMouseOver'
+  );
 });
 
 test('Tree declares handleMouseOut function', () => {
@@ -247,11 +292,19 @@ test('handleMouseOver dims unrelated nodes fill-opacity to 0.1', () => {
 });
 
 test('handleMouseOut restores strokeOpacity', () => {
-  assert.ok(/selectAll\s*\(\s*['"]\.link['"]\s*\)\.attr\s*\(\s*['"]stroke-opacity['"]\s*,\s*strokeOpacity/.test(source), 'should restore strokeOpacity');
+  assert.ok(
+    /selectAll\s*\(\s*['"]\.link['"]\s*\)\.attr\s*\(\s*['"]stroke-opacity['"]\s*,\s*strokeOpacity/.test(
+      source
+    ),
+    'should restore strokeOpacity'
+  );
 });
 
 test('handleMouseOut restores fill-opacity to 1', () => {
-  assert.ok(/selectAll\s*\(\s*['"]\.node['"]\s*\)\.attr\s*\(\s*['"]fill-opacity['"]\s*,\s*1/.test(source), 'should restore fill-opacity to 1');
+  assert.ok(
+    /selectAll\s*\(\s*['"]\.node['"]\s*\)\.attr\s*\(\s*['"]fill-opacity['"]\s*,\s*1/.test(source),
+    'should restore fill-opacity to 1'
+  );
 });
 
 // ============================================================
@@ -284,8 +337,14 @@ test('Tree applies transform translate for node positioning', () => {
 });
 
 test('Tree sets mouseover and mouseout on nodes', () => {
-  assert.ok(/\.on\s*\(\s*['"]mouseover['"]\s*,\s*handleMouseOver/.test(source), 'should set mouseover');
-  assert.ok(/\.on\s*\(\s*['"]mouseout['"]\s*,\s*handleMouseOut/.test(source), 'should set mouseout');
+  assert.ok(
+    /\.on\s*\(\s*['"]mouseover['"]\s*,\s*handleMouseOver/.test(source),
+    'should set mouseover'
+  );
+  assert.ok(
+    /\.on\s*\(\s*['"]mouseout['"]\s*,\s*handleMouseOut/.test(source),
+    'should set mouseout'
+  );
 });
 
 test('Tree appends circles to nodes', () => {
@@ -293,7 +352,10 @@ test('Tree appends circles to nodes', () => {
 });
 
 test('Tree circles use different fill for internal vs leaf nodes', () => {
-  assert.ok(/d\.children\s*\?\s*stroke\s*:\s*fill/.test(source), 'should differentiate fill for internal/leaf nodes');
+  assert.ok(
+    /d\.children\s*\?\s*stroke\s*:\s*fill/.test(source),
+    'should differentiate fill for internal/leaf nodes'
+  );
 });
 
 test('Tree appends title elements for hover text', () => {
@@ -306,7 +368,10 @@ test('Tree appends text elements for labels', () => {
 
 test('Tree labels use text-anchor for positioning', () => {
   assert.ok(/text-anchor/.test(source), 'should set text-anchor');
-  assert.ok(/d\.children\s*\?\s*['"]end['"]\s*:\s*['"]start['"]/.test(source), 'should vary text-anchor by node type');
+  assert.ok(
+    /d\.children\s*\?\s*['"]end['"]\s*:\s*['"]start['"]/.test(source),
+    'should vary text-anchor by node type'
+  );
 });
 
 test('Tree labels use paint-order stroke for halo effect', () => {
@@ -319,7 +384,10 @@ test('Tree labels use paint-order stroke for halo effect', () => {
 // ============================================================
 
 test('Tree throws error for unsupported curve', () => {
-  assert.ok(/throw\s+new\s+Error\s*\(\s*['"`]Unsupported curve['"`]/.test(source), 'should throw for unsupported curve');
+  assert.ok(
+    /throw\s+new\s+Error\s*\(\s*['"`]Unsupported curve['"`]/.test(source),
+    'should throw for unsupported curve'
+  );
 });
 
 // ============================================================
@@ -332,5 +400,8 @@ test('Tree centers tree using Infinity/-Infinity bounds', () => {
 });
 
 test('Tree computes default height from x1 - x0 + dx * 2', () => {
-  assert.ok(/height\s*=\s*x1\s*-\s*x0\s*\+\s*dx\s*\*\s*2/.test(source), 'should compute height from bounds');
+  assert.ok(
+    /height\s*=\s*x1\s*-\s*x0\s*\+\s*dx\s*\*\s*2/.test(source),
+    'should compute height from bounds'
+  );
 });

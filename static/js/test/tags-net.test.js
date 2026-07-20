@@ -13,11 +13,17 @@ const source = fs.readFileSync(SOURCE_PATH, 'utf8');
 // ============================================================
 
 test('source declares TagsNet as a default export class', () => {
-  assert.ok(/export\s+default\s+class\s+TagsNet\b/.test(source), 'should export default class TagsNet');
+  assert.ok(
+    /export\s+default\s+class\s+TagsNet\b/.test(source),
+    'should export default class TagsNet'
+  );
 });
 
 test('source declares constructor with container_id and event_system params', () => {
-  assert.ok(/constructor\s*\(\s*container_id\s*,\s*event_system\s*\)/.test(source), 'constructor should accept container_id and event_system');
+  assert.ok(
+    /constructor\s*\(\s*container_id\s*,\s*event_system\s*\)/.test(source),
+    'constructor should accept container_id and event_system'
+  );
 });
 
 test('source assigns this.ES from event_system', () => {
@@ -25,7 +31,10 @@ test('source assigns this.ES from event_system', () => {
 });
 
 test('source initializes _state with tags Map', () => {
-  assert.ok(/this\._state\s*=\s*\{[^}]*tags\s*:\s*new\s+Map\(\)/s.test(source), '_state should initialize tags as new Map()');
+  assert.ok(
+    /this\._state\s*=\s*\{[^}]*tags\s*:\s*new\s+Map\(\)/s.test(source),
+    '_state should initialize tags as new Map()'
+  );
 });
 
 test('source initializes _state with main_tag and selected_tag as empty strings', () => {
@@ -34,7 +43,10 @@ test('source initializes _state with main_tag and selected_tag as empty strings'
 });
 
 test('source gets container via document.getElementById', () => {
-  assert.ok(/this\._container\s*=\s*document\.getElementById\(container_id\)/.test(source), 'should get container by ID');
+  assert.ok(
+    /this\._container\s*=\s*document\.getElementById\(container_id\)/.test(source),
+    'should get container by ID'
+  );
 });
 
 test('source initializes _network as null', () => {
@@ -61,15 +73,24 @@ test('source defines sentiment colors for negative, positive, positive/negative,
 });
 
 test('source sets negative sentiment color to red (#ff0000)', () => {
-  assert.ok(/'negative'\s*,\s*\{[^}]*color\s*:\s*['"]#ff0000/.test(source), 'negative color should be #ff0000');
+  assert.ok(
+    /'negative'\s*,\s*\{[^}]*color\s*:\s*['"]#ff0000/.test(source),
+    'negative color should be #ff0000'
+  );
 });
 
 test('source sets positive sentiment color to green (#00ff00)', () => {
-  assert.ok(/'positive'\s*,\s*\{[^}]*color\s*:\s*['"]#00ff00/.test(source), 'positive color should be #00ff00');
+  assert.ok(
+    /'positive'\s*,\s*\{[^}]*color\s*:\s*['"]#00ff00/.test(source),
+    'positive color should be #00ff00'
+  );
 });
 
 test('source sets neutral sentiment color to gray (#aaaaaa)', () => {
-  assert.ok(/'neutral'\s*,\s*\{[^}]*color\s*:\s*['"]#aaaaaa/.test(source), 'neutral color should be #aaaaaa');
+  assert.ok(
+    /'neutral'\s*,\s*\{[^}]*color\s*:\s*['"]#aaaaaa/.test(source),
+    'neutral color should be #aaaaaa'
+  );
 });
 
 // ============================================================
@@ -81,7 +102,10 @@ test('source declares getRandomColorHEX method', () => {
 });
 
 test('source declares getRandomCoords method', () => {
-  assert.ok(/\bgetRandomCoords\s*\(\s*(?:point)?\s*\)/.test(source), 'should have getRandomCoords method');
+  assert.ok(
+    /\bgetRandomCoords\s*\(\s*(?:point)?\s*\)/.test(source),
+    'should have getRandomCoords method'
+  );
 });
 
 test('source declares initCoords method', () => {
@@ -97,7 +121,10 @@ test('source declares selectTag method', () => {
 });
 
 test('source declares moveDependedNodes method', () => {
-  assert.ok(/\bmoveDependedNodes\s*\(\s*delta\s*,\s*tag_id\s*\)/.test(source), 'should have moveDependedNodes method');
+  assert.ok(
+    /\bmoveDependedNodes\s*\(\s*delta\s*,\s*tag_id\s*\)/.test(source),
+    'should have moveDependedNodes method'
+  );
 });
 
 test('source declares moveTag method', () => {
@@ -113,7 +140,10 @@ test('source declares updateNet method', () => {
 });
 
 test('source declares renderNet method', () => {
-  assert.ok(/\brenderNet\s*\(\s*nodes\s*,\s*edges\s*\)/.test(source), 'should have renderNet method');
+  assert.ok(
+    /\brenderNet\s*\(\s*nodes\s*,\s*edges\s*\)/.test(source),
+    'should have renderNet method'
+  );
 });
 
 test('source declares bindEvents method', () => {
@@ -129,15 +159,24 @@ test('source declares start method', () => {
 // ============================================================
 
 test('source binds updateNet in constructor', () => {
-  assert.ok(/this\.updateNet\s*=\s*this\.updateNet\.bind\(this\)/.test(source), 'should bind updateNet');
+  assert.ok(
+    /this\.updateNet\s*=\s*this\.updateNet\.bind\(this\)/.test(source),
+    'should bind updateNet'
+  );
 });
 
 test('source binds loadTagNet in constructor', () => {
-  assert.ok(/this\.loadTagNet\s*=\s*this\.loadTagNet\.bind\(this\)/.test(source), 'should bind loadTagNet');
+  assert.ok(
+    /this\.loadTagNet\s*=\s*this\.loadTagNet\.bind\(this\)/.test(source),
+    'should bind loadTagNet'
+  );
 });
 
 test('source binds selectTag in constructor', () => {
-  assert.ok(/this\.selectTag\s*=\s*this\.selectTag\.bind\(this\)/.test(source), 'should bind selectTag');
+  assert.ok(
+    /this\.selectTag\s*=\s*this\.selectTag\.bind\(this\)/.test(source),
+    'should bind selectTag'
+  );
 });
 
 test('source binds moveTag in constructor', () => {
@@ -149,7 +188,9 @@ test('source binds moveTag in constructor', () => {
 // ============================================================
 
 test('getRandomColorHEX returns object with color and inverted_color', () => {
-  const match = source.match(/return\s*\{\s*color\s*:\s*['"]([^'"]+)['"]\s*,\s*inverted_color\s*:\s*['"]([^'"]+)['"]\s*\}/);
+  const match = source.match(
+    /return\s*\{\s*color\s*:\s*['"]([^'"]+)['"]\s*,\s*inverted_color\s*:\s*['"]([^'"]+)['"]\s*\}/
+  );
   assert.ok(match, 'should return object with color and inverted_color');
   assert.equal(match[1], '#0000ff');
   assert.equal(match[2], '#ffffff');
@@ -165,7 +206,10 @@ test('getRandomCoords uses x_delta and y_delta of 200', () => {
 });
 
 test('getRandomCoords generates coords within 5000 when no point', () => {
-  assert.ok(/Math\.random\(\)\s*\*\s*5000/.test(source), 'should use Math.random() * 5000 for default range');
+  assert.ok(
+    /Math\.random\(\)\s*\*\s*5000/.test(source),
+    'should use Math.random() * 5000 for default range'
+  );
 });
 
 // ============================================================
@@ -173,19 +217,31 @@ test('getRandomCoords generates coords within 5000 when no point', () => {
 // ============================================================
 
 test('loadTagNet triggers LOAD_TAG_NET event', () => {
-  assert.ok(/this\.ES\.trigger\s*\(\s*this\.ES\.LOAD_TAG_NET/.test(source), 'loadTagNet should trigger LOAD_TAG_NET');
+  assert.ok(
+    /this\.ES\.trigger\s*\(\s*this\.ES\.LOAD_TAG_NET/.test(source),
+    'loadTagNet should trigger LOAD_TAG_NET'
+  );
 });
 
 test('selectTag triggers NET_TAG_SELECTED event', () => {
-  assert.ok(/this\.ES\.trigger\s*\(\s*this\.ES\.NET_TAG_SELECTED/.test(source), 'selectTag should trigger NET_TAG_SELECTED');
+  assert.ok(
+    /this\.ES\.trigger\s*\(\s*this\.ES\.NET_TAG_SELECTED/.test(source),
+    'selectTag should trigger NET_TAG_SELECTED'
+  );
 });
 
 test('bindEvents binds TAGS_NET_UPDATED to updateNet', () => {
-  assert.ok(/this\.ES\.bind\s*\(\s*this\.ES\.TAGS_NET_UPDATED\s*,\s*this\.updateNet\s*\)/.test(source), 'bindEvents should bind TAGS_NET_UPDATED');
+  assert.ok(
+    /this\.ES\.bind\s*\(\s*this\.ES\.TAGS_NET_UPDATED\s*,\s*this\.updateNet\s*\)/.test(source),
+    'bindEvents should bind TAGS_NET_UPDATED'
+  );
 });
 
 test('start calls bindEvents', () => {
-  assert.ok(/start\s*\(\s*\)\s*\{[\s\S]*this\.bindEvents\(\)/.test(source), 'start should call bindEvents');
+  assert.ok(
+    /start\s*\(\s*\)\s*\{[\s\S]*this\.bindEvents\(\)/.test(source),
+    'start should call bindEvents'
+  );
 });
 
 // ============================================================
@@ -220,23 +276,38 @@ test('getNetData filters hidden tags', () => {
 // ============================================================
 
 test('renderNet creates new vis.Network', () => {
-  assert.ok(/new\s+vis\.Network\s*\(\s*this\._container/.test(source), 'should create vis.Network with container');
+  assert.ok(
+    /new\s+vis\.Network\s*\(\s*this\._container/.test(source),
+    'should create vis.Network with container'
+  );
 });
 
 test('renderNet registers doubleClick event handler', () => {
-  assert.ok(/this\._network\.on\s*\(\s*['"]doubleClick['"]/.test(source), 'should register doubleClick handler');
+  assert.ok(
+    /this\._network\.on\s*\(\s*['"]doubleClick['"]/.test(source),
+    'should register doubleClick handler'
+  );
 });
 
 test('renderNet registers selectNode event handler', () => {
-  assert.ok(/this\._network\.on\s*\(\s*['"]selectNode['"]/.test(source), 'should register selectNode handler');
+  assert.ok(
+    /this\._network\.on\s*\(\s*['"]selectNode['"]/.test(source),
+    'should register selectNode handler'
+  );
 });
 
 test('renderNet registers dragEnd event handler', () => {
-  assert.ok(/this\._network\.on\s*\(\s*['"]dragEnd['"]/.test(source), 'should register dragEnd handler');
+  assert.ok(
+    /this\._network\.on\s*\(\s*['"]dragEnd['"]/.test(source),
+    'should register dragEnd handler'
+  );
 });
 
 test('renderNet sets physics to false in options', () => {
-  assert.ok(/physics\s*:\s*\{[^}]*enabled\s*:\s*false/s.test(source), 'physics should be disabled in options');
+  assert.ok(
+    /physics\s*:\s*\{[^}]*enabled\s*:\s*false/s.test(source),
+    'physics should be disabled in options'
+  );
 });
 
 test('renderNet sets hideEdgesOnDrag to true', () => {
@@ -244,7 +315,10 @@ test('renderNet sets hideEdgesOnDrag to true', () => {
 });
 
 test('renderNet calls setData on existing network', () => {
-  assert.ok(/this\._network\.setData\s*\(\s*data\s*\)/.test(source), 'should call setData on existing network');
+  assert.ok(
+    /this\._network\.setData\s*\(\s*data\s*\)/.test(source),
+    'should call setData on existing network'
+  );
 });
 
 test('renderNet calls redraw on existing network', () => {
@@ -268,7 +342,10 @@ test('initCoords uses getRandomCoords for new positions', () => {
 });
 
 test('initCoords uses getRandomCoords(pos) for edge nodes', () => {
-  assert.ok(/this\.getRandomCoords\(pos\)/.test(source), 'should pass pos to getRandomCoords for edges');
+  assert.ok(
+    /this\.getRandomCoords\(pos\)/.test(source),
+    'should pass pos to getRandomCoords for edges'
+  );
 });
 
 // ============================================================

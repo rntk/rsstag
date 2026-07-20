@@ -5,17 +5,8 @@
 {% include 'head-data.html' %}
 </head>
 <body>
-{% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
-<div id="global_tools">
-    {% include "logo.html" %}
-    <div class="panel right_half">
-        <span class="login_button global_tools_button">
-            <a href="/data-sources">Data sources</a>
-        </span>
-        {{ g_status.global_status() }}
-        {{ menu.settings_menu() }}
-    </div>
-</div>
+{% from 'site-header.html' import site_header with context %}
+{{ site_header(active='') }}
 <div class="page screen_middle">
     <h1>Workers Status</h1>
     

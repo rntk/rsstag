@@ -11,9 +11,15 @@ function createMockCell(classList = []) {
   const classes = new Set(classList);
   return {
     classList: {
-      add(name) { classes.add(name); },
-      remove(name) { classes.delete(name); },
-      contains(name) { return classes.has(name); },
+      add(name) {
+        classes.add(name);
+      },
+      remove(name) {
+        classes.delete(name);
+      },
+      contains(name) {
+        return classes.has(name);
+      },
     },
     tagName: 'TD',
     matches(selector) {
@@ -36,8 +42,12 @@ function createMockRow(cells = []) {
 function createMockTable(rows = []) {
   return {
     rows,
-    querySelector() { return null; },
-    matches() { return false; },
+    querySelector() {
+      return null;
+    },
+    matches() {
+      return false;
+    },
   };
 }
 
@@ -58,10 +68,7 @@ function createMockDocument(overrides = {}) {
 }
 
 function runTagFeeds(overrides = {}) {
-  const source = fs.readFileSync(
-    new URL('../tag-feeds.js', import.meta.url),
-    'utf8'
-  );
+  const source = fs.readFileSync(new URL('../tag-feeds.js', import.meta.url), 'utf8');
 
   const context = {
     document: createMockDocument(),
@@ -96,11 +103,13 @@ test('mouseover on td adds hover-column class to all cells in that column', () =
     createMockRow([cell10, cell11, cell12]),
   ]);
 
-  table.matches = function() { return false; };
+  table.matches = function () {
+    return false;
+  };
 
   // Track registered listeners
   let mouseoverHandler = null;
-  table.addEventListener = function(event, handler) {
+  table.addEventListener = function (event, handler) {
     if (event === 'mouseover') mouseoverHandler = handler;
   };
 
@@ -141,14 +150,13 @@ test('mouseover on th adds hover-column class to all cells in that column', () =
   const td1 = createMockCell();
   td1.cellIndex = 1;
 
-  const table = createMockTable([
-    createMockRow([th0, th1]),
-    createMockRow([td0, td1]),
-  ]);
-  table.matches = function() { return false; };
+  const table = createMockTable([createMockRow([th0, th1]), createMockRow([td0, td1])]);
+  table.matches = function () {
+    return false;
+  };
 
   let mouseoverHandler = null;
-  table.addEventListener = function(event, handler) {
+  table.addEventListener = function (event, handler) {
     if (event === 'mouseover') mouseoverHandler = handler;
   };
 
@@ -169,13 +177,13 @@ test('mouseover on first column (cellIndex 0) does not add hover-column', () => 
   const cell01 = createMockCell();
   cell01.cellIndex = 1;
 
-  const table = createMockTable([
-    createMockRow([cell00, cell01]),
-  ]);
-  table.matches = function() { return false; };
+  const table = createMockTable([createMockRow([cell00, cell01])]);
+  table.matches = function () {
+    return false;
+  };
 
   let mouseoverHandler = null;
-  table.addEventListener = function(event, handler) {
+  table.addEventListener = function (event, handler) {
     if (event === 'mouseover') mouseoverHandler = handler;
   };
 
@@ -209,11 +217,13 @@ test('mouseout removes hover-column from all cells in that column', () => {
     createMockRow([cell00, cell01, cell02]),
     createMockRow([cell10, cell11, cell12]),
   ]);
-  table.matches = function() { return false; };
+  table.matches = function () {
+    return false;
+  };
 
   let mouseoverHandler = null;
   let mouseoutHandler = null;
-  table.addEventListener = function(event, handler) {
+  table.addEventListener = function (event, handler) {
     if (event === 'mouseover') mouseoverHandler = handler;
     if (event === 'mouseout') mouseoutHandler = handler;
   };
@@ -239,13 +249,13 @@ test('mouseout on first column does not remove hover-column', () => {
   const cell01 = createMockCell(['hover-column']);
   cell01.cellIndex = 1;
 
-  const table = createMockTable([
-    createMockRow([cell00, cell01]),
-  ]);
-  table.matches = function() { return false; };
+  const table = createMockTable([createMockRow([cell00, cell01])]);
+  table.matches = function () {
+    return false;
+  };
 
   let mouseoutHandler = null;
-  table.addEventListener = function(event, handler) {
+  table.addEventListener = function (event, handler) {
     if (event === 'mouseout') mouseoutHandler = handler;
   };
 
@@ -273,7 +283,9 @@ test('no error when document.querySelector returns null', () => {
   assert.doesNotThrow(() => {
     runTagFeeds({
       document: {
-        querySelector() { return null; },
+        querySelector() {
+          return null;
+        },
         addEventListener() {},
       },
     });
@@ -286,13 +298,13 @@ test('mouseover on non-cell element does not add hover-column', () => {
   const cell01 = createMockCell();
   cell01.cellIndex = 1;
 
-  const table = createMockTable([
-    createMockRow([cell00, cell01]),
-  ]);
-  table.matches = function() { return false; };
+  const table = createMockTable([createMockRow([cell00, cell01])]);
+  table.matches = function () {
+    return false;
+  };
 
   let mouseoverHandler = null;
-  table.addEventListener = function(event, handler) {
+  table.addEventListener = function (event, handler) {
     if (event === 'mouseover') mouseoverHandler = handler;
   };
 
@@ -303,7 +315,9 @@ test('mouseover on non-cell element does not add hover-column', () => {
   // Target is a div, not td or th
   const fakeTarget = {
     tagName: 'DIV',
-    matches(sel) { return false; },
+    matches(sel) {
+      return false;
+    },
     cellIndex: 1,
   };
 

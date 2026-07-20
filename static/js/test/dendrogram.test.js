@@ -16,10 +16,7 @@ const source = fs.readFileSync(SOURCE_PATH, 'utf8');
 test('TagTree stores data on construction', () => {
   const data = {
     name: 'root',
-    children: [
-      { name: 'child1', children: [{ name: 'grandchild1' }] },
-      { name: 'child2' },
-    ],
+    children: [{ name: 'child1', children: [{ name: 'grandchild1' }] }, { name: 'child2' }],
   };
 
   const tree = new TagTree(data);
@@ -63,13 +60,19 @@ test('TagTree render accepts selector, width, and height parameters', () => {
 });
 
 test('TagTree render method uses document.querySelector and d3.tree', () => {
-  assert.ok(/document\.querySelector\s*\(\s*selector\s*\)/.test(source), 'render should query selector');
+  assert.ok(
+    /document\.querySelector\s*\(\s*selector\s*\)/.test(source),
+    'render should query selector'
+  );
   assert.ok(/d3\.tree/.test(source), 'render should use d3.tree');
   assert.ok(/d3\.hierarchy/.test(source), 'render should use d3.hierarchy');
 });
 
 test('TagTree render returns early when container is not found', () => {
-  assert.ok(/if\s*\(\s*pg\s*\)/.test(source) || /pg\s*\?/.test(source), 'render should check container exists before appending');
+  assert.ok(
+    /if\s*\(\s*pg\s*\)/.test(source) || /pg\s*\?/.test(source),
+    'render should check container exists before appending'
+  );
 });
 
 test('BidirectionalTagTree render method uses d3.tree', () => {
@@ -79,8 +82,14 @@ test('BidirectionalTagTree render method uses d3.tree', () => {
 });
 
 test('BidirectionalTagTree render returns early when container is not found', () => {
-  assert.ok(/let\s+pg\s*=\s*document\.querySelector\s*\(\s*selector\s*\)/.test(source), 'render should query selector');
-  assert.ok(/if\s*\(\s*pg\s*\)/.test(source) || /pg\s*\?/.test(source), 'render should check container exists before appending');
+  assert.ok(
+    /let\s+pg\s*=\s*document\.querySelector\s*\(\s*selector\s*\)/.test(source),
+    'render should query selector'
+  );
+  assert.ok(
+    /if\s*\(\s*pg\s*\)/.test(source) || /pg\s*\?/.test(source),
+    'render should check container exists before appending'
+  );
 });
 
 // ============================================================
@@ -90,12 +99,8 @@ test('BidirectionalTagTree render returns early when container is not found', ()
 test('BidirectionalTagTree stores data on construction', () => {
   const data = {
     name: 'root',
-    before: [
-      { name: 'before-child' },
-    ],
-    after: [
-      { name: 'after-child' },
-    ],
+    before: [{ name: 'before-child' }],
+    after: [{ name: 'after-child' }],
   };
 
   const tree = new BidirectionalTagTree(data);
@@ -178,9 +183,7 @@ test('TagTree render uses ancestors to build URL', () => {
   // The actual URL building depends on d3 and DOM, so we verify the interface.
   const data = {
     name: 'root',
-    children: [
-      { name: 'child', children: [{ name: 'grandchild' }] },
-    ],
+    children: [{ name: 'child', children: [{ name: 'grandchild' }] }],
   };
   const tree = new TagTree(data);
   assert.ok(tree.data.children.length === 1);
@@ -190,12 +193,8 @@ test('TagTree render uses ancestors to build URL', () => {
 test('BidirectionalTagTree data supports before/after structure', () => {
   const data = {
     name: 'center-topic',
-    before: [
-      { name: 'previous-topic', children: [{ name: 'older-topic' }] },
-    ],
-    after: [
-      { name: 'next-topic', children: [{ name: 'newer-topic' }] },
-    ],
+    before: [{ name: 'previous-topic', children: [{ name: 'older-topic' }] }],
+    after: [{ name: 'next-topic', children: [{ name: 'newer-topic' }] }],
   };
   const tree = new BidirectionalTagTree(data);
 

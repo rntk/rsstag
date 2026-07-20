@@ -97,9 +97,15 @@ test('renderExpandedSnippet updates markup, visible indices, and button state', 
     can_extend_after: true,
   });
 
-  assert.match(snippetText.innerHTML, /<div class="snippet-context snippet-context-before snippet-context-new">/);
+  assert.match(
+    snippetText.innerHTML,
+    /<div class="snippet-context snippet-context-before snippet-context-new">/
+  );
   assert.match(snippetText.innerHTML, /<div class="snippet-context snippet-context-base">/);
-  assert.match(snippetText.innerHTML, /<div class="snippet-context snippet-context-after snippet-context-new">/);
+  assert.match(
+    snippetText.innerHTML,
+    /<div class="snippet-context snippet-context-after snippet-context-new">/
+  );
   assert.equal(snippetItem.dataset.visibleIndices, '1,2,3');
   assert.equal(snippetItem.dataset.canExtendBefore, '0');
   assert.equal(snippetItem.dataset.canExtendAfter, '1');
@@ -155,7 +161,10 @@ test('renderExpandedSnippet disables the button when no more context exists', ()
 // highlightTagWordsInHtml and buildTagHighlightRe tests
 // ============================================================
 
-const SNIPPET_SOURCE = fs.readFileSync(new URL('../post-grouped-snippets.js', import.meta.url), 'utf8');
+const SNIPPET_SOURCE = fs.readFileSync(
+  new URL('../post-grouped-snippets.js', import.meta.url),
+  'utf8'
+);
 
 test('buildTagHighlightRe returns null when TAG_WORDS is empty or missing', () => {
   // Source-inspection: verify the function guards against empty/missing TAG_WORDS

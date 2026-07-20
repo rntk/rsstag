@@ -302,7 +302,15 @@ function buildBranchElement(
     childrenEl.className = 'fh-branch__children';
     children.forEach((child) => {
       childrenEl.appendChild(
-        buildTreeElement(child, rootName, collapsedPaths, onToggle, onSummary, onOriginal, tagHighlightRe)
+        buildTreeElement(
+          child,
+          rootName,
+          collapsedPaths,
+          onToggle,
+          onSummary,
+          onOriginal,
+          tagHighlightRe
+        )
       );
     });
     branch.appendChild(childrenEl);
@@ -702,15 +710,23 @@ class FeedHierarchy {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic: path.replace(/>/g, ' > '), sentences: this.collectSentences(entry) }),
+        body: JSON.stringify({
+          topic: path.replace(/>/g, ' > '),
+          sentences: this.collectSentences(entry),
+        }),
       });
       const payload = await response.json();
-      if (!response.ok || !payload.data) throw new Error(payload.error || 'Unable to generate summary.');
+      if (!response.ok || !payload.data)
+        throw new Error(payload.error || 'Unable to generate summary.');
       const summary = String(payload.data).trim();
       this.summaries.set(path, summary);
       this.showSummary(path, summary);
     } catch (error) {
-      this.showSummary(path, error instanceof Error ? error.message : 'Unable to generate summary.', true);
+      this.showSummary(
+        path,
+        error instanceof Error ? error.message : 'Unable to generate summary.',
+        true
+      );
     } finally {
       card?.classList.remove('is-summary-loading');
     }
@@ -720,7 +736,9 @@ class FeedHierarchy {
     const dialog = document.createElement('dialog');
     dialog.className = 'canvas-summary-dialog';
     dialog.innerHTML = `<button type="button" class="canvas-summary-dialog__close" aria-label="Close">×</button><p class="canvas-summary-dialog__kicker">Summary</p><h2></h2><div class="canvas-summary-dialog__text"></div>`;
-    dialog.querySelector('.canvas-summary-dialog__close')?.addEventListener('click', () => dialog.close());
+    dialog
+      .querySelector('.canvas-summary-dialog__close')
+      ?.addEventListener('click', () => dialog.close());
     dialog.addEventListener('click', (event) => {
       if (event.target === dialog) dialog.close();
     });
@@ -733,7 +751,9 @@ class FeedHierarchy {
     const dialog = document.createElement('dialog');
     dialog.className = 'canvas-original-dialog';
     dialog.innerHTML = `<button type="button" class="canvas-summary-dialog__close" aria-label="Close">×</button><p class="canvas-summary-dialog__kicker">Original</p><h2></h2><div class="canvas-original-dialog__sources"></div>`;
-    dialog.querySelector('.canvas-summary-dialog__close')?.addEventListener('click', () => dialog.close());
+    dialog
+      .querySelector('.canvas-summary-dialog__close')
+      ?.addEventListener('click', () => dialog.close());
     dialog.addEventListener('click', (event) => {
       if (event.target === dialog) dialog.close();
     });

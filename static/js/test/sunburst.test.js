@@ -13,7 +13,10 @@ const source = fs.readFileSync(SOURCE_PATH, 'utf8');
 // ============================================================
 
 test('source declares TagSunburst as a default export class', () => {
-  assert.ok(/export\s+default\s+class\s+TagSunburst\b/.test(source), 'should export default class TagSunburst');
+  assert.ok(
+    /export\s+default\s+class\s+TagSunburst\b/.test(source),
+    'should export default class TagSunburst'
+  );
 });
 
 test('source declares constructor with data param', () => {
@@ -69,15 +72,24 @@ test('source declares render method', () => {
 });
 
 test('source declares createNavigation method', () => {
-  assert.ok(/createNavigation\s*\(\s*container\s*\)/.test(source), 'should have createNavigation method');
+  assert.ok(
+    /createNavigation\s*\(\s*container\s*\)/.test(source),
+    'should have createNavigation method'
+  );
 });
 
 test('source declares navigateToPage method', () => {
-  assert.ok(/navigateToPage\s*\(\s*pageIndex\s*\)/.test(source), 'should have navigateToPage method');
+  assert.ok(
+    /navigateToPage\s*\(\s*pageIndex\s*\)/.test(source),
+    'should have navigateToPage method'
+  );
 });
 
 test('source declares renderCurrentChart method', () => {
-  assert.ok(/renderCurrentChart\s*\(\s*container\s*\)/.test(source), 'should have renderCurrentChart method');
+  assert.ok(
+    /renderCurrentChart\s*\(\s*container\s*\)/.test(source),
+    'should have renderCurrentChart method'
+  );
 });
 
 // ============================================================
@@ -85,11 +97,19 @@ test('source declares renderCurrentChart method', () => {
 // ============================================================
 
 test('initializeCharts merges before and after arrays into children', () => {
-  assert.ok(/this\.data\.children\s*=\s*\[\.\.\.\s*\(\s*this\.data\.before\s*\|\|\s*\[\]\s*\)\s*,\s*\.\.\.\s*\(\s*this\.data\.after\s*\|\|\s*\[\]\s*\)\s*\]/.test(source), 'should merge before and after into children');
+  assert.ok(
+    /this\.data\.children\s*=\s*\[\.\.\.\s*\(\s*this\.data\.before\s*\|\|\s*\[\]\s*\)\s*,\s*\.\.\.\s*\(\s*this\.data\.after\s*\|\|\s*\[\]\s*\)\s*\]/.test(
+      source
+    ),
+    'should merge before and after into children'
+  );
 });
 
 test('merge only happens when children not present but before/after exist', () => {
-  assert.ok(/!this\.data\.children\s*&&\s*\(this\.data\.before/.test(source), 'merge condition should check !children && (before || after)');
+  assert.ok(
+    /!this\.data\.children\s*&&\s*\(this\.data\.before/.test(source),
+    'merge condition should check !children && (before || after)'
+  );
 });
 
 // ============================================================
@@ -97,11 +117,17 @@ test('merge only happens when children not present but before/after exist', () =
 // ============================================================
 
 test('initializeCharts splits data when children exceed maxChildrenPerChart', () => {
-  assert.ok(/this\.data\.children\.length\s*>\s*this\.maxChildrenPerChart/.test(source), 'should check if children exceed maxChildrenPerChart');
+  assert.ok(
+    /this\.data\.children\.length\s*>\s*this\.maxChildrenPerChart/.test(source),
+    'should check if children exceed maxChildrenPerChart'
+  );
 });
 
 test('createSplitData uses slice with maxChildrenPerChart chunk size', () => {
-  assert.ok(/children\.slice\s*\(\s*i\s*,\s*i\s*\+\s*this\.maxChildrenPerChart\s*\)/.test(source), 'should chunk with slice');
+  assert.ok(
+    /children\.slice\s*\(\s*i\s*,\s*i\s*\+\s*this\.maxChildrenPerChart\s*\)/.test(source),
+    'should chunk with slice'
+  );
 });
 
 test('createSplitData spreads original data properties into each chunk', () => {
@@ -133,16 +159,28 @@ test('render clears container innerHTML', () => {
 });
 
 test('render creates div with id sunburst-chart-container', () => {
-  assert.ok(/chartContainer\.id\s*=\s*['"]sunburst-chart-container['"]/.test(source), 'should create chart container div');
+  assert.ok(
+    /chartContainer\.id\s*=\s*['"]sunburst-chart-container['"]/.test(source),
+    'should create chart container div'
+  );
 });
 
 test('render appends chartContainer to container', () => {
-  assert.ok(/container\.appendChild\s*\(\s*chartContainer\s*\)/.test(source), 'should append chart container');
+  assert.ok(
+    /container\.appendChild\s*\(\s*chartContainer\s*\)/.test(source),
+    'should append chart container'
+  );
 });
 
 test('render creates navigation when splitData has multiple pages', () => {
-  assert.ok(/this\.splitData\.length\s*>\s*1/.test(source), 'should check splitData length for nav');
-  assert.ok(/this\.createNavigation\s*\(\s*container\s*\)/.test(source), 'should call createNavigation');
+  assert.ok(
+    /this\.splitData\.length\s*>\s*1/.test(source),
+    'should check splitData length for nav'
+  );
+  assert.ok(
+    /this\.createNavigation\s*\(\s*container\s*\)/.test(source),
+    'should call createNavigation'
+  );
 });
 
 // ============================================================
@@ -150,23 +188,40 @@ test('render creates navigation when splitData has multiple pages', () => {
 // ============================================================
 
 test('createNavigation creates div with sunburst-navigation class', () => {
-  assert.ok(/nav\.className\s*=\s*['"]sunburst-navigation['"]/.test(source), 'should set nav class name');
+  assert.ok(
+    /nav\.className\s*=\s*['"]sunburst-navigation['"]/.test(source),
+    'should set nav class name'
+  );
 });
 
 test('createNavigation creates Previous button', () => {
-  assert.ok(/prevBtn\.textContent\s*=\s*['"]\u2190\s*Previous['"]/.test(source), 'should create Previous button');
+  assert.ok(
+    /prevBtn\.textContent\s*=\s*['"]\u2190\s*Previous['"]/.test(source),
+    'should create Previous button'
+  );
 });
 
 test('createNavigation creates Next button', () => {
-  assert.ok(/nextBtn\.textContent\s*=\s*['"]Next\s*\u2192['"]/.test(source), 'should create Next button');
+  assert.ok(
+    /nextBtn\.textContent\s*=\s*['"]Next\s*\u2192['"]/.test(source),
+    'should create Next button'
+  );
 });
 
 test('createNavigation disables Previous button on first page', () => {
-  assert.ok(/prevBtn\.disabled\s*=\s*this\.currentPage\s*===\s*0/.test(source), 'should disable prev on page 0');
+  assert.ok(
+    /prevBtn\.disabled\s*=\s*this\.currentPage\s*===\s*0/.test(source),
+    'should disable prev on page 0'
+  );
 });
 
 test('createNavigation disables Next button on last page', () => {
-  assert.ok(/nextBtn\.disabled\s*=\s*this\.currentPage\s*===\s*this\.splitData\.length\s*-\s*1/.test(source), 'should disable next on last page');
+  assert.ok(
+    /nextBtn\.disabled\s*=\s*this\.currentPage\s*===\s*this\.splitData\.length\s*-\s*1/.test(
+      source
+    ),
+    'should disable next on last page'
+  );
 });
 
 test('createNavigation shows page info text', () => {
@@ -176,7 +231,10 @@ test('createNavigation shows page info text', () => {
 
 test('createNavigation sets display flex on nav', () => {
   assert.ok(/display\s*:\s*flex/.test(source), 'nav should use display flex');
-  assert.ok(/justify-content\s*:\s*space-between/.test(source), 'nav should use justify-content space-between');
+  assert.ok(
+    /justify-content\s*:\s*space-between/.test(source),
+    'nav should use justify-content space-between'
+  );
 });
 
 // ============================================================
@@ -185,7 +243,10 @@ test('createNavigation sets display flex on nav', () => {
 
 test('navigateToPage validates pageIndex bounds', () => {
   assert.ok(/pageIndex\s*<\s*0/.test(source), 'should check negative index');
-  assert.ok(/pageIndex\s*>=\s*this\.splitData\.length/.test(source), 'should check out-of-bounds index');
+  assert.ok(
+    /pageIndex\s*>=\s*this\.splitData\.length/.test(source),
+    'should check out-of-bounds index'
+  );
 });
 
 test('navigateToPage updates currentPage', () => {
@@ -193,7 +254,10 @@ test('navigateToPage updates currentPage', () => {
 });
 
 test('navigateToPage re-renders chart', () => {
-  assert.ok(/this\.renderCurrentChart\s*\(\s*chartContainer\s*\)/.test(source), 'should re-render chart');
+  assert.ok(
+    /this\.renderCurrentChart\s*\(\s*chartContainer\s*\)/.test(source),
+    'should re-render chart'
+  );
 });
 
 test('navigateToPage removes old navigation and creates new one', () => {
@@ -206,7 +270,10 @@ test('navigateToPage removes old navigation and creates new one', () => {
 // ============================================================
 
 test('renderCurrentChart sets data on current chart', () => {
-  assert.ok(/currentChart\s*\.\s*data\s*\(\s*currentData\s*\)/.test(source), 'should set chart data');
+  assert.ok(
+    /currentChart\s*\.\s*data\s*\(\s*currentData\s*\)/.test(source),
+    'should set chart data'
+  );
 });
 
 test('renderCurrentChart sets minSliceAngle to 0', () => {
@@ -218,7 +285,10 @@ test('renderCurrentChart sets onClick handler', () => {
 });
 
 test('onClick navigates to /sunburst/ for normal click', () => {
-  assert.ok(/window\.location\.href\s*=\s*['"]\/sunburst\/['"]/.test(source), 'should navigate to /sunburst/');
+  assert.ok(
+    /window\.location\.href\s*=\s*['"]\/sunburst\/['"]/.test(source),
+    'should navigate to /sunburst/'
+  );
 });
 
 test('onClick uses encodeURIComponent for tag path', () => {
@@ -245,7 +315,10 @@ test('onClick goes to root (/) for single-word tag', () => {
 // ============================================================
 
 test('generateSimilarColor function exists in source', () => {
-  assert.ok(/function\s+generateSimilarColor\s*\(\s*baseColor\s*,\s*range\s*\)/.test(source), 'should declare generateSimilarColor');
+  assert.ok(
+    /function\s+generateSimilarColor\s*\(\s*baseColor\s*,\s*range\s*\)/.test(source),
+    'should declare generateSimilarColor'
+  );
 });
 
 test('generateSimilarColor clamps RGB values between 0-255', () => {
@@ -261,9 +334,18 @@ test('hexToRGB function exists', () => {
 });
 
 test('hexToRGB parses hex with parseInt and slice', () => {
-  assert.ok(/parseInt\s*\(\s*hex\.slice\s*\(\s*1\s*,\s*3\s*\)\s*,\s*16\s*\)/.test(source), 'should parse R component');
-  assert.ok(/parseInt\s*\(\s*hex\.slice\s*\(\s*3\s*,\s*5\s*\)\s*,\s*16\s*\)/.test(source), 'should parse G component');
-  assert.ok(/parseInt\s*\(\s*hex\.slice\s*\(\s*5\s*,\s*7\s*\)\s*,\s*16\s*\)/.test(source), 'should parse B component');
+  assert.ok(
+    /parseInt\s*\(\s*hex\.slice\s*\(\s*1\s*,\s*3\s*\)\s*,\s*16\s*\)/.test(source),
+    'should parse R component'
+  );
+  assert.ok(
+    /parseInt\s*\(\s*hex\.slice\s*\(\s*3\s*,\s*5\s*\)\s*,\s*16\s*\)/.test(source),
+    'should parse G component'
+  );
+  assert.ok(
+    /parseInt\s*\(\s*hex\.slice\s*\(\s*5\s*,\s*7\s*\)\s*,\s*16\s*\)/.test(source),
+    'should parse B component'
+  );
 });
 
 test('rgbToHex function exists', () => {
@@ -271,7 +353,10 @@ test('rgbToHex function exists', () => {
 });
 
 test('rgbToHex pads single hex digits with leading zero', () => {
-  assert.ok(/hex\.length\s*===\s*1\s*\?\s*['"]0['"]\s*\+/.test(source), 'should pad single hex digit');
+  assert.ok(
+    /hex\.length\s*===\s*1\s*\?\s*['"]0['"]\s*\+/.test(source),
+    'should pad single hex digit'
+  );
 });
 
 test('rgbToHex converts via toString(16)', () => {
@@ -311,7 +396,10 @@ test('rgbToHex pads single-digit hex values', () => {
 // ============================================================
 
 test('source imports Sunburst from sunburst-chart', () => {
-  assert.ok(/import\s+Sunburst\s+from\s+['"]sunburst-chart['"]/.test(source), 'should import Sunburst from sunburst-chart');
+  assert.ok(
+    /import\s+Sunburst\s+from\s+['"]sunburst-chart['"]/.test(source),
+    'should import Sunburst from sunburst-chart'
+  );
 });
 
 test('source calls Sunburst() to create chart instances', () => {
@@ -323,5 +411,8 @@ test('source calls Sunburst() to create chart instances', () => {
 // ============================================================
 
 test('renderCurrentChart sets color function using generateSimilarColor', () => {
-  assert.ok(/\.color\s*\(\s*\(\s*d\s*\)\s*=>\s*generateSimilarColor/.test(source), 'should use generateSimilarColor for chart color');
+  assert.ok(
+    /\.color\s*\(\s*\(\s*d\s*\)\s*=>\s*generateSimilarColor/.test(source),
+    'should use generateSimilarColor for chart color'
+  );
 });

@@ -6,19 +6,11 @@
 </head>
 <body>
 
-{% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
-<div id="global_tools">
-    <div class="left_half">
-        <div id="link_on_root" class="global_tools_button">
-            <a href="/">main</a>
-        </div>
-        <div id="help_button" class="global_tools_button">
-            <a href="#">help</a>
-        </div>
-    </div>
-    <div class="right_half">
-        {{ g_status.global_status() }}
-        {{ menu.settings_menu() }}
+{% from 'site-header.html' import site_header with context %}
+{{ site_header(active='tags') }}
+<div class="flex items-center p-4 border-b border-outline-variant/10">
+    <div id="help_button" class="global_tools_button">
+        <a href="#">help</a>
     </div>
 </div>
 <div class="page">

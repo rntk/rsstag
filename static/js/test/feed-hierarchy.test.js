@@ -244,7 +244,14 @@ describe('renderTree', () => {
       { name: 'News', sources: [{ sentences: ['The original sentence.'] }] },
     ]);
     const opened = [];
-    renderTree(container, roots, new Set(), () => {}, () => {}, (entry) => opened.push(entry));
+    renderTree(
+      container,
+      roots,
+      new Set(),
+      () => {},
+      () => {},
+      (entry) => opened.push(entry)
+    );
 
     const preview = container.querySelector('.fh-leaf-sentences');
     expect(preview?.textContent).toBe('The original sentence.');
@@ -372,10 +379,11 @@ describe('FeedHierarchy (DOM smoke test)', () => {
     new FeedHierarchy().init();
     document.querySelector('.fh-topic-menu').click();
 
-    expect([...document.querySelectorAll('.canvas-topic-menu button')].map((button) => button.textContent)).toEqual([
-      'Summary',
-      'Original',
-    ]);
+    expect(
+      [...document.querySelectorAll('.canvas-topic-menu button')].map(
+        (button) => button.textContent
+      )
+    ).toEqual(['Summary', 'Original']);
   });
 
   it('renders read controls for original sentences', () => {
@@ -393,10 +401,11 @@ describe('FeedHierarchy (DOM smoke test)', () => {
     );
 
     expect(source.querySelectorAll('.canvas-original-sentence')).toHaveLength(2);
-    expect([...source.querySelectorAll('.canvas-original-sentence__toggle')].map((button) => button.textContent)).toEqual([
-      'Mark Read',
-      'Mark Unread',
-    ]);
+    expect(
+      [...source.querySelectorAll('.canvas-original-sentence__toggle')].map(
+        (button) => button.textContent
+      )
+    ).toEqual(['Mark Read', 'Mark Unread']);
     expect(source.querySelectorAll('.canvas-original-sentence.is-read')).toHaveLength(1);
   });
 
@@ -429,7 +438,9 @@ describe('FeedHierarchy (DOM smoke test)', () => {
     const marks = source.querySelectorAll('.canvas-original-sentence__tag');
     expect(marks).toHaveLength(1);
     expect(marks[0].textContent).toBe('Python');
-    expect(source.querySelectorAll('.canvas-original-sentence')[1].querySelectorAll('mark')).toHaveLength(0);
+    expect(
+      source.querySelectorAll('.canvas-original-sentence')[1].querySelectorAll('mark')
+    ).toHaveLength(0);
   });
 
   it('highlights lemma surface forms from TAG_WORDS metadata', () => {
@@ -491,6 +502,9 @@ describe('tag highlight helpers', () => {
     const el = document.createElement('span');
     fillHighlightedText(el, 'Hello <python> and PYTHON', buildTagHighlightRe('python'));
     expect(el.textContent).toBe('Hello <python> and PYTHON');
-    expect([...el.querySelectorAll('mark')].map((mark) => mark.textContent)).toEqual(['python', 'PYTHON']);
+    expect([...el.querySelectorAll('mark')].map((mark) => mark.textContent)).toEqual([
+      'python',
+      'PYTHON',
+    ]);
   });
 });

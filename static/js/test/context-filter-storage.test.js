@@ -152,7 +152,6 @@ test('start binds event handlers and kicks off the initial fetch', async () => {
   }
 });
 
-
 test('addFilter maps feed/category/topic/subtopic item types', async () => {
   const previousFetch = globalThis.fetch;
   const previousWindow = globalThis.window;
@@ -240,7 +239,11 @@ test('addFilter with missing type is a no-op', async () => {
 
   globalThis.fetch = async () => {
     fetchCalled = true;
-    return { async json() { return { data: 'ok' }; } };
+    return {
+      async json() {
+        return { data: 'ok' };
+      },
+    };
   };
 
   try {
@@ -259,7 +262,11 @@ test('addFilter with missing value is a no-op', async () => {
 
   globalThis.fetch = async () => {
     fetchCalled = true;
-    return { async json() { return { data: 'ok' }; } };
+    return {
+      async json() {
+        return { data: 'ok' };
+      },
+    };
   };
 
   try {
@@ -278,7 +285,11 @@ test('addFilter with null argument is a no-op', async () => {
 
   globalThis.fetch = async () => {
     fetchCalled = true;
-    return { async json() { return { data: 'ok' }; } };
+    return {
+      async json() {
+        return { data: 'ok' };
+      },
+    };
   };
 
   try {
@@ -383,7 +394,11 @@ test('removeFilter with missing type is a no-op', async () => {
 
   globalThis.fetch = async () => {
     fetchCalled = true;
-    return { async json() { return { data: 'ok' }; } };
+    return {
+      async json() {
+        return { data: 'ok' };
+      },
+    };
   };
 
   try {
@@ -520,9 +535,15 @@ test('bindEvents wires add/remove/clear to the storage methods', async () => {
   let removeArg = null;
   let clearCalls = 0;
 
-  storage.addFilter = async (f) => { addArg = f; };
-  storage.removeFilter = async (f) => { removeArg = f; };
-  storage.clearFilter = async () => { clearCalls += 1; };
+  storage.addFilter = async (f) => {
+    addArg = f;
+  };
+  storage.removeFilter = async (f) => {
+    removeArg = f;
+  };
+  storage.clearFilter = async () => {
+    clearCalls += 1;
+  };
 
   storage.bindEvents();
 

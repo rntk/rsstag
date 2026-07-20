@@ -168,7 +168,7 @@ test('fetchPostsContent logs error on non-JSON response', async (t) => {
   storage.fetchPostsContent(['1']);
   await flushPromises();
 
-  assert.equal(errorMessage, "Can\x60t fetch posts content");
+  assert.equal(errorMessage, 'Can\x60t fetch posts content');
 });
 
 test('fetchPostsContent catches network errors', async (t) => {
@@ -192,7 +192,7 @@ test('fetchPostsContent catches network errors', async (t) => {
   storage.fetchPostsContent(['1']);
   await flushPromises();
 
-  assert.equal(errorMsg, "Can\x60t fetch posts content.");
+  assert.equal(errorMsg, 'Can\x60t fetch posts content.');
   assert.ok(errorDetail instanceof Error);
 });
 
@@ -228,7 +228,10 @@ test('fetchPostLinks attaches sorted tags to post', async (t) => {
   await storage.fetchPostLinks('5');
 
   const post = storage.getState().posts.get('5');
-  assert.deepEqual(post.links.tags.map((t) => t.tag), ['alpha', 'beta', 'zebra']);
+  assert.deepEqual(
+    post.links.tags.map((t) => t.tag),
+    ['alpha', 'beta', 'zebra']
+  );
 });
 
 test('fetchPostLinks handles missing data gracefully', async (t) => {
@@ -271,7 +274,7 @@ test('fetchPostLinks catches network errors', async (t) => {
   storage.fetchPostLinks('1');
   await flushPromises();
 
-  assert.equal(errorMsg, "Can\x60t fetch posts links");
+  assert.equal(errorMsg, 'Can\x60t fetch posts links');
   assert.ok(errorDetail instanceof Error);
 });
 
@@ -307,7 +310,7 @@ test('changePostsStatus handles network errors', async (t) => {
   storage.changePostsStatus({ ids: ['1'], readed: true });
   await flushPromises();
 
-  assert.equal(errorMsg, "Can\x60t change posts status.");
+  assert.equal(errorMsg, 'Can\x60t change posts status.');
   assert.ok(errorDetail instanceof Error);
 });
 
@@ -339,7 +342,7 @@ test('changePostsStatus handles response with no data', async (t) => {
   storage.changePostsStatus({ ids: ['1'], readed: true });
   await flushPromises();
 
-  assert.equal(errorMessage, "Can\x60t change posts status");
+  assert.equal(errorMessage, 'Can\x60t change posts status');
 });
 
 test('changePostsStatus ignores invalid post IDs silently', async (t) => {

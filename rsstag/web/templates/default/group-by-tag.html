@@ -6,50 +6,16 @@
 </head>
 
 <body class="font-body selection:bg-secondary-container bg-background">
-    {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}{% from
+    {% from 'site-header.html' import site_header with context %}{% from
     'context-filter-bar.html' import context_filter_bar with context %}
 
-    <!-- Top Navigation Bar -->
-    <header class="sticky top-0 z-40 bg-surface/80 backdrop-blur-xl border-b border-outline-variant/10">
-        <div class="px-4 md:px-6 h-16 flex justify-between items-center w-full max-w-[1600px] mx-auto">
-            <div class="flex items-center space-x-10">
-                <a href="/" class="font-headline font-extrabold text-primary text-xl tracking-tight">RSSTag</a>
-                <nav class="hidden md:flex items-center space-x-1">
-                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/">
-                        <span class="material-symbols-outlined text-lg">dashboard</span>
-                        <span class="text-sm">Dashboard</span>
-                    </a>
-                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/group/category">
-                        <span class="material-symbols-outlined text-lg">category</span>
-                        <span class="text-sm">Categories</span>
-                    </a>
-                    <a class="sidebar-item-active flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/group/tag/1">
-                        <span class="material-symbols-outlined text-lg">sell</span>
-                        <span class="text-sm">Tags</span>
-                    </a>
-                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/topics/1">
-                        <span class="material-symbols-outlined text-lg">topic</span>
-                        <span class="text-sm">Topics</span>
-                    </a>
-                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/map">
-                        <span class="material-symbols-outlined text-lg">map</span>
-                        <span class="text-sm">Map</span>
-                    </a>
-                </nav>
-            </div>
-            
-            <div class="flex items-center space-x-4">
-                {{ g_status.global_status() }}
-                {{ menu.settings_menu() }}
-                <button onclick="document.getElementById('help_window').classList.remove('hidden')" class="p-2 hover:bg-surface-container-high rounded-full transition-colors">
-                    <span class="material-symbols-outlined">help</span>
-                </button>
-                <a class="text-on-surface-variant hover:text-primary p-2 transition-colors" href="/logout" title="Log Out">
-                    <span class="material-symbols-outlined">logout</span>
-                </a>
-            </div>
-        </div>
-    </header>
+    {{ site_header(active='tags') }}
+
+    <div class="flex items-center px-4 md:px-6 py-2 max-w-[1600px] mx-auto">
+        <button onclick="document.getElementById('help_window').classList.remove('hidden')" class="p-2 hover:bg-surface-container-high transition-colors">
+            <span class="material-symbols-outlined">help</span>
+        </button>
+    </div>
 
     <!-- Main Content Area -->
     <main class="min-h-screen">
@@ -65,15 +31,15 @@
                 <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <h2 class="text-3xl font-headline font-extrabold text-primary">Tags</h2>
                     <div class="flex flex-wrap items-center gap-3">
-                        <a href="{{sort_by_link}}" class="text-xs font-bold text-on-surface-variant hover:text-primary bg-surface-container-high px-4 py-2 rounded-full transition-all flex items-center space-x-2">
+                        <a href="{{sort_by_link}}" class="text-xs font-bold text-on-surface-variant hover:text-primary bg-surface-container-high px-4 py-2 transition-all flex items-center space-x-2">
                             <span class="material-symbols-outlined text-sm">sort</span>
                             <span>Sort by {{sort_by_title}}</span>
                         </a>
-                        <a href="{{group_by_link}}" class="text-xs font-bold text-on-surface-variant hover:text-primary bg-surface-container-high px-4 py-2 rounded-full transition-all flex items-center space-x-2">
+                        <a href="{{group_by_link}}" class="text-xs font-bold text-on-surface-variant hover:text-primary bg-surface-container-high px-4 py-2 transition-all flex items-center space-x-2">
                             <span class="material-symbols-outlined text-sm">category</span>
                             <span>Group by Category</span>
                         </a>
-                        <a href="{{tags_categories_link}}" class="text-xs font-bold text-on-surface-variant hover:text-primary bg-surface-container-high px-4 py-2 rounded-full transition-all flex items-center space-x-2">
+                        <a href="{{tags_categories_link}}" class="text-xs font-bold text-on-surface-variant hover:text-primary bg-surface-container-high px-4 py-2 transition-all flex items-center space-x-2">
                             <span class="material-symbols-outlined text-sm">folder</span>
                             <span>Tags Categories</span>
                         </a>
@@ -135,7 +101,7 @@
 
     <div id="help_window" class="fixed inset-0 z-[100] bg-surface/90 backdrop-blur-sm hidden flex items-center justify-center p-6">
         <div class="bg-surface-container-lowest p-8 rounded-2xl border border-outline-variant/10 shadow-2xl max-w-lg w-full relative">
-            <button onclick="document.getElementById('help_window').classList.add('hidden')" class="absolute top-4 right-4 p-2 hover:bg-surface-container-high rounded-full transition-colors">
+            <button onclick="document.getElementById('help_window').classList.add('hidden')" class="absolute top-4 right-4 p-2 hover:bg-surface-container-high transition-colors">
                 <span class="material-symbols-outlined">close</span>
             </button>
             <h3 class="text-xl font-headline font-bold mb-6 flex items-center space-x-2">

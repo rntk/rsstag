@@ -13,15 +13,24 @@ const source = fs.readFileSync(SOURCE_PATH, 'utf8');
 // ============================================================
 
 test('source declares PostComparePage as a default export class', () => {
-  assert.ok(/export\s+default\s+class\s+PostComparePage\s+extends\s+PostGroupedPage/.test(source), 'should export default class PostComparePage extends PostGroupedPage');
+  assert.ok(
+    /export\s+default\s+class\s+PostComparePage\s+extends\s+PostGroupedPage/.test(source),
+    'should export default class PostComparePage extends PostGroupedPage'
+  );
 });
 
 test('source imports PostGroupedPage', () => {
-  assert.ok(/import\s+PostGroupedPage\s+from\s+['"]\.\/post-grouped\.js['"]/.test(source), 'should import PostGroupedPage from post-grouped.js');
+  assert.ok(
+    /import\s+PostGroupedPage\s+from\s+['"]\.\/post-grouped\.js['"]/.test(source),
+    'should import PostGroupedPage from post-grouped.js'
+  );
 });
 
 test('source declares constructor calling super()', () => {
-  assert.ok(/constructor\s*\(\s*\)\s*\{[\s\S]*super\(\)/.test(source), 'constructor should call super()');
+  assert.ok(
+    /constructor\s*\(\s*\)\s*\{[\s\S]*super\(\)/.test(source),
+    'constructor should call super()'
+  );
 });
 
 // ============================================================
@@ -53,7 +62,10 @@ test('source declares init method', () => {
 });
 
 test('source declares initSyncScrollToggle method', () => {
-  assert.ok(/\binitSyncScrollToggle\s*\(\s*\)/.test(source), 'should have initSyncScrollToggle method');
+  assert.ok(
+    /\binitSyncScrollToggle\s*\(\s*\)/.test(source),
+    'should have initSyncScrollToggle method'
+  );
 });
 
 test('source declares attachScrollSync method', () => {
@@ -61,7 +73,10 @@ test('source declares attachScrollSync method', () => {
 });
 
 test('source declares attachHeaderToggleHandlers method', () => {
-  assert.ok(/\battachHeaderToggleHandlers\s*\(\s*\)/.test(source), 'should have attachHeaderToggleHandlers method');
+  assert.ok(
+    /\battachHeaderToggleHandlers\s*\(\s*\)/.test(source),
+    'should have attachHeaderToggleHandlers method'
+  );
 });
 
 test('source declares buildPostsList method', () => {
@@ -69,11 +84,17 @@ test('source declares buildPostsList method', () => {
 });
 
 test('source declares handleTopicSelection method', () => {
-  assert.ok(/\bhandleTopicSelection\s*\(\s*topicPath\s*\)/.test(source), 'should have handleTopicSelection method');
+  assert.ok(
+    /\bhandleTopicSelection\s*\(\s*topicPath\s*\)/.test(source),
+    'should have handleTopicSelection method'
+  );
 });
 
 test('source declares activateInitialTopic method', () => {
-  assert.ok(/\bactivateInitialTopic\s*\(\s*\)/.test(source), 'should have activateInitialTopic method');
+  assert.ok(
+    /\bactivateInitialTopic\s*\(\s*\)/.test(source),
+    'should have activateInitialTopic method'
+  );
 });
 
 test('source declares clearCompareState method', () => {
@@ -81,7 +102,10 @@ test('source declares clearCompareState method', () => {
 });
 
 test('source declares syncTopicColumns method', () => {
-  assert.ok(/\bsyncTopicColumns\s*\(\s*topicPath\s*\)/.test(source), 'should have syncTopicColumns method');
+  assert.ok(
+    /\bsyncTopicColumns\s*\(\s*topicPath\s*\)/.test(source),
+    'should have syncTopicColumns method'
+  );
 });
 
 // ============================================================
@@ -113,11 +137,17 @@ test('init calls buildPostsList', () => {
 });
 
 test('init calls attachSentenceGroupHandlers', () => {
-  assert.ok(/this\.attachSentenceGroupHandlers\(\)/.test(source), 'init should call attachSentenceGroupHandlers');
+  assert.ok(
+    /this\.attachSentenceGroupHandlers\(\)/.test(source),
+    'init should call attachSentenceGroupHandlers'
+  );
 });
 
 test('init calls attachHeaderToggleHandlers', () => {
-  assert.ok(/this\.attachHeaderToggleHandlers\(\)/.test(source), 'init should call attachHeaderToggleHandlers');
+  assert.ok(
+    /this\.attachHeaderToggleHandlers\(\)/.test(source),
+    'init should call attachHeaderToggleHandlers'
+  );
 });
 
 test('init calls setInitialReadStatus', () => {
@@ -145,7 +175,10 @@ test('init calls attachScrollSync', () => {
 // ============================================================
 
 test('initSyncScrollToggle queries #sync_scroll_toggle', () => {
-  assert.ok(/document\.getElementById\s*\(\s*['"]sync_scroll_toggle['"]\s*\)/.test(source), 'should get sync_scroll_toggle by ID');
+  assert.ok(
+    /document\.getElementById\s*\(\s*['"]sync_scroll_toggle['"]\s*\)/.test(source),
+    'should get sync_scroll_toggle by ID'
+  );
 });
 
 test('initSyncScrollToggle returns early if button not found', () => {
@@ -161,7 +194,10 @@ test('initSyncScrollToggle toggles syncScroll state', () => {
 });
 
 test('initSyncScrollToggle toggles active class on button', () => {
-  assert.ok(/btn\.classList\.toggle\s*\(\s*['"]active['"]\s*,\s*this\.syncScroll\s*\)/.test(source), 'should toggle active class');
+  assert.ok(
+    /btn\.classList\.toggle\s*\(\s*['"]active['"]\s*,\s*this\.syncScroll\s*\)/.test(source),
+    'should toggle active class'
+  );
 });
 
 test('initSyncScrollToggle updates button text for Synced/Independent', () => {
@@ -174,7 +210,10 @@ test('initSyncScrollToggle updates button text for Synced/Independent', () => {
 // ============================================================
 
 test('attachScrollSync queries .compare-post-body elements', () => {
-  assert.ok(/document\.querySelectorAll\s*\(\s*['"]\.compare-post-body['"]\s*\)/.test(source), 'should query .compare-post-body');
+  assert.ok(
+    /document\.querySelectorAll\s*\(\s*['"]\.compare-post-body['"]\s*\)/.test(source),
+    'should query .compare-post-body'
+  );
 });
 
 test('attachScrollSync returns early if fewer than 2 bodies', () => {
@@ -207,11 +246,17 @@ test('attachScrollSync uses 150ms guard timer', () => {
 // ============================================================
 
 test('attachHeaderToggleHandlers queries .compare-post-header', () => {
-  assert.ok(/document\.querySelectorAll\s*\(\s*['"]\.compare-post-header['"]\s*\)/.test(source), 'should query .compare-post-header');
+  assert.ok(
+    /document\.querySelectorAll\s*\(\s*['"]\.compare-post-header['"]\s*\)/.test(source),
+    'should query .compare-post-header'
+  );
 });
 
 test('attachHeaderToggleHandlers queries .compare-header-toggle inside header', () => {
-  assert.ok(/header\.querySelector\s*\(\s*['"]\.compare-header-toggle['"]\s*\)/.test(source), 'should query toggle inside header');
+  assert.ok(
+    /header\.querySelector\s*\(\s*['"]\.compare-header-toggle['"]\s*\)/.test(source),
+    'should query toggle inside header'
+  );
 });
 
 test('attachHeaderToggleHandlers returns early if toggle not found', () => {
@@ -219,7 +264,10 @@ test('attachHeaderToggleHandlers returns early if toggle not found', () => {
 });
 
 test('attachHeaderToggleHandlers reads data-header-state attribute', () => {
-  assert.ok(/header\.getAttribute\s*\(\s*['"]data-header-state['"]\s*\)/.test(source), 'should read data-header-state');
+  assert.ok(
+    /header\.getAttribute\s*\(\s*['"]data-header-state['"]\s*\)/.test(source),
+    'should read data-header-state'
+  );
 });
 
 test('attachHeaderToggleHandlers toggles between expanded and collapsed', () => {
@@ -228,7 +276,10 @@ test('attachHeaderToggleHandlers toggles between expanded and collapsed', () => 
 });
 
 test('attachHeaderToggleHandlers sets aria-expanded attribute', () => {
-  assert.ok(/toggle\.setAttribute\s*\(\s*['"]aria-expanded['"]/.test(source), 'should set aria-expanded');
+  assert.ok(
+    /toggle\.setAttribute\s*\(\s*['"]aria-expanded['"]/.test(source),
+    'should set aria-expanded'
+  );
 });
 
 // ============================================================
@@ -236,8 +287,14 @@ test('attachHeaderToggleHandlers sets aria-expanded attribute', () => {
 // ============================================================
 
 test('buildPostsList queries #posts_list and #compare_scroll', () => {
-  assert.ok(/document\.getElementById\s*\(\s*['"]posts_list['"]\s*\)/.test(source), 'should get posts_list');
-  assert.ok(/document\.getElementById\s*\(\s*['"]compare_scroll['"]\s*\)/.test(source), 'should get compare_scroll');
+  assert.ok(
+    /document\.getElementById\s*\(\s*['"]posts_list['"]\s*\)/.test(source),
+    'should get posts_list'
+  );
+  assert.ok(
+    /document\.getElementById\s*\(\s*['"]compare_scroll['"]\s*\)/.test(source),
+    'should get compare_scroll'
+  );
 });
 
 test('buildPostsList returns early if elements or posts are missing', () => {
@@ -262,7 +319,10 @@ test('buildPostsList shows Post ID and feed title', () => {
 });
 
 test('buildPostsList uses data-post-id selector for columns', () => {
-  assert.ok(/\[data-post-id=["']\$\{post\.post_id\}["']\]/.test(source), 'should query by data-post-id');
+  assert.ok(
+    /\[data-post-id=["']\$\{post\.post_id\}["']\]/.test(source),
+    'should query by data-post-id'
+  );
 });
 
 test('buildPostsList adds range-highlight and pulse classes on click', () => {
@@ -279,7 +339,10 @@ test('buildPostsList uses setTimeout to remove highlight after 1500ms', () => {
 // ============================================================
 
 test('handleTopicSelection calls setActiveTopic', () => {
-  assert.ok(/this\.setActiveTopic\s*\(\s*topicPath\s*\)/.test(source), 'should call setActiveTopic');
+  assert.ok(
+    /this\.setActiveTopic\s*\(\s*topicPath\s*\)/.test(source),
+    'should call setActiveTopic'
+  );
 });
 
 test('handleTopicSelection resets topic state index to 0', () => {
@@ -291,7 +354,10 @@ test('handleTopicSelection sets currentTopic', () => {
 });
 
 test('handleTopicSelection calls syncTopicColumns', () => {
-  assert.ok(/this\.syncTopicColumns\s*\(\s*topicPath\s*\)/.test(source), 'should call syncTopicColumns');
+  assert.ok(
+    /this\.syncTopicColumns\s*\(\s*topicPath\s*\)/.test(source),
+    'should call syncTopicColumns'
+  );
 });
 
 // ============================================================
@@ -300,7 +366,10 @@ test('handleTopicSelection calls syncTopicColumns', () => {
 
 test('activateInitialTopic reads window.current_topic', () => {
   assert.ok(/window\.current_topic/.test(source), 'should read window.current_topic');
-  assert.ok(/typeof\s+window\.current_topic\s*===\s*['"]string['"]/.test(source), 'should check type is string');
+  assert.ok(
+    /typeof\s+window\.current_topic\s*===\s*['"]string['"]/.test(source),
+    'should check type is string'
+  );
 });
 
 test('activateInitialTopic falls back to first topicState key', () => {
@@ -308,7 +377,10 @@ test('activateInitialTopic falls back to first topicState key', () => {
 });
 
 test('activateInitialTopic returns early if no default topic', () => {
-  assert.ok(/if\s*\(!defaultTopic\)\s*\{[\s\S]*return/.test(source), 'should return early if no topic');
+  assert.ok(
+    /if\s*\(!defaultTopic\)\s*\{[\s\S]*return/.test(source),
+    'should return early if no topic'
+  );
 });
 
 // ============================================================
@@ -316,15 +388,24 @@ test('activateInitialTopic returns early if no default topic', () => {
 // ============================================================
 
 test('clearCompareState queries .compare-post-column', () => {
-  assert.ok(/document\.querySelectorAll\s*\(\s*['"]\.compare-post-column['"]\s*\)/.test(source), 'should query compare-post-column');
+  assert.ok(
+    /document\.querySelectorAll\s*\(\s*['"]\.compare-post-column['"]\s*\)/.test(source),
+    'should query compare-post-column'
+  );
 });
 
 test('clearCompareState removes compare-post-column-no-match class', () => {
-  assert.ok(/classList\.remove\s*\(\s*['"]compare-post-column-no-match['"]/.test(source), 'should remove no-match class');
+  assert.ok(
+    /classList\.remove\s*\(\s*['"]compare-post-column-no-match['"]/.test(source),
+    'should remove no-match class'
+  );
 });
 
 test('clearCompareState queries .compare-anchor-sentence', () => {
-  assert.ok(/document\.querySelectorAll\s*\(\s*['"]\.compare-anchor-sentence['"]\s*\)/.test(source), 'should query compare-anchor-sentence');
+  assert.ok(
+    /document\.querySelectorAll\s*\(\s*['"]\.compare-anchor-sentence['"]\s*\)/.test(source),
+    'should query compare-anchor-sentence'
+  );
 });
 
 // ============================================================
@@ -337,19 +418,31 @@ test('syncTopicColumns reads sentences and color from topicState', () => {
 });
 
 test('syncTopicColumns calls highlightSentences', () => {
-  assert.ok(/this\.highlightSentences\s*\(\s*sentenceNumbers\s*,\s*color/.test(source), 'should call highlightSentences');
+  assert.ok(
+    /this\.highlightSentences\s*\(\s*sentenceNumbers\s*,\s*color/.test(source),
+    'should call highlightSentences'
+  );
 });
 
 test('syncTopicColumns queries .compare-post-column', () => {
-  assert.ok(/document\.querySelectorAll\s*\(\s*['"]\.compare-post-column['"]\s*\)/.test(source), 'should query columns');
+  assert.ok(
+    /document\.querySelectorAll\s*\(\s*['"]\.compare-post-column['"]\s*\)/.test(source),
+    'should query columns'
+  );
 });
 
 test('syncTopicColumns queries sentence groups by data-sentence attribute', () => {
-  assert.ok(/\.sentence-group\[data-sentence=["']\$\{/.test(source), 'should query by data-sentence');
+  assert.ok(
+    /\.sentence-group\[data-sentence=["']\$\{/.test(source),
+    'should query by data-sentence'
+  );
 });
 
 test('syncTopicColumns adds compare-post-column-no-match when no anchor found', () => {
-  assert.ok(/column\.classList\.add\s*\(\s*['"]compare-post-column-no-match['"]/.test(source), 'should add no-match class');
+  assert.ok(
+    /column\.classList\.add\s*\(\s*['"]compare-post-column-no-match['"]/.test(source),
+    'should add no-match class'
+  );
 });
 
 test('syncTopicColumns sets emptyState.hidden to true/false based on match', () => {
@@ -358,11 +451,17 @@ test('syncTopicColumns sets emptyState.hidden to true/false based on match', () 
 });
 
 test('syncTopicColumns adds compare-anchor-sentence class to anchor', () => {
-  assert.ok(/span\.classList\.add\s*\(\s*['"]compare-anchor-sentence['"]/.test(source), 'should add anchor class');
+  assert.ok(
+    /span\.classList\.add\s*\(\s*['"]compare-anchor-sentence['"]/.test(source),
+    'should add anchor class'
+  );
 });
 
 test('syncTopicColumns scrolls to anchor using anchorRatio', () => {
-  assert.ok(/body\.clientHeight\s*\*\s*this\.anchorRatio/.test(source), 'should use anchorRatio for scroll position');
+  assert.ok(
+    /body\.clientHeight\s*\*\s*this\.anchorRatio/.test(source),
+    'should use anchorRatio for scroll position'
+  );
 });
 
 test('syncTopicColumns uses smooth scroll behavior', () => {

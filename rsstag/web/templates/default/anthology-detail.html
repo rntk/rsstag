@@ -7,7 +7,7 @@
 </head>
 
 <body>
-    {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
+    {% from 'site-header.html' import site_header with context %}
     {% macro render_source_refs(source_refs) -%}
         {% if source_refs %}
         <ul class="anthology-source-list">
@@ -147,20 +147,7 @@
         <p class="anthology-empty-state">No hierarchy has been generated yet.</p>
         {% endif %}
     {%- endmacro %}
-    <div id="global_tools">
-        <div class="left_half">
-            <div class="global_tools_button">
-                <a href="/">main</a>
-            </div>
-            <div class="global_tools_button">
-                <a href="/anthologies">anthologies</a>
-            </div>
-        </div>
-        <div class="right_half">
-            {{ g_status.global_status() }}
-            {{ menu.settings_menu() }}
-        </div>
-    </div>
+    {{ site_header(active='') }}
 
     <div
         id="anthology-detail-page"

@@ -17,11 +17,17 @@ test('source declares TopicsMarimekko class', () => {
 });
 
 test('source exports TopicsMarimekko as default', () => {
-  assert.ok(/export\s+default\s+TopicsMarimekko/.test(source), 'should export default TopicsMarimekko');
+  assert.ok(
+    /export\s+default\s+TopicsMarimekko/.test(source),
+    'should export default TopicsMarimekko'
+  );
 });
 
 test('source imports triggerAnthology from topics-list', () => {
-  assert.ok(/import\s*\{\s*triggerAnthology\s*\}\s*from\s+['"]\.\/topics-list\.js['"]/.test(source), 'should import triggerAnthology');
+  assert.ok(
+    /import\s*\{\s*triggerAnthology\s*\}\s*from\s+['"]\.\/topics-list\.js['"]/.test(source),
+    'should import triggerAnthology'
+  );
 });
 
 test('source declares constructor with no parameters', () => {
@@ -49,11 +55,17 @@ test('source defines PALETTE array with 16 colors', () => {
 });
 
 test('source sets MAX_COLUMNS_PER_PAGE to 10', () => {
-  assert.ok(/const\s+MAX_COLUMNS_PER_PAGE\s*=\s*10/.test(source), 'MAX_COLUMNS_PER_PAGE should be 10');
+  assert.ok(
+    /const\s+MAX_COLUMNS_PER_PAGE\s*=\s*10/.test(source),
+    'MAX_COLUMNS_PER_PAGE should be 10'
+  );
 });
 
 test('source defines BOTTOM_LABEL_HEIGHT as 140', () => {
-  assert.ok(/const\s+BOTTOM_LABEL_HEIGHT\s*=\s*140/.test(source), 'BOTTOM_LABEL_HEIGHT should be 140');
+  assert.ok(
+    /const\s+BOTTOM_LABEL_HEIGHT\s*=\s*140/.test(source),
+    'BOTTOM_LABEL_HEIGHT should be 140'
+  );
 });
 
 test('source defines TOP_PADDING as 20', () => {
@@ -77,11 +89,17 @@ test('source defines FONT_SIZE_BOTTOM as 15', () => {
 });
 
 test('source defines MIN_ROW_HEIGHT from FONT_SIZE_LABEL', () => {
-  assert.ok(/const\s+MIN_ROW_HEIGHT\s*=\s*FONT_SIZE_LABEL\s*\+\s*8/.test(source), 'MIN_ROW_HEIGHT should be FONT_SIZE_LABEL + 8');
+  assert.ok(
+    /const\s+MIN_ROW_HEIGHT\s*=\s*FONT_SIZE_LABEL\s*\+\s*8/.test(source),
+    'MIN_ROW_HEIGHT should be FONT_SIZE_LABEL + 8'
+  );
 });
 
 test('source defines MIN_COL_HEIGHT from FONT_SIZE_LABEL', () => {
-  assert.ok(/const\s+MIN_COL_HEIGHT\s*=\s*FONT_SIZE_LABEL\s*\+\s*10/.test(source), 'MIN_COL_HEIGHT should be FONT_SIZE_LABEL + 10');
+  assert.ok(
+    /const\s+MIN_COL_HEIGHT\s*=\s*FONT_SIZE_LABEL\s*\+\s*10/.test(source),
+    'MIN_COL_HEIGHT should be FONT_SIZE_LABEL + 10'
+  );
 });
 
 // ============================================================
@@ -89,11 +107,17 @@ test('source defines MIN_COL_HEIGHT from FONT_SIZE_LABEL', () => {
 // ============================================================
 
 test('source declares _colorForBar method', () => {
-  assert.ok(/_colorForBar\s*\(\s*colIndex\s*,\s*rowIndex\s*,\s*rowCount\s*\)/.test(source), 'should have _colorForBar method');
+  assert.ok(
+    /_colorForBar\s*\(\s*colIndex\s*,\s*rowIndex\s*,\s*rowCount\s*\)/.test(source),
+    'should have _colorForBar method'
+  );
 });
 
 test('source declares render method', () => {
-  assert.ok(/render\s*\(\s*selector\s*,\s*topicNode\s*\)/.test(source), 'should have render method with selector and topicNode');
+  assert.ok(
+    /render\s*\(\s*selector\s*,\s*topicNode\s*\)/.test(source),
+    'should have render method with selector and topicNode'
+  );
 });
 
 test('source declares _getPageColumns method', () => {
@@ -113,7 +137,10 @@ test('source declares _buildSvg method', () => {
 });
 
 test('source declares _computeRowHeights method', () => {
-  assert.ok(/_computeRowHeights\s*\(\s*rows\s*,\s*colHeight\s*\)/.test(source), 'should have _computeRowHeights method');
+  assert.ok(
+    /_computeRowHeights\s*\(\s*rows\s*,\s*colHeight\s*\)/.test(source),
+    'should have _computeRowHeights method'
+  );
 });
 
 // ============================================================
@@ -121,21 +148,41 @@ test('source declares _computeRowHeights method', () => {
 // ============================================================
 
 test('_colorForBar uses PALETTE with modulo for cycling', () => {
-  assert.ok(/PALETTE\[colIndex\s*%\s*PALETTE\.length\]/.test(source), 'should cycle through palette');
+  assert.ok(
+    /PALETTE\[colIndex\s*%\s*PALETTE\.length\]/.test(source),
+    'should cycle through palette'
+  );
 });
 
 test('_colorForBar parses hex color with parseInt and slice', () => {
-  assert.ok(/parseInt\s*\(\s*base\.slice\s*\(\s*1\s*,\s*3/.test(source), 'should parse R component');
-  assert.ok(/parseInt\s*\(\s*base\.slice\s*\(\s*3\s*,\s*5/.test(source), 'should parse G component');
-  assert.ok(/parseInt\s*\(\s*base\.slice\s*\(\s*5\s*,\s*7/.test(source), 'should parse B component');
+  assert.ok(
+    /parseInt\s*\(\s*base\.slice\s*\(\s*1\s*,\s*3/.test(source),
+    'should parse R component'
+  );
+  assert.ok(
+    /parseInt\s*\(\s*base\.slice\s*\(\s*3\s*,\s*5/.test(source),
+    'should parse G component'
+  );
+  assert.ok(
+    /parseInt\s*\(\s*base\.slice\s*\(\s*5\s*,\s*7/.test(source),
+    'should parse B component'
+  );
 });
 
 test('_colorForBar computes factor based on rowIndex and rowCount', () => {
-  assert.ok(/0\.7\s*\+\s*0\.6\s*\*\s*\(\s*rowIndex\s*\/\s*\(\s*rowCount\s*-\s*1/.test(source), 'should compute factor for brightness');
+  assert.ok(
+    /0\.7\s*\+\s*0\.6\s*\*\s*\(\s*rowIndex\s*\/\s*\(\s*rowCount\s*-\s*1/.test(source),
+    'should compute factor for brightness'
+  );
 });
 
 test('_colorForBar uses clamp to limit RGB to 0-255', () => {
-  assert.ok(/const\s+clamp\s*=\s*\(\s*v\s*\)\s*=>\s*Math\.min\s*\(\s*255\s*,\s*Math\.max\s*\(\s*0/.test(source), 'should define clamp');
+  assert.ok(
+    /const\s+clamp\s*=\s*\(\s*v\s*\)\s*=>\s*Math\.min\s*\(\s*255\s*,\s*Math\.max\s*\(\s*0/.test(
+      source
+    ),
+    'should define clamp'
+  );
 });
 
 test('_colorForBar returns rgb() string', () => {
@@ -163,11 +210,17 @@ test('render handles empty children array', () => {
 });
 
 test('render shows "No subtopics." for empty topic', () => {
-  assert.ok(/container\.textContent\s*=\s*['"]No subtopics\.['"]/.test(source), 'should show no subtopics message');
+  assert.ok(
+    /container\.textContent\s*=\s*['"]No subtopics\.['"]/.test(source),
+    'should show no subtopics message'
+  );
 });
 
 test('render handles null topicNode', () => {
-  assert.ok(/\(\s*topicNode\s*&&\s*topicNode\.children\s*\)\s*\|\|\s*\[\]/.test(source), 'should handle null topicNode');
+  assert.ok(
+    /\(\s*topicNode\s*&&\s*topicNode\.children\s*\)\s*\|\|\s*\[\]/.test(source),
+    'should handle null topicNode'
+  );
 });
 
 // ============================================================
@@ -180,7 +233,12 @@ test('render maps children to columns with name, width, rows, originalIndex', ()
 });
 
 test('render calculates column width from subChildren length', () => {
-  assert.ok(/const\s+width\s*=\s*subChildren\.length\s*>\s*0\s*\?\s*subChildren\.length\s*:\s*1/.test(source), 'should calculate width from children');
+  assert.ok(
+    /const\s+width\s*=\s*subChildren\.length\s*>\s*0\s*\?\s*subChildren\.length\s*:\s*1/.test(
+      source
+    ),
+    'should calculate width from children'
+  );
 });
 
 test('render uses text_length as primary value source', () => {
@@ -206,7 +264,10 @@ test('render handles leaf subtopics without children as single row', () => {
 
 test('render computes maxColValue using Math.max', () => {
   assert.ok(/this\.maxColValue\s*=\s*Math\.max/.test(source), 'should use Math.max');
-  assert.ok(/c\.rows\.reduce\s*\(\s*\(\s*s\s*,\s*r\s*\)\s*=>\s*s\s*\+\s*r\.value/.test(source), 'should sum row values');
+  assert.ok(
+    /c\.rows\.reduce\s*\(\s*\(\s*s\s*,\s*r\s*\)\s*=>\s*s\s*\+\s*r\.value/.test(source),
+    'should sum row values'
+  );
 });
 
 // ============================================================
@@ -214,12 +275,23 @@ test('render computes maxColValue using Math.max', () => {
 // ============================================================
 
 test('render computes totalPages with Math.ceil', () => {
-  assert.ok(/this\.totalPages\s*=\s*Math\.ceil\s*\(\s*this\.allColumns\.length\s*\/\s*MAX_COLUMNS_PER_PAGE/.test(source), 'should calculate totalPages');
+  assert.ok(
+    /this\.totalPages\s*=\s*Math\.ceil\s*\(\s*this\.allColumns\.length\s*\/\s*MAX_COLUMNS_PER_PAGE/.test(
+      source
+    ),
+    'should calculate totalPages'
+  );
 });
 
 test('_getPageColumns uses slice with MAX_COLUMNS_PER_PAGE', () => {
-  assert.ok(/this\.currentPage\s*\*\s*MAX_COLUMNS_PER_PAGE/.test(source), 'should calculate start index');
-  assert.ok(/\.slice\s*\(\s*start\s*,\s*start\s*\+\s*MAX_COLUMNS_PER_PAGE/.test(source), 'should slice columns');
+  assert.ok(
+    /this\.currentPage\s*\*\s*MAX_COLUMNS_PER_PAGE/.test(source),
+    'should calculate start index'
+  );
+  assert.ok(
+    /\.slice\s*\(\s*start\s*,\s*start\s*\+\s*MAX_COLUMNS_PER_PAGE/.test(source),
+    'should slice columns'
+  );
 });
 
 test('_renderPage clears container innerHTML', () => {
@@ -228,11 +300,17 @@ test('_renderPage clears container innerHTML', () => {
 
 test('_renderPage appends nav when totalPages > 1', () => {
   assert.ok(/this\.totalPages\s*>\s*1/.test(source), 'should check totalPages');
-  assert.ok(/container\.appendChild\s*\(\s*this\._buildNav\s*\(\s*\)\s*\)/.test(source), 'should append nav');
+  assert.ok(
+    /container\.appendChild\s*\(\s*this\._buildNav\s*\(\s*\)\s*\)/.test(source),
+    'should append nav'
+  );
 });
 
 test('_renderPage appends SVG from _buildSvg', () => {
-  assert.ok(/container\.appendChild\s*\(\s*this\._buildSvg\s*\(\s*columns\s*\)\s*\)/.test(source), 'should append SVG');
+  assert.ok(
+    /container\.appendChild\s*\(\s*this\._buildSvg\s*\(\s*columns\s*\)\s*\)/.test(source),
+    'should append SVG'
+  );
 });
 
 // ============================================================
@@ -244,17 +322,32 @@ test('_buildNav creates div with marimekko-nav class', () => {
 });
 
 test('_buildNav creates Previous button with arrow unicode', () => {
-  assert.ok(/prevBtn\.textContent\s*=\s*['"]\\u2190\s*Previous['"]/.test(source), 'should create Previous button');
-  assert.ok(/prevBtn\.className\s*=\s*['"]marimekko-nav-btn['"]/.test(source), 'should set button class');
+  assert.ok(
+    /prevBtn\.textContent\s*=\s*['"]\\u2190\s*Previous['"]/.test(source),
+    'should create Previous button'
+  );
+  assert.ok(
+    /prevBtn\.className\s*=\s*['"]marimekko-nav-btn['"]/.test(source),
+    'should set button class'
+  );
 });
 
 test('_buildNav creates Next button with arrow unicode', () => {
-  assert.ok(/nextBtn\.textContent\s*=\s*['"]Next\s*\\u2192['"]/.test(source), 'should create Next button');
-  assert.ok(/nextBtn\.className\s*=\s*['"]marimekko-nav-btn['"]/.test(source), 'should set button class');
+  assert.ok(
+    /nextBtn\.textContent\s*=\s*['"]Next\s*\\u2192['"]/.test(source),
+    'should create Next button'
+  );
+  assert.ok(
+    /nextBtn\.className\s*=\s*['"]marimekko-nav-btn['"]/.test(source),
+    'should set button class'
+  );
 });
 
 test('_buildNav creates info span with marimekko-nav-info class', () => {
-  assert.ok(/info\.className\s*=\s*['"]marimekko-nav-info['"]/.test(source), 'should set info class');
+  assert.ok(
+    /info\.className\s*=\s*['"]marimekko-nav-info['"]/.test(source),
+    'should set info class'
+  );
 });
 
 test('_buildNav info shows page and range text', () => {
@@ -263,11 +356,17 @@ test('_buildNav info shows page and range text', () => {
 });
 
 test('_buildNav Previous button disabled on page 0', () => {
-  assert.ok(/prevBtn\.disabled\s*=\s*this\.currentPage\s*===\s*0/.test(source), 'should disable prev on page 0');
+  assert.ok(
+    /prevBtn\.disabled\s*=\s*this\.currentPage\s*===\s*0/.test(source),
+    'should disable prev on page 0'
+  );
 });
 
 test('_buildNav Next button disabled on last page', () => {
-  assert.ok(/nextBtn\.disabled\s*=\s*this\.currentPage\s*>=\s*this\.totalPages\s*-\s*1/.test(source), 'should disable next on last page');
+  assert.ok(
+    /nextBtn\.disabled\s*=\s*this\.currentPage\s*>=\s*this\.totalPages\s*-\s*1/.test(source),
+    'should disable next on last page'
+  );
 });
 
 test('_buildNav Previous button decrements currentPage', () => {
@@ -298,8 +397,14 @@ test('_buildSvg creates SVG with createElementNS', () => {
 });
 
 test('_buildSvg sets SVG width and height attributes', () => {
-  assert.ok(/svg\.setAttribute\s*\(\s*['"]width['"]\s*,\s*chartWidth/.test(source), 'should set width');
-  assert.ok(/svg\.setAttribute\s*\(\s*['"]height['"]\s*,\s*chartHeight/.test(source), 'should set height');
+  assert.ok(
+    /svg\.setAttribute\s*\(\s*['"]width['"]\s*,\s*chartWidth/.test(source),
+    'should set width'
+  );
+  assert.ok(
+    /svg\.setAttribute\s*\(\s*['"]height['"]\s*,\s*chartHeight/.test(source),
+    'should set height'
+  );
 });
 
 test('_buildSvg sets SVG display:block style', () => {
@@ -312,12 +417,18 @@ test('_buildSvg creates rect elements with fill from _colorForBar', () => {
 });
 
 test('_buildSvg creates title elements as tooltips', () => {
-  assert.ok(/const\s+title\s*=\s*document\.createElementNS/.test(source), 'should create title element');
+  assert.ok(
+    /const\s+title\s*=\s*document\.createElementNS/.test(source),
+    'should create title element'
+  );
   assert.ok(/title\.textContent\s*=/.test(source), 'should set title text');
 });
 
 test('_buildSvg creates text labels with rotation', () => {
-  assert.ok(/label\.setAttribute\s*\(\s*['"]transform['"]\s*,\s*['"`]rotate/.test(source), 'should set rotation transform');
+  assert.ok(
+    /label\.setAttribute\s*\(\s*['"]transform['"]\s*,\s*['"`]rotate/.test(source),
+    'should set rotation transform'
+  );
 });
 
 test('_buildSvg creates clickable links for rows with topicPath', () => {
@@ -331,7 +442,10 @@ test('_buildSvg adds click handler that triggers anthology on shift-click', () =
 });
 
 test('_buildSvg truncates long labels with ellipsis', () => {
-  assert.ok(/\.slice\s*\(\s*0\s*,\s*maxChars\s*-\s*1\s*\)\s*\+\s*['"]\\u2026['"]/.test(source), 'should truncate with ellipsis');
+  assert.ok(
+    /\.slice\s*\(\s*0\s*,\s*maxChars\s*-\s*1\s*\)\s*\+\s*['"]\\u2026['"]/.test(source),
+    'should truncate with ellipsis'
+  );
 });
 
 // ============================================================
@@ -339,21 +453,36 @@ test('_buildSvg truncates long labels with ellipsis', () => {
 // ============================================================
 
 test('_computeRowHeights returns empty array for no rows', () => {
-  assert.ok(/if\s*\(\s*rowCount\s*===\s*0\s*\)\s*\{[\s\S]*return\s*\[\]/.test(source), 'should return empty for no rows');
+  assert.ok(
+    /if\s*\(\s*rowCount\s*===\s*0\s*\)\s*\{[\s\S]*return\s*\[\]/.test(source),
+    'should return empty for no rows'
+  );
 });
 
 test('_computeRowHeights distributes equally when colHeight <= minTotal', () => {
-  assert.ok(/new\s+Array\s*\(\s*rowCount\s*\)\.fill\s*\(\s*colHeight\s*\/\s*rowCount/.test(source), 'should distribute equally for small height');
+  assert.ok(
+    /new\s+Array\s*\(\s*rowCount\s*\)\.fill\s*\(\s*colHeight\s*\/\s*rowCount/.test(source),
+    'should distribute equally for small height'
+  );
 });
 
 test('_computeRowHeights uses proportional distribution with extra height', () => {
-  assert.ok(/const\s+extraHeight\s*=\s*colHeight\s*-\s*minTotal/.test(source), 'should compute extra height');
-  assert.ok(/MIN_ROW_HEIGHT\s*\+\s*\(\s*value\s*\/\s*valueSum\s*\)\s*\*\s*extraHeight/.test(source), 'should distribute proportionally');
+  assert.ok(
+    /const\s+extraHeight\s*=\s*colHeight\s*-\s*minTotal/.test(source),
+    'should compute extra height'
+  );
+  assert.ok(
+    /MIN_ROW_HEIGHT\s*\+\s*\(\s*value\s*\/\s*valueSum\s*\)\s*\*\s*extraHeight/.test(source),
+    'should distribute proportionally'
+  );
 });
 
 test('_computeRowHeights handles zero valueSum by distributing equally', () => {
   assert.ok(/if\s*\(\s*valueSum\s*<=\s*0\s*\)/.test(source), 'should check zero sum');
-  assert.ok(/new\s+Array\s*\(\s*rowCount\s*\)\.fill\s*\(\s*colHeight\s*\/\s*rowCount/.test(source), 'should distribute equally for zero sum');
+  assert.ok(
+    /new\s+Array\s*\(\s*rowCount\s*\)\.fill\s*\(\s*colHeight\s*\/\s*rowCount/.test(source),
+    'should distribute equally for zero sum'
+  );
 });
 
 // ============================================================
@@ -364,16 +493,19 @@ test('_colorForBar returns valid RGB string format', () => {
   const match = source.match(/_colorForBar\s*\([^)]*\)\s*\{[\s\S]*?return\s+`rgb\([^`]+`\s*;\s*\n/);
   assert.ok(match, 'should extract _colorForBar body');
   // Create a standalone version to test
-  const fnSource = match[0]
-    .replace(/this\._colorForBar\s*=\s*/, '')
-    .replace(/^  /gm, '');
-  const wrapperFn = new Function('colIndex', 'rowIndex', 'rowCount', `
+  const fnSource = match[0].replace(/this\._colorForBar\s*=\s*/, '').replace(/^  /gm, '');
+  const wrapperFn = new Function(
+    'colIndex',
+    'rowIndex',
+    'rowCount',
+    `
     const PALETTE = ${source.match(/const\s+PALETTE\s*=\s*\[[\s\S]*?\];/m)[0].replace(/const\s+PALETTE\s*=\s*/, '')};
     function _colorForBar(colIndex, rowIndex, rowCount) {
       ${fnSource.split('{').slice(1).join('{')}
     }
     return _colorForBar(colIndex, rowIndex, rowCount);
-  `);
+  `
+  );
   const result = wrapperFn(0, 0, 1);
   assert.ok(result.startsWith('rgb('), 'should return rgb() string');
   assert.ok(/rgb\(\d+,\s*\d+,\s*\d+\)/.test(result), 'should be valid rgb format');

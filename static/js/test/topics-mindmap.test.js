@@ -23,7 +23,10 @@ function extractMethodBody(src, name) {
     if (src[i] === '(') depth += 1;
     else if (src[i] === ')') {
       depth -= 1;
-      if (depth === 0) { parenClose = i; break; }
+      if (depth === 0) {
+        parenClose = i;
+        break;
+      }
     }
   }
 
@@ -73,7 +76,7 @@ function makeTree(rootName, childNames, options = {}) {
   root.depth = 0;
   root.children = childNames.map((name, i) => {
     const child = makeNode(name, options.childKind || 'topic', {
-      ...(options.childData || {})[i] || {},
+      ...((options.childData || {})[i] || {}),
     });
     child.parent = root;
     child.depth = 1;
@@ -193,7 +196,11 @@ test('_normalizeNodeData uses default actions for topic kind', () => {
   delete node.data.available_actions;
   mm._normalizeNodeData(node);
   assert.deepEqual(node.data.available_actions, [
-    'tags', 'sentences', 'sources', 'categories', 'subtopics',
+    'tags',
+    'sentences',
+    'sources',
+    'categories',
+    'subtopics',
   ]);
 });
 
@@ -454,7 +461,10 @@ test('_nodeWidth respects minWidth for short labels', () => {
 
 test('_nodeWidth respects maxWidth for very long labels', () => {
   const mm = new TopicsMindmap();
-  const node = makeNode('This is an extremely long topic label that should definitely trigger the maximum width constraint', 'topic');
+  const node = makeNode(
+    'This is an extremely long topic label that should definitely trigger the maximum width constraint',
+    'topic'
+  );
   const width = mm._nodeWidth(node);
   assert.ok(width <= mm.nodeMaxWidth, 'should not exceed nodeMaxWidth');
 });
@@ -462,7 +472,10 @@ test('_nodeWidth respects maxWidth for very long labels', () => {
 test('_nodeWidth increases with label length', () => {
   const mm = new TopicsMindmap();
   const shortNode = makeNode('Short', 'topic');
-  const longNode = makeNode('This is a much longer topic label for testing width calculation', 'topic');
+  const longNode = makeNode(
+    'This is a much longer topic label for testing width calculation',
+    'topic'
+  );
   const shortWidth = mm._nodeWidth(shortNode);
   const longWidth = mm._nodeWidth(longNode);
   assert.ok(longWidth > shortWidth, 'longer label should produce wider node');
@@ -506,7 +519,8 @@ test('_displayNodeLabel returns full label when it fits', () => {
 
 test('_displayNodeLabel truncates long labels with ellipsis', () => {
   const mm = new TopicsMindmap();
-  const longName = 'This is a very long topic name that will definitely need truncation because it exceeds the available width';
+  const longName =
+    'This is a very long topic name that will definitely need truncation because it exceeds the available width';
   const node = makeNode(longName, 'topic');
   const label = mm._displayNodeLabel(node);
   assert.ok(label.length < longName.length, 'truncated label should be shorter');
@@ -542,7 +556,10 @@ test('_displayNodeLabel returns ellipsis for very short usable width', () => {
 // ============================================================
 
 test('_buildSnippetHTML generates header with sentence count', () => {
-  assert.ok(/\$\{snippets\.length\}\s*sentence/.test(source), 'should include sentence count in header');
+  assert.ok(
+    /\$\{snippets\.length\}\s*sentence/.test(source),
+    'should include sentence count in header'
+  );
   assert.ok(/snippets\.length\s*!==\s*1/.test(source), 'should handle singular case');
 });
 
@@ -913,21 +930,33 @@ test('_defaultActionsForNodeKind returns empty for root', () => {
 test('_defaultActionsForNodeKind returns DEFAULT_ACTIONS for topic', () => {
   const mm = new TopicsMindmap();
   assert.deepEqual(mm._defaultActionsForNodeKind('topic'), [
-    'tags', 'sentences', 'sources', 'categories', 'subtopics',
+    'tags',
+    'sentences',
+    'sources',
+    'categories',
+    'subtopics',
   ]);
 });
 
 test('_defaultActionsForNodeKind returns DEFAULT_ACTIONS for subtopic', () => {
   const mm = new TopicsMindmap();
   assert.deepEqual(mm._defaultActionsForNodeKind('subtopic'), [
-    'tags', 'sentences', 'sources', 'categories', 'subtopics',
+    'tags',
+    'sentences',
+    'sources',
+    'categories',
+    'subtopics',
   ]);
 });
 
 test('_defaultActionsForNodeKind returns DEFAULT_ACTIONS for unknown kind', () => {
   const mm = new TopicsMindmap();
   assert.deepEqual(mm._defaultActionsForNodeKind('unknown_kind'), [
-    'tags', 'sentences', 'sources', 'categories', 'subtopics',
+    'tags',
+    'sentences',
+    'sources',
+    'categories',
+    'subtopics',
   ]);
 });
 
@@ -1093,8 +1122,14 @@ test('_isNavigableNode returns false for non-topic/subtopic nodes', () => {
 });
 
 test('_navigateFocus sets focusedRootIndex (source inspection)', () => {
-  assert.ok(/this\._focusedRootIndex\s*=\s*delta\s*>\s*0\s*\?\s*0/.test(source), 'should set focusedRootIndex to 0 when delta > 0 and null');
-  assert.ok(/_focusedRootIndex\s*\+\s*delta/.test(source), 'should adjust focusedRootIndex by delta');
+  assert.ok(
+    /this\._focusedRootIndex\s*=\s*delta\s*>\s*0\s*\?\s*0/.test(source),
+    'should set focusedRootIndex to 0 when delta > 0 and null'
+  );
+  assert.ok(
+    /_focusedRootIndex\s*\+\s*delta/.test(source),
+    'should adjust focusedRootIndex by delta'
+  );
   assert.ok(/\.length\)\s*%\s*\w+\.length/.test(source), 'should wrap around using modulo');
 });
 
@@ -1104,7 +1139,10 @@ test('_navigateFocus wraps around at end of list (source inspection)', () => {
 });
 
 test('_navigateFocus negative delta wraps from beginning (source inspection)', () => {
-  assert.ok(/delta\s*>\s*0\s*\?\s*0\s*:\s*children\.length\s*-\s*1/.test(source), 'should wrap to last when delta < 0 and null');
+  assert.ok(
+    /delta\s*>\s*0\s*\?\s*0\s*:\s*children\.length\s*-\s*1/.test(source),
+    'should wrap to last when delta < 0 and null'
+  );
 });
 
 test('_getAllDescendantsDeep returns node and all descendants', () => {

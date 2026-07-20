@@ -3,26 +3,13 @@
 <head>
 <title>RSSTag - Statistics</title>
 {% include 'head-data.html' %}
-<style>
-.stats-table { width: 100%; max-width: 600px; border-collapse: collapse; margin: 20px 0; }
-.stats-table td { padding: 10px; border: 1px solid #ddd; }
-.stats-table td:first-child { font-weight: bold; background-color: #f4f4f4; width: 40%; }
-</style>
 </head>
 <body>
-{% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
-<div id="global_tools">
-    {% include "logo.html" %}
-    <div class="panel right_half">
-        <span class="login_button global_tools_button">
-            <a href="/data-sources">Data sources</a>
-        </span>
-        {{ g_status.global_status() }}
-        {{ menu.settings_menu() }}
-    </div>
-</div>
-<div class="page screen_middle">
+{% from 'site-header.html' import site_header with context %}
+{{ site_header(active='') }}
+<div class="page screen_middle statistics-page">
     <h1>Statistics</h1>
+    <p><a href="/data-sources">Data sources</a></p>
     
     <table class="stats-table">
         <tr>

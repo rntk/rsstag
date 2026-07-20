@@ -95,7 +95,10 @@ test('loadRecommendations() renders recommendation groups and click navigates vi
     const itemButton = list.children[0];
 
     assert.equal(itemButton.children[0].textContent, 'google + Google > Gemma');
-    assert.equal(itemButton.children[1].textContent, '7 sentences · 3 posts · google -> googl · score 0.81');
+    assert.equal(
+      itemButton.children[1].textContent,
+      '7 sentences · 3 posts · google -> googl · score 0.81'
+    );
 
     itemButton.dispatch('click');
     await Promise.resolve();

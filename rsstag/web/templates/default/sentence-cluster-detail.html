@@ -7,28 +7,19 @@
 </head>
 
 <body>
-    {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
-
-    <div id="global_tools">
-        <div class="left_half">
-            <div id="link_on_root" class="global_tools_button">
-                <a href="/">main</a>
-            </div>
-            <div id="help_button" class="global_tools_button">
-                <a href="#">help</a>
-            </div>
+    {% from 'site-header.html' import site_header with context %}
+    {{ site_header(active='tags') }}
+    <div class="flex items-center space-x-4 p-4 border-b border-outline-variant/10">
+        <div id="help_button" class="global_tools_button">
+            <a href="#">help</a>
         </div>
-        <div class="right_half">
-            <div id="read_all" class="global_tools_button">
-                <button class="batch-read-btn" data-action="read-all" type="button"
-                    title="Mark all displayed snippets as read">Read all</button>
-            </div>
-            <div id="unread_all" class="global_tools_button">
-                <button class="batch-read-btn" data-action="unread-all" type="button"
-                    title="Mark all displayed snippets as unread">Unread all</button>
-            </div>
-            {{ g_status.global_status() }}
-            {{ menu.settings_menu() }}
+        <div id="read_all" class="global_tools_button">
+            <button class="batch-read-btn" data-action="read-all" type="button"
+                title="Mark all displayed snippets as read">Read all</button>
+        </div>
+        <div id="unread_all" class="global_tools_button">
+            <button class="batch-read-btn" data-action="unread-all" type="button"
+                title="Mark all displayed snippets as unread">Unread all</button>
         </div>
     </div>
 

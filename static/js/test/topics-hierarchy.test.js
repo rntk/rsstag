@@ -53,10 +53,7 @@ test('hierarchyHighlightColor gets lighter with depth', () => {
 });
 
 test('hierarchyHighlightColor is deterministic for same root and depth', () => {
-  assert.equal(
-    hierarchyHighlightColor('root', 2),
-    hierarchyHighlightColor('root', 2),
-  );
+  assert.equal(hierarchyHighlightColor('root', 2), hierarchyHighlightColor('root', 2));
 });
 
 test('hierarchyAccentColor returns a valid HSL string', () => {
@@ -66,10 +63,7 @@ test('hierarchyAccentColor returns a valid HSL string', () => {
 });
 
 test('hierarchyAccentColor is deterministic', () => {
-  assert.equal(
-    hierarchyAccentColor('tech', 1),
-    hierarchyAccentColor('tech', 1),
-  );
+  assert.equal(hierarchyAccentColor('tech', 1), hierarchyAccentColor('tech', 1));
 });
 
 test('countRenderedRows returns 1 for a leaf node', () => {
@@ -120,10 +114,7 @@ test('countRenderedRows handles node with empty children array', () => {
 // ---------------------------------------------------------------------------
 
 function extractFunction(source, name) {
-  const patterns = [
-    `export function ${name}`,
-    `function ${name}`,
-  ];
+  const patterns = [`export function ${name}`, `function ${name}`];
   let start = -1;
   for (const p of patterns) {
     start = source.indexOf(p);
@@ -185,12 +176,18 @@ function createMockDocument() {
     getAttribute(name) {
       return this[name];
     }
-    querySelector(sel) { return null; }
-    querySelectorAll(sel) { return []; }
+    querySelector(sel) {
+      return null;
+    }
+    querySelectorAll(sel) {
+      return [];
+    }
     addEventListener() {}
     removeEventListener() {}
     focus() {}
-    closest() { return null; }
+    closest() {
+      return null;
+    }
     getBoundingClientRect() {
       return { top: 0, right: 0, bottom: 0, left: 0, width: 0, height: 0 };
     }
@@ -205,7 +202,14 @@ function createMockDocument() {
 
 function loadTopicsHierarchyDOM(overrides = {}) {
   const source = fs.readFileSync(new URL('../topics-hierarchy.js', import.meta.url), 'utf8');
-  const funcs = ['hashString', 'hierarchyHighlightColor', 'hierarchyAccentColor', 'countRenderedRows', 'buildNode', 'renderTopicsHierarchy'];
+  const funcs = [
+    'hashString',
+    'hierarchyHighlightColor',
+    'hierarchyAccentColor',
+    'countRenderedRows',
+    'buildNode',
+    'renderTopicsHierarchy',
+  ];
   const scriptSource = [
     ...funcs.map((name) => extractFunction(source, name)),
     'module.exports = { buildNode, renderTopicsHierarchy };',
@@ -303,7 +307,7 @@ test('buildNode non-leaf with _url creates a link in the label text', () => {
   const result = buildNode(node, 'root', 0);
 
   const labelSticky = result.children[0].children.find(
-    (c) => c.className === 'th-node__label-sticky',
+    (c) => c.className === 'th-node__label-sticky'
   );
   assert.ok(labelSticky, 'label should contain a sticky wrapper');
 
@@ -323,7 +327,15 @@ test('renderTopicsHierarchy does nothing with null container', () => {
 
 test('renderTopicsHierarchy renders empty state when no children', () => {
   const { renderTopicsHierarchy } = loadTopicsHierarchyDOM();
-  const container = { innerHTML: '', children: [], childNodes: [], appendChild(child) { this.children.push(child); this.childNodes.push(child); } };
+  const container = {
+    innerHTML: '',
+    children: [],
+    childNodes: [],
+    appendChild(child) {
+      this.children.push(child);
+      this.childNodes.push(child);
+    },
+  };
   renderTopicsHierarchy(container, { name: 'root', children: [] });
 
   const empty = container.children.find((c) => c.className === 'th-empty');
@@ -333,7 +345,15 @@ test('renderTopicsHierarchy renders empty state when no children', () => {
 
 test('renderTopicsHierarchy renders topic roots into container', () => {
   const { renderTopicsHierarchy } = loadTopicsHierarchyDOM();
-  const container = { innerHTML: '', children: [], childNodes: [], appendChild(child) { this.children.push(child); this.childNodes.push(child); } };
+  const container = {
+    innerHTML: '',
+    children: [],
+    childNodes: [],
+    appendChild(child) {
+      this.children.push(child);
+      this.childNodes.push(child);
+    },
+  };
   const data = {
     name: 'root',
     children: [
@@ -351,7 +371,15 @@ test('renderTopicsHierarchy renders topic roots into container', () => {
 
 test('renderTopicsHierarchy handles data with no children gracefully', () => {
   const { renderTopicsHierarchy } = loadTopicsHierarchyDOM();
-  const container = { innerHTML: '', children: [], childNodes: [], appendChild(child) { this.children.push(child); this.childNodes.push(child); } };
+  const container = {
+    innerHTML: '',
+    children: [],
+    childNodes: [],
+    appendChild(child) {
+      this.children.push(child);
+      this.childNodes.push(child);
+    },
+  };
   assert.doesNotThrow(() => {
     renderTopicsHierarchy(container, {});
   });

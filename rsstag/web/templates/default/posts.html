@@ -9,58 +9,17 @@
 </head>
 
 <body class="font-body selection:bg-secondary-container bg-background">
-    {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}{% from
+    {% from 'site-header.html' import site_header with context %}{% from
     'context-filter-bar.html' import context_filter_bar with context %}
 
-    <!-- Top Navigation Bar -->
-    <header class="sticky top-0 z-40 bg-surface/80 backdrop-blur-xl border-b border-outline-variant/10">
-        <div class="px-10 h-20 flex justify-between items-center w-full max-w-[1600px] mx-auto">
-            <div class="flex items-center space-x-10">
-                <a href="/" class="font-headline font-extrabold text-primary text-xl tracking-tight">RSSTag</a>
-                <nav class="hidden md:flex items-center space-x-1">
-                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/">
-                        <span class="material-symbols-outlined text-lg">dashboard</span>
-                        <span class="text-sm">Dashboard</span>
-                    </a>
-                    <a class="{% if group == 'category' %}sidebar-item-active{% else %}text-on-surface-variant hover:bg-surface-container-high{% endif %} flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/group/category">
-                        <span class="material-symbols-outlined text-lg">category</span>
-                        <span class="text-sm">Categories</span>
-                    </a>
-                    <a class="{% if group == 'tag' %}sidebar-item-active{% else %}text-on-surface-variant hover:bg-surface-container-high{% endif %} flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/group/tag/1">
-                        <span class="material-symbols-outlined text-lg">sell</span>
-                        <span class="text-sm">Tags</span>
-                    </a>
-                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/topics/1">
-                        <span class="material-symbols-outlined text-lg">topic</span>
-                        <span class="text-sm">Topics</span>
-                    </a>
-                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/map">
-                        <span class="material-symbols-outlined text-lg">map</span>
-                        <span class="text-sm">Map</span>
-                    </a>
-                </nav>
-            </div>
-            
-            <div class="flex items-center space-x-4">
-                <div id="player_block" class="flex items-center"></div>
-                <div id="read_all" class="flex items-center"></div>
-                <div id="show_all" class="flex items-center"></div>
-                
-                {{ g_status.global_status() }}
-                {{ menu.settings_menu() }}
-                <a class="text-on-surface-variant hover:text-primary p-2 transition-colors" href="/logout" title="Log Out">
-                    <span class="material-symbols-outlined">logout</span>
-                </a>
-            </div>
-        </div>
-    </header>
+    {{ site_header(active=('categories' if group == 'category' else 'tags' if group == 'tag' else ''), show_posts_tools=True) }}
 
     <!-- Main Content Area -->
     <main class="min-h-screen">
         <div class="max-w-[1600px] mx-auto">
 
             <!-- Filter Bar -->
-            <div class="sticky top-20 z-30 bg-surface/50 backdrop-blur-md px-10 py-2 border-b border-outline-variant/5">
+            <div class="context-filter-strip">
                 {{ context_filter_bar() }}
             </div>
 
@@ -74,7 +33,7 @@
                         {% endif %}
                         <div id="posts_stat" class="text-sm text-on-surface-variant font-medium"></div>
                     </div>
-                    <button id="help_trigger" class="p-2 hover:bg-surface-container-high rounded-full transition-colors text-on-surface-variant" title="Hotkeys">
+                    <button id="help_trigger" class="p-2 hover:bg-surface-container-high transition-colors text-on-surface-variant" title="Hotkeys">
                         <span class="material-symbols-outlined">keyboard</span>
                     </button>
                 </div>
@@ -86,7 +45,7 @@
 
     <div id="help_window" class="fixed inset-0 z-[100] bg-surface/90 backdrop-blur-sm hidden flex items-center justify-center p-6">
         <div class="bg-surface-container-lowest p-8 rounded-2xl border border-outline-variant/10 shadow-2xl max-w-lg w-full relative">
-            <button onclick="document.getElementById('help_window').classList.add('hidden')" class="absolute top-4 right-4 p-2 hover:bg-surface-container-high rounded-full transition-colors">
+            <button onclick="document.getElementById('help_window').classList.add('hidden')" class="absolute top-4 right-4 p-2 hover:bg-surface-container-high transition-colors">
                 <span class="material-symbols-outlined">close</span>
             </button>
             <h3 class="text-xl font-headline font-bold mb-6 flex items-center space-x-2">

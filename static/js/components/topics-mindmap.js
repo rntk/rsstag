@@ -155,7 +155,8 @@ export default class TopicsMindmap {
     }
 
     const data = node.data;
-    data.node_kind = data.node_kind || data._nodeKind || (data._isSnippetNode ? 'snippet_panel' : 'topic');
+    data.node_kind =
+      data.node_kind || data._nodeKind || (data._isSnippetNode ? 'snippet_panel' : 'topic');
     data.available_actions = Array.isArray(data.available_actions)
       ? data.available_actions
       : Array.isArray(data._availableActions)
@@ -236,7 +237,7 @@ export default class TopicsMindmap {
   }
 
   _hasMenuButton(node) {
-    return !this._isSnippetNode(node) && (this._getAvailableActions(node).length > 0);
+    return !this._isSnippetNode(node) && this._getAvailableActions(node).length > 0;
   }
 
   _getAvailableActions(node) {
@@ -257,10 +258,7 @@ export default class TopicsMindmap {
     const arrowSpace = this._hasArrow(node) ? this.nodeArrowWidth : 0;
     const menuSpace = this._hasMenuButton(node) ? this.nodeMenuBtnWidth : 0;
     const estimatedWidth =
-      name.length * this.nodeCharWidth +
-      this.nodeHorizontalPadding +
-      arrowSpace +
-      menuSpace;
+      name.length * this.nodeCharWidth + this.nodeHorizontalPadding + arrowSpace + menuSpace;
     return Math.min(Math.max(estimatedWidth, this.nodeMinWidth), this.nodeMaxWidth);
   }
 
@@ -853,9 +851,9 @@ export default class TopicsMindmap {
 
     const visibleNodes = this.root.descendants().filter((node) => node.depth > 0);
     // In two-col mode, hide the root→child links (root is virtual/invisible)
-    const visibleLinks = this.root.links().filter((link) =>
-      link.source.depth >= 0 && !(this._twoColMode && link.source.depth === 0)
-    );
+    const visibleLinks = this.root
+      .links()
+      .filter((link) => link.source.depth >= 0 && !(this._twoColMode && link.source.depth === 0));
 
     const node = this.gNodes.selectAll('g.mindmap-node').data(visibleNodes, (d) => d.id);
 
@@ -907,14 +905,12 @@ export default class TopicsMindmap {
         this._activateNode(nodeData);
       });
 
-    regularEnter
-      .append('title')
-      .text((nodeData) => {
-        const scope = this._getNodeScope(nodeData);
-        const title = scope.topic_path || nodeData.data.name || '';
-        const count = nodeData.data.value || 0;
-        return `${title} (${count} ${this.options.countLabel})`;
-      });
+    regularEnter.append('title').text((nodeData) => {
+      const scope = this._getNodeScope(nodeData);
+      const title = scope.topic_path || nodeData.data.name || '';
+      const count = nodeData.data.value || 0;
+      return `${title} (${count} ${this.options.countLabel})`;
+    });
 
     regularEnter
       .filter((nodeData) => this._hasArrow(nodeData))
@@ -937,7 +933,10 @@ export default class TopicsMindmap {
       .filter((nodeData) => this._hasMenuButton(nodeData))
       .append('text')
       .attr('class', 'mindmap-node-menu-btn')
-      .attr('x', (nodeData) => this._nodeWidth(nodeData) - this.nodeArrowWidth - this.nodeMenuBtnWidth)
+      .attr(
+        'x',
+        (nodeData) => this._nodeWidth(nodeData) - this.nodeArrowWidth - this.nodeMenuBtnWidth
+      )
       .attr('dy', '0.35em')
       .attr('font-size', '14px')
       .attr('text-anchor', 'middle')
@@ -997,9 +996,7 @@ export default class TopicsMindmap {
       .attr('width', (nodeData) => this._nodeWidth(nodeData))
       .attr('fill', (nodeData) => this._depthColor(nodeData.depth));
 
-    nodeUpdate
-      .select('.mindmap-node-text')
-      .text((nodeData) => this._displayNodeLabel(nodeData));
+    nodeUpdate.select('.mindmap-node-text').text((nodeData) => this._displayNodeLabel(nodeData));
 
     nodeUpdate
       .select('.mindmap-node-arrow')
@@ -1008,7 +1005,10 @@ export default class TopicsMindmap {
 
     nodeUpdate
       .select('.mindmap-node-menu-btn')
-      .attr('x', (nodeData) => this._nodeWidth(nodeData) - this.nodeArrowWidth - this.nodeMenuBtnWidth)
+      .attr(
+        'x',
+        (nodeData) => this._nodeWidth(nodeData) - this.nodeArrowWidth - this.nodeMenuBtnWidth
+      )
       .text((nodeData) => (nodeData.data._loadingAction ? '...' : '\u2261'));
 
     nodeUpdate
@@ -1120,9 +1120,9 @@ export default class TopicsMindmap {
     if (!this.root) {
       return;
     }
-    const expandedNodes = this.root.descendants().filter(
-      (node) => node.depth > 0 && node.children && !this._isSnippetNode(node)
-    );
+    const expandedNodes = this.root
+      .descendants()
+      .filter((node) => node.depth > 0 && node.children && !this._isSnippetNode(node));
     if (expandedNodes.length === 0) {
       return;
     }
@@ -1170,8 +1170,7 @@ export default class TopicsMindmap {
     if (this._focusedRootIndex === null) {
       this._focusedRootIndex = delta > 0 ? 0 : children.length - 1;
     } else {
-      this._focusedRootIndex =
-        (this._focusedRootIndex + delta + children.length) % children.length;
+      this._focusedRootIndex = (this._focusedRootIndex + delta + children.length) % children.length;
     }
     this._update(this.root);
     setTimeout(() => this._fitToView(), 100);
@@ -1189,8 +1188,7 @@ export default class TopicsMindmap {
       this._focusLabelEl.textContent = `${idx + 1}/${children.length}: ${name}`;
     } else if (this._focusLabelEl) {
       const shown = children.length;
-      this._focusLabelEl.textContent =
-        shown === total ? `${total} topics` : `${shown}/${total}`;
+      this._focusLabelEl.textContent = shown === total ? `${total} topics` : `${shown}/${total}`;
     }
     if (this._focusExitBtn) {
       this._focusExitBtn.style.display = isFocused ? 'inline-block' : 'none';
@@ -1329,16 +1327,19 @@ export default class TopicsMindmap {
     const pad = 6;
 
     // Collect all positioned nodes (depth > 0, have x/y from last layout)
-    const allNodes = this.root.descendants().filter(
-      (n) => n.depth > 0 && n.x !== undefined && n.y !== undefined
-    );
+    const allNodes = this.root
+      .descendants()
+      .filter((n) => n.depth > 0 && n.x !== undefined && n.y !== undefined);
     if (allNodes.length === 0) {
       this._minimapEl.innerHTML = '';
       return;
     }
 
     // D3 tree: node.x = vertical screen pos, node.y = horizontal screen pos
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    let minX = Infinity,
+      maxX = -Infinity,
+      minY = Infinity,
+      maxY = -Infinity;
     allNodes.forEach((n) => {
       minX = Math.min(minX, n.x);
       maxX = Math.max(maxX, n.x);
@@ -1380,7 +1381,9 @@ export default class TopicsMindmap {
         const vw = Math.max((svgW / t.k) * scale, 4);
         const vh = Math.max((svgH / t.k) * scale, 4);
         vpRect = `<rect x="${vx.toFixed(1)}" y="${vy.toFixed(1)}" width="${vw.toFixed(1)}" height="${vh.toFixed(1)}" fill="rgba(0,100,200,0.08)" stroke="#3a7bd5" stroke-width="1.5" rx="2"/>`;
-      } catch (_) { /* ignore */ }
+      } catch (_) {
+        /* ignore */
+      }
     }
 
     this._minimapEl.innerHTML = `<svg width="${W}" height="${H}" style="display:block">${rects}${vpRect}</svg>`;
@@ -1390,7 +1393,11 @@ export default class TopicsMindmap {
     const btnDefs = [
       { text: 'Reset View', className: 'mindmap-reset-btn', handler: () => this._fitToView() },
       { text: 'Fold All', className: 'mindmap-fold-all-btn', handler: () => this._foldAll() },
-      { text: 'Fold Level', className: 'mindmap-fold-level-btn', handler: () => this._foldCurrentLevel() },
+      {
+        text: 'Fold Level',
+        className: 'mindmap-fold-level-btn',
+        handler: () => this._foldCurrentLevel(),
+      },
     ];
     btnDefs.forEach(({ text, className, handler }) => {
       const btn = document.createElement('button');

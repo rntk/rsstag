@@ -7,14 +7,8 @@
 </head>
 
 <body>
-    {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
-    <div id="global_tools">
-        {% include "logo.html" %}
-        <div class="panel right_half">
-            {{ g_status.global_status() }}
-            {{ menu.settings_menu() }}
-        </div>
-    </div>
+    {% from 'site-header.html' import site_header with context %}
+    {{ site_header(active='') }}
     <div class="page screen_middle">
         {% if error %}
         <p id="error">{{ error }}</p>

@@ -65,7 +65,10 @@ import { initTopicHierarchyCanvasPage, renderTopicsHierarchy } from '../topics-h
 function buildGroupedTopicsHierarchy(flatTopics, tagName) {
   const root = { name: 'root', children: [] };
   flatTopics.forEach((topic) => {
-    const parts = (topic.tag || '').split('>').map((p) => p.trim()).filter(Boolean);
+    const parts = (topic.tag || '')
+      .split('>')
+      .map((p) => p.trim())
+      .filter(Boolean);
     if (!parts.length) return;
     let children = root.children;
     let pathSoFar = '';
@@ -687,7 +690,10 @@ function tagNoContextInfoPage(tag) {
     bigrams_mentions_evsys
   );
   const bigrams_mentions_storage = new BiGramsMentionsStorage(tag.tag, bigrams_mentions_evsys);
-  renderToRoot('load_bigrams_mentions', <TagButton ES={bigrams_mentions_evsys} title="mentions" tag={tag} />);
+  renderToRoot(
+    'load_bigrams_mentions',
+    <TagButton ES={bigrams_mentions_evsys} title="mentions" tag={tag} />
+  );
   bigrams_mentions_chart.start();
   bigrams_mentions_storage.start();
 
@@ -738,7 +744,12 @@ function tagWithContextInfoPage(tag) {
 
   renderToRoot(
     'load_siblings',
-    <TagToolWidget tag={tag.tag} title="siblings" url="/tag-siblings" listContainerId="siblings_tags" />
+    <TagToolWidget
+      tag={tag.tag}
+      title="siblings"
+      url="/tag-siblings"
+      listContainerId="siblings_tags"
+    />
   );
 
   const clusters_evsys = new EventsSystem();
@@ -752,12 +763,21 @@ function tagWithContextInfoPage(tag) {
     contexts_classification_evsys
   );
   renderToRoot('tag_contexts_classification', <TagsList ES={contexts_classification_evsys} />);
-  renderToRoot('load_contexts_classification', <TagButton ES={contexts_classification_evsys} title="contexts" tag={tag} />);
+  renderToRoot(
+    'load_contexts_classification',
+    <TagButton ES={contexts_classification_evsys} title="contexts" tag={tag} />
+  );
   contexts_classification_storage.start();
 
   renderToRoot(
     'load_bi_grams',
-    <TagToolWidget tag={tag.tag} title="bi-grams" url="/tag-bi-grams" listContainerId="bi_grams" is_bigram={true} />
+    <TagToolWidget
+      tag={tag.tag}
+      title="bi-grams"
+      url="/tag-bi-grams"
+      listContainerId="bi_grams"
+      is_bigram={true}
+    />
   );
 
   // Bi-grams graph
@@ -841,7 +861,13 @@ function tagWithContextInfoPage(tag) {
 
   renderToRoot(
     'load_pmi',
-    <TagToolWidget tag={tag.tag} title="PMI" url="/tag-pmi" listContainerId="pmi" is_bigram={true} />
+    <TagToolWidget
+      tag={tag.tag}
+      title="PMI"
+      url="/tag-pmi"
+      listContainerId="pmi"
+      is_bigram={true}
+    />
   );
 
   renderToRoot(
@@ -871,7 +897,12 @@ function tagWithContextInfoPage(tag) {
 
   renderToRoot(
     'load_llm_topics',
-    <TagToolWidget tag={tag.tag} title="LLM topics" url="/tag-llm-topics" listContainerId="tag_llm_topics" />
+    <TagToolWidget
+      tag={tag.tag}
+      title="LLM topics"
+      url="/tag-llm-topics"
+      listContainerId="tag_llm_topics"
+    />
   );
 
   const tag_topics_radar_evsys = new EventsSystem();
@@ -880,7 +911,10 @@ function tagWithContextInfoPage(tag) {
     maxTopics: 30,
     defaultLevel: 'deepest',
   });
-  renderToRoot('load_topics_radar', <TagButton ES={tag_topics_radar_evsys} title="topics radar" tag={tag} />);
+  renderToRoot(
+    'load_topics_radar',
+    <TagButton ES={tag_topics_radar_evsys} title="topics radar" tag={tag} />
+  );
   topics_radar.start();
   tag_topics_radar_storage.start();
 
@@ -893,26 +927,53 @@ function tagWithContextInfoPage(tag) {
 
   renderToRoot(
     'load_entities',
-    <TagToolWidget tag={tag.tag} title="entities" url="/tag-entities" listContainerId="tag_entities" is_entities={true} />
+    <TagToolWidget
+      tag={tag.tag}
+      title="entities"
+      url="/tag-entities"
+      listContainerId="tag_entities"
+      is_entities={true}
+    />
   );
 
   renderToRoot(
     'load_tfidf',
-    <TagToolWidget tag={tag.tag} title="TFIDF" url="/tag-tfidf" listContainerId="tag_tfidf" is_entities={true} />
+    <TagToolWidget
+      tag={tag.tag}
+      title="TFIDF"
+      url="/tag-tfidf"
+      listContainerId="tag_tfidf"
+      is_entities={true}
+    />
   );
 
   renderToRoot(
     'load_specific',
-    <TagToolWidget tag={tag.tag} title="specific" url="/tag-specific" listContainerId="tag_specific" />
+    <TagToolWidget
+      tag={tag.tag}
+      title="specific"
+      url="/tag-specific"
+      listContainerId="tag_specific"
+    />
   );
 
   renderToRoot(
     'load_specific1',
-    <TagToolWidget tag={tag.tag} title="specific1" url="/tag-specific1" listContainerId="tag_specific1" />
+    <TagToolWidget
+      tag={tag.tag}
+      title="specific1"
+      url="/tag-specific1"
+      listContainerId="tag_specific1"
+    />
   );
 
   renderToRoot(
     'load_similar_words',
-    <TagToolWidget tag={tag.tag} title="Words" url="/tag-similar-tags" listContainerId="similar_words_tags" />
+    <TagToolWidget
+      tag={tag.tag}
+      title="Words"
+      url="/tag-similar-tags"
+      listContainerId="similar_words_tags"
+    />
   );
 }

@@ -113,8 +113,7 @@ export default class PostComparePage extends PostGroupedPage {
         }
         const scrollBounds = compareScroll.getBoundingClientRect();
         const columnBounds = column.getBoundingClientRect();
-        const targetLeft =
-          compareScroll.scrollLeft + (columnBounds.left - scrollBounds.left) - 24;
+        const targetLeft = compareScroll.scrollLeft + (columnBounds.left - scrollBounds.left) - 24;
         compareScroll.scrollTo({
           left: Math.max(0, targetLeft),
           behavior: 'smooth',

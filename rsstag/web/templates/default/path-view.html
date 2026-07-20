@@ -7,33 +7,26 @@
 </head>
 
 <body>
-    {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}{% from 'context-filter-bar.html' import context_filter_bar with context %}
+    {% from 'site-header.html' import site_header with context %}{% from 'context-filter-bar.html' import context_filter_bar with context %}
 
-    <div id="global_tools">
-        <div class="left_half">
-            <div id="link_on_root" class="global_tools_button">
-                <a href="/">main</a>
-            </div>
+    {{ site_header(active='') }}
+
+    <div class="flex items-center flex-wrap gap-2 px-4 md:px-6 py-2 max-w-[1600px] mx-auto">
+        <div id="player_block" class="flex items-center"></div>
+        <div id="posts_stat" class="text-sm text-on-surface-variant font-medium"></div>
+        {% if content_type == 'sentences' %}
+        <div id="read_all" class="flex items-center">
+            <button class="batch-read-btn" data-action="read-all" type="button"
+                title="Mark all displayed snippets as read">Read all</button>
         </div>
-        <div class="right_half">
-            <div id="player_block" class="global_tools_button"></div>
-            <div id="posts_stat" class="global_tools_button"></div>
-            {% if content_type == 'sentences' %}
-            <div id="read_all" class="global_tools_button">
-                <button class="batch-read-btn" data-action="read-all" type="button"
-                    title="Mark all displayed snippets as read">Read all</button>
-            </div>
-            <div id="unread_all" class="global_tools_button">
-                <button class="batch-read-btn" data-action="unread-all" type="button"
-                    title="Mark all displayed snippets as unread">Unread all</button>
-            </div>
-            {% endif %}
-            <div id="show_all" class="global_tools_button"></div>
-            {{ g_status.global_status() }}
-            {{ menu.settings_menu() }}
+        <div id="unread_all" class="flex items-center">
+            <button class="batch-read-btn" data-action="unread-all" type="button"
+                title="Mark all displayed snippets as unread">Unread all</button>
         </div>
-        {{ context_filter_bar() }}
+        {% endif %}
+        <div id="show_all" class="flex items-center"></div>
     </div>
+    {{ context_filter_bar() }}
 
     <div class="page path-view-page">
         <div class="path-header">

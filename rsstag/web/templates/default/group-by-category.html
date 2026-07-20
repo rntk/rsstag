@@ -6,53 +6,19 @@
 </head>
 
 <body class="font-body selection:bg-secondary-container bg-background">
-    {% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}{% from
+    {% from 'site-header.html' import site_header with context %}{% from
     'context-filter-bar.html' import context_filter_bar with context %}
 
-    <!-- Top Navigation Bar -->
-    <header class="sticky top-0 z-40 bg-surface/80 backdrop-blur-xl border-b border-outline-variant/10">
-        <div class="px-10 h-20 flex justify-between items-center w-full max-w-[1600px] mx-auto">
-            <div class="flex items-center space-x-10">
-                <a href="/" class="font-headline font-extrabold text-primary text-xl tracking-tight">RSSTag</a>
-                <nav class="hidden md:flex items-center space-x-1">
-                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/">
-                        <span class="material-symbols-outlined text-lg">dashboard</span>
-                        <span class="text-sm">Dashboard</span>
-                    </a>
-                    <a class="sidebar-item-active flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/group/category">
-                        <span class="material-symbols-outlined text-lg">category</span>
-                        <span class="text-sm">Categories</span>
-                    </a>
-                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/group/tag/1">
-                        <span class="material-symbols-outlined text-lg">sell</span>
-                        <span class="text-sm">Tags</span>
-                    </a>
-                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/topics/1">
-                        <span class="material-symbols-outlined text-lg">topic</span>
-                        <span class="text-sm">Topics</span>
-                    </a>
-                    <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center space-x-2 px-4 py-2 rounded-lg transition-all active:scale-95" href="/map">
-                        <span class="material-symbols-outlined text-lg">map</span>
-                        <span class="text-sm">Map</span>
-                    </a>
-                </nav>
-            </div>
-            
-            <div class="flex items-center space-x-4">
-                {{ g_status.global_status() }}
-                {{ menu.settings_menu() }}
-                <div id="delete_controls" class="hidden items-center space-x-2">
-                    <button class="px-4 py-2 bg-surface-container-high hover:bg-surface-container-highest rounded-lg text-xs font-bold transition-colors" onclick="toggleSelectAll()">Select All</button>
-                    <button id="delete_btn" class="px-4 py-2 bg-error text-on-error rounded-lg text-xs font-bold transition-all active:scale-95 disabled:opacity-50 disabled:scale-100" onclick="confirmDelete()" disabled>
-                        Delete Selected (<span id="selected_count">0</span>)
-                    </button>
-                </div>
-                <a class="text-on-surface-variant hover:text-primary p-2 transition-colors" href="/logout" title="Log Out">
-                    <span class="material-symbols-outlined">logout</span>
-                </a>
-            </div>
+    {{ site_header(active='categories') }}
+
+    <div class="flex items-center px-10 py-2 max-w-[1600px] mx-auto">
+        <div id="delete_controls" class="hidden items-center space-x-2">
+            <button class="px-4 py-2 bg-surface-container-high hover:bg-surface-container-highest rounded-lg text-xs font-bold transition-colors" onclick="toggleSelectAll()">Select All</button>
+            <button id="delete_btn" class="px-4 py-2 bg-error text-on-error rounded-lg text-xs font-bold transition-all active:scale-95 disabled:opacity-50 disabled:scale-100" onclick="confirmDelete()" disabled>
+                Delete Selected (<span id="selected_count">0</span>)
+            </button>
         </div>
-    </header>
+    </div>
 
     <!-- Main Content Area -->
     <main class="min-h-screen">
@@ -68,7 +34,7 @@
                 <div class="flex items-center justify-between mb-8">
                     <div class="flex items-center space-x-4">
                         <h2 class="text-3xl font-headline font-extrabold text-primary">Categories</h2>
-                        <a href="{{group_by_link}}" class="text-xs font-bold text-on-surface-variant hover:text-primary bg-surface-container-high px-3 py-1.5 rounded-full transition-all flex items-center space-x-1.5">
+                        <a href="{{group_by_link}}" class="text-xs font-bold text-on-surface-variant hover:text-primary bg-surface-container-high px-3 py-1.5 transition-all flex items-center space-x-1.5">
                             <span class="material-symbols-outlined text-sm">sell</span>
                             <span>Switch to Tags</span>
                         </a>

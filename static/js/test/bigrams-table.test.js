@@ -17,11 +17,17 @@ test('source imports React', () => {
 });
 
 test('source declares BigramsTable as default export class extending React.Component', () => {
-  assert.ok(/export\s+default\s+class\s+BigramsTable\s+extends\s+React\.Component/.test(source), 'should export default class BigramsTable extends React.Component');
+  assert.ok(
+    /export\s+default\s+class\s+BigramsTable\s+extends\s+React\.Component/.test(source),
+    'should export default class BigramsTable extends React.Component'
+  );
 });
 
 test('source declares constructor with props param calling super', () => {
-  assert.ok(/constructor\s*\(\s*props\s*\)\s*\{[\s\S]*super\s*\(\s*props\s*\)/.test(source), 'constructor should call super(props)');
+  assert.ok(
+    /constructor\s*\(\s*props\s*\)\s*\{[\s\S]*super\s*\(\s*props\s*\)/.test(source),
+    'constructor should call super(props)'
+  );
 });
 
 // ============================================================
@@ -29,7 +35,10 @@ test('source declares constructor with props param calling super', () => {
 // ============================================================
 
 test('source initializes state.tags as new Map()', () => {
-  assert.ok(/this\.state\s*=\s*\{[^}]*tags\s*:\s*new\s+Map\(\)/s.test(source), 'should initialize tags as new Map()');
+  assert.ok(
+    /this\.state\s*=\s*\{[^}]*tags\s*:\s*new\s+Map\(\)/s.test(source),
+    'should initialize tags as new Map()'
+  );
 });
 
 test('source initializes state.tag_hash as empty string', () => {
@@ -42,15 +51,24 @@ test('source initializes state.hoveredRow and hoveredCol as null', () => {
 });
 
 test('source binds updateTags in constructor', () => {
-  assert.ok(/this\.updateTags\s*=\s*this\.updateTags\.bind\(this\)/.test(source), 'should bind updateTags');
+  assert.ok(
+    /this\.updateTags\s*=\s*this\.updateTags\.bind\(this\)/.test(source),
+    'should bind updateTags'
+  );
 });
 
 test('source binds handleCellMouseEnter in constructor', () => {
-  assert.ok(/this\.handleCellMouseEnter\s*=\s*this\.handleCellMouseEnter\.bind\(this\)/.test(source), 'should bind handleCellMouseEnter');
+  assert.ok(
+    /this\.handleCellMouseEnter\s*=\s*this\.handleCellMouseEnter\.bind\(this\)/.test(source),
+    'should bind handleCellMouseEnter'
+  );
 });
 
 test('source binds handleCellMouseLeave in constructor', () => {
-  assert.ok(/this\.handleCellMouseLeave\s*=\s*this\.handleCellMouseLeave\.bind\(this\)/.test(source), 'should bind handleCellMouseLeave');
+  assert.ok(
+    /this\.handleCellMouseLeave\s*=\s*this\.handleCellMouseLeave\.bind\(this\)/.test(source),
+    'should bind handleCellMouseLeave'
+  );
 });
 
 // ============================================================
@@ -62,11 +80,17 @@ test('source declares updateTags method', () => {
 });
 
 test('source declares handleCellMouseEnter method', () => {
-  assert.ok(/handleCellMouseEnter\s*\(\s*row\s*,\s*col\s*\)/.test(source), 'should have handleCellMouseEnter method');
+  assert.ok(
+    /handleCellMouseEnter\s*\(\s*row\s*,\s*col\s*\)/.test(source),
+    'should have handleCellMouseEnter method'
+  );
 });
 
 test('source declares handleCellMouseLeave method', () => {
-  assert.ok(/handleCellMouseLeave\s*\(\s*\)/.test(source), 'should have handleCellMouseLeave method');
+  assert.ok(
+    /handleCellMouseLeave\s*\(\s*\)/.test(source),
+    'should have handleCellMouseLeave method'
+  );
 });
 
 test('source declares componentDidMount method', () => {
@@ -74,7 +98,10 @@ test('source declares componentDidMount method', () => {
 });
 
 test('source declares componentWillUnmount method', () => {
-  assert.ok(/componentWillUnmount\s*\(\s*\)/.test(source), 'should have componentWillUnmount method');
+  assert.ok(
+    /componentWillUnmount\s*\(\s*\)/.test(source),
+    'should have componentWillUnmount method'
+  );
 });
 
 test('source declares processBigrams method', () => {
@@ -82,15 +109,24 @@ test('source declares processBigrams method', () => {
 });
 
 test('source declares getCircleSize method', () => {
-  assert.ok(/getCircleSize\s*\(\s*count\s*,\s*maxCount\s*\)/.test(source), 'should have getCircleSize method');
+  assert.ok(
+    /getCircleSize\s*\(\s*count\s*,\s*maxCount\s*\)/.test(source),
+    'should have getCircleSize method'
+  );
 });
 
 test('source declares getCircleColor method', () => {
-  assert.ok(/getCircleColor\s*\(\s*count\s*,\s*maxCount\s*\)/.test(source), 'should have getCircleColor method');
+  assert.ok(
+    /getCircleColor\s*\(\s*count\s*,\s*maxCount\s*\)/.test(source),
+    'should have getCircleColor method'
+  );
 });
 
 test('source declares renderCircle method', () => {
-  assert.ok(/renderCircle\s*\(\s*cellData\s*,\s*maxCount\s*\)/.test(source), 'should have renderCircle method');
+  assert.ok(
+    /renderCircle\s*\(\s*cellData\s*,\s*maxCount\s*\)/.test(source),
+    'should have renderCircle method'
+  );
 });
 
 test('source declares render method', () => {
@@ -102,12 +138,18 @@ test('source declares render method', () => {
 // ============================================================
 
 test('componentDidMount binds TAGS_UPDATED event', () => {
-  assert.ok(/this\.props\.ES\.bind\s*\(\s*this\.props\.ES\.TAGS_UPDATED/.test(source), 'should bind TAGS_UPDATED');
+  assert.ok(
+    /this\.props\.ES\.bind\s*\(\s*this\.props\.ES\.TAGS_UPDATED/.test(source),
+    'should bind TAGS_UPDATED'
+  );
   assert.ok(/this\.updateTags/.test(source), 'should bind updateTags handler');
 });
 
 test('componentWillUnmount unbinds TAGS_UPDATED event', () => {
-  assert.ok(/this\.props\.ES\.unbind\s*\(\s*this\.props\.ES\.TAGS_UPDATED/.test(source), 'should unbind TAGS_UPDATED');
+  assert.ok(
+    /this\.props\.ES\.unbind\s*\(\s*this\.props\.ES\.TAGS_UPDATED/.test(source),
+    'should unbind TAGS_UPDATED'
+  );
 });
 
 // ============================================================
@@ -123,12 +165,18 @@ test('updateTags calls this.setState with state argument', () => {
 // ============================================================
 
 test('handleCellMouseEnter sets hoveredRow and hoveredCol via setState', () => {
-  assert.ok(/this\.setState\s*\(\s*\{[\s\S]*hoveredRow\s*:\s*row/.test(source), 'should set hoveredRow');
+  assert.ok(
+    /this\.setState\s*\(\s*\{[\s\S]*hoveredRow\s*:\s*row/.test(source),
+    'should set hoveredRow'
+  );
   assert.ok(/hoveredCol\s*:\s*col/.test(source), 'should set hoveredCol');
 });
 
 test('handleCellMouseLeave clears hover state via setState', () => {
-  assert.ok(/this\.setState\s*\(\s*\{[\s\S]*hoveredRow\s*:\s*null/.test(source), 'should clear hoveredRow');
+  assert.ok(
+    /this\.setState\s*\(\s*\{[\s\S]*hoveredRow\s*:\s*null/.test(source),
+    'should clear hoveredRow'
+  );
   assert.ok(/hoveredCol\s*:\s*null/.test(source), 'should clear hoveredCol');
 });
 
@@ -137,12 +185,20 @@ test('handleCellMouseLeave clears hover state via setState', () => {
 // ============================================================
 
 test('processBigrams extracts tags from this.state', () => {
-  assert.ok(/const\s*\{\s*tags\s*\}\s*=\s*this\.state/.test(source), 'should destructure tags from state');
+  assert.ok(
+    /const\s*\{\s*tags\s*\}\s*=\s*this\.state/.test(source),
+    'should destructure tags from state'
+  );
 });
 
 test('processBigrams returns empty result when no tags', () => {
   assert.ok(/if\s*\(!tags\s*\|\|\s*!tags\.size\)/.test(source), 'should check for empty tags');
-  assert.ok(/return\s*\{\s*firstWords\s*:\s*\[\]\s*,\s*secondWords\s*:\s*\[\]\s*,\s*matrix\s*:\s*\{\}\s*,\s*maxCount\s*:\s*0\s*\}/.test(source), 'should return empty result');
+  assert.ok(
+    /return\s*\{\s*firstWords\s*:\s*\[\]\s*,\s*secondWords\s*:\s*\[\]\s*,\s*matrix\s*:\s*\{\}\s*,\s*maxCount\s*:\s*0\s*\}/.test(
+      source
+    ),
+    'should return empty result'
+  );
 });
 
 test('processBigrams initializes firstWordCounts, secondWordCounts, matrix, maxCount', () => {
@@ -153,12 +209,21 @@ test('processBigrams initializes firstWordCounts, secondWordCounts, matrix, maxC
 });
 
 test('processBigrams tracks connections with Sets', () => {
-  assert.ok(/firstWordConnections\[firstWord\]\s*=\s*new\s+Set\(\)/.test(source), 'should create Set for firstWord connections');
-  assert.ok(/secondWordConnections\[secondWord\]\s*=\s*new\s+Set\(\)/.test(source), 'should create Set for secondWord connections');
+  assert.ok(
+    /firstWordConnections\[firstWord\]\s*=\s*new\s+Set\(\)/.test(source),
+    'should create Set for firstWord connections'
+  );
+  assert.ok(
+    /secondWordConnections\[secondWord\]\s*=\s*new\s+Set\(\)/.test(source),
+    'should create Set for secondWord connections'
+  );
 });
 
 test('processBigrams splits tag by space to get bigram parts', () => {
-  assert.ok(/tagData\.tag\.split\s*\(\s*['"']\s+['"]\s*\)/.test(source), 'should split tag by space');
+  assert.ok(
+    /tagData\.tag\.split\s*\(\s*['"']\s+['"]\s*\)/.test(source),
+    'should split tag by space'
+  );
 });
 
 test('processBigrams checks bigramParts length >= 2', () => {
@@ -166,8 +231,18 @@ test('processBigrams checks bigramParts length >= 2', () => {
 });
 
 test('processBigrams accumulates first and second word counts', () => {
-  assert.ok(/firstWordCounts\[firstWord\]\s*=\s*\(firstWordCounts\[firstWord\]\s*\|\|\s*0\)\s*\+\s*count/.test(source), 'should accumulate first word count');
-  assert.ok(/secondWordCounts\[secondWord\]\s*=\s*\(secondWordCounts\[secondWord\]\s*\|\|\s*0\)\s*\+\s*count/.test(source), 'should accumulate second word count');
+  assert.ok(
+    /firstWordCounts\[firstWord\]\s*=\s*\(firstWordCounts\[firstWord\]\s*\|\|\s*0\)\s*\+\s*count/.test(
+      source
+    ),
+    'should accumulate first word count'
+  );
+  assert.ok(
+    /secondWordCounts\[secondWord\]\s*=\s*\(secondWordCounts\[secondWord\]\s*\|\|\s*0\)\s*\+\s*count/.test(
+      source
+    ),
+    'should accumulate second word count'
+  );
 });
 
 test('processBigrams stores cell data with count, tag, url', () => {
@@ -177,12 +252,21 @@ test('processBigrams stores cell data with count, tag, url', () => {
 });
 
 test('processBigrams tracks maxCount', () => {
-  assert.ok(/if\s*\(\s*count\s*>\s*maxCount\s*\)\s*\{[\s\S]*maxCount\s*=\s*count/.test(source), 'should update maxCount');
+  assert.ok(
+    /if\s*\(\s*count\s*>\s*maxCount\s*\)\s*\{[\s\S]*maxCount\s*=\s*count/.test(source),
+    'should update maxCount'
+  );
 });
 
 test('processBigrams sorts words by frequency descending', () => {
-  assert.ok(/firstWordCounts\[b\]\s*-\s*firstWordCounts\[a\]/.test(source), 'should sort first words desc');
-  assert.ok(/secondWordCounts\[b\]\s*-\s*secondWordCounts\[a\]/.test(source), 'should sort second words desc');
+  assert.ok(
+    /firstWordCounts\[b\]\s*-\s*firstWordCounts\[a\]/.test(source),
+    'should sort first words desc'
+  );
+  assert.ok(
+    /secondWordCounts\[b\]\s*-\s*secondWordCounts\[a\]/.test(source),
+    'should sort second words desc'
+  );
 });
 
 test('processBigrams uses iterative refinement with 3 iterations', () => {
@@ -190,8 +274,14 @@ test('processBigrams uses iterative refinement with 3 iterations', () => {
 });
 
 test('processBigrams refinement scores words by top connections', () => {
-  assert.ok(/topSecondWords\s*=\s*new\s+Set\s*\([^)]*secondWords\.slice/.test(source), 'should create Set of top second words');
-  assert.ok(/bTopConnections\s*-\s*aTopConnections/.test(source), 'should score by top connections');
+  assert.ok(
+    /topSecondWords\s*=\s*new\s+Set\s*\([^)]*secondWords\.slice/.test(source),
+    'should create Set of top second words'
+  );
+  assert.ok(
+    /bTopConnections\s*-\s*aTopConnections/.test(source),
+    'should score by top connections'
+  );
 });
 
 // ============================================================
@@ -207,15 +297,24 @@ test('getCircleSize defines maxSize as 28', () => {
 });
 
 test('getCircleSize returns minSize when maxCount is 0', () => {
-  assert.ok(/if\s*\(\s*maxCount\s*===\s*0\s*\)\s*return\s*minSize/.test(source), 'should return minSize for maxCount=0');
+  assert.ok(
+    /if\s*\(\s*maxCount\s*===\s*0\s*\)\s*return\s*minSize/.test(source),
+    'should return minSize for maxCount=0'
+  );
 });
 
 test('getCircleSize uses Math.sqrt for scaling', () => {
-  assert.ok(/Math\.sqrt\s*\(\s*count\s*\/\s*maxCount\s*\)/.test(source), 'should use square root scaling');
+  assert.ok(
+    /Math\.sqrt\s*\(\s*count\s*\/\s*maxCount\s*\)/.test(source),
+    'should use square root scaling'
+  );
 });
 
 test('getCircleSize formula: minSize + (maxSize - minSize) * normalized', () => {
-  assert.ok(/minSize\s*\+\s*\(maxSize\s*-\s*minSize\)\s*\*\s*normalized/.test(source), 'should use linear interpolation with normalized sqrt value');
+  assert.ok(
+    /minSize\s*\+\s*\(maxSize\s*-\s*minSize\)\s*\*\s*normalized/.test(source),
+    'should use linear interpolation with normalized sqrt value'
+  );
 });
 
 // ============================================================
@@ -238,7 +337,10 @@ test('getCircleColor returns #e67e22 (orange) for ratio > 0.4', () => {
 
 test('getCircleColor returns #f1c40f (yellow) for ratio > 0.2', () => {
   assert.ok(/ratio\s*>\s*0\.2/.test(source), 'should check > 0.2');
-  assert.ok(/return\s*['"]#f1c40f['"]/.test(source), 'should return yellow for low-medium frequency');
+  assert.ok(
+    /return\s*['"]#f1c40f['"]/.test(source),
+    'should return yellow for low-medium frequency'
+  );
 });
 
 test('getCircleColor returns #e74c3c (red) for low ratio', () => {
@@ -250,24 +352,42 @@ test('getCircleColor returns #e74c3c (red) for low ratio', () => {
 // ============================================================
 
 test('renderCircle returns null when cellData is falsy', () => {
-  assert.ok(/if\s*\(\s*!cellData\s*\)\s*return\s*null/.test(source), 'should return null for empty cell');
+  assert.ok(
+    /if\s*\(\s*!cellData\s*\)\s*return\s*null/.test(source),
+    'should return null for empty cell'
+  );
 });
 
 test('renderCircle calls getCircleSize and getCircleColor', () => {
-  assert.ok(/this\.getCircleSize\s*\(\s*cellData\.count\s*,\s*maxCount\s*\)/.test(source), 'should call getCircleSize');
-  assert.ok(/this\.getCircleColor\s*\(\s*cellData\.count\s*,\s*maxCount\s*\)/.test(source), 'should call getCircleColor');
+  assert.ok(
+    /this\.getCircleSize\s*\(\s*cellData\.count\s*,\s*maxCount\s*\)/.test(source),
+    'should call getCircleSize'
+  );
+  assert.ok(
+    /this\.getCircleColor\s*\(\s*cellData\.count\s*,\s*maxCount\s*\)/.test(source),
+    'should call getCircleColor'
+  );
 });
 
 test('renderCircle conditionally shows inner circle when count > 30% of max', () => {
-  assert.ok(/cellData\.count\s*>\s*maxCount\s*\*\s*0\.3/.test(source), 'should check 30% threshold for inner circle');
+  assert.ok(
+    /cellData\.count\s*>\s*maxCount\s*\*\s*0\.3/.test(source),
+    'should check 30% threshold for inner circle'
+  );
 });
 
 test('renderCircle conditionally shows center circle when count > 60% of max', () => {
-  assert.ok(/cellData\.count\s*>\s*maxCount\s*\*\s*0\.6/.test(source), 'should check 60% threshold for center circle');
+  assert.ok(
+    /cellData\.count\s*>\s*maxCount\s*\*\s*0\.6/.test(source),
+    'should check 60% threshold for center circle'
+  );
 });
 
 test('renderCircle creates anchor with bigram-cell-link class', () => {
-  assert.ok(/className\s*=\s*['"]bigram-cell-link['"]/.test(source), 'should set bigram-cell-link class');
+  assert.ok(
+    /className\s*=\s*['"]bigram-cell-link['"]/.test(source),
+    'should set bigram-cell-link class'
+  );
 });
 
 test('renderCircle sets href from cellData.url', () => {
@@ -295,11 +415,19 @@ test('renderCircle creates circles with bigram-circle, bigram-circle-inner, bigr
 // ============================================================
 
 test('render destructures processBigrams result', () => {
-  assert.ok(/const\s*\{\s*firstWords\s*,\s*secondWords\s*,\s*matrix\s*,\s*maxCount\s*\}\s*=\s*this\.processBigrams\(\)/.test(source), 'should destructure from processBigrams');
+  assert.ok(
+    /const\s*\{\s*firstWords\s*,\s*secondWords\s*,\s*matrix\s*,\s*maxCount\s*\}\s*=\s*this\.processBigrams\(\)/.test(
+      source
+    ),
+    'should destructure from processBigrams'
+  );
 });
 
 test('render destructures hoveredRow and hoveredCol from state', () => {
-  assert.ok(/const\s*\{\s*hoveredRow\s*,\s*hoveredCol\s*\}\s*=\s*this\.state/.test(source), 'should destructure hover state');
+  assert.ok(
+    /const\s*\{\s*hoveredRow\s*,\s*hoveredCol\s*\}\s*=\s*this\.state/.test(source),
+    'should destructure hover state'
+  );
 });
 
 test('render returns <p>No bigrams data available</p> when no data', () => {
@@ -307,7 +435,10 @@ test('render returns <p>No bigrams data available</p> when no data', () => {
 });
 
 test('render creates bigrams-table-container div', () => {
-  assert.ok(/className\s*=\s*['"]bigrams-table-container['"]/.test(source), 'should set container class');
+  assert.ok(
+    /className\s*=\s*['"]bigrams-table-container['"]/.test(source),
+    'should set container class'
+  );
 });
 
 test('render creates legend with bigrams-table-legend class', () => {
@@ -326,7 +457,10 @@ test('render legend shows High, Medium, Low-Medium, Low items with color circles
 });
 
 test('render creates bigrams-table-scroll wrapper', () => {
-  assert.ok(/className\s*=\s*['"]bigrams-table-scroll['"]/.test(source), 'should set scroll wrapper class');
+  assert.ok(
+    /className\s*=\s*['"]bigrams-table-scroll['"]/.test(source),
+    'should set scroll wrapper class'
+  );
 });
 
 test('render creates table with bigrams-table class', () => {
@@ -334,7 +468,10 @@ test('render creates table with bigrams-table class', () => {
 });
 
 test('render creates corner cell with bigrams-corner-cell class', () => {
-  assert.ok(/className\s*=\s*['"]bigrams-corner-cell['"]/.test(source), 'should set corner cell class');
+  assert.ok(
+    /className\s*=\s*['"]bigrams-corner-cell['"]/.test(source),
+    'should set corner cell class'
+  );
 });
 
 test('render creates column headers with bigrams-col-header class', () => {
@@ -379,7 +516,10 @@ function extractMethodBody(src, name) {
     if (src[i] === '(') depth += 1;
     else if (src[i] === ')') {
       depth -= 1;
-      if (depth === 0) { parenClose = i; break; }
+      if (depth === 0) {
+        parenClose = i;
+        break;
+      }
     }
   }
 
@@ -399,10 +539,14 @@ function extractMethodBody(src, name) {
 
 test('getCircleSize correctly computes size for max count', () => {
   const body = extractMethodBody(source, 'getCircleSize');
-  const fn = new Function('count', 'maxCount', `
+  const fn = new Function(
+    'count',
+    'maxCount',
+    `
     function getCircleSize(count, maxCount) { ${body} }
     return getCircleSize(count, maxCount);
-  `);
+  `
+  );
   assert.equal(fn(100, 100), 28);
   assert.equal(fn(0, 100), 6);
   assert.equal(fn(5, 0), 6);
@@ -410,23 +554,34 @@ test('getCircleSize correctly computes size for max count', () => {
 
 test('getCircleSize uses square root scaling (non-linear)', () => {
   const body = extractMethodBody(source, 'getCircleSize');
-  const fn = new Function('count', 'maxCount', `
+  const fn = new Function(
+    'count',
+    'maxCount',
+    `
     function getCircleSize(count, maxCount) { ${body} }
     return getCircleSize(count, maxCount);
-  `);
+  `
+  );
   // Sqrt scaling: quarter count should give more than quarter size
   const quarter = fn(25, 100);
   const half = fn(50, 100);
   const full = fn(100, 100);
-  assert.ok(half - quarter < full - half, 'sqrt scaling means differences decrease as count increases');
+  assert.ok(
+    half - quarter < full - half,
+    'sqrt scaling means differences decrease as count increases'
+  );
 });
 
 test('getCircleColor returns correct colors for ratio tiers', () => {
   const body = extractMethodBody(source, 'getCircleColor');
-  const fn = new Function('count', 'maxCount', `
+  const fn = new Function(
+    'count',
+    'maxCount',
+    `
     function getCircleColor(count, maxCount) { ${body} }
     return getCircleColor(count, maxCount);
-  `);
+  `
+  );
   assert.equal(fn(8, 10), '#3498db');
   assert.equal(fn(10, 10), '#3498db');
   assert.equal(fn(5, 10), '#e67e22');

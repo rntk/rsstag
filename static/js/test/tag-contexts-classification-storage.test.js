@@ -45,8 +45,14 @@ test('fetchContexts() success updates tags and emits payload shape', async (t) =
   const lastCall = es.calls.at(-1);
   assert.equal(lastCall.event, es.TAGS_UPDATED);
   assert.equal(lastCall.payload.tags.get('root').count, 2);
-  assert.equal(es.calls.some((c) => c.event === es.START_TASK), true);
-  assert.equal(es.calls.some((c) => c.event === es.END_TASK), true);
+  assert.equal(
+    es.calls.some((c) => c.event === es.START_TASK),
+    true
+  );
+  assert.equal(
+    es.calls.some((c) => c.event === es.END_TASK),
+    true
+  );
 });
 
 test('fetchContexts() failure path emits END_TASK after error', async (t) => {
