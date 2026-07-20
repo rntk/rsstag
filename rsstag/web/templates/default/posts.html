@@ -9,19 +9,13 @@
 </head>
 
 <body class="font-body selection:bg-secondary-container bg-background">
-    {% from 'site-header.html' import site_header with context %}{% from
-    'context-filter-bar.html' import context_filter_bar with context %}
+    {% from 'site-header.html' import site_header with context %}
 
-    {{ site_header(active=('categories' if group == 'category' else 'tags' if group == 'tag' else ''), show_posts_tools=True) }}
+    {{ site_header(active=('categories' if group == 'category' else 'tags' if group == 'tag' else ''), show_posts_tools=True, show_context_filter=True) }}
 
     <!-- Main Content Area -->
     <main class="min-h-screen">
         <div class="max-w-[1600px] mx-auto">
-
-            <!-- Filter Bar -->
-            <div class="context-filter-strip">
-                {{ context_filter_bar() }}
-            </div>
 
             <!-- Content -->
             <div class="p-10">

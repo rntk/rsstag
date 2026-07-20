@@ -7,9 +7,9 @@
 </head>
 
 <body>
-    {% from 'site-header.html' import site_header with context %}{% from 'context-filter-bar.html' import context_filter_bar with context %}
+    {% from 'site-header.html' import site_header with context %}
 
-    {{ site_header(active='tags') }}
+    {{ site_header(active='tags', show_context_filter=True) }}
     <div class="flex items-center space-x-4 p-4 border-b border-outline-variant/10">
         <div id="help_button" class="global_tools_button">
             <a href="#">help</a>
@@ -24,10 +24,6 @@
                 title="Mark all displayed snippets as unread">Unread all</button>
         </div>
     </div>
-    <div class="context-filter-strip">
-        {{ context_filter_bar() }}
-    </div>
-
     <div class="page post-grouped-snippets-page">
         <div class="back-nav">
             <a href="/tag-info/{{tag | url_encode}}" class="back-btn">&larr; Back to Tag Info</a>

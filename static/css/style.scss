@@ -7783,15 +7783,18 @@ body:has(#global_tools.site-header) {
   }
 }
 
-/* Slim sticky context-filter strip that sits directly under the header. */
-.context-filter-strip {
-  position: sticky;
-  top: var(--rsst-header-height);
-  z-index: 30;
+/* The context filter belongs to the global header. Keeping it in normal header
+   flow lets the sticky header reserve its full height and prevents overlap with
+   page content when filter tags wrap. */
+.site-header__context-filter {
+  max-width: 1600px;
+  margin: 0 auto;
   padding: var(--rsst-space-2) var(--rsst-space-5);
-  background: rgb(238 240 235 / 88%);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--rsst-border);
+  border-top: 1px solid var(--rsst-border);
+
+  .context-filter-bar {
+    padding: var(--rsst-space-1) var(--rsst-space-3);
+  }
 }
 
 /* Flat dashboard cards (root-logged.html). Overrides the rounded/shadow

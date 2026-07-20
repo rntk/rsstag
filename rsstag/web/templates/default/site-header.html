@@ -1,19 +1,21 @@
-{% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}
+{% import 'main-menu.html' as menu with context %}{% import 'global-status.html' as g_status with context %}{% import 'context-filter-bar.html' as context_filter with context %}
 
 {#
   Canonical app-wide header.
 
-  Signature: site_header(active='', show_posts_tools=False)
+  Signature: site_header(active='', show_posts_tools=False, show_context_filter=False)
     - active: one of 'dashboard', 'categories', 'tags', 'topics', 'map'
               (empty string highlights nothing).
     - show_posts_tools: when True, renders the posts-page tool mount points
               (#player_block, #read_all, #show_all).
+    - show_context_filter: when True, renders the context filter in the
+              global header instead of as a separate sticky page strip.
 
   The `#global_tools` id and the mount ids (settings_menu, global_status,
   read_all, show_all, player_block) are consumed by /app/static/js and MUST
   stay intact. Import this file `with context` so g_status/menu see user_settings.
 #}
-{% macro site_header(active='', show_posts_tools=False) -%}
+{% macro site_header(active='', show_posts_tools=False, show_context_filter=False) -%}
 <header id="global_tools" class="site-header">
     <div class="site-header__inner">
         <div class="site-header__left">
@@ -57,5 +59,10 @@
             </a>
         </div>
     </div>
+    {% if show_context_filter %}
+    <div class="site-header__context-filter">
+        {{ context_filter.context_filter_bar() }}
+    </div>
+    {% endif %}
 </header>
 {%- endmacro %}

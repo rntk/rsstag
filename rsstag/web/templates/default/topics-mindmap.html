@@ -6,17 +6,13 @@
 </head>
 
 <body style="overflow: hidden;">
-    {% from 'site-header.html' import site_header with context %}{% from
-    'context-filter-bar.html' import context_filter_bar with context %}
+    {% from 'site-header.html' import site_header with context %}
 
-    {{ site_header(active='topics') }}
+    {{ site_header(active='topics', show_context_filter=True) }}
     <div class="flex items-center p-4 border-b border-outline-variant/10">
         <div id="help_button" class="global_tools_button">
             <a href="/topics-list">topics list</a>
         </div>
-    </div>
-    <div class="context-filter-strip">
-        {{ context_filter_bar() }}
     </div>
     <div class="page topics-mindmap-page">
         <h1>Topics Mindmap</h1>

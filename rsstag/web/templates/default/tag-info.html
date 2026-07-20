@@ -11,9 +11,8 @@
 </head>
 
 <body>
-    {% from 'site-header.html' import site_header with context %}{% from
-    'context-filter-bar.html' import context_filter_bar with context %}
-    {{ site_header(active='tags') }}
+    {% from 'site-header.html' import site_header with context %}
+    {{ site_header(active='tags', show_context_filter=True) }}
     <nav class="tag-info-tools" aria-label="Tag tools">
         <div id="help_button" class="global_tools_button">
             <a href="#">Help</a>
@@ -28,9 +27,6 @@
             <a href="/anthologies">Anthologies</a>
         </div>
     </nav>
-    <div class="context-filter-strip">
-        {{ context_filter_bar() }}
-    </div>
     <main class="page tag-info-page">
         <header class="tag-info-header">
             <div class="tag-info-header__copy">
