@@ -259,6 +259,9 @@ class FeedCanvas {
     this.resizeTimer = 0;
     /** @type {Map<string, string>} */
     this.summaries = new Map();
+    /** Layout keys with a summary request in flight. */
+    /** @type {Set<string>} */
+    this.summaryLoadingKeys = new Set();
     this.contextMenu = null;
     this.summaryDialog = null;
     this.statusTimer = 0;
@@ -290,6 +293,9 @@ class FeedCanvas {
     this.cardTemplate = null;
     /** @type {number[]} */
     this.renderedIndices = [];
+    /** Layout index whose card currently owns keyboard focus. */
+    /** @type {number|null} */
+    this.focusedLayoutIndex = null;
     this.cullFrame = 0;
     /** Selection and hover live here, not on the DOM, because cards recycle. */
     /** @type {object|null} */
@@ -738,9 +744,11 @@ class FeedCanvas {
       (maximum, layout) => Math.max(maximum, layout.height),
       0
     );
+    this.focusedLayoutIndex = null;
     this.renderedIndices = [];
     this.cardPool.forEach((card) => {
       card.hidden = true;
+      delete card.dataset.layoutIndex;
     });
 
     const postsHeight = document.getElementById('canvas_posts')?.offsetHeight || 0;
@@ -789,6 +797,19 @@ class FeedCanvas {
       band.bottom,
       this.maxCardHeight
     );
+    const activeCard = document.activeElement?.closest?.('.canvas-topic-card');
+    const activeElement = document.activeElement;
+    const activeLayoutAttribute = activeCard?.getAttribute('data-layout-index');
+    const activeLayoutIndex =
+      activeCard && this.cards.contains(activeCard) && activeLayoutAttribute !== null
+        ? Number(activeLayoutAttribute)
+        : null;
+    [this.focusedLayoutIndex, activeLayoutIndex]
+      .filter((index) => Number.isInteger(index) && index >= 0 && index < this.layouts.length)
+      .forEach((index) => {
+        if (!visible.includes(index)) visible.push(index);
+      });
+    visible.sort((left, right) => left - right);
     if (sameIndices(visible, this.renderedIndices)) return;
     this.renderedIndices = visible;
     if (!this.cardTemplate) this.cardTemplate = createCardTemplate();
@@ -803,11 +824,24 @@ class FeedCanvas {
     for (let index = visible.length; index < this.cardPool.length; index += 1) {
       this.cardPool[index].hidden = true;
     }
+    if (activeLayoutIndex !== null) {
+      const activeCardAfterRender = this.cardForLayoutIndex(activeLayoutIndex);
+      if (activeCardAfterRender && activeCardAfterRender !== activeCard) {
+        const focusTarget =
+          activeElement?.classList?.contains('canvas-topic-card__menu')
+            ? activeCardAfterRender.querySelector('.canvas-topic-card__menu')
+            : activeCardAfterRender;
+        focusTarget?.focus();
+      }
+    }
   }
 
   /** @param {HTMLDivElement} card @param {number} layoutIndex */
   bindCard(card, layoutIndex) {
     const layout = this.layouts[layoutIndex];
+    // A pooled node may have belonged to a different layout while its
+    // summary request was pending. Recompute all transient state below.
+    card.classList.remove('is-summary-loading');
     card.dataset.layoutIndex = String(layoutIndex);
     card.style.top = `${layout.top}px`;
     card.style.height = `${layout.height}px`;
@@ -832,6 +866,16 @@ class FeedCanvas {
     const selected = this.selectedLayout === layout;
     card.classList.toggle('is-selected', selected);
     card.classList.toggle('is-active', selected || this.hoverLayout === layout);
+    card.classList.toggle('is-summary-loading', this.summaryLoadingKeys.has(this.summaryKey(layout)));
+  }
+
+  /** @param {number} layoutIndex @returns {HTMLDivElement|null} */
+  cardForLayoutIndex(layoutIndex) {
+    return (
+      this.cardPool.find(
+        (card) => !card.hidden && Number(card.getAttribute('data-layout-index')) === layoutIndex
+      ) || null
+    );
   }
 
   refreshVisibleCardStates() {
@@ -902,11 +946,56 @@ class FeedCanvas {
       this.selectLayout(layout);
     });
     this.cards.addEventListener('keydown', (event) => {
+      const card = event.target.closest?.('.canvas-topic-card');
+      if (event.key === 'Tab' && card) {
+        const currentIndex = Number(card.getAttribute('data-layout-index'));
+        const menu = card.querySelector('.canvas-topic-card__menu');
+        const targetIsCard = event.target === card;
+        const targetIsMenu = event.target === menu;
+        // Preserve the card's own menu in the tab order before moving to the
+        // next topic, but materialize that topic while the card is focused.
+        if (!event.shiftKey && targetIsCard && menu) {
+          const nextIndex = currentIndex + 1;
+          if (nextIndex < this.layouts.length) {
+            this.focusedLayoutIndex = nextIndex;
+            this.renderVisibleCards();
+          }
+          return;
+        }
+        // Let Shift+Tab return from the menu to its card.
+        if (event.shiftKey && targetIsMenu) {
+          return;
+        }
+        const nextIndex = currentIndex + (event.shiftKey ? -1 : 1);
+        if (
+          !Number.isInteger(currentIndex) ||
+          nextIndex < 0 ||
+          nextIndex >= this.layouts.length
+        ) {
+          return;
+        }
+        event.preventDefault();
+        this.focusedLayoutIndex = nextIndex;
+        this.renderVisibleCards();
+        this.cardForLayoutIndex(nextIndex)?.focus();
+        return;
+      }
       if (event.key !== 'Enter' && event.key !== ' ') return;
       const layout = this.layoutForCard(event.target.closest?.('.canvas-topic-card'));
       if (!layout) return;
       event.preventDefault();
       this.selectLayout(layout);
+    });
+    this.cards.addEventListener('focusin', (event) => {
+      const card = event.target.closest?.('.canvas-topic-card');
+      if (!card || !this.cards.contains(card)) return;
+      const layoutIndex = Number(card.getAttribute('data-layout-index'));
+      this.focusedLayoutIndex = Number.isInteger(layoutIndex) ? layoutIndex : null;
+    });
+    this.cards.addEventListener('focusout', (event) => {
+      const card = event.target.closest?.('.canvas-topic-card');
+      if (!card || card.contains(event.relatedTarget)) return;
+      this.focusedLayoutIndex = null;
     });
     // mouseenter/mouseleave do not bubble, so delegation needs the over/out
     // pair plus a relatedTarget check to ignore moves inside the same card.
@@ -978,7 +1067,9 @@ class FeedCanvas {
       this.showSummary(layout.node.path, cached);
       return;
     }
-    card.classList.add('is-summary-loading');
+    if (this.summaryLoadingKeys.has(key)) return;
+    this.summaryLoadingKeys.add(key);
+    this.refreshCardState(card, layout);
     try {
       const response = await fetch('/openai/summary', {
         method: 'POST',
@@ -999,7 +1090,8 @@ class FeedCanvas {
         true
       );
     } finally {
-      card.classList.remove('is-summary-loading');
+      this.summaryLoadingKeys.delete(key);
+      if (this.layoutForCard(card) === layout) this.refreshCardState(card, layout);
     }
   }
 
