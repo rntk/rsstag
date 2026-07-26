@@ -1,18 +1,82 @@
-/* global CSS, Element, console, document, fetch, window */
+/* global CSS, CustomEvent, Element, console, document, fetch, window */
 
-const CARD_WIDTH = 220;
-const CARD_GAP = 14;
-const RAIL_PADDING = 20;
-const MIN_TOPIC_FONT_SIZE = 8;
+/** Fired on `#feed_canvas` when the toolbar moves it and its cached rect goes stale. */
+const CANVAS_OFFSET_EVENT = 'canvas:offsetchange';
+
+/* Topic card width, gap, rail padding and base font size live in
+   static/css/style.scss, which derives them from the zoom scalars set by
+   FeedCanvas#applyTransform. */
 const MIN_SCALE = 0.15;
 const MAX_SCALE = 1.8;
 const ZOOM_FACTOR = 1.1;
 const TOPIC_ZOOM_SCALE = 1.6;
 const ARROW_PAN_STEP = 80;
 const PAGE_STEP_RATIO = 0.8;
-const BASE_TOPIC_FONT_SIZE = 13;
 const TOPIC_CARD_CHROME_HEIGHT = 30;
 const COMPACT_TOPIC_CARD_HEIGHT = 70;
+/** Screen px rendered beyond each viewport edge, so panning has slack. */
+const CARD_OVERSCAN = 300;
+
+/**
+ * Indices of the layouts overlapping the vertical band `[top, bottom]`, in
+ * content coordinates.
+ *
+ * `layouts` must be sorted by `top`. A binary search finds the first candidate,
+ * but a card taller than the gap can start above the band and still reach into
+ * it, so the scan starts `maxHeight` earlier -- exact, and still O(log n).
+ *
+ * @param {Array<{top: number, height: number}>} layouts
+ * @param {number} top
+ * @param {number} bottom
+ * @param {number} maxHeight
+ * @returns {number[]}
+ */
+export function visibleLayoutIndices(layouts, top, bottom, maxHeight) {
+  let low = 0;
+  let high = layouts.length;
+  const from = top - maxHeight;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (layouts[middle].top < from) low = middle + 1;
+    else high = middle;
+  }
+  /** @type {number[]} */
+  const visible = [];
+  for (let index = low; index < layouts.length && layouts[index].top <= bottom; index += 1) {
+    if (layouts[index].top + layouts[index].height >= top) visible.push(index);
+  }
+  return visible;
+}
+
+/** @param {number[]} left @param {number[]} right @returns {boolean} */
+function sameIndices(left, right) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+/**
+ * Prototype card, cloned for the pool. Built with createElement rather than
+ * innerHTML so recycling never re-parses markup.
+ *
+ * @returns {HTMLDivElement}
+ */
+function createCardTemplate() {
+  const card = document.createElement('div');
+  card.className = 'canvas-topic-card';
+  card.tabIndex = 0;
+  card.setAttribute('role', 'button');
+  const menu = document.createElement('button');
+  menu.type = 'button';
+  menu.className = 'canvas-topic-card__menu';
+  menu.setAttribute('aria-label', 'Topic actions');
+  menu.title = 'Topic actions';
+  menu.textContent = '⋮';
+  const name = document.createElement('span');
+  name.className = 'canvas-topic-card__name';
+  const meta = document.createElement('span');
+  meta.className = 'canvas-topic-card__meta';
+  card.append(menu, name, meta);
+  return card;
+}
 
 /**
  * Keep the canvas below the global toolbar and update the shared CSS variable
@@ -52,7 +116,13 @@ export function syncGlobalToolsOffset() {
   if (!toolsHidden && toolsHeight > 0) {
     document.documentElement.style.setProperty('--global-tools-height', `${height}px`);
   }
-  if (content && (height > 0 || toolsHidden)) content.style.top = `${height}px`;
+  if (content && (height > 0 || toolsHidden)) {
+    content.style.top = `${height}px`;
+    // FeedCanvas caches this element's rect; announce that it just moved so the
+    // cache is dropped at the moment of the change rather than on the scroll
+    // that scheduled it.
+    content.dispatchEvent(new CustomEvent(CANVAS_OFFSET_EVENT));
+  }
 }
 
 /**
@@ -83,6 +153,10 @@ export function setupGlobalTools() {
     window.EVSYS.bind(window.EVSYS.CONTEXT_FILTER_UPDATED, apply);
   }
 
+  // These also re-announce the offset after FeedCanvas has bound its listeners.
+  // setupGlobalTools runs before FeedCanvas#init, so the `apply()` above fires
+  // CANVAS_OFFSET_EVENT with nobody listening; dropping these would leave a
+  // rect cached during startup with nothing to invalidate it.
   window.setTimeout(apply, 0);
   window.setTimeout(apply, 250);
 
@@ -165,6 +239,16 @@ class FeedCanvas {
     this.rail = document.getElementById('canvas_topic_rail');
     this.cards = document.getElementById('canvas_topic_cards');
     this.levels = document.getElementById('canvas_levels');
+    /** @type {Map<string, Record<string, unknown>>} */
+    this.postsById = new Map(this.posts.map((post) => [String(post.post_id || ''), post]));
+    /**
+     * postId -> sentence number -> span. Built in one pass so geometry and
+     * highlighting never run a document-wide attribute-selector match per
+     * sentence.
+     *
+     * @type {Map<string, Map<number, Element>>}
+     */
+    this.sentenceIndex = new Map();
     this.nodes = buildTopicNodes(this.posts);
     this.maxLevel = Math.max(0, ...this.nodes.map((node) => node.depth));
     this.selectedLevel = this.maxLevel;
@@ -180,24 +264,75 @@ class FeedCanvas {
     this.statusTimer = 0;
     /** @type {Map<string, {top: number, bottom: number, left: number, right: number}>} */
     this.sentenceMetrics = new Map();
-    /** @type {Array<{layout: {node: ReturnType<typeof buildTopicNodes>[number], postId: string, run: number[], top: number, height: number, left: number, width: number}, card: HTMLDivElement}>} */
-    this.topicCards = [];
-    this.topicCardUpdateFrame = 0;
     /** @type {{scale: number, x: number, y: number}|null} */
     this.savedView = null;
+    /** Cached viewport rect; invalidated on resize, scroll and root resize. */
+    /** @type {DOMRect|null} */
+    this.rootRect = null;
+    /** Scale last written to the DOM, so panning skips the zoom-only writes. */
+    /** @type {number|null} */
+    this.appliedScale = null;
+    this.zoomFrame = 0;
+    /** @type {{factor: number, clientX: number, clientY: number}|null} */
+    this.pendingZoom = null;
+    /**
+     * Every card position, sorted by `top`. Only the slice on screen is ever
+     * given a DOM node.
+     *
+     * @type {Array<{node: ReturnType<typeof buildTopicNodes>[number], postId: string, run: number[], top: number, height: number, left: number, width: number}>}
+     */
+    this.layouts = [];
+    this.maxCardHeight = 0;
+    /** Recycled card elements, index-aligned with `renderedIndices`. */
+    /** @type {HTMLDivElement[]} */
+    this.cardPool = [];
+    /** @type {HTMLDivElement|null} */
+    this.cardTemplate = null;
+    /** @type {number[]} */
+    this.renderedIndices = [];
+    this.cullFrame = 0;
+    /** Selection and hover live here, not on the DOM, because cards recycle. */
+    /** @type {object|null} */
+    this.selectedLayout = null;
+    /** @type {object|null} */
+    this.hoverLayout = null;
   }
 
   init() {
     if (!this.root || !this.viewport || !this.document || !this.rail || !this.cards) return;
     this.renderLevelButtons();
+    this.buildSentenceIndex();
     this.bindEvents();
+    this.bindCardEvents();
     this.applyTransform();
-    this.layoutTopics();
     this.createSummaryDialog();
-    document.fonts?.ready.then(() => {
-      this.sentenceMetrics.clear();
+    // Sentence geometry depends on the webfonts, so laying out before they
+    // arrive means measuring everything twice. Lay out once, as late as needed.
+    if (document.fonts && document.fonts.status !== 'loaded') {
+      document.fonts.ready.then(() => this.layoutTopics());
+    } else {
       this.layoutTopics();
+    }
+  }
+
+  /** @returns {void} */
+  buildSentenceIndex() {
+    this.sentenceIndex = new Map();
+    this.document?.querySelectorAll('.canvas-post[data-post-id]').forEach((postElement) => {
+      /** @type {Map<number, Element>} */
+      const byNumber = new Map();
+      postElement
+        .querySelectorAll('.canvas-sentence[data-sentence-number]')
+        .forEach((sentence) => {
+          byNumber.set(Number(sentence.getAttribute('data-sentence-number')), sentence);
+        });
+      this.sentenceIndex.set(postElement.getAttribute('data-post-id') || '', byNumber);
     });
+  }
+
+  /** @param {string} postId @param {number} number @returns {Element|null} */
+  getSentenceElement(postId, number) {
+    return this.sentenceIndex.get(postId)?.get(number) || null;
   }
 
   renderLevelButtons() {
@@ -245,7 +380,7 @@ class FeedCanvas {
       (event) => {
         event.preventDefault();
         const factor = event.deltaY < 0 ? ZOOM_FACTOR : 1 / ZOOM_FACTOR;
-        this.zoomByFactor(factor, event.clientX, event.clientY);
+        this.queueZoom(factor, event.clientX, event.clientY);
       },
       { passive: false }
     );
@@ -282,18 +417,69 @@ class FeedCanvas {
     window.addEventListener('pointerdown', (event) => {
       if (!this.contextMenu?.contains(event.target)) this.closeContextMenu();
     });
+    const invalidateRootRect = () => {
+      this.rootRect = null;
+    };
     window.addEventListener('resize', () => {
+      invalidateRootRect();
       window.clearTimeout(this.resizeTimer);
       this.resizeTimer = window.setTimeout(() => {
         this.sentenceMetrics.clear();
         this.layoutTopics();
       }, 100);
     });
+    // The canvas is `position: fixed`, so page scrolling leaves its rect alone.
+    // The one thing that moves it is syncGlobalToolsOffset rewriting `top` when
+    // the toolbar shows or hides, which it announces here. That runs on a
+    // timeout after the scroll, so listening to scroll itself would invalidate
+    // too early and re-cache the pre-move rect.
+    this.root?.addEventListener(CANVAS_OFFSET_EVENT, invalidateRootRect);
+    if (typeof window.ResizeObserver !== 'undefined' && this.root) {
+      new window.ResizeObserver(invalidateRootRect).observe(this.root);
+    }
+  }
+
+  /**
+   * The canvas is `position: fixed`, so its rect only moves on resize or when
+   * the toolbar shows/hides. Caching it keeps the zoom path from forcing a
+   * synchronous reflow on every wheel event.
+   *
+   * @returns {DOMRect|null}
+   */
+  getRootRect() {
+    if (!this.rootRect && this.root) this.rootRect = this.root.getBoundingClientRect();
+    return this.rootRect;
+  }
+
+  /**
+   * Collapse the wheel events that arrive within one frame into a single zoom.
+   * Trackpads emit far more than one per frame, and each one would otherwise
+   * read layout and write the transform.
+   *
+   * @param {number} factor
+   * @param {number} clientX
+   * @param {number} clientY
+   */
+  queueZoom(factor, clientX, clientY) {
+    if (this.pendingZoom) {
+      this.pendingZoom.factor *= factor;
+      this.pendingZoom.clientX = clientX;
+      this.pendingZoom.clientY = clientY;
+    } else {
+      this.pendingZoom = { factor, clientX, clientY };
+    }
+    if (this.zoomFrame) return;
+    this.zoomFrame = window.requestAnimationFrame(() => {
+      this.zoomFrame = 0;
+      const pending = this.pendingZoom;
+      this.pendingZoom = null;
+      if (pending) this.zoomByFactor(pending.factor, pending.clientX, pending.clientY);
+    });
   }
 
   /** @param {string} postId @returns {Record<string, unknown>|undefined} */
   findPost(postId) {
-    return this.posts.find((post) => String(post.post_id || '') === postId);
+    return this.postsById.get(postId);
   }
 
   /** @param {string} message @param {boolean} [isError] */
@@ -358,10 +544,10 @@ class FeedCanvas {
 
   /** @param {number} factor @param {number|null} [clientX] @param {number|null} [clientY] */
   zoomByFactor(factor, clientX = null, clientY = null) {
-    if (!this.root) return;
+    const rect = this.getRootRect();
+    if (!rect) return;
     const nextScale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, this.scale * factor));
     if (nextScale === this.scale) return;
-    const rect = this.root.getBoundingClientRect();
     const focusX = clientX ?? rect.left + rect.width / 2;
     const focusY = clientY ?? rect.top + rect.height / 2;
     const contentX = (focusX - rect.left - this.x) / this.scale;
@@ -370,7 +556,6 @@ class FeedCanvas {
     this.y = focusY - rect.top - contentY * nextScale;
     this.scale = nextScale;
     this.applyTransform();
-    this.scheduleTopicCardUpdate();
   }
 
   reset() {
@@ -378,22 +563,20 @@ class FeedCanvas {
     this.x = 40;
     this.y = 30;
     this.applyTransform();
-    this.scheduleTopicCardUpdate();
   }
 
   /** @param {{top: number, height: number, left: number, width: number}} layout */
   zoomToLayout(layout) {
-    if (!this.root || !this.document) return;
+    const rect = this.getRootRect();
+    if (!rect || !this.document) return;
     if (!this.savedView) this.savedView = { scale: this.scale, x: this.x, y: this.y };
     const targetScale = Math.min(MAX_SCALE, Math.max(this.savedView.scale, TOPIC_ZOOM_SCALE));
-    const rect = this.root.getBoundingClientRect();
     const centerX = layout.left + layout.width / 2;
     const centerY = layout.top + layout.height / 2;
     this.scale = targetScale;
     this.x = rect.width / 2 - centerX * targetScale;
     this.y = rect.height / 2 - centerY * targetScale;
     this.applyTransform();
-    this.scheduleTopicCardUpdate();
   }
 
   restoreView() {
@@ -403,7 +586,6 @@ class FeedCanvas {
     this.y = this.savedView.y;
     this.savedView = null;
     this.applyTransform();
-    this.scheduleTopicCardUpdate();
   }
 
   /** @param {number} dx @param {number} dy */
@@ -453,57 +635,41 @@ class FeedCanvas {
     action();
   }
 
+  /**
+   * Zoom is two style writes on one element. The topic rail counter-scales
+   * itself from `--topic-inv-zoom` / `--topic-font-zoom` in CSS, so no card is
+   * touched here. The zoom-only properties are inherited by the whole canvas
+   * subtree, so skip them while panning to avoid invalidating it needlessly.
+   *
+   * @returns {void}
+   */
   applyTransform() {
-    this.viewport?.style.setProperty('--canvas-x', `${this.x}px`);
-    this.viewport?.style.setProperty('--canvas-y', `${this.y}px`);
-    this.viewport?.style.setProperty('--canvas-zoom', String(this.scale));
-  }
-
-  /** @returns {number} */
-  getTopicCardWidth() {
-    return CARD_WIDTH * Math.max(1, 1 / this.scale);
-  }
-
-  /** @param {number} cardHeight @returns {number} */
-  getTopicFontSize(cardHeight) {
-    const zoomAdjusted = BASE_TOPIC_FONT_SIZE * Math.max(1, 1.25 / this.scale - 0.25);
-    const titleLines = cardHeight < COMPACT_TOPIC_CARD_HEIGHT ? 1 : 2;
-    const availableHeight = Math.max(1, cardHeight - TOPIC_CARD_CHROME_HEIGHT);
-    return Math.max(
-      MIN_TOPIC_FONT_SIZE,
-      Math.min(zoomAdjusted, availableHeight / (titleLines * 1.25))
-    );
-  }
-
-  scheduleTopicCardUpdate() {
-    if (this.topicCardUpdateFrame) return;
-    this.topicCardUpdateFrame = window.requestAnimationFrame(() => {
-      this.topicCardUpdateFrame = 0;
-      this.updateTopicCards();
-    });
-  }
-
-  updateTopicCards() {
-    const cardWidth = this.getTopicCardWidth();
-    if (this.rail) {
-      const railWidth =
-        (this.selectedLevel + 1) * cardWidth + this.selectedLevel * CARD_GAP + RAIL_PADDING * 2;
-      this.rail.style.width = `${railWidth}px`;
+    const style = this.viewport?.style;
+    if (!style) return;
+    style.setProperty('--canvas-x', `${this.x}px`);
+    style.setProperty('--canvas-y', `${this.y}px`);
+    if (this.appliedScale !== this.scale) {
+      this.appliedScale = this.scale;
+      style.setProperty('--canvas-zoom', String(this.scale));
+      style.setProperty('--topic-inv-zoom', String(Math.max(1, 1 / this.scale)));
+      style.setProperty('--topic-font-zoom', String(Math.max(1, 1.25 / this.scale - 0.25)));
     }
-    this.topicCards.forEach(({ layout, card }) => {
-      this.updateTopicCardMetrics(card, layout, cardWidth);
-    });
+    // Panning and zooming both change which cards are on screen.
+    this.scheduleCull();
   }
 
   /**
-   * @param {HTMLDivElement} card
-   * @param {{node: ReturnType<typeof buildTopicNodes>[number], height: number}} layout
-   * @param {number} cardWidth
+   * Upper bound on a card's title font size, from the space the card has. It
+   * depends only on the card height, so CSS can cap the zoom-driven size with
+   * it without recomputing anything per zoom step.
+   *
+   * @param {number} cardHeight
+   * @returns {number}
    */
-  updateTopicCardMetrics(card, layout, cardWidth) {
-    card.style.width = `${cardWidth}px`;
-    card.style.right = `${RAIL_PADDING + layout.node.depth * (cardWidth + CARD_GAP)}px`;
-    card.style.setProperty('--topic-font-size', `${this.getTopicFontSize(layout.height)}px`);
+  getTopicFontCap(cardHeight) {
+    const titleLines = cardHeight < COMPACT_TOPIC_CARD_HEIGHT ? 1 : 2;
+    const availableHeight = Math.max(1, cardHeight - TOPIC_CARD_CHROME_HEIGHT);
+    return availableHeight / (titleLines * 1.25);
   }
 
   /** @param {string} postId @param {number} number @param {DOMRect} documentRect */
@@ -511,8 +677,7 @@ class FeedCanvas {
     const key = `${postId}\u0000${number}`;
     const cached = this.sentenceMetrics.get(key);
     if (cached) return cached;
-    const selector = `.canvas-post[data-post-id="${CSS.escape(postId)}"] .canvas-sentence[data-sentence-number="${number}"]`;
-    const rect = this.document?.querySelector(selector)?.getBoundingClientRect();
+    const rect = this.getSentenceElement(postId, number)?.getBoundingClientRect();
     if (!rect) return null;
     const metrics = {
       top: (rect.top - documentRect.top) / this.scale,
@@ -526,17 +691,12 @@ class FeedCanvas {
 
   layoutTopics() {
     if (!this.document || !this.rail || !this.cards) return;
-    if (this.topicCardUpdateFrame) {
-      window.cancelAnimationFrame(this.topicCardUpdateFrame);
-      this.topicCardUpdateFrame = 0;
-    }
-    this.cards.replaceChildren();
-    this.topicCards = [];
+    // The pool stays attached across re-layouts: `cardPool` holds references to
+    // these nodes, so detaching them here would leave the pool full of orphans
+    // and renderVisibleCards would never append anything again.
     const visibleNodes = this.nodes.filter((node) => node.depth <= this.selectedLevel);
-    const cardWidth = this.getTopicCardWidth();
-    const railWidth =
-      (this.selectedLevel + 1) * cardWidth + this.selectedLevel * CARD_GAP + RAIL_PADDING * 2;
-    this.rail.style.width = `${railWidth}px`;
+    this.rail.style.setProperty('--rail-columns', String(this.selectedLevel + 1));
+    this.rail.style.setProperty('--rail-gaps', String(this.selectedLevel));
     const documentRect = this.document.getBoundingClientRect();
     /** @type {Array<{node: ReturnType<typeof buildTopicNodes>[number], postId: string, run: number[], top: number, height: number}>} */
     const layouts = [];
@@ -564,84 +724,202 @@ class FeedCanvas {
       });
     });
 
-    const fragment = document.createDocumentFragment();
-    layouts.forEach((layout) => {
-      const card = this.createCard(layout, cardWidth);
-      this.topicCards.push({ layout, card });
-      fragment.appendChild(card);
+    // Highlights hang off layouts that are about to be replaced.
+    this.setSentenceHighlight(this.selectedLayout, false);
+    this.setSentenceHighlight(this.hoverLayout, false);
+    this.selectedLayout = null;
+    this.hoverLayout = null;
+    // Nothing is selected any more, so there is no view left to restore to.
+    this.savedView = null;
+
+    layouts.sort((left, right) => left.top - right.top);
+    this.layouts = layouts;
+    this.maxCardHeight = layouts.reduce(
+      (maximum, layout) => Math.max(maximum, layout.height),
+      0
+    );
+    this.renderedIndices = [];
+    this.cardPool.forEach((card) => {
+      card.hidden = true;
     });
-    this.cards.appendChild(fragment);
+
     const postsHeight = document.getElementById('canvas_posts')?.offsetHeight || 0;
     const cardsHeight = layouts.reduce(
       (maximum, layout) => Math.max(maximum, layout.top + layout.height),
       0
     );
     this.cards.style.height = `${Math.max(postsHeight, cardsHeight) + 24}px`;
+    this.renderVisibleCards();
   }
 
   /**
-   * @param {{node: ReturnType<typeof buildTopicNodes>[number], postId: string, run: number[], top: number, height: number}} layout
-   * @param {number} cardWidth
-   * @returns {HTMLDivElement}
+   * Content-space band on screen, padded by CARD_OVERSCAN screen px.
+   *
+   * @returns {{top: number, bottom: number}}
    */
-  createCard(layout, cardWidth) {
-    const card = document.createElement('div');
-    card.className = 'canvas-topic-card';
-    card.tabIndex = 0;
-    card.setAttribute('role', 'button');
+  getVisibleBand() {
+    const rect = this.getRootRect();
+    const height = rect ? rect.height : window.innerHeight;
+    return {
+      top: (-this.y - CARD_OVERSCAN) / this.scale,
+      bottom: (height - this.y + CARD_OVERSCAN) / this.scale,
+    };
+  }
+
+  scheduleCull() {
+    if (this.cullFrame) return;
+    this.cullFrame = window.requestAnimationFrame(() => {
+      this.cullFrame = 0;
+      this.renderVisibleCards();
+    });
+  }
+
+  /**
+   * Give a DOM node only to the cards on screen, reusing the pool. The whole
+   * rail is tens of thousands of cards; the viewport holds tens.
+   *
+   * @returns {void}
+   */
+  renderVisibleCards() {
+    if (!this.cards) return;
+    const band = this.getVisibleBand();
+    const visible = visibleLayoutIndices(
+      this.layouts,
+      band.top,
+      band.bottom,
+      this.maxCardHeight
+    );
+    if (sameIndices(visible, this.renderedIndices)) return;
+    this.renderedIndices = visible;
+    if (!this.cardTemplate) this.cardTemplate = createCardTemplate();
+    while (this.cardPool.length < visible.length) {
+      const card = /** @type {HTMLDivElement} */ (this.cardTemplate.cloneNode(true));
+      this.cardPool.push(card);
+      this.cards.appendChild(card);
+    }
+    visible.forEach((layoutIndex, poolIndex) => {
+      this.bindCard(this.cardPool[poolIndex], layoutIndex);
+    });
+    for (let index = visible.length; index < this.cardPool.length; index += 1) {
+      this.cardPool[index].hidden = true;
+    }
+  }
+
+  /** @param {HTMLDivElement} card @param {number} layoutIndex */
+  bindCard(card, layoutIndex) {
+    const layout = this.layouts[layoutIndex];
+    card.dataset.layoutIndex = String(layoutIndex);
     card.style.top = `${layout.top}px`;
     card.style.height = `${layout.height}px`;
-    this.updateTopicCardMetrics(card, layout, cardWidth);
+    // Width, horizontal offset and font size are derived in CSS from these and
+    // the viewport's zoom scalars, so zooming never rewrites them.
+    card.style.setProperty('--topic-depth', String(layout.node.depth));
+    card.style.setProperty('--topic-font-cap', `${this.getTopicFontCap(layout.height)}px`);
     card.style.setProperty('--topic-color', topicColor(layout.node.path));
     card.style.setProperty(
       '--topic-title-lines',
       layout.height < COMPACT_TOPIC_CARD_HEIGHT ? '1' : '2'
     );
-    card.innerHTML = `<button type="button" class="canvas-topic-card__menu" aria-label="Topic actions" title="Topic actions">⋮</button><span class="canvas-topic-card__name"></span><span class="canvas-topic-card__meta">${layout.run.length} sent.</span>`;
-    const name = card.querySelector('.canvas-topic-card__name');
-    if (name) name.textContent = layout.node.name;
     card.title = layout.node.path;
-    const toggleHighlight = (active) => {
-      layout.run.forEach((number) => {
-        const selector = `.canvas-post[data-post-id="${CSS.escape(layout.postId)}"] .canvas-sentence[data-sentence-number="${number}"]`;
-        this.document?.querySelector(selector)?.classList.toggle('is-topic-active', active);
-      });
-      card.classList.toggle('is-active', active);
-    };
-    card.addEventListener('mouseenter', () => toggleHighlight(true));
-    card.addEventListener('mouseleave', () => {
-      if (!card.classList.contains('is-selected')) toggleHighlight(false);
+    card.children[1].textContent = layout.node.name;
+    card.children[2].textContent = `${layout.run.length} sent.`;
+    card.hidden = false;
+    this.refreshCardState(card, layout);
+  }
+
+  /** @param {HTMLElement} card @param {object} layout */
+  refreshCardState(card, layout) {
+    const selected = this.selectedLayout === layout;
+    card.classList.toggle('is-selected', selected);
+    card.classList.toggle('is-active', selected || this.hoverLayout === layout);
+  }
+
+  refreshVisibleCardStates() {
+    this.renderedIndices.forEach((layoutIndex, poolIndex) => {
+      this.refreshCardState(this.cardPool[poolIndex], this.layouts[layoutIndex]);
     });
-    const selectCard = () => {
-      const selected = !card.classList.contains('is-selected');
-      this.cards?.querySelectorAll('.is-selected').forEach((item) => {
-        item.classList.remove('is-selected', 'is-active');
-      });
-      this.document
-        ?.querySelectorAll('.canvas-sentence.is-topic-active')
-        .forEach((item) => item.classList.remove('is-topic-active'));
-      card.classList.toggle('is-selected', selected);
-      if (selected) {
-        toggleHighlight(true);
-        this.zoomToLayout(layout);
-      } else {
-        this.restoreView();
+  }
+
+  /** @param {object|null} layout @param {boolean} active */
+  setSentenceHighlight(layout, active) {
+    if (!layout) return;
+    layout.run.forEach((number) => {
+      this.getSentenceElement(layout.postId, number)?.classList.toggle(
+        'is-topic-active',
+        active
+      );
+    });
+  }
+
+  /** @param {object|null} layout */
+  setHoverLayout(layout) {
+    if (this.hoverLayout === layout) return;
+    const previous = this.hoverLayout;
+    this.hoverLayout = layout;
+    if (previous && previous !== this.selectedLayout) this.setSentenceHighlight(previous, false);
+    if (layout) this.setSentenceHighlight(layout, true);
+    this.refreshVisibleCardStates();
+  }
+
+  /** @param {object} layout */
+  selectLayout(layout) {
+    const previous = this.selectedLayout;
+    if (previous) this.setSentenceHighlight(previous, previous === this.hoverLayout);
+    this.selectedLayout = previous === layout ? null : layout;
+    if (this.selectedLayout) {
+      this.setSentenceHighlight(this.selectedLayout, true);
+      this.zoomToLayout(this.selectedLayout);
+    } else {
+      this.restoreView();
+    }
+    this.refreshVisibleCardStates();
+  }
+
+  /** @param {Element|null} card @returns {object|null} */
+  layoutForCard(card) {
+    const index = card instanceof Element ? card.getAttribute('data-layout-index') : null;
+    return index === null ? null : this.layouts[Number(index)] || null;
+  }
+
+  /**
+   * One listener set for the whole rail. Per-card listeners are impossible once
+   * cards recycle, and there were five per card across all of them.
+   *
+   * @returns {void}
+   */
+  bindCardEvents() {
+    if (!this.cards) return;
+    this.cards.addEventListener('click', (event) => {
+      const card = event.target.closest?.('.canvas-topic-card');
+      const layout = this.layoutForCard(card);
+      if (!layout) return;
+      const menu = event.target.closest('.canvas-topic-card__menu');
+      if (menu) {
+        event.stopPropagation();
+        this.openContextMenu(menu, layout, card);
+        return;
       }
-    };
-    card.addEventListener('click', (event) => {
-      if (!event.target.closest('.canvas-topic-card__menu')) selectCard();
+      this.selectLayout(layout);
     });
-    card.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        selectCard();
-      }
+    this.cards.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      const layout = this.layoutForCard(event.target.closest?.('.canvas-topic-card'));
+      if (!layout) return;
+      event.preventDefault();
+      this.selectLayout(layout);
     });
-    card.querySelector('.canvas-topic-card__menu')?.addEventListener('click', (event) => {
-      event.stopPropagation();
-      this.openContextMenu(event.currentTarget, layout, card);
+    // mouseenter/mouseleave do not bubble, so delegation needs the over/out
+    // pair plus a relatedTarget check to ignore moves inside the same card.
+    this.cards.addEventListener('mouseover', (event) => {
+      const card = event.target.closest?.('.canvas-topic-card');
+      if (!card || card.contains(event.relatedTarget)) return;
+      this.setHoverLayout(this.layoutForCard(card));
     });
-    return card;
+    this.cards.addEventListener('mouseout', (event) => {
+      const card = event.target.closest?.('.canvas-topic-card');
+      if (!card || card.contains(event.relatedTarget)) return;
+      this.setHoverLayout(null);
+    });
   }
 
   closeContextMenu() {
@@ -678,14 +956,17 @@ class FeedCanvas {
     return `${layout.node.path}\u0000${layout.postId}\u0000${layout.run.join(',')}`;
   }
 
-  /** @param {object} layout @returns {string[]} */
+  /**
+   * Sentence text comes from the rendered spans rather than the JSON payload,
+   * which no longer ships it. `run` is already ascending, so this keeps
+   * document order.
+   *
+   * @param {object} layout
+   * @returns {string[]}
+   */
   summarySentences(layout) {
-    const post = this.posts.find((item) => String(item.post_id || '') === layout.postId);
-    if (!post || !Array.isArray(post.sentences)) return [];
-    const numbers = new Set(layout.run);
-    return post.sentences
-      .filter((sentence) => numbers.has(sentence.number))
-      .map((sentence) => String(sentence.text || '').trim())
+    return layout.run
+      .map((number) => this.getSentenceElement(layout.postId, number)?.textContent.trim() || '')
       .filter(Boolean);
   }
 

@@ -1,7 +1,7 @@
 import gzip
 import unittest
 
-from rsstag.web.posts import _serialize_canvas_posts
+from rsstag.web.posts import _serialize_canvas_posts, _strip_canvas_sentence_text
 from tests.web_test_utils import MongoWebTestCase
 
 
@@ -13,6 +13,38 @@ class TestCanvasSerialization(unittest.TestCase):
 
         self.assertNotIn("</script>", serialized)
         self.assertIn("\\u003c/script\\u003e", serialized)
+
+
+class TestCanvasSentenceStripping(unittest.TestCase):
+    def _post(self) -> dict[str, object]:
+        return {
+            "post_id": "post-1",
+            "title": "Aligned post",
+            "url": "https://example.com/post-1",
+            "read": False,
+            "sentences": [{"number": 1, "text": "First sentence."}],
+            "groups": {"Technology > Canvas": [1]},
+        }
+
+    def test_sentence_text_is_dropped(self) -> None:
+        stripped: list[dict[str, object]] = _strip_canvas_sentence_text([self._post()])
+
+        self.assertNotIn("sentences", stripped[0])
+        self.assertNotIn("First sentence.", _serialize_canvas_posts(stripped))
+
+    def test_fields_the_canvas_still_reads_are_kept(self) -> None:
+        stripped: list[dict[str, object]] = _strip_canvas_sentence_text([self._post()])
+
+        self.assertEqual(stripped[0]["post_id"], "post-1")
+        self.assertEqual(stripped[0]["read"], False)
+        self.assertEqual(stripped[0]["groups"], {"Technology > Canvas": [1]})
+
+    def test_source_posts_are_not_mutated(self) -> None:
+        posts: list[dict[str, object]] = [self._post()]
+
+        _strip_canvas_sentence_text(posts)
+
+        self.assertIn("sentences", posts[0])
 
 
 class TestWebCanvas(MongoWebTestCase):

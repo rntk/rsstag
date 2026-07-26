@@ -1170,6 +1170,20 @@ def _build_canvas_post(
     }
 
 
+def _strip_canvas_sentence_text(posts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Drop sentence text from the canvas client payload.
+
+    The template already renders every sentence as a span tagged with its
+    number, so repeating the text in JSON doubles the page weight and adds a
+    large synchronous parse at load. The canvas reads sentence text only when a
+    summary is requested, and takes it from the DOM instead.
+    """
+    return [
+        {key: value for key, value in post.items() if key != "sentences"}
+        for post in posts
+    ]
+
+
 def _serialize_canvas_posts(posts: list[dict[str, Any]]) -> str:
     """Serialize canvas data without allowing values to terminate its script tag."""
     serialized: str = json.dumps(posts, default=str)
@@ -1288,7 +1302,9 @@ def on_canvas_get(
     return Response(
         page.render(
             posts=canvas_posts,
-            posts_json=_serialize_canvas_posts(canvas_posts),
+            posts_json=_serialize_canvas_posts(
+                _strip_canvas_sentence_text(canvas_posts)
+            ),
             feed=current_feed,
             category=current_category,
             tag=tag,

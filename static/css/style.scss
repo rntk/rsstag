@@ -8009,10 +8009,28 @@ body:has(#global_tools.site-header) {
   }
 }
 
+/* Topic rail geometry.
+   Cards keep a constant on-screen size while the canvas zooms out, so their
+   width, offset and font size all depend on the zoom level. The two scalars
+   come from `--topic-inv-zoom` / `--topic-font-zoom`, which FeedCanvas sets
+   once per frame on the viewport; the per-card arithmetic happens here so a
+   zoom step costs a couple of style writes instead of three per card.
+   Keep in sync with COMPACT_TOPIC_CARD_HEIGHT / TOPIC_CARD_CHROME_HEIGHT in
+   static/js/components/feed-canvas.js, which derive `--topic-font-cap`. */
+$topic-card-width: 220px;
+$topic-card-gap: 14px;
+$topic-rail-padding: 20px;
+$topic-font-base: 13px;
+$topic-font-min: 8px;
+
 .canvas-topic-rail {
   position: relative;
   min-height: 100%;
   flex: none;
+  width: calc(
+    var(--rail-columns, 1) * (#{$topic-card-width} * var(--topic-inv-zoom, 1)) + var(--rail-gaps, 0) *
+      #{$topic-card-gap} + #{$topic-rail-padding * 2}
+  );
 }
 .canvas-topic-rail__body {
   position: relative;
@@ -8020,8 +8038,20 @@ body:has(#global_tools.site-header) {
 }
 
 .canvas-topic-card {
+  --topic-font-size: max(
+    #{$topic-font-min},
+    min(
+      #{$topic-font-base} * var(--topic-font-zoom, 1),
+      var(--topic-font-cap, #{$topic-font-base})
+    )
+  );
+
   position: absolute;
-  width: 220px;
+  width: calc(#{$topic-card-width} * var(--topic-inv-zoom, 1));
+  right: calc(
+    #{$topic-rail-padding} + var(--topic-depth, 0) *
+      (#{$topic-card-width} * var(--topic-inv-zoom, 1) + #{$topic-card-gap})
+  );
   padding: 9px 12px 9px 14px;
   display: flex;
   flex-direction: column;
@@ -8041,6 +8071,12 @@ body:has(#global_tools.site-header) {
     border-color: #20231f;
     border-left-color: var(--topic-color);
     background: #fff9d8;
+  }
+
+  /* Pooled cards park here when scrolled out of view. `display: flex` above
+     would otherwise beat the UA stylesheet's `[hidden] { display: none }`. */
+  &[hidden] {
+    display: none;
   }
 }
 
@@ -8302,8 +8338,11 @@ body:has(#global_tools.site-header) {
   display: -webkit-box;
   overflow: hidden;
   font:
-    700 var(--topic-font-size, 13px)/1.25 Inter,
+    700 #{$topic-font-base}/1.25 Inter,
     sans-serif;
+  /* Set apart from the shorthand: the value is a max()/min() expression, and
+     the unitless line-height above scales with whatever it resolves to. */
+  font-size: var(--topic-font-size, #{$topic-font-base});
   -webkit-box-orient: vertical;
   -webkit-line-clamp: var(--topic-title-lines, 2);
 }
