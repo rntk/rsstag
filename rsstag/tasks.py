@@ -47,6 +47,7 @@ TASK_ANTHOLOGY = 26
 TASK_TOPIC_MERGE = 27
 TASK_RAW_DOWNLOAD = 28
 TASK_RAW_TO_POSTS = 29
+TASK_TAGS_TOPICS = 30
 
 SCOPE_MODE_ALL = "all"
 SCOPE_MODE_POSTS = "posts"
@@ -136,6 +137,7 @@ TASK_LEASE_SECONDS: Dict[int, float] = {
     TASK_RAW_DOWNLOAD: 3600.0,
     TASK_RAW_TO_POSTS: 3600.0,
     TASK_ANTHOLOGY: 3600.0,
+    TASK_TAGS_TOPICS: 7200.0,
 }
 
 
@@ -1188,6 +1190,10 @@ class RssTagTasks:
                     info["count"] = self._db.tags.count_documents(
                         {"owner": user_id, "classifications": {"$exists": False}}
                     )
+                elif task["type"] == TASK_TAGS_TOPICS:
+                    info["count"] = self._db.tags.count_documents(
+                        {"owner": user_id, "topic_backed": {"$ne": True}}
+                    )
                 elif task["type"] == TASK_POST_GROUPING_BATCH:
                     info["count"] = self._count_pending_grouping_posts(user_id, task)
                 elif task["type"] == TASK_TAG_CLASSIFICATION_BATCH:
@@ -1236,6 +1242,7 @@ class RssTagTasks:
             TASK_TOPIC_MERGE: "Topic merge (supports scoped reprocess)",
             TASK_RAW_DOWNLOAD: "Download raw provider data (incremental)",
             TASK_RAW_TO_POSTS: "Convert raw provider data to posts (incremental)",
+            TASK_TAGS_TOPICS: "Find tags appearing in post topics",
         }
 
         if task_type in task_titles:

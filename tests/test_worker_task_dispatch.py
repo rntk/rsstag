@@ -10,12 +10,14 @@ from rsstag.tasks import (
     TASK_NOOP,
     TASK_POST_GROUPING,
     TASK_TAGS,
+    TASK_TAGS_TOPICS,
     TASK_TOPIC_MERGE,
     TASK_W2V,
     RssTagTasks,
 )
 from rsstag.users import RssTagUsers
 from rsstag.workers.registry import WorkerRegistry
+from rsstag.workers.tag_worker import TagWorker
 from rsstag.topic_merge import TOPIC_MERGE_VERSION
 from tests.db_utils import DBHelper
 
@@ -61,6 +63,75 @@ class MongoTaskDispatchTestCase(unittest.TestCase):
 
 
 class TestWorkerTaskDispatch(MongoTaskDispatchTestCase):
+    def test_tag_topics_worker_sets_topic_backed_flag(self) -> None:
+        user: Dict[str, Any] = self._create_user("topic_flag_user")
+        owner: str = user["sid"]
+        self.db.posts.insert_many(
+            [
+                {
+                    "owner": owner,
+                    "pid": "topic-flag-post-1",
+                    "tags": ["helpful", "noise"],
+                },
+                {
+                    "owner": owner,
+                    "pid": "topic-flag-post-2",
+                    "tags": ["other"],
+                },
+            ]
+        )
+        self.db.post_grouping.insert_many(
+            [
+                {
+                    "owner": owner,
+                    "post_ids": ["topic-flag-post-1"],
+                    "groups": {"Helpful topic": [1]},
+                },
+                {
+                    "owner": owner,
+                    "post_ids": ["topic-flag-post-2"],
+                    "groups": {"Other topic": [1]},
+                },
+            ]
+        )
+        self.db.tags.insert_many(
+            [
+                {"owner": owner, "tag": "helpful"},
+                {"owner": owner, "tag": "noise", "topic_backed": True},
+                {"owner": owner, "tag": "other"},
+            ]
+        )
+
+        worker: TagWorker = object.__new__(TagWorker)
+        worker._db = self.db
+        result: bool = worker.handle_tags_topics({"user": {"sid": owner}})
+
+        self.assertTrue(result)
+        backed: set[str] = {
+            row["tag"]
+            for row in self.db.tags.find(
+                {"owner": owner, "topic_backed": True}, {"tag": 1, "_id": 0}
+            )
+        }
+        self.assertEqual(backed, {"helpful", "other"})
+
+    def test_get_task_claims_and_finishes_tag_topics_task(self) -> None:
+        user: Dict[str, Any] = self._create_user("topic_task_user")
+        task_id = self.db.tasks.insert_one(
+            {
+                "user": user["sid"],
+                "type": TASK_TAGS_TOPICS,
+                "processing": 0,
+                "manual": True,
+            }
+        ).inserted_id
+
+        task: Dict[str, Any] = self.tasks.get_task(self.users)
+
+        self.assertEqual(task["type"], TASK_TAGS_TOPICS)
+        self.assertTrue(self.tasks.finish_task(task))
+        self.assertIsNone(self.db.tasks.find_one({"_id": task_id}))
+
     def test_get_task_returns_seeded_tags_task_with_post_batch(self) -> None:
         user: Dict[str, Any] = self._create_user("alice")
         self.db.posts.insert_one(

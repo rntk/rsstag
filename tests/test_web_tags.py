@@ -1,5 +1,6 @@
 import gzip
 import json
+import re
 import unittest
 from unittest import mock
 
@@ -189,6 +190,74 @@ class TestWebTags(MongoWebTestCase):
 
         # Both pages should render successfully and contain different tag subsets.
         self.assertNotEqual(body1, body2)
+
+    def test_on_group_by_tags_get_can_filter_to_tags_in_post_topics(self) -> None:
+        user, sid = self.seed_test_user("topic-tag-filter-user", "password")
+        feed_id = "topic-tag-filter-feed"
+        self.test_db.feeds.insert_one(
+            {
+                "owner": sid,
+                "feed_id": feed_id,
+                "category_id": "topic-tag-filter-category",
+                "category_title": "Topic Tag Filter",
+                "category_local_url": "/category/topic-tag-filter-category",
+                "local_url": f"/feed/{feed_id}",
+                "title": "Topic Tag Filter",
+                "url": "http://example.com/topic-tag-filter-feed",
+                "favicon": "",
+                "processing": 0,
+            }
+        )
+        self.test_db.posts.insert_many(
+            [
+                {
+                    "owner": sid,
+                    "pid": "topic-tag-filter-post-1",
+                    "feed_id": feed_id,
+                    "tags": ["helpful", "noise"],
+                    "read": False,
+                    "processing": 0,
+                },
+                {
+                    "owner": sid,
+                    "pid": "topic-tag-filter-post-2",
+                    "feed_id": feed_id,
+                    "tags": ["other"],
+                    "read": False,
+                    "processing": 0,
+                },
+            ]
+        )
+        for tag in ("helpful", "noise", "other"):
+            self.test_db.tags.insert_one(
+                {
+                    "owner": sid,
+                    "tag": tag,
+                    "posts_count": 1,
+                    "unread_count": 1,
+                    "words": [tag],
+                    "local_url": f"/entity/{tag}",
+                    "processing": 0,
+                    "temperature": 1,
+                    "freq": 1.0,
+                    "sentiment": [],
+                    "topic_backed": tag != "noise",
+                }
+            )
+
+        client = self.get_authenticated_client(sid)
+        response = client.get("/group/tag/1?topics=1")
+        self.assertEqual(response.status_code, 200)
+        match = re.search(
+            r"var initial_tags_list = (.*?);",
+            response.get_data(as_text=True),
+            re.DOTALL,
+        )
+        self.assertIsNotNone(match)
+        tags = {item["tag"] for item in json.loads(match.group(1))}
+        self.assertEqual(tags, {"helpful", "other"})
+        self.assertNotIn("noise", tags)
+        self.assertIn('/group/tag/1?topics=1', response.get_data(as_text=True))
 
     # ------------------------------------------------------------------
     # on_group_by_tags_categories_get / on_group_by_tags_by_category_get

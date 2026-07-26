@@ -60,12 +60,64 @@ def _get_scoped_tag_counts(app: "RSSTagApplication", user: dict) -> tuple[bool, 
     )
 
 
+def _topic_filter_enabled(request: Optional[Request]) -> bool:
+    """Return whether the optional topic-backed tag filter was requested."""
+    if request is None:
+        return False
+    return request.args.get("topics", "").strip().casefold() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _append_topic_filter(url: str, enabled: bool) -> str:
+    """Keep the topic-backed tag filter on generated page links."""
+    if not enabled:
+        return url
+    separator = "&" if "?" in url else "?"
+    return f"{url}{separator}topics=1"
+
+
+def _preserve_topic_filter_in_pages(pages_map: dict[str, list[dict]], enabled: bool) -> None:
+    """Apply the optional filter to all pagination links in a page map."""
+    if not enabled:
+        return
+    for page_links in pages_map.values():
+        for page_link in page_links:
+            page_link["url"] = _append_topic_filter(page_link["url"], enabled)
+
+
 def on_group_by_tags_get(
-    app: "RSSTagApplication", user: dict, page_number: int = 1
+    app: "RSSTagApplication",
+    user: dict,
+    page_number: int = 1,
+    request: Optional[Request] = None,
 ) -> Response:
+    topic_filter_active = _topic_filter_enabled(request)
     context_filter_active, scoped_counts = _get_scoped_tag_counts(app, user)
+    topic_backed_tags: set[str] = (
+        app.tags.get_topic_backed_names(
+            user["sid"], user["settings"]["only_unread"]
+        )
+        if topic_filter_active and context_filter_active
+        else set()
+    )
+
     if context_filter_active:
-        tags_count = len(scoped_counts)
+        visible_scoped_tags = {
+            tag
+            for tag in scoped_counts
+            if not topic_filter_active or tag in topic_backed_tags
+        }
+        tags_count = len(visible_scoped_tags)
+    elif topic_filter_active:
+        tags_count = app.tags.count(
+            user["sid"],
+            user["settings"]["only_unread"],
+            topic_backed=True,
+        )
     else:
         tags_count = app.tags.count(user["sid"], user["settings"]["only_unread"])
     page_count = app.get_page_count(tags_count, user["settings"]["tags_on_page"])
@@ -82,9 +134,16 @@ def on_group_by_tags_get(
     pages_map, start_tags_range, end_tags_range = app.calc_pager_data(
         p_number, page_count, user["settings"]["tags_on_page"], "on_group_by_tags_get"
     )
-    sorted_tags = []
+    _preserve_topic_filter_in_pages(pages_map, topic_filter_active)
+    sorted_tags: list[dict[str, Any]] = []
     if context_filter_active:
         sorted_scoped = sorted(scoped_counts.items(), key=lambda item: item[1], reverse=True)
+        if topic_filter_active:
+            sorted_scoped = [
+                item
+                for item in sorted_scoped
+                if item[0] in topic_backed_tags
+            ]
         paged_scoped = sorted_scoped[
             start_tags_range : start_tags_range + user["settings"]["tags_on_page"]
         ]
@@ -100,11 +159,17 @@ def on_group_by_tags_get(
                 }
             )
     else:
+        tag_opts: dict[str, Any] = {
+            "offset": start_tags_range,
+            "limit": user["settings"]["tags_on_page"],
+        }
+        if topic_filter_active:
+            tag_opts["topic_backed"] = True
         tags = app.tags.get_all(
             user["sid"],
             user["settings"]["only_unread"],
             user["settings"]["hot_tags"],
-            opts={"offset": start_tags_range, "limit": user["settings"]["tags_on_page"]},
+            opts=tag_opts,
         )
 
         for t in tags:
@@ -126,14 +191,19 @@ def on_group_by_tags_get(
         letters = []
     page = app.template_env.get_template("group-by-tag.html")
 
+    sort_by_link: str = _append_topic_filter(
+        app.routes.get_url_by_endpoint(
+            endpoint="on_group_by_tags_get",
+            params={"page_number": new_cookie_page_value},
+        ),
+        topic_filter_active,
+    )
+
     return Response(
         page.render(
             tags=sorted_tags,
             sort_by_title="tags",
-            sort_by_link=app.routes.get_url_by_endpoint(
-                endpoint="on_group_by_tags_get",
-                params={"page_number": new_cookie_page_value},
-            ),
+            sort_by_link=sort_by_link,
             group_by_link=app.routes.get_url_by_endpoint(
                 endpoint="on_group_by_category_get"
             ),

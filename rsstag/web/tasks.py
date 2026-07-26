@@ -28,6 +28,7 @@ from rsstag.tasks import (
     TASK_TOPIC_MERGE,
     TASK_RAW_DOWNLOAD,
     TASK_RAW_TO_POSTS,
+    TASK_TAGS_TOPICS,
     get_task_scope_hint,
 )
 
@@ -61,6 +62,7 @@ def on_tasks_get(app, user: dict, request: Request) -> Response:
         TASK_TOPIC_MERGE: "Merge topics",
         TASK_RAW_DOWNLOAD: "Download raw provider data",
         TASK_RAW_TO_POSTS: "Convert raw data to posts",
+        TASK_TAGS_TOPICS: "Find tags appearing in post topics",
     }
     available_tasks = {
         task_type: f"{title} ({get_task_scope_hint(task_type)})"

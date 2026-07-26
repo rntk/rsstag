@@ -5,7 +5,14 @@ from pymongo import MongoClient, DESCENDING, UpdateOne
 
 
 class RssTagTags:
-    indexes = ["owner", "tag", "unread_count", "posts_count", "processing"]
+    indexes = [
+        "owner",
+        "tag",
+        "unread_count",
+        "posts_count",
+        "processing",
+        "topic_backed",
+    ]
 
     def __init__(self, db: MongoClient) -> None:
         self._db = db
@@ -56,6 +63,8 @@ class RssTagTags:
         query = {"owner": owner}
         if opts and "regexp" in opts:
             query["tag"] = {"$regex": opts["regexp"], "$options": "i"}
+        if opts and "topic_backed" in opts:
+            query["topic_backed"] = bool(opts["topic_backed"])
         sort_data = []
         if hot_tags:
             sort_data.append(("temperature", DESCENDING))
@@ -81,6 +90,7 @@ class RssTagTags:
         regexp: str = "",
         sentiments: Optional[List[str]] = None,
         groups: Optional[List[str]] = None,
+        topic_backed: Optional[bool] = None,
     ) -> int:
         query = {"owner": owner}
         if regexp:
@@ -97,8 +107,23 @@ class RssTagTags:
                 {"groups": {"$exists": True}},
                 {"groups": {"$all": groups}},
             ]
+        if topic_backed is not None:
+            query["topic_backed"] = topic_backed
 
         return self._db.tags.count_documents(query)
+
+    def get_topic_backed_names(
+        self, owner: str, only_unread: Optional[bool] = None
+    ) -> set[str]:
+        """Return names of tags marked as occurring in post topics."""
+        query = {"owner": owner, "topic_backed": True}
+        if only_unread:
+            query["unread_count"] = {"$gt": 0}
+        return {
+            str(tag_doc["tag"])
+            for tag_doc in self._db.tags.find(query, projection={"tag": 1, "_id": 0})
+            if tag_doc.get("tag")
+        }
 
     def change_unread(self, owner: str, tags: dict, readed: bool) -> bool:
         updates = []

@@ -4,6 +4,7 @@ import gzip
 import logging
 import math
 import os.path
+import re
 import time
 from collections import Counter, defaultdict
 from functools import lru_cache
@@ -31,6 +32,16 @@ from rsstag.fasttext import FastTextLearn
 from rsstag.web.routes import RSSTagRoutes
 from rsstag.tasks import TAG_NOT_IN_PROCESSING
 from rsstag.workers.base import BaseWorker
+
+
+def _tag_occurs_in_topic(tag: str, topic: str) -> bool:
+    """Match a tag as a complete word or phrase inside a topic path."""
+    tag_value: str = tag.strip()
+    topic_value: str = topic.strip()
+    if not tag_value or not topic_value:
+        return False
+    pattern: str = rf"(?<!\w){re.escape(tag_value)}(?!\w)"
+    return re.search(pattern, topic_value, flags=re.IGNORECASE) is not None
 
 
 class TagWorker(BaseWorker):
@@ -68,6 +79,9 @@ class TagWorker(BaseWorker):
 
     def handle_tags_groups(self, task: dict) -> Optional[bool]:
         return self.make_tags_groups(task["user"]["sid"])
+
+    def handle_tags_topics(self, task: dict[str, Any]) -> bool:
+        return self.make_tags_topics(task["user"]["sid"])
 
     def clear_user_data(self, user: dict) -> bool:
         try:
@@ -558,6 +572,75 @@ class TagWorker(BaseWorker):
             logging.error("Can`t FastText. Info: %s", e)
 
         return result
+
+    def make_tags_topics(self, owner: str) -> bool:
+        """Mark tags that occur in a topic belonging to one of their posts."""
+        try:
+            topics_by_post: dict[str, set[str]] = defaultdict(set)
+            groupings = self._db.post_grouping.find(
+                {"owner": owner},
+                projection={"post_ids": 1, "groups": 1, "_id": 0},
+            )
+            for grouping in groupings:
+                groups: Any = grouping.get("groups")
+                post_ids: Any = grouping.get("post_ids")
+                if not isinstance(groups, dict) or not isinstance(post_ids, list):
+                    continue
+                topics: set[str] = {
+                    str(topic).strip()
+                    for topic in groups
+                    if str(topic).strip()
+                }
+                if not topics:
+                    continue
+                for post_id in post_ids:
+                    topics_by_post[str(post_id)].update(topics)
+
+            topic_backed_tags: set[str] = set()
+            posts = self._db.posts.find(
+                {"owner": owner},
+                projection={"pid": 1, "tags": 1, "_id": 0},
+            )
+            for post in posts:
+                post_topics: set[str] = topics_by_post.get(str(post.get("pid")), set())
+                raw_tags: Any = post.get("tags", [])
+                if not post_topics or not isinstance(raw_tags, list):
+                    continue
+                for raw_tag in raw_tags:
+                    tag: str = str(raw_tag).strip()
+                    if tag and any(
+                        _tag_occurs_in_topic(tag, topic) for topic in post_topics
+                    ):
+                        topic_backed_tags.add(tag.casefold())
+
+            self._db.tags.update_many(
+                {"owner": owner},
+                {"$set": {"topic_backed": False}},
+            )
+            updates: list[UpdateOne] = []
+            for tag_doc in self._db.tags.find(
+                {"owner": owner}, projection={"tag": 1}
+            ):
+                tag_name: str = str(tag_doc.get("tag", "")).strip()
+                if tag_name.casefold() in topic_backed_tags:
+                    updates.append(
+                        UpdateOne(
+                            {"_id": tag_doc["_id"]},
+                            {"$set": {"topic_backed": True}},
+                        )
+                    )
+            if updates:
+                self._db.tags.bulk_write(updates, ordered=False)
+
+            logging.info(
+                "Marked %d topic-backed tags for owner %s",
+                len(updates),
+                owner,
+            )
+            return True
+        except Exception as exc:
+            logging.exception("Unable to mark tags appearing in topics: %s", exc)
+            return False
 
     def make_tags_groups(self, owner: str) -> Optional[bool]:
         tags_h = RssTagTags(self._db)

@@ -426,9 +426,11 @@ class RSSTagApplication(object):
         return (pages_map, start_tags_range, end_tags_range)
 
     def on_group_by_tags_get(
-        self, user: dict, _: Request, page_number: int = 1
+        self, user: dict, request: Request, page_number: int = 1
     ) -> Response:
-        return tags_handlers.on_group_by_tags_get(self, user, page_number)
+        return tags_handlers.on_group_by_tags_get(
+            self, user, page_number=page_number, request=request
+        )
 
     def on_group_by_bigrams_get(
         self, user: dict, _: Request, page_number: int = 1
