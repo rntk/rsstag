@@ -5,22 +5,8 @@
     {% include "head-data.html" %}
 </head>
 <body class="canvas-page">
-    <header class="canvas-page__header">
-        <a class="canvas-page__brand" href="/">RSSTag</a>
-        <div>
-            <p class="canvas-page__eyebrow">Posts canvas</p>
-            <h1>{% if feed %}{{ feed.title }}{% elif category %}{{ category.title }}{% elif tag %}{{ tag }}{% else %}All posts{% endif %}</h1>
-        </div>
-        {% if feed %}
-        <a class="canvas-page__feed-link" href="{{ feed.local_url or ('/feed/' ~ feed.feed_id|url_encode) }}">Regular feed view</a>
-        {% elif category %}
-        <a class="canvas-page__feed-link" href="/hierarchy?category={{ category.category_id|url_encode }}">Hierarchy view</a>
-        <a class="canvas-page__feed-link" href="{{ category.local_url or ('/category/' ~ category.category_id|url_encode) }}">Regular category view</a>
-        {% elif tag %}
-        <a class="canvas-page__feed-link" href="/tag/{{ tag|url_encode }}">Tag view</a>
-        {% endif %}
-    </header>
-
+    {% from 'site-header.html' import site_header with context %}
+    {{ site_header(show_context_filter=True) }}
     <main id="feed_canvas" class="feed-canvas" tabindex="0">
         <div id="feed_canvas_viewport" class="feed-canvas__viewport">
             <div id="feed_canvas_document" class="feed-canvas__document">

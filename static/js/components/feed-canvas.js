@@ -14,6 +14,94 @@ const BASE_TOPIC_FONT_SIZE = 13;
 const TOPIC_CARD_CHROME_HEIGHT = 30;
 const COMPACT_TOPIC_CARD_HEIGHT = 70;
 
+/**
+ * Keep the canvas below the global toolbar and update the shared CSS variable
+ * used by pages with a fixed `#global_tools` element.
+ *
+ * @returns {void}
+ */
+export function syncGlobalToolsOffset() {
+  const sharedTools = document.querySelector('#global_tools');
+  const pageHeader = document.querySelector('.canvas-page__header');
+  const tools = sharedTools || pageHeader;
+  if (!tools) {
+    document.documentElement.style.removeProperty('--global-tools-height');
+    return;
+  }
+
+  const isHidden = (element) => {
+    const computed =
+      typeof window.getComputedStyle === 'function'
+        ? window.getComputedStyle(element)
+        : { display: '', visibility: '' };
+    return (
+      element.style.display === 'none' ||
+      computed.display === 'none' ||
+      computed.visibility === 'hidden'
+    );
+  };
+  const measure = (element) => {
+    if (!element || isHidden(element)) return 0;
+    return Math.ceil(element.getBoundingClientRect().height);
+  };
+  const toolsHidden = isHidden(tools);
+  const toolsHeight = toolsHidden ? 0 : measure(tools);
+  const pageHeaderHeight = sharedTools && pageHeader ? measure(pageHeader) : 0;
+  const height = toolsHeight + pageHeaderHeight;
+  const content = document.querySelector('#feed_canvas');
+  if (!toolsHidden && toolsHeight > 0) {
+    document.documentElement.style.setProperty('--global-tools-height', `${height}px`);
+  }
+  if (content && (height > 0 || toolsHidden)) content.style.top = `${height}px`;
+}
+
+/**
+ * Add the app-wide toolbar behaviour to the standalone canvas page. The page
+ * has its own header, while deployments using the shared header expose it as
+ * `#global_tools`.
+ *
+ * @returns {void}
+ */
+export function setupGlobalTools() {
+  const tools =
+    document.querySelector('#global_tools') || document.querySelector('.canvas-page__header');
+  const bottomTools = document.querySelector('#global_tools_bottom');
+  if (!tools || tools.dataset.globalToolsBound === 'true') return;
+
+  tools.dataset.globalToolsBound = 'true';
+  tools.dataset.globalToolsDisplay = window.getComputedStyle(tools).display || 'block';
+  const apply = () => syncGlobalToolsOffset();
+  apply();
+  window.addEventListener('resize', apply);
+
+  if (typeof window.ResizeObserver !== 'undefined') {
+    const observer = new window.ResizeObserver(apply);
+    observer.observe(tools);
+  }
+
+  if (window.EVSYS && typeof window.EVSYS.bind === 'function') {
+    window.EVSYS.bind(window.EVSYS.CONTEXT_FILTER_UPDATED, apply);
+  }
+
+  window.setTimeout(apply, 0);
+  window.setTimeout(apply, 250);
+
+  let previousScroll = window.scrollY;
+  let timeout = 0;
+  window.addEventListener('scroll', () => {
+    window.clearTimeout(timeout);
+    if (previousScroll === window.scrollY) return;
+    timeout = window.setTimeout(() => {
+      const currentScroll = window.scrollY;
+      const shouldShow = previousScroll > currentScroll;
+      tools.style.display = shouldShow ? tools.dataset.globalToolsDisplay : 'none';
+      if (bottomTools) bottomTools.style.display = shouldShow ? 'block' : 'none';
+      apply();
+      previousScroll = currentScroll;
+    }, 150);
+  });
+}
+
 /** @returns {string} */
 function topicColor(path) {
   let hash = 0;
@@ -662,4 +750,7 @@ class FeedCanvas {
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => new FeedCanvas().init());
+document.addEventListener('DOMContentLoaded', () => {
+  setupGlobalTools();
+  new FeedCanvas().init();
+});
