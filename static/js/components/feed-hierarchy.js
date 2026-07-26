@@ -1,4 +1,4 @@
-/* global document, window */
+/* global HTMLButtonElement, URLSearchParams, console, document, fetch, setTimeout, window */
 
 /**
  * Feed Hierarchy page (/hierarchy)
@@ -750,10 +750,13 @@ class FeedHierarchy {
   createOriginalDialog() {
     const dialog = document.createElement('dialog');
     dialog.className = 'canvas-original-dialog';
-    dialog.innerHTML = `<button type="button" class="canvas-summary-dialog__close" aria-label="Close">×</button><p class="canvas-summary-dialog__kicker">Original</p><h2></h2><div class="canvas-original-dialog__sources"></div>`;
+    dialog.innerHTML = `<button type="button" class="canvas-summary-dialog__close" aria-label="Close">×</button><div class="canvas-original-dialog__toolbar"><p class="canvas-summary-dialog__kicker">Original</p><button type="button" class="canvas-original-dialog__read-toggle"></button></div><h2></h2><div class="canvas-original-dialog__sources"></div>`;
     dialog
       .querySelector('.canvas-summary-dialog__close')
       ?.addEventListener('click', () => dialog.close());
+    dialog
+      .querySelector('.canvas-original-dialog__read-toggle')
+      ?.addEventListener('click', () => this.toggleAllOriginalSentences());
     dialog.addEventListener('click', (event) => {
       if (event.target === dialog) dialog.close();
     });
@@ -794,6 +797,7 @@ class FeedHierarchy {
         sourcesEl.appendChild(this.buildOriginalSource(source, index));
       });
     }
+    this.updateOriginalReadAllButton();
     this.originalDialog.showModal();
     this.scrollToFirstTagHighlight();
   }
@@ -851,6 +855,8 @@ class FeedHierarchy {
         toggle.disabled = true;
         toggle.title = 'Read status unavailable';
       } else {
+        toggle.dataset.postId = source.post_id;
+        toggle.dataset.sentenceNumber = String(sentence.number);
         toggle.addEventListener('click', () =>
           this.toggleOriginalSentence(source.post_id, sentence.number, item, toggle)
         );
@@ -874,6 +880,7 @@ class FeedHierarchy {
   async toggleOriginalSentence(postId, sentenceNumber, sentenceEl, toggle) {
     const readed = toggle.dataset.read !== '1';
     toggle.disabled = true;
+    this.updateOriginalReadAllButton();
     try {
       const response = await fetch('/read/snippets', {
         method: 'POST',
@@ -892,11 +899,91 @@ class FeedHierarchy {
       toggle.dataset.read = readed ? '1' : '0';
       toggle.textContent = readed ? 'Mark Unread' : 'Mark Read';
       toggle.title = readed ? 'Mark sentence as unread' : 'Mark sentence as read';
+      this.updateOriginalReadAllButton();
     } catch (error) {
       console.error('Unable to update original sentence status.', error);
       window.alert(error instanceof Error ? error.message : 'Unable to update sentence status.');
     } finally {
       toggle.disabled = false;
+      this.updateOriginalReadAllButton();
+    }
+  }
+
+  /** Update the Original dialog's bulk action label and availability. */
+  updateOriginalReadAllButton() {
+    const button = this.originalDialog?.querySelector('.canvas-original-dialog__read-toggle');
+    if (!(button instanceof HTMLButtonElement)) return;
+    const sentenceButtons = [
+      ...(this.originalDialog?.querySelectorAll(
+        '.canvas-original-sentence__toggle[data-post-id][data-sentence-number]'
+      ) || []),
+    ];
+    const allRead =
+      sentenceButtons.length > 0 && sentenceButtons.every((item) => item.dataset.read === '1');
+    button.textContent = allRead ? 'Mark all as unread' : 'Mark all as read';
+    button.title = allRead
+      ? 'Mark every original sentence as unread'
+      : 'Mark every original sentence as read';
+    button.disabled = sentenceButtons.length === 0 || sentenceButtons.some((item) => item.disabled);
+  }
+
+  /** Mark every addressable sentence currently shown in Original. */
+  async toggleAllOriginalSentences() {
+    const button = this.originalDialog?.querySelector('.canvas-original-dialog__read-toggle');
+    if (!(button instanceof HTMLButtonElement) || button.disabled) return;
+    const sentenceButtons = [
+      ...(this.originalDialog?.querySelectorAll(
+        '.canvas-original-sentence__toggle[data-post-id][data-sentence-number]'
+      ) || []),
+    ];
+    if (sentenceButtons.length === 0) return;
+
+    const allRead = sentenceButtons.every((item) => item.dataset.read === '1');
+    const readed = !allRead;
+    const selections = new Map();
+    sentenceButtons.forEach((item) => {
+      const postId = item.dataset.postId;
+      const sentenceNumber = Number(item.dataset.sentenceNumber);
+      if (!postId || !Number.isInteger(sentenceNumber)) return;
+      const indices = selections.get(postId) || [];
+      indices.push(sentenceNumber);
+      selections.set(postId, indices);
+      item.disabled = true;
+    });
+    button.disabled = true;
+
+    try {
+      const response = await fetch('/read/snippets', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          selections: [...selections].map(([post_id, sentence_indices]) => ({
+            post_id,
+            sentence_indices,
+          })),
+          readed,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok || payload.data !== 'ok') {
+        throw new Error(payload.error || 'Unable to update sentence statuses.');
+      }
+      sentenceButtons.forEach((item) => {
+        const sentenceEl = item.closest('.canvas-original-sentence');
+        sentenceEl?.classList.toggle('is-read', readed);
+        item.dataset.read = readed ? '1' : '0';
+        item.textContent = readed ? 'Mark Unread' : 'Mark Read';
+        item.title = readed ? 'Mark sentence as unread' : 'Mark sentence as read';
+      });
+    } catch (error) {
+      console.error('Unable to update all original sentence statuses.', error);
+      window.alert(error instanceof Error ? error.message : 'Unable to update sentence statuses.');
+    } finally {
+      sentenceButtons.forEach((item) => {
+        item.disabled = false;
+      });
+      this.updateOriginalReadAllButton();
     }
   }
 

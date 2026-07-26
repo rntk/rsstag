@@ -409,6 +409,58 @@ describe('FeedHierarchy (DOM smoke test)', () => {
     expect(source.querySelectorAll('.canvas-original-sentence.is-read')).toHaveLength(1);
   });
 
+  it('marks all addressable Original sentences read and then unread', async () => {
+    window.hierarchyTopics = [
+      {
+        name: 'News',
+        sources: [
+          {
+            post_id: 'post-1',
+            title: 'First post',
+            sentences: [
+              { number: 1, text: 'Unread sentence.', read: false },
+              { number: 2, text: 'Read sentence.', read: true },
+            ],
+          },
+        ],
+      },
+    ];
+    const hierarchy = new FeedHierarchy();
+    hierarchy.init();
+    hierarchy.showOriginal(hierarchy.roots[0]);
+
+    const requests = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url, options) => {
+      requests.push({ url, options: JSON.parse(options.body) });
+      return { ok: true, json: async () => ({ data: 'ok' }) };
+    };
+
+    try {
+      const button = document.querySelector('.canvas-original-dialog__read-toggle');
+      expect(button.textContent).toBe('Mark all as read');
+      button.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(requests[0]).toEqual({
+        url: '/read/snippets',
+        options: {
+          selections: [{ post_id: 'post-1', sentence_indices: [1, 2] }],
+          readed: true,
+        },
+      });
+      expect(document.querySelectorAll('.canvas-original-sentence.is-read')).toHaveLength(2);
+      expect(button.textContent).toBe('Mark all as unread');
+
+      button.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(requests[1].options.readed).toBe(false);
+      expect(document.querySelectorAll('.canvas-original-sentence.is-read')).toHaveLength(0);
+      expect(button.textContent).toBe('Mark all as read');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   it('opens the Original dialog from a leaf sentence preview', () => {
     window.hierarchyTopics = [
       { name: 'News', sources: [{ title: 'Post', sentences: ['The original sentence.'] }] },
