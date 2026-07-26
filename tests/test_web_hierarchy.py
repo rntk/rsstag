@@ -163,6 +163,29 @@ class TestWebHierarchy(MongoWebTestCase):
         self.assertIn('"posts_count": 1', only_first_segment)
         self.assertIn('"sentences_count": 1', only_first_segment)
 
+    def test_hierarchy_hides_topics_with_only_read_sentences(self) -> None:
+        sid, feed_id = self._seed_hierarchy()
+        # "Technology > Only First" holds sentence 1 of post 1 only, so marking
+        # that sentence read must remove the topic while "Shared" survives
+        # through its remaining unread sentences.
+        self.app.post_grouping.update_snippets_read_status(
+            sid, "hierarchy-post-1", [1], True
+        )
+        client = self.get_authenticated_client(sid)
+
+        response = client.get(f"/hierarchy?feed={feed_id}")
+        body: str = response.data.decode("utf-8")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn("Technology \\u003e Only First", body)
+        self.assertIn("Technology \\u003e Shared", body)
+
+        shared_index: int = body.index("Technology \\u003e Shared")
+        shared_segment: str = body[shared_index : shared_index + 200]
+        self.assertIn('"posts_count": 2', shared_segment)
+        self.assertIn('"sentences_count": 2', shared_segment)
+        self.assertNotIn("First sentence.", body)
+
     def test_hierarchy_filters_by_tag_without_feed(self) -> None:
         sid, _ = self._seed_hierarchy()
         client = self.get_authenticated_client(sid)

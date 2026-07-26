@@ -21,6 +21,95 @@
  */
 
 /**
+ * Keep the hierarchy viewport below the global toolbar and update the shared
+ * CSS variable used by pages with a fixed `#global_tools` element.
+ *
+ * @returns {void}
+ */
+export function syncGlobalToolsOffset() {
+  const sharedTools = document.querySelector('#global_tools');
+  const pageHeader = document.querySelector('.feed-hierarchy-page__header');
+  const tools = sharedTools || pageHeader;
+  if (!tools) {
+    document.documentElement.style.removeProperty('--global-tools-height');
+    return;
+  }
+
+  const isHidden = (element) => {
+    const computed =
+      typeof window.getComputedStyle === 'function'
+        ? window.getComputedStyle(element)
+        : { display: '', visibility: '' };
+    return (
+      element.style.display === 'none' ||
+      computed.display === 'none' ||
+      computed.visibility === 'hidden'
+    );
+  };
+  const measure = (element) => {
+    if (!element || isHidden(element)) return 0;
+    return Math.ceil(element.getBoundingClientRect().height);
+  };
+  const toolsHidden = isHidden(tools);
+  const toolsHeight = toolsHidden ? 0 : measure(tools);
+  const pageHeaderHeight = sharedTools && pageHeader ? measure(pageHeader) : 0;
+  const height = toolsHeight + pageHeaderHeight;
+  const content = document.querySelector('#feed_hierarchy');
+  if (!toolsHidden && toolsHeight > 0) {
+    document.documentElement.style.setProperty('--global-tools-height', `${height}px`);
+  }
+  if (content && (height > 0 || toolsHidden)) content.style.top = `${height}px`;
+}
+
+/**
+ * Add the app-wide toolbar behaviour to the standalone hierarchy page. The
+ * page has its own header, while deployments using the shared header expose
+ * it as `#global_tools`.
+ *
+ * @returns {void}
+ */
+export function setupGlobalTools() {
+  const tools =
+    document.querySelector('#global_tools') ||
+    document.querySelector('.feed-hierarchy-page__header');
+  const bottomTools = document.querySelector('#global_tools_bottom');
+  if (!tools || tools.dataset.globalToolsBound === 'true') return;
+
+  tools.dataset.globalToolsBound = 'true';
+  tools.dataset.globalToolsDisplay = window.getComputedStyle(tools).display || 'block';
+  const apply = () => syncGlobalToolsOffset();
+  apply();
+  window.addEventListener('resize', apply);
+
+  if (typeof window.ResizeObserver !== 'undefined') {
+    const observer = new window.ResizeObserver(apply);
+    observer.observe(tools);
+  }
+
+  if (window.EVSYS && typeof window.EVSYS.bind === 'function') {
+    window.EVSYS.bind(window.EVSYS.CONTEXT_FILTER_UPDATED, apply);
+  }
+
+  window.setTimeout(apply, 0);
+  window.setTimeout(apply, 250);
+
+  let previousScroll = window.scrollY;
+  let timeout = 0;
+  window.addEventListener('scroll', () => {
+    window.clearTimeout(timeout);
+    if (previousScroll === window.scrollY) return;
+    timeout = window.setTimeout(() => {
+      const currentScroll = window.scrollY;
+      const shouldShow = previousScroll > currentScroll;
+      tools.style.display = shouldShow ? tools.dataset.globalToolsDisplay : 'none';
+      if (bottomTools) bottomTools.style.display = shouldShow ? 'block' : 'none';
+      apply();
+      previousScroll = currentScroll;
+    }, 150);
+  });
+}
+
+/**
  * Build a nested tree from a flat list of topics whose `name` encodes a
  * hierarchy path ("A > B > C"). Returns an array of root tree entries.
  *
@@ -528,6 +617,71 @@ export function collectOriginalSources(entry) {
 }
 
 /**
+ * Unread sentences of one source. Plain strings carry no read state and are
+ * therefore kept.
+ *
+ * @param {TopicSource} source
+ * @returns {(TopicSentence|string)[]}
+ */
+function unreadSourceSentences(source) {
+  const sentences = Array.isArray(source?.sentences) ? source.sentences : [];
+  return sentences.filter((sentence) => typeof sentence === 'string' || !sentence?.read);
+}
+
+/**
+ * Rebuild a topic from its unread sentences only, or return null when every
+ * sentence of the topic is read.
+ *
+ * Topics without per-sentence sources are returned untouched: an unknown read
+ * state must never hide material.
+ *
+ * @param {Topic} topic
+ * @returns {Topic|null}
+ */
+export function topicWithUnreadOnly(topic) {
+  const sources = Array.isArray(topic?.sources) ? topic.sources : [];
+  if (sources.length === 0) return topic;
+
+  const unreadSources = [];
+  let sentencesCount = 0;
+  sources.forEach((source) => {
+    const sentences = unreadSourceSentences(source);
+    if (sentences.length === 0) return;
+    unreadSources.push({ ...source, sentences });
+    sentencesCount += sentences.length;
+  });
+  if (unreadSources.length === 0) return null;
+
+  return {
+    ...topic,
+    posts_count: unreadSources.length,
+    sentences_count: sentencesCount,
+    sentences: unreadSources.flatMap((source) =>
+      source.sentences.map((sentence) =>
+        typeof sentence === 'string' ? sentence : String(sentence?.text || '')
+      )
+    ),
+    sources: unreadSources,
+  };
+}
+
+/**
+ * Drop topics whose sentences are all read, used when the "only unread" user
+ * setting is on. Counts are recalculated so leaf badges stay in sync.
+ *
+ * @param {Topic[]} topics
+ * @returns {Topic[]}
+ */
+export function filterUnreadTopics(topics) {
+  const filtered = [];
+  (Array.isArray(topics) ? topics : []).forEach((topic) => {
+    const unreadTopic = topicWithUnreadOnly(topic);
+    if (unreadTopic) filtered.push(unreadTopic);
+  });
+  return filtered;
+}
+
+/**
  * Render the topic tree into the given container.
  * @param {HTMLElement|null} container
  * @param {TreeEntry[]} roots
@@ -602,10 +756,13 @@ class FeedHierarchy {
   constructor() {
     /** @type {Topic[]} */
     this.topics = Array.isArray(window.hierarchyTopics) ? window.hierarchyTopics : [];
+    this.onlyUnread = Boolean(window.hierarchyOnlyUnread);
     this.levelsEl = document.getElementById('feed_hierarchy_levels');
     this.treeEl = document.getElementById('feed_hierarchy_tree');
-    this.roots = buildTopicTree(this.topics, 0);
-    this.maxLevel = getMaxTopicLevel(this.topics);
+    /** @type {Topic[]} Topics actually rendered: read-only topics are hidden. */
+    this.visibleTopics = this.onlyUnread ? filterUnreadTopics(this.topics) : this.topics;
+    this.roots = buildTopicTree(this.visibleTopics, 0);
+    this.maxLevel = getMaxTopicLevel(this.visibleTopics);
     // Deepest level selected by default so the tree starts fully unfolded.
     this.selectedLevel = this.maxLevel;
     this.collapsedPaths = new Set(
@@ -900,6 +1057,7 @@ class FeedHierarchy {
       toggle.textContent = readed ? 'Mark Unread' : 'Mark Read';
       toggle.title = readed ? 'Mark sentence as unread' : 'Mark sentence as read';
       this.updateOriginalReadAllButton();
+      this.applyReadState([{ post_id: postId, sentence_indices: [sentenceNumber] }], readed);
     } catch (error) {
       console.error('Unable to update original sentence status.', error);
       window.alert(error instanceof Error ? error.message : 'Unable to update sentence status.');
@@ -952,18 +1110,16 @@ class FeedHierarchy {
     });
     button.disabled = true;
 
+    const payloadSelections = [...selections].map(([post_id, sentence_indices]) => ({
+      post_id,
+      sentence_indices,
+    }));
     try {
       const response = await fetch('/read/snippets', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          selections: [...selections].map(([post_id, sentence_indices]) => ({
-            post_id,
-            sentence_indices,
-          })),
-          readed,
-        }),
+        body: JSON.stringify({ selections: payloadSelections, readed }),
       });
       const payload = await response.json();
       if (!response.ok || payload.data !== 'ok') {
@@ -976,6 +1132,7 @@ class FeedHierarchy {
         item.textContent = readed ? 'Mark Unread' : 'Mark Read';
         item.title = readed ? 'Mark sentence as unread' : 'Mark sentence as read';
       });
+      this.applyReadState(payloadSelections, readed);
     } catch (error) {
       console.error('Unable to update all original sentence statuses.', error);
       window.alert(error instanceof Error ? error.message : 'Unable to update sentence statuses.');
@@ -985,6 +1142,64 @@ class FeedHierarchy {
       });
       this.updateOriginalReadAllButton();
     }
+  }
+
+  /**
+   * Re-derive the rendered tree after read state changed. The current fold
+   * state is kept: `collapsedPaths` entries for paths that no longer exist are
+   * simply never matched again.
+   */
+  refreshVisibleTopics() {
+    this.visibleTopics = this.onlyUnread ? filterUnreadTopics(this.topics) : this.topics;
+    this.roots = buildTopicTree(this.visibleTopics, 0);
+    this.maxLevel = getMaxTopicLevel(this.visibleTopics);
+    if (this.selectedLevel > this.maxLevel) {
+      // The pruned tree is shallower than the selected level: fall back to the
+      // fold state of the deepest level that still exists.
+      this.selectedLevel = this.maxLevel;
+      this.collapsedPaths = new Set(
+        collectNonLeafPaths(this.roots, { minDepth: this.selectedLevel })
+      );
+    }
+    this.renderLevels();
+    this.renderTree();
+  }
+
+  /**
+   * Mirror a /read/snippets update onto the in-memory topics so topics without
+   * unread sentences disappear without a page reload.
+   *
+   * The Original dialog renders copies of the sentences, and one sentence can
+   * belong to several topics, so every (post_id, number) match is updated.
+   *
+   * @param {{post_id: string, sentence_indices: number[]}[]} selections
+   * @param {boolean} readed
+   */
+  applyReadState(selections, readed) {
+    const byPost = new Map();
+    (Array.isArray(selections) ? selections : []).forEach((selection) => {
+      const postId = String(selection?.post_id || '');
+      if (!postId) return;
+      const numbers = byPost.get(postId) || new Set();
+      (Array.isArray(selection?.sentence_indices) ? selection.sentence_indices : []).forEach(
+        (index) => numbers.add(Number(index))
+      );
+      byPost.set(postId, numbers);
+    });
+
+    this.topics.forEach((topic) => {
+      (Array.isArray(topic?.sources) ? topic.sources : []).forEach((source) => {
+        const numbers = byPost.get(String(source?.post_id || ''));
+        if (!numbers) return;
+        (Array.isArray(source.sentences) ? source.sentences : []).forEach((sentence) => {
+          if (sentence && typeof sentence === 'object' && numbers.has(Number(sentence.number))) {
+            sentence.read = readed;
+          }
+        });
+      });
+    });
+
+    if (this.onlyUnread) this.refreshVisibleTopics();
   }
 
   /** @param {number} level */
@@ -1009,6 +1224,7 @@ class FeedHierarchy {
 export { FeedHierarchy };
 
 document.addEventListener('DOMContentLoaded', () => {
+  setupGlobalTools();
   if (document.getElementById('feed_hierarchy_tree')) {
     new FeedHierarchy().init();
   }

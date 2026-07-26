@@ -103,6 +103,18 @@ def _topic_matches_tag_or_filter(
     return False
 
 
+def _all_posts_read(post_ids: Iterable[Any], read_pids: set[Any]) -> bool:
+    """Check if every post of a grouping doc is marked read.
+
+    Unknown pids (no post document) count as unread so a missing post never
+    hides a topic that still has unread material.
+    """
+    ids: list[Any] = list(post_ids)
+    if not ids:
+        return False
+    return all(pid in read_pids for pid in ids)
+
+
 def _build_topics_index(
     app: "RSSTagApplication",
     user: dict,
@@ -156,7 +168,7 @@ def _build_topics_index(
         for post_data in grouped_posts:
             all_post_ids.update(post_data.get("post_ids", []))
 
-    posts_projection: dict[str, int] = {"_id": 0, "pid": 1, "feed_id": 1}
+    posts_projection: dict[str, int] = {"_id": 0, "pid": 1, "feed_id": 1, "read": 1}
     if normalized_context_tags:
         posts_projection["content"] = 1
     posts_list: list[dict] = list(
@@ -165,6 +177,15 @@ def _build_topics_index(
         )
     )
     posts_data: dict[int, dict] = {post["pid"]: post for post in posts_list}
+
+    # Post level read state: sentence read flags can lag behind a post that was
+    # marked read as a whole (multi post groupings, grouping rebuilt after the
+    # post was read), so drop fully read posts here as well.
+    read_pids: set[Any] = (
+        {pid for pid, post in posts_data.items() if post.get("read", False)}
+        if only_unread
+        else set()
+    )
 
     feed_ids: set[int] = {post["feed_id"] for post in posts_data.values()}
     feeds_data: dict[int, str] = {
@@ -193,6 +214,8 @@ def _build_topics_index(
 
     for post_data in grouped_posts:
         post_ids: list[int] = post_data.get("post_ids", [])
+        if only_unread and _all_posts_read(post_ids, read_pids):
+            continue
         post_id_str: str = "_".join(str(pid) for pid in post_ids)
 
         first_post_id: Optional[int] = post_ids[0] if post_ids else None
@@ -1283,8 +1306,13 @@ def _build_hierarchy_topics(
     tag: str = "",
     match_topic: bool = False,
     match_sentences: bool = False,
+    only_unread: bool = False,
 ) -> list[dict[str, Any]]:
-    """Aggregate per-post topic groups into a single feed-wide topic hierarchy."""
+    """Aggregate per-post topic groups into a single feed-wide topic hierarchy.
+
+    With ``only_unread`` set, read sentences are dropped and a topic left
+    without any unread sentence disappears from the hierarchy.
+    """
     text_filter_active: bool = bool(tag) and (match_topic or match_sentences)
     posts_count: dict[str, int] = defaultdict(int)
     sentences_count: dict[str, int] = defaultdict(int)
@@ -1323,6 +1351,12 @@ def _build_hierarchy_topics(
                 for number in numbers
                 if isinstance(number, int) and number in sentences_by_number
             ]
+            if only_unread:
+                source_sentences = [
+                    sentence for sentence in source_sentences if not sentence["read"]
+                ]
+                if not source_sentences:
+                    continue
             if text_filter_active and not _topic_matches_tag_or_filter(
                 topic_name,
                 (sentence["text"] for sentence in source_sentences),
@@ -1332,9 +1366,7 @@ def _build_hierarchy_topics(
             ):
                 continue
             posts_count[topic_name] += 1
-            sentences_count[topic_name] += sum(
-                1 for number in numbers if isinstance(number, int)
-            )
+            sentences_count[topic_name] += len(source_sentences)
             topic_sentences[topic_name].extend(
                 sentence["text"] for sentence in source_sentences
             )
@@ -1471,7 +1503,13 @@ def on_hierarchy_get(
             posts_cursor = app.posts.get_all(user["sid"], only_unread, projection)
         db_posts: list[dict[str, Any]] = list(posts_cursor)
         hierarchy_topics: list[dict[str, Any]] = _build_hierarchy_topics(
-            app, user, db_posts, tag, match_topic, match_sentences
+            app,
+            user,
+            db_posts,
+            tag,
+            match_topic,
+            match_sentences,
+            only_unread=bool(only_unread),
         )
     except Exception as exc:
         logging.exception(

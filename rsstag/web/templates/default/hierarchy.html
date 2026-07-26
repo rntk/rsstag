@@ -5,29 +5,14 @@
     {% include "head-data.html" %}
 </head>
 <body class="feed-hierarchy-page">
-    <header class="feed-hierarchy-page__header">
-        <a class="feed-hierarchy-page__brand" href="/">RSSTag</a>
-        <div>
-            <p class="feed-hierarchy-page__eyebrow">Topic hierarchy</p>
-            <h1>{% if feed %}{{ feed.title }}{% elif category %}{{ category.title }}{% elif tag %}{{ tag }}{% else %}All posts{% endif %}</h1>
-        </div>
-        <nav class="feed-hierarchy-page__links">
-            {% if feed %}
-                <a href="/canvas?feed={{ feed.feed_id|url_encode }}">Canvas view</a>
-                <a href="{{ feed.local_url or ('/feed/' ~ feed.feed_id|url_encode) }}">Regular feed view</a>
-            {% elif category %}
-                <a href="/canvas?category={{ category.category_id|url_encode }}">Canvas view</a>
-                <a href="{{ category.local_url or ('/category/' ~ category.category_id|url_encode) }}">Regular category view</a>
-            {% elif tag %}
-                <a href="/tag/{{ tag|url_encode }}">Tag view</a>
-            {% endif %}
-        </nav>
-    </header>
+    {% from 'site-header.html' import site_header with context %}
+    {{ site_header(active='topics', show_context_filter=True) }}
     <main id="feed_hierarchy" class="feed-hierarchy" tabindex="0">
         <div id="feed_hierarchy_levels" class="feed-hierarchy__levels" aria-label="Topic depth"></div>
         <div id="feed_hierarchy_tree" class="feed-hierarchy__tree" aria-label="Topics hierarchy"></div>
     </main>
     <script>window.hierarchyTopics = {{ topics_json | safe }};</script>
+    <script>window.hierarchyOnlyUnread = {{ (user_settings.only_unread or false) | tojson }};</script>
     <script>window.TAG_WORDS = {{ tag_words | tojson }};</script>
     <script type="module" src="/static/js/components/feed-hierarchy.js"></script>
 </body>
