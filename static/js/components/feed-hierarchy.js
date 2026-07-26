@@ -1222,10 +1222,3 @@ class FeedHierarchy {
 }
 
 export { FeedHierarchy };
-
-document.addEventListener('DOMContentLoaded', () => {
-  setupGlobalTools();
-  if (document.getElementById('feed_hierarchy_tree')) {
-    new FeedHierarchy().init();
-  }
-});

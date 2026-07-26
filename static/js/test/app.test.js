@@ -118,6 +118,8 @@ test('resolvePageType handles expected routes and fallback', () => {
   const { resolvePageType } = loadAppFunctions();
   const cases = [
     ['/', 'root'],
+    ['/canvas', 'canvas'],
+    ['/hierarchy', 'hierarchy'],
     ['/post-compare/demo', 'post-compare'],
     ['/post-grouped/demo', 'post-grouped'],
     ['/s-tree/demo', 's-tree'],

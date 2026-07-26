@@ -62,6 +62,14 @@ import { initTopicsPage } from '../topics-list.js';
 import TopicsMindmap from '../components/topics-mindmap.js';
 import { initTopicHierarchyCanvasPage, renderTopicsHierarchy } from '../topics-hierarchy.js';
 import { initTagInfoEmptySections } from '../libs/tag-info-sections.js';
+import {
+  FeedCanvas,
+  setupGlobalTools as setupCanvasGlobalTools,
+} from '../components/feed-canvas.js';
+import {
+  FeedHierarchy,
+  setupGlobalTools as setupHierarchyGlobalTools,
+} from '../components/feed-hierarchy.js';
 
 function buildGroupedTopicsHierarchy(flatTopics, tagName) {
   const root = { name: 'root', children: [] };
@@ -381,6 +389,12 @@ function initPathRecommendationsPage() {
 export function resolvePageType(path) {
   if (path === '/') {
     return 'root';
+  }
+  if (path === '/canvas') {
+    return 'canvas';
+  }
+  if (path === '/hierarchy') {
+    return 'hierarchy';
   }
   if (/^\/post-compare\//.test(path)) {
     return 'post-compare';
@@ -722,6 +736,12 @@ export function initApp() {
     mindmap.render('#topics_mindmap_chart', window.mindmap_data);
   } else if (pageType === 'topic-hierarchy') {
     initTopicHierarchyCanvasPage();
+  } else if (pageType === 'canvas') {
+    setupCanvasGlobalTools();
+    new FeedCanvas().init();
+  } else if (pageType === 'hierarchy') {
+    setupHierarchyGlobalTools();
+    new FeedHierarchy().init();
   } else if (pageType === 'sentence-cluster') {
     initSnippetHoverCards();
     initSentenceClusterPage();

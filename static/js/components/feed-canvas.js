@@ -750,7 +750,4 @@ class FeedCanvas {
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  setupGlobalTools();
-  new FeedCanvas().init();
-});
+export { FeedCanvas };

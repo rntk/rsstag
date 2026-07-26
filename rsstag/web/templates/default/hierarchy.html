@@ -14,6 +14,5 @@
     <script>window.hierarchyTopics = {{ topics_json | safe }};</script>
     <script>window.hierarchyOnlyUnread = {{ (user_settings.only_unread or false) | tojson }};</script>
     <script>window.TAG_WORDS = {{ tag_words | tojson }};</script>
-    <script type="module" src="/static/js/components/feed-hierarchy.js"></script>
 </body>
 </html>

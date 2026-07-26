@@ -136,7 +136,7 @@ class TestWebHierarchy(MongoWebTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertIn("window.hierarchyTopics", body)
-        self.assertIn(b"feed-hierarchy.js", response.data)
+        self.assertIn(b"/static/js/bundle.js", response.data)
         self.assertIn("Technology \\u003e Shared", body)
         self.assertIn("Technology \\u003e Only First", body)
         self.assertNotIn("Excluded post", body)

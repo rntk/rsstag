@@ -117,7 +117,7 @@ class TestWebCanvas(MongoWebTestCase):
         self.assertIn(b"Aligned post", response.data)
         self.assertIn(b"First sentence.", response.data)
         self.assertIn(b"Technology \\u003e Canvas", response.data)
-        self.assertIn(b"feed-canvas.js", response.data)
+        self.assertIn(b"/static/js/bundle.js", response.data)
         self.assertIn(b'data-post-read-toggle', response.data)
         self.assertIn(b'data-canvas-read-all="true"', response.data)
         self.assertIn(b'"read": false', response.data)
@@ -207,7 +207,7 @@ class TestWebCanvas(MongoWebTestCase):
         self.assertIn(b"Technology \\u003e Canvas", response.data)
         self.assertIn(b"First sentence.", response.data)
         self.assertIn(b"Second sentence.", response.data)
-        self.assertIn(b"feed-hierarchy.js", response.data)
+        self.assertIn(b"/static/js/bundle.js", response.data)
 
 
 if __name__ == "__main__":

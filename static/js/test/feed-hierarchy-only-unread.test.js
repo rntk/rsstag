@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-// feed-hierarchy.js registers a DOMContentLoaded listener at import time, so a
-// minimal document/window pair has to exist before the module is loaded.
+// The component is imported directly, so provide the minimal document/window
+// pair required by its DOM helpers before loading the module.
 globalThis.document = {
   getElementById: () => null,
   addEventListener: () => {},
