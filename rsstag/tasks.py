@@ -410,8 +410,8 @@ class RssTagTasks:
                         # normalize each so it carries the state-machine fields.
                         for doc in data["data"]:
                             doc.setdefault("processing", TASK_NOT_IN_PROCESSING)
-                            doc.setdefault("status", TASK_STATUS_PENDING)
                             doc.setdefault("attempts", 0)
+                            self._normalize_mark_status(doc)
                         self._db.tasks.insert_many(data["data"])
                     else:
                         result = False
@@ -450,6 +450,35 @@ class RssTagTasks:
             self._log.warning("Can`t add task. Bad task data: %s", data)
 
         return result
+
+    @staticmethod
+    def _normalize_mark_status(doc: Dict[str, Any]) -> Dict[str, Any]:
+        """Keep a mark payload's read flag from shadowing the task status.
+
+        Mark payloads carry ``status`` as a boolean: the read state the
+        provider must apply. The state machine stores its own lifecycle
+        ``status`` string on the very same doc, and mark tasks are inserted
+        directly instead of going through ``enqueue``. A boolean left in place
+        matches none of the ``claimable_filter`` branches, so the task could
+        never be claimed and sat in the queue forever. Move the flag to
+        ``mark_status`` and hand ``status`` back to the state machine.
+        """
+        if isinstance(doc.get("status"), bool):
+            doc["mark_status"] = doc["status"]
+        doc["status"] = TASK_STATUS_PENDING
+        return doc
+
+    @staticmethod
+    def _mark_task_data(user_task: Dict[str, Any]) -> Dict[str, Any]:
+        """Provider payload for a mark task, with the read flag under ``status``.
+
+        Providers read ``data["status"]`` (see bazqux/gmail ``mark``), so the
+        boolean has to be put back where they expect it. It must never stay the
+        lifecycle string, which is truthy and would mark unread posts as read.
+        """
+        data = dict(user_task)
+        data["status"] = bool(data.get("mark_status", True))
+        return data
 
     def add_next_tasks(self, user: str, task_type: int) -> Optional[bool]:
         result = False
@@ -524,7 +553,9 @@ class RssTagTasks:
                 task["type"] = TASK_NOOP
                 return task
             data = user_task
-            if user_task["type"] == TASK_TAGS:
+            if user_task["type"] in (TASK_MARK, TASK_MARK_TELEGRAM):
+                data = self._mark_task_data(user_task)
+            elif user_task["type"] == TASK_TAGS:
                 data = []
                 ps = self._db.posts.find(
                     {

@@ -62,6 +62,26 @@ class TestRssTagPostGrouping(unittest.TestCase):
         doc = self.post_grouping.get_grouped_posts(self.owner, [post_id])
         self.assertFalse(doc["sentences"][0]["read"])
 
+    def test_update_snippets_read_status_without_matching_numbers(self):
+        """Unmatched numbers change nothing, so the caller must skip the post."""
+        post_id = 101
+        sentences = [{"number": 0, "text": "s0", "read": True}]
+        self.post_grouping.save_grouped_posts(self.owner, [post_id], sentences, {"t1": [0]})
+
+        all_read = self.post_grouping.update_snippets_read_status(
+            self.owner, post_id, [42], False
+        )
+        self.assertIsNone(all_read)
+
+        doc = self.post_grouping.get_grouped_posts(self.owner, [post_id])
+        self.assertTrue(doc["sentences"][0]["read"])
+
+    def test_update_snippets_read_status_without_grouping(self):
+        all_read = self.post_grouping.update_snippets_read_status(
+            self.owner, 999, [0], True
+        )
+        self.assertIsNone(all_read)
+
     def test_post_ids_hash_is_stable_for_int_and_string_ids(self):
         post_id = 321
         sentences = [{"number": 0, "text": "s0"}]

@@ -26,6 +26,7 @@ from rsstag.tasks import (  # noqa: E402
     RssTagTasks,
     TASK_DOWNLOAD,
     TASK_LETTERS,
+    TASK_MARK,
     TASK_NOOP,
     TASK_TAGS,
 )
@@ -239,6 +240,55 @@ class TasksStateIntegrationTestCase(unittest.TestCase):
         self.assertEqual(task["type"], TASK_TAGS)
         self.assertEqual(len(task["data"]), 1)
         self.assertEqual(task["data"][0]["_id"], stale_id)
+
+    def _add_mark_task(self, readed: bool = True) -> None:
+        """Enqueue a mark task exactly as read_state.py builds its payload."""
+        self.tasks.add_task(
+            {
+                "type": TASK_MARK,
+                "user": "u1",
+                "data": [
+                    {
+                        "user": "u1",
+                        "id": "provider-id-1",
+                        "status": readed,
+                        "processing": LEGACY_PROCESSING_IDLE,
+                        "type": TASK_MARK,
+                        "provider": "bazqux",
+                    }
+                ],
+            }
+        )
+
+    def test_mark_task_is_claimable(self) -> None:
+        """The read flag must not shadow the lifecycle status and block claims."""
+        self._insert_user("u1")
+        self._add_mark_task()
+
+        claimed = self.tasks._state.claim()
+
+        self.assertIsNotNone(claimed)
+        self.assertEqual(claimed["status"], TASK_STATUS_RUNNING)
+
+    def test_mark_task_carries_read_flag_to_provider(self) -> None:
+        self._insert_user("u1")
+        self._add_mark_task(readed=False)
+
+        claimed = self.tasks._state.claim()
+
+        self.assertIs(self.tasks._mark_task_data(claimed)["status"], False)
+
+    def test_completed_mark_task_leaves_the_queue(self) -> None:
+        """The stuck-task complaint: a handled mark task must be deleted."""
+        self._insert_user("u1")
+        self._add_mark_task()
+        claimed = self.tasks._state.claim()
+
+        self.tasks.finish_task(
+            {"_id": claimed["_id"], "type": TASK_MARK, "user": {"sid": "u1"}}
+        )
+
+        self.assertEqual(self.db.tasks.count_documents({"type": TASK_MARK}), 0)
 
     def test_mark_task_failed_sets_dead_and_unclaimable(self) -> None:
         self._insert_user("u1")

@@ -36,7 +36,14 @@ class ReadStateService:
         selections: Iterable[Mapping[str, Any]],
         readed: bool,
     ) -> dict[str, Any]:
-        """Mark grouped sentences read/unread and roll post state up when needed."""
+        """Mark grouped sentences read/unread and roll post state up when needed.
+
+        A post is only handed to its provider once it has no unread sentence
+        left: marking a subset read updates the grouping doc alone, so no
+        TASK_MARK is queued and the provider API is never called for a
+        partially read post. `provider` is the session default, used only when
+        a post does not carry its own provider.
+        """
 
         by_post: dict[str, list[int]] = defaultdict(list)
         for selection in selections:
@@ -63,7 +70,14 @@ class ReadStateService:
             post = self._posts.get_by_pid(
                 owner,
                 post_id,
-                {"pid": True, "read": True, "id": True, "tags": True, "bi_grams": True},
+                {
+                    "pid": True,
+                    "read": True,
+                    "id": True,
+                    "tags": True,
+                    "bi_grams": True,
+                    "provider": True,
+                },
             )
             if not post:
                 skipped_posts.append(post_id)
@@ -85,7 +99,9 @@ class ReadStateService:
                     "status": readed,
                     "processing": TASK_NOT_IN_PROCESSING,
                     "type": TASK_MARK,
-                    "provider": provider,
+                    # A user can hold posts from several providers, so the
+                    # post's own provider wins over the session default.
+                    "provider": post.get("provider") or provider,
                 }
             ]
             if not self._tasks.add_task(

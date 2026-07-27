@@ -111,7 +111,9 @@ class RssTagPostGrouping:
         """Update read status for multiple sentences in a post's grouping
 
         Returns True if ALL sentences in the post are now read, False otherwise.
-        Returns None if post grouping not found.
+        Returns None when nothing was updated: the grouping doc is missing, or
+        none of `sentence_indices` matched a sentence of this post. Callers use
+        None to skip the post entirely instead of rolling its read state up.
         """
         post_ids = [post_id]
         post_ids_hash = self._generate_post_ids_hash(post_ids)
@@ -131,13 +133,14 @@ class RssTagPostGrouping:
             if not s.get("read", False):
                 all_read = False
 
-        if found_any:
-            self._db.post_grouping.update_one(
-                {"owner": owner, "post_ids_hash": post_ids_hash},
-                {"$set": {"sentences": sentences}},
-            )
-            return all_read
-        return False
+        if not found_any:
+            return None
+
+        self._db.post_grouping.update_one(
+            {"owner": owner, "post_ids_hash": post_ids_hash},
+            {"$set": {"sentences": sentences}},
+        )
+        return all_read
 
     def mark_sequences_read(self, owner: str, post_id: PostId, read_status: bool) -> bool:
         """Mark ALL sentences in a post's grouping as read/unread"""

@@ -7,9 +7,15 @@ from unittest.mock import MagicMock, patch
 sys.modules.setdefault("rsstag.post_grouping", types.SimpleNamespace(RssTagPostGrouping=object))
 sys.modules.setdefault("rsstag.tags", types.SimpleNamespace(RssTagTags=object))
 
+from typing import Any, Dict, List
+
+from rsstag.task_state import TASK_STATUS_PENDING
 from rsstag.tasks import (
     RssTagTasks,
     TASK_ANTHOLOGY,
+    TASK_MARK,
+    TASK_MARK_TELEGRAM,
+    TASK_NOT_IN_PROCESSING,
     TASK_POST_GROUPING,
     TASK_W2V,
     SCOPE_MODE_ALL,
@@ -140,6 +146,98 @@ class TestRssTagTasksScope(unittest.TestCase):
 
         self.assertTrue(ok)
         self.assertEqual("", error)
+
+
+def _is_claimable(doc: Dict[str, Any], now: float = 1000.0) -> bool:
+    """Plain-Python mirror of TaskStateMachine.claimable_filter.
+
+    The real filter is a Mongo query and there is no Mongo (or mongomock) in
+    this environment, so the three branches are re-expressed here to pin the
+    doc shapes that can and cannot be claimed. Kept deliberately literal so a
+    change to the filter shows up as a diff against this function.
+    """
+    if doc.get("status") == "pending" and not doc.get("backoff_until", 0) > now:
+        return True
+    if doc.get("status") == "running" and doc.get("lease_until", now) < now:
+        return True
+    return "status" not in doc and doc.get("processing") == TASK_NOT_IN_PROCESSING
+
+
+class TestRssTagTasksMarkStatus(unittest.TestCase):
+    """A mark payload's boolean read flag must not shadow the task status."""
+
+    def setUp(self) -> None:
+        self.db = MagicMock()
+        self.storage = RssTagTasks(self.db)
+
+    def _add_mark_task(self, task_type: int, payload: Dict[str, Any]) -> Dict[str, Any]:
+        self.storage.add_task({"type": task_type, "user": "user-1", "data": [payload]})
+        inserted: List[Dict[str, Any]] = self.db.tasks.insert_many.call_args.args[0]
+        self.assertEqual(len(inserted), 1)
+        return inserted[0]
+
+    def _mark_payload(self, readed: bool) -> Dict[str, Any]:
+        """The payload shape built by read_state.py / on_read_posts_post."""
+        return {
+            "user": "user-1",
+            "id": "provider-id-1",
+            "status": readed,
+            "processing": TASK_NOT_IN_PROCESSING,
+            "type": TASK_MARK,
+            "provider": "bazqux",
+        }
+
+    def test_legacy_boolean_status_doc_is_unclaimable(self) -> None:
+        """Regression: the exact shape that left mark tasks stuck in the queue."""
+        self.assertFalse(_is_claimable(self._mark_payload(True)))
+
+    def test_enqueued_mark_task_is_claimable(self) -> None:
+        doc = self._add_mark_task(TASK_MARK, self._mark_payload(True))
+
+        self.assertEqual(doc["status"], TASK_STATUS_PENDING)
+        self.assertTrue(_is_claimable(doc))
+
+    def test_enqueued_mark_task_keeps_read_flag(self) -> None:
+        doc = self._add_mark_task(TASK_MARK, self._mark_payload(True))
+        self.assertIs(doc["mark_status"], True)
+
+    def test_enqueued_unread_mark_task_keeps_read_flag(self) -> None:
+        doc = self._add_mark_task(TASK_MARK, self._mark_payload(False))
+
+        self.assertIs(doc["mark_status"], False)
+        self.assertEqual(doc["status"], TASK_STATUS_PENDING)
+        self.assertTrue(_is_claimable(doc))
+
+    def test_telegram_mark_task_has_no_read_flag(self) -> None:
+        """The telegram payload never carried a boolean, so it stayed claimable."""
+        doc = self._add_mark_task(
+            TASK_MARK_TELEGRAM,
+            {
+                "user": "user-1",
+                "id": "",
+                "processing": TASK_NOT_IN_PROCESSING,
+                "type": TASK_MARK_TELEGRAM,
+                "provider": "telegram",
+            },
+        )
+
+        self.assertEqual(doc["status"], TASK_STATUS_PENDING)
+        self.assertNotIn("mark_status", doc)
+        self.assertTrue(_is_claimable(doc))
+
+    def test_provider_payload_exposes_read_flag_as_status(self) -> None:
+        """Providers read data["status"]; it must stay the boolean, not "pending"."""
+        doc = self._add_mark_task(TASK_MARK, self._mark_payload(False))
+
+        data = self.storage._mark_task_data(doc)
+
+        self.assertIs(data["status"], False)
+
+    def test_provider_payload_never_passes_lifecycle_string(self) -> None:
+        data = self.storage._mark_task_data(
+            {"type": TASK_MARK, "status": TASK_STATUS_PENDING}
+        )
+        self.assertIsInstance(data["status"], bool)
 
 
 if __name__ == "__main__":
