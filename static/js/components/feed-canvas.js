@@ -312,6 +312,7 @@ class FeedCanvas {
     this.updatePageMeta();
     this.renderLevelButtons();
     this.buildSentenceIndex();
+    this.bindOriginalLinks();
     this.bindEvents();
     this.bindCardEvents();
     this.applyTransform();
@@ -335,6 +336,34 @@ class FeedCanvas {
         byNumber.set(Number(sentence.getAttribute('data-sentence-number')), sentence);
       });
       this.sentenceIndex.set(postElement.getAttribute('data-post-id') || '', byNumber);
+    });
+  }
+
+  /**
+   * Add an explicit link to the source page for every post block.
+   *
+   * The regular feed uses the post URL as the title link. Keeping a separate
+   * action on the canvas makes the source page discoverable even when the
+   * title is long or the post has no title link in the server-rendered markup.
+   *
+   * @returns {void}
+   */
+  bindOriginalLinks() {
+    this.document?.querySelectorAll('.canvas-post[data-post-id]').forEach((postElement) => {
+      const postId = postElement.getAttribute('data-post-id') || '';
+      const post = this.findPost(postId);
+      const url = typeof post?.url === 'string' ? post.url.trim() : '';
+      const headerContent = postElement.querySelector('.canvas-post__header > div');
+      if (!url || !headerContent || headerContent.querySelector('[data-original-link]')) return;
+
+      const link = document.createElement('a');
+      link.className = 'canvas-post__original-link';
+      link.dataset.originalLink = 'true';
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.textContent = 'Original page';
+      headerContent.appendChild(link);
     });
   }
 
