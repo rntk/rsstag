@@ -2,7 +2,7 @@
 
 import logging
 import time
-from typing import Optional, List, Dict, Any, Union, Iterator
+from typing import Optional, List, Dict, Any, Union, Iterator, Set
 from pymongo import MongoClient
 import hashlib
 
@@ -42,6 +42,51 @@ class RssTagPostGrouping:
     def get_all_by_owner(self, owner: str, projection: Optional[dict] = None) -> Iterator[dict]:
         """Get all grouped posts data by owner"""
         return self._db.post_grouping.find({"owner": owner}, projection=projection)
+
+    def get_existing_post_ids(
+        self, owner: str, post_ids: List[PostId]
+    ) -> Set[str]:
+        """Return requested post ids that already have persisted grouping data."""
+        normalized_post_ids: Set[str] = {
+            str(post_id) for post_id in post_ids if post_id is not None
+        }
+        if not normalized_post_ids:
+            return set()
+
+        query_values: List[PostId] = []
+        for post_id in post_ids:
+            if post_id is None:
+                continue
+            for value in (post_id, str(post_id)):
+                if value not in query_values:
+                    query_values.append(value)
+
+        post_ids_hashes: List[str] = [
+            self._generate_post_ids_hash([post_id])
+            for post_id in normalized_post_ids
+        ]
+        cursor: Iterator[dict] = self._db.post_grouping.find(
+            {
+                "owner": owner,
+                "$or": [
+                    {"post_ids_hash": {"$in": post_ids_hashes}},
+                    {"post_ids": {"$in": query_values}},
+                ],
+            },
+            projection={"post_ids": True, "_id": False},
+        )
+
+        existing_post_ids: Set[str] = set()
+        for document in cursor:
+            grouped_post_ids: Any = document.get("post_ids", [])
+            if not isinstance(grouped_post_ids, list):
+                continue
+            existing_post_ids.update(
+                str(post_id)
+                for post_id in grouped_post_ids
+                if post_id is not None and str(post_id) in normalized_post_ids
+            )
+        return existing_post_ids
 
     def save_grouped_posts(
         self,

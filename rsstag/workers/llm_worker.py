@@ -187,6 +187,52 @@ class _PostGroupingWorker:
     def handle_post_grouping_cleanup(self, task: Dict[str, Any]) -> bool:
         return self.make_post_grouping_cleanup(task)
 
+    def _exclude_posts_with_existing_groupings(
+        self, owner: str, posts: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Skip posts whose topics were persisted before this worker received them."""
+        from rsstag.post_grouping import RssTagPostGrouping
+
+        post_ids: List[Any] = [
+            post.get("pid") for post in posts if post.get("pid") is not None
+        ]
+        existing_post_ids: Set[str] = RssTagPostGrouping(
+            self._db
+        ).get_existing_post_ids(owner, post_ids)
+        if not existing_post_ids:
+            return posts
+
+        processed_posts: List[Dict[str, Any]] = [
+            post
+            for post in posts
+            if str(post.get("pid")) in existing_post_ids
+        ]
+        updates: List[UpdateOne] = [
+            UpdateOne(
+                {"_id": post["_id"]},
+                {
+                    "$set": {
+                        "grouping": 1,
+                        "processing": POST_NOT_IN_PROCESSING,
+                    }
+                },
+            )
+            for post in processed_posts
+        ]
+        if updates:
+            self._db.posts.bulk_write(updates, ordered=False)
+            logging.info(
+                "Skipped %d post(s) with existing topics for owner %s",
+                len(processed_posts),
+                owner,
+            )
+
+        return [
+            post
+            for post in posts
+            if str(post.get("pid")) not in existing_post_ids
+        ]
+
     def make_post_grouping(self, task: Dict[str, Any]) -> bool:
         try:
             from rsstag.post_grouping import RssTagPostGrouping
@@ -196,6 +242,8 @@ class _PostGroupingWorker:
             posts: List[Dict[str, Any]] = task["data"]
             had_errors: bool = False
 
+            posts = self._exclude_posts_with_existing_groupings(owner, posts)
+            task["data"] = posts
             if not posts:
                 return True
 
@@ -405,6 +453,9 @@ class _PostGroupingWorker:
 
             post_splitter = PostSplitter()
             posts: List[Dict[str, Any]] = task.get("data") or []
+            owner: str = task["user"]["sid"]
+            posts = self._exclude_posts_with_existing_groupings(owner, posts)
+            task["data"] = posts
             if not posts:
                 task["data"] = []
                 return True

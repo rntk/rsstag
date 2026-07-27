@@ -96,6 +96,10 @@ def get_task_scope_capability(task_type: int) -> str:
 
 
 def get_task_scope_hint(task_type: int) -> str:
+    if task_type in (TASK_POST_GROUPING, TASK_POST_GROUPING_BATCH):
+        return "incremental; supports scope"
+    if task_type == TASK_POST_GROUPING_CLEANUP:
+        return "reprocesses selected scope"
     capability = get_task_scope_capability(task_type)
     if capability == SCOPE_CAPABILITY_SCOPED_SUPPORTED:
         return "supports scoped reprocess"
@@ -300,6 +304,46 @@ class RssTagTasks:
         scope_query = self._build_post_scope_predicate(owner, task_doc)
         return self._db.posts.count_documents({**scope_query, "grouping": {"$exists": False}})
 
+    def _exclude_posts_with_existing_groupings(
+        self, owner: str, posts: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Backfill grouping markers and return only posts without persisted topics."""
+        post_ids: List[Any] = [
+            post.get("pid") for post in posts if post.get("pid") is not None
+        ]
+        existing_post_ids: Set[str] = RssTagPostGrouping(
+            self._db
+        ).get_existing_post_ids(owner, post_ids)
+        if not existing_post_ids:
+            return posts
+
+        processed_ids: List[Any] = [
+            post["_id"]
+            for post in posts
+            if str(post.get("pid")) in existing_post_ids
+        ]
+        if processed_ids:
+            self._db.posts.update_many(
+                {"_id": {"$in": processed_ids}},
+                {
+                    "$set": {
+                        "grouping": 1,
+                        "processing": POST_NOT_IN_PROCESSING,
+                    }
+                },
+            )
+            self._log.info(
+                "Skipped %d already-grouped post(s) for owner %s",
+                len(processed_ids),
+                owner,
+            )
+
+        return [
+            post
+            for post in posts
+            if str(post.get("pid")) not in existing_post_ids
+        ]
+
     def _count_pending_anthologies(self, owner: str) -> int:
         return self._db.anthologies.count_documents({"owner": owner, "status": "pending"})
 
@@ -327,9 +371,26 @@ class RssTagTasks:
             query.update(extra_query)
 
         update = {"$set": claim_set} if claim_set else None
-        if update:
-            return self._db.posts.find_one_and_update(query, update)
-        return self._db.posts.find_one(query)
+        while True:
+            candidate: Optional[dict] = self._db.posts.find_one(query)
+            if not candidate:
+                return None
+
+            pending_posts: List[Dict[str, Any]] = (
+                self._exclude_posts_with_existing_groupings(owner, [candidate])
+            )
+            if not pending_posts:
+                continue
+
+            if not update:
+                return candidate
+
+            claim_query: Dict[str, Any] = {**query, "_id": candidate["_id"]}
+            claimed_post: Optional[dict] = self._db.posts.find_one_and_update(
+                claim_query, update
+            )
+            if claimed_post:
+                return claimed_post
 
     def add_task(self, data: dict, manual: bool = True):
         result = True
@@ -616,26 +677,20 @@ class RssTagTasks:
                         self._state.complete(user_task["_id"])
             elif user_task["type"] == TASK_POST_GROUPING:
                 data = []
-                scope_query = self._build_post_scope_predicate(task["user"]["sid"], user_task)
-                # Get posts that need grouping
-                ps = self._db.posts.find(
-                    {
-                        **scope_query,
-                        "grouping": {"$exists": False},
-                        "processing": claimable_item_processing(),
-                    }
-                ).limit(1)
-                ids = []
-                for p in ps:
-                    data.append(p)
-                    ids.append(p["_id"])
+                owner: str = task["user"]["sid"]
+                scope_query = self._build_post_scope_predicate(owner, user_task)
+                post: Optional[dict] = self._find_pending_grouping_post(
+                    owner,
+                    user_task,
+                    extra_query={"processing": claimable_item_processing()},
+                    claim_set={"processing": time.time()},
+                )
+                ids: List[Any] = []
+                if post:
+                    data.append(post)
+                    ids.append(post["_id"])
                 unlock_task = True
-                if ids:
-                    self._db.posts.update_many(
-                        {"_id": {"$in": ids}},
-                        {"$set": {"processing": time.time()}},
-                    )
-                else:
+                if not ids:
                     task["type"] = TASK_NOOP
                     psc = self._db.posts.count_documents(
                         {**scope_query, "grouping": {"$exists": False}}
@@ -672,7 +727,10 @@ class RssTagTasks:
                     ).limit(10000)
                     for p in ps:
                         data.append(p)
-                        ids.append(p["_id"])
+                    data = self._exclude_posts_with_existing_groupings(
+                        task["user"]["sid"], data
+                    )
+                    ids = [post["_id"] for post in data]
                     if ids:
                         self._db.posts.update_many(
                             {"_id": {"$in": ids}},
@@ -1262,9 +1320,9 @@ class RssTagTasks:
             TASK_BIGRAMS_RANK: "Bi-grams ranking",
             TASK_TAGS_RANK: "Tags ranking",
             TASK_CLEAN_BIGRAMS: "Clean bi-grams",
-            TASK_POST_GROUPING: "Post grouping (supports scoped reprocess)",
+            TASK_POST_GROUPING: "Post grouping (incremental, supports scope)",
             TASK_TAG_CLASSIFICATION: "Tags classification",
-            TASK_POST_GROUPING_BATCH: "Post grouping (batch, supports scoped reprocess)",
+            TASK_POST_GROUPING_BATCH: "Post grouping (batch, incremental, supports scope)",
             TASK_TAG_CLASSIFICATION_BATCH: "Tags classification (batch)",
             TASK_DELETE_FEEDS: "Delete feeds",
             TASK_POST_GROUPING_CLEANUP: "Post grouping cleanup (supports scoped reprocess)",

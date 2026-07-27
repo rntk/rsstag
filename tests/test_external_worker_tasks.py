@@ -105,6 +105,58 @@ class TestExternalWorkerTasks(unittest.TestCase):
         )
         self.assertEqual(locked_count, 1)
 
+    def test_claim_post_grouping_skips_post_with_persisted_topics(self) -> None:
+        self.db.tasks.insert_one(
+            {
+                "user": self.owner,
+                "type": TASK_POST_GROUPING,
+                "processing": 0,
+                "manual": True,
+            }
+        )
+        existing_post_id = self.db.posts.insert_one(
+            {
+                "owner": self.owner,
+                "pid": 1,
+                "processing": POST_NOT_IN_PROCESSING,
+                "content": {
+                    "title": "Existing",
+                    "content": self._compress_text("Existing post"),
+                },
+            }
+        ).inserted_id
+        pending_post_id = self.db.posts.insert_one(
+            {
+                "owner": self.owner,
+                "pid": 2,
+                "processing": POST_NOT_IN_PROCESSING,
+                "content": {
+                    "title": "Pending",
+                    "content": self._compress_text("Pending post"),
+                },
+            }
+        ).inserted_id
+        self.db.post_grouping.insert_one(
+            {
+                "owner": self.owner,
+                "post_ids": ["1"],
+                "groups": {"Existing topic": [1]},
+            }
+        )
+
+        task: Dict[str, Any] = self.tasks.claim_external_task(self.owner) or {}
+
+        self.assertEqual(task.get("task_type"), TASK_POST_GROUPING)
+        self.assertEqual(task["item"]["post_id"], str(pending_post_id))
+        existing_post: Dict[str, Any] | None = self.db.posts.find_one(
+            {"_id": existing_post_id}
+        )
+        self.assertIsNotNone(existing_post)
+        self.assertEqual(existing_post.get("grouping"), 1)
+        self.assertEqual(
+            existing_post.get("processing"), POST_NOT_IN_PROCESSING
+        )
+
     def test_submit_post_grouping_success_updates_and_completes_task(self) -> None:
         self.db.tasks.insert_one(
             {

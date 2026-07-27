@@ -17,6 +17,7 @@ from rsstag.tasks import (
 )
 from rsstag.users import RssTagUsers
 from rsstag.workers.registry import WorkerRegistry
+from rsstag.workers.llm_worker import _PostGroupingWorker
 from rsstag.workers.tag_worker import TagWorker
 from rsstag.topic_merge import TOPIC_MERGE_VERSION
 from tests.db_utils import DBHelper
@@ -63,6 +64,104 @@ class MongoTaskDispatchTestCase(unittest.TestCase):
 
 
 class TestWorkerTaskDispatch(MongoTaskDispatchTestCase):
+    def test_post_grouping_task_skips_posts_with_persisted_topics(self) -> None:
+        user: Dict[str, Any] = self._create_user("incremental_grouping_user")
+        owner: str = user["sid"]
+        existing_post_id = self.db.posts.insert_one(
+            {
+                "owner": owner,
+                "pid": "already-grouped",
+                "processing": POST_NOT_IN_PROCESSING,
+            }
+        ).inserted_id
+        pending_post_id = self.db.posts.insert_one(
+            {
+                "owner": owner,
+                "pid": "needs-topics",
+                "processing": POST_NOT_IN_PROCESSING,
+            }
+        ).inserted_id
+        self.db.post_grouping.insert_one(
+            {
+                "owner": owner,
+                "post_ids": ["already-grouped"],
+                "groups": {"Existing topic": [1]},
+            }
+        )
+        self.db.tasks.insert_one(
+            {
+                "user": owner,
+                "type": TASK_POST_GROUPING,
+                "processing": 0,
+                "manual": True,
+            }
+        )
+
+        task: Dict[str, Any] = self.tasks.get_task(self.users)
+
+        self.assertEqual(task["type"], TASK_POST_GROUPING)
+        self.assertEqual([post["_id"] for post in task["data"]], [pending_post_id])
+        existing_post: Dict[str, Any] | None = self.db.posts.find_one(
+            {"_id": existing_post_id}
+        )
+        self.assertIsNotNone(existing_post)
+        self.assertEqual(existing_post.get("grouping"), 1)
+        self.assertEqual(
+            existing_post.get("processing"), POST_NOT_IN_PROCESSING
+        )
+
+    def test_post_grouping_worker_does_not_regenerate_existing_topics(self) -> None:
+        owner: str = "worker-incremental-owner"
+        post_id = self.db.posts.insert_one(
+            {
+                "owner": owner,
+                "pid": 42,
+                "processing": 123.0,
+            }
+        ).inserted_id
+        grouping_id = self.db.post_grouping.insert_one(
+            {
+                "owner": owner,
+                "post_ids": ["42"],
+                "groups": {"Existing topic": [1]},
+                "sentences": [{"number": 1, "text": "Existing sentence"}],
+            }
+        ).inserted_id
+        llm: MagicMock = MagicMock()
+        worker: _PostGroupingWorker = _PostGroupingWorker(
+            self.db,
+            {},
+            llm,
+            MagicMock(),
+            MagicMock(),
+        )
+        task: Dict[str, Any] = {
+            "user": {"sid": owner, "settings": {}},
+            "data": [
+                {
+                    "_id": post_id,
+                    "pid": 42,
+                    "processing": 123.0,
+                }
+            ],
+        }
+
+        result: bool = worker.make_post_grouping(task)
+
+        self.assertTrue(result)
+        llm.get_handler.assert_not_called()
+        self.assertEqual(task["data"], [])
+        stored_post: Dict[str, Any] | None = self.db.posts.find_one({"_id": post_id})
+        self.assertIsNotNone(stored_post)
+        self.assertEqual(stored_post.get("grouping"), 1)
+        self.assertEqual(stored_post.get("processing"), POST_NOT_IN_PROCESSING)
+        self.assertEqual(self.db.post_grouping.count_documents({}), 1)
+        stored_grouping: Dict[str, Any] | None = self.db.post_grouping.find_one(
+            {"_id": grouping_id}
+        )
+        self.assertIsNotNone(stored_grouping)
+        self.assertEqual(stored_grouping.get("groups"), {"Existing topic": [1]})
+
     def test_tag_topics_worker_sets_topic_backed_flag(self) -> None:
         user: Dict[str, Any] = self._create_user("topic_flag_user")
         owner: str = user["sid"]
