@@ -1,5 +1,7 @@
 /* global HTMLButtonElement, URLSearchParams, console, document, fetch, setTimeout, window */
 
+import { PageMeta, countTopicsMeta } from './page-meta.js';
+
 /**
  * Feed Hierarchy page (/hierarchy)
  *
@@ -775,10 +777,12 @@ class FeedHierarchy {
     this.originalDialog = null;
     /** @type {RegExp|null} */
     this.tagHighlightRe = buildTagHighlightRe(getTagHighlightWords());
+    this.pageMeta = new PageMeta();
   }
 
   init() {
     if (!this.treeEl) return;
+    this.updatePageMeta();
     this.renderLevels();
     this.renderTree();
     this.createSummaryDialog();
@@ -791,6 +795,23 @@ class FeedHierarchy {
     renderLevelButtons(this.levelsEl, this.maxLevel, this.selectedLevel, (level) =>
       this.handleSelectLevel(level)
     );
+  }
+
+  /**
+   * Header counts for the page as a whole. Counted over `this.topics` rather
+   * than `visibleTopics`, because the latter has already had read sentences
+   * stripped when the only-unread setting is on and would always report zero
+   * read. Both describe the current filter scope, not the entire feed.
+   *
+   * @returns {void}
+   */
+  updatePageMeta() {
+    const counts = countTopicsMeta(this.topics);
+    this.pageMeta.render([
+      { label: 'topics', value: counts.topics },
+      { label: 'posts', value: counts.posts },
+      { label: 'unread sentences', value: counts.unread, accent: true },
+    ]);
   }
 
   renderTree() {
@@ -1199,6 +1220,9 @@ class FeedHierarchy {
       });
     });
 
+    // The counts follow the mutation above, so they are refreshed here rather
+    // than in refreshVisibleTopics -- that only runs with only-unread on.
+    this.updatePageMeta();
     if (this.onlyUnread) this.refreshVisibleTopics();
   }
 

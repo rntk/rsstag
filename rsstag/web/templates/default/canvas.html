@@ -6,7 +6,7 @@
 </head>
 <body class="canvas-page">
     {% from 'site-header.html' import site_header with context %}
-    {{ site_header(show_context_filter=True) }}
+    {{ site_header(show_context_filter=True, page_scope=page_scope, page_title=page_title) }}
     <main id="feed_canvas" class="feed-canvas" tabindex="0">
         <div id="feed_canvas_viewport" class="feed-canvas__viewport">
             <div id="feed_canvas_document" class="feed-canvas__document">

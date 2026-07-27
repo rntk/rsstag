@@ -7772,6 +7772,69 @@ body:has(#global_tools.site-header) {
   border-bottom-color: var(--rsst-ink);
 }
 
+/* Page meta strip: names the scope the page is showing and carries the counts
+   written by static/js/components/page-meta.js. It sits inside
+   .site-header__inner, whose height is fixed, and never wraps -- filling in
+   counts must not change the height syncGlobalToolsOffset measures into
+   --global-tools-height. Deliberately quiet: it reads as a continuation of the
+   nav rather than a banner. */
+.site-header__page {
+  display: flex;
+  align-items: baseline;
+  gap: var(--rsst-space-2);
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-left: var(--rsst-space-5);
+  border-left: 1px solid var(--rsst-border);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.site-header__page-scope {
+  flex: none;
+  color: var(--rsst-ink-tertiary);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.site-header__page-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--rsst-ink);
+  font: 700 14px/1.2 var(--rsst-font-head);
+  text-overflow: ellipsis;
+}
+
+.site-header__page-stats {
+  display: flex;
+  align-items: baseline;
+  flex: none;
+  gap: var(--rsst-space-2);
+  color: var(--rsst-ink-tertiary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+
+  &:empty {
+    display: none;
+  }
+}
+
+.site-header__page-stat + .site-header__page-stat::before {
+  content: "·";
+  margin-right: var(--rsst-space-2);
+  color: var(--rsst-border-strong);
+}
+
+/* Unread is the count users act on, so it gets the one step of contrast. */
+.site-header__page-stat--accent {
+  color: var(--rsst-ink-secondary);
+
+  b {
+    font-weight: 700;
+  }
+}
+
 .site-header__right {
   display: flex;
   align-items: center;
@@ -7810,6 +7873,15 @@ body:has(#global_tools.site-header) {
 
 @media (max-width: 767px) {
   .site-header__nav {
+    display: none;
+  }
+
+  /* Keep the title and the counts; the kicker is the most redundant part. */
+  .site-header__page {
+    padding-left: var(--rsst-space-3);
+  }
+
+  .site-header__page-scope {
     display: none;
   }
 }
@@ -8059,8 +8131,8 @@ $topic-font-min: 8px;
   min-height: 100%;
   flex: none;
   width: calc(
-    var(--rail-columns, 1) * (#{$topic-card-width} * var(--topic-inv-zoom, 1)) + var(--rail-gaps, 0) *
-      #{$topic-card-gap} + #{$topic-rail-padding * 2}
+    var(--rail-columns, 1) * (#{$topic-card-width} * var(--topic-inv-zoom, 1)) +
+      var(--rail-gaps, 0) * #{$topic-card-gap} + #{$topic-rail-padding * 2}
   );
 }
 .canvas-topic-rail__body {
@@ -8369,7 +8441,7 @@ $topic-font-min: 8px;
   display: -webkit-box;
   overflow: hidden;
   font:
-    700 #{$topic-font-base}/1.25 Inter,
+    700 #{$topic-font-base}/ 1.25 Inter,
     sans-serif;
   /* Set apart from the shorthand: the value is a max()/min() expression, and
      the unitless line-height above scales with whatever it resolves to. */

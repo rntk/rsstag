@@ -1214,6 +1214,25 @@ def _get_category_scope(
     }
 
 
+def _page_scope_labels(
+    feed: Optional[dict[str, Any]],
+    category: Optional[dict[str, str]],
+    tag: str,
+) -> tuple[str, str]:
+    """Kicker and title naming what a canvas/hierarchy page is showing.
+
+    Rendered into the shared header so the page is labelled without waiting
+    for scripts; the counts beside it are filled in by page-meta.js.
+    """
+    if feed:
+        return "Feed", str(feed.get("title") or feed.get("feed_id") or "Feed")
+    if category:
+        return "Category", str(category.get("title") or "Category")
+    if tag:
+        return "Tag", tag
+    return "Scope", "All posts"
+
+
 def on_canvas_get(
     app: "RSSTagApplication", user: dict[str, Any], request: Request
 ) -> Response:
@@ -1298,6 +1317,7 @@ def on_canvas_get(
             user, request, InternalServerError("The canvas could not be loaded.")
         )
 
+    page_scope, page_title = _page_scope_labels(current_feed, current_category, tag)
     page: Template = app.template_env.get_template("canvas.html")
     return Response(
         page.render(
@@ -1308,6 +1328,8 @@ def on_canvas_get(
             feed=current_feed,
             category=current_category,
             tag=tag,
+            page_scope=page_scope,
+            page_title=page_title,
             user_settings=user["settings"],
             provider=user.get("provider", ""),
         ),
@@ -1545,6 +1567,7 @@ def on_hierarchy_get(
         else []
     )
 
+    page_scope, page_title = _page_scope_labels(current_feed, current_category, tag)
     page: Template = app.template_env.get_template("hierarchy.html")
     return Response(
         page.render(
@@ -1553,6 +1576,8 @@ def on_hierarchy_get(
             feed=current_feed,
             category=current_category,
             tag=tag,
+            page_scope=page_scope,
+            page_title=page_title,
             tag_words=tag_words,
             user_settings=user["settings"],
             provider=user.get("provider", ""),

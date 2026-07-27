@@ -1,5 +1,7 @@
 /* global CSS, CustomEvent, Element, console, document, fetch, window */
 
+import { PageMeta, countPostsMeta } from './page-meta.js';
+
 /** Fired on `#feed_canvas` when the toolbar moves it and its cached rect goes stale. */
 const CANVAS_OFFSET_EVENT = 'canvas:offsetchange';
 
@@ -302,10 +304,12 @@ class FeedCanvas {
     this.selectedLayout = null;
     /** @type {object|null} */
     this.hoverLayout = null;
+    this.pageMeta = new PageMeta();
   }
 
   init() {
     if (!this.root || !this.viewport || !this.document || !this.rail || !this.cards) return;
+    this.updatePageMeta();
     this.renderLevelButtons();
     this.buildSentenceIndex();
     this.bindEvents();
@@ -327,11 +331,9 @@ class FeedCanvas {
     this.document?.querySelectorAll('.canvas-post[data-post-id]').forEach((postElement) => {
       /** @type {Map<number, Element>} */
       const byNumber = new Map();
-      postElement
-        .querySelectorAll('.canvas-sentence[data-sentence-number]')
-        .forEach((sentence) => {
-          byNumber.set(Number(sentence.getAttribute('data-sentence-number')), sentence);
-        });
+      postElement.querySelectorAll('.canvas-sentence[data-sentence-number]').forEach((sentence) => {
+        byNumber.set(Number(sentence.getAttribute('data-sentence-number')), sentence);
+      });
       this.sentenceIndex.set(postElement.getAttribute('data-post-id') || '', byNumber);
     });
   }
@@ -501,6 +503,22 @@ class FeedCanvas {
     }, 5000);
   }
 
+  /**
+   * Header counts for the whole canvas, not the slice currently on screen.
+   * The topic total spans every depth, matching `buildTopicNodes`, so it does
+   * not shift when the level selector folds the rail down.
+   *
+   * @returns {void}
+   */
+  updatePageMeta() {
+    const counts = countPostsMeta(this.posts);
+    this.pageMeta.render([
+      { label: 'posts', value: counts.total },
+      { label: 'unread', value: counts.unread, accent: true },
+      { label: 'topics', value: this.nodes.length },
+    ]);
+  }
+
   /** @param {string} postId @param {boolean} read */
   renderPostReadState(postId, read) {
     const selector = `.canvas-post[data-post-id="${CSS.escape(postId)}"]`;
@@ -538,6 +556,7 @@ class FeedCanvas {
         if (post) post.read = read;
         this.renderPostReadState(postId, read);
       });
+      this.updatePageMeta();
       const noun = postIds.length === 1 ? 'post' : 'posts';
       this.showStatus(`${postIds.length} ${noun} marked ${read ? 'read' : 'unread'}.`);
     } catch (error) {
@@ -740,10 +759,7 @@ class FeedCanvas {
 
     layouts.sort((left, right) => left.top - right.top);
     this.layouts = layouts;
-    this.maxCardHeight = layouts.reduce(
-      (maximum, layout) => Math.max(maximum, layout.height),
-      0
-    );
+    this.maxCardHeight = layouts.reduce((maximum, layout) => Math.max(maximum, layout.height), 0);
     this.focusedLayoutIndex = null;
     this.renderedIndices = [];
     this.cardPool.forEach((card) => {
@@ -791,12 +807,7 @@ class FeedCanvas {
   renderVisibleCards() {
     if (!this.cards) return;
     const band = this.getVisibleBand();
-    const visible = visibleLayoutIndices(
-      this.layouts,
-      band.top,
-      band.bottom,
-      this.maxCardHeight
-    );
+    const visible = visibleLayoutIndices(this.layouts, band.top, band.bottom, this.maxCardHeight);
     const activeCard = document.activeElement?.closest?.('.canvas-topic-card');
     const activeElement = document.activeElement;
     const activeLayoutAttribute = activeCard?.getAttribute('data-layout-index');
@@ -827,10 +838,9 @@ class FeedCanvas {
     if (activeLayoutIndex !== null) {
       const activeCardAfterRender = this.cardForLayoutIndex(activeLayoutIndex);
       if (activeCardAfterRender && activeCardAfterRender !== activeCard) {
-        const focusTarget =
-          activeElement?.classList?.contains('canvas-topic-card__menu')
-            ? activeCardAfterRender.querySelector('.canvas-topic-card__menu')
-            : activeCardAfterRender;
+        const focusTarget = activeElement?.classList?.contains('canvas-topic-card__menu')
+          ? activeCardAfterRender.querySelector('.canvas-topic-card__menu')
+          : activeCardAfterRender;
         focusTarget?.focus();
       }
     }
@@ -866,7 +876,10 @@ class FeedCanvas {
     const selected = this.selectedLayout === layout;
     card.classList.toggle('is-selected', selected);
     card.classList.toggle('is-active', selected || this.hoverLayout === layout);
-    card.classList.toggle('is-summary-loading', this.summaryLoadingKeys.has(this.summaryKey(layout)));
+    card.classList.toggle(
+      'is-summary-loading',
+      this.summaryLoadingKeys.has(this.summaryKey(layout))
+    );
   }
 
   /** @param {number} layoutIndex @returns {HTMLDivElement|null} */
@@ -888,10 +901,7 @@ class FeedCanvas {
   setSentenceHighlight(layout, active) {
     if (!layout) return;
     layout.run.forEach((number) => {
-      this.getSentenceElement(layout.postId, number)?.classList.toggle(
-        'is-topic-active',
-        active
-      );
+      this.getSentenceElement(layout.postId, number)?.classList.toggle('is-topic-active', active);
     });
   }
 
@@ -967,11 +977,7 @@ class FeedCanvas {
           return;
         }
         const nextIndex = currentIndex + (event.shiftKey ? -1 : 1);
-        if (
-          !Number.isInteger(currentIndex) ||
-          nextIndex < 0 ||
-          nextIndex >= this.layouts.length
-        ) {
+        if (!Number.isInteger(currentIndex) || nextIndex < 0 || nextIndex >= this.layouts.length) {
           return;
         }
         event.preventDefault();

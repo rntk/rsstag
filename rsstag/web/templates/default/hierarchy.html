@@ -6,7 +6,7 @@
 </head>
 <body class="feed-hierarchy-page">
     {% from 'site-header.html' import site_header with context %}
-    {{ site_header(active='topics', show_context_filter=True) }}
+    {{ site_header(active='topics', show_context_filter=True, page_scope=page_scope, page_title=page_title) }}
     <main id="feed_hierarchy" class="feed-hierarchy" tabindex="0">
         <div id="feed_hierarchy_levels" class="feed-hierarchy__levels" aria-label="Topic depth"></div>
         <div id="feed_hierarchy_tree" class="feed-hierarchy__tree" aria-label="Topics hierarchy"></div>
