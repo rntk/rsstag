@@ -1812,6 +1812,244 @@ def on_post_snippet_tags_post(app: "RSSTagApplication", user: dict, request: Req
     return Response(json.dumps(result), mimetype="application/json", status=200)
 
 
+_WORD_RE = re.compile(r"\w+", re.UNICODE)
+
+
+def _normalize_topic_path(topic: Any) -> str:
+    """Join the parts of a topic path with one separator.
+
+    The canvas joins path parts with " > " and the hierarchy with ">", so both
+    are normalized before any comparison.
+    """
+    return " > ".join(part.strip() for part in str(topic or "").split(">") if part.strip())
+
+
+def _topic_scope_numbers(groups: dict[str, Any], topic: str) -> set[int]:
+    """Sentence numbers of a topic plus every topic nested under it.
+
+    Both pages treat a topic as the root of a subtree: the canvas accumulates
+    descendant sentences into every path prefix, and the hierarchy walks child
+    entries. Scoping by prefix here keeps the tag list consistent with them.
+    """
+    scoped: set[int] = set()
+    prefix: str = f"{topic} > "
+    for name, numbers in (groups or {}).items():
+        normalized: str = _normalize_topic_path(name)
+        if normalized != topic and not normalized.startswith(prefix):
+            continue
+        if not isinstance(numbers, list):
+            continue
+        scoped.update(number for number in numbers if isinstance(number, int))
+    return scoped
+
+
+def _topic_scope_sentences(
+    app: "RSSTagApplication", owner: str, post_id: str, topic: str, only_unread: bool
+) -> list[str]:
+    """Texts of the sentences of one post that belong to a topic subtree.
+
+    Read state lives in the grouping document rather than in what the page
+    sent, so a partially read post is narrowed correctly.
+    """
+    grouped: Optional[dict[str, Any]] = app.post_grouping.get_grouped_posts(
+        owner, [post_id]
+    )
+    if not grouped:
+        return []
+    numbers: set[int] = _topic_scope_numbers(grouped.get("groups", {}) or {}, topic)
+    if not numbers:
+        return []
+    return [
+        str(sentence.get("text", "")).strip()
+        for sentence in grouped.get("sentences", []) or []
+        if isinstance(sentence, dict)
+        and isinstance(sentence.get("number"), int)
+        and sentence["number"] in numbers
+        and str(sentence.get("text", "")).strip()
+        and not (only_unread and bool(sentence.get("read", False)))
+    ]
+
+
+def _build_tag_matchers(
+    app: "RSSTagApplication", owner: str, tags: set[str]
+) -> dict[str, dict[str, Any]]:
+    """Surface forms per tag, prepared for matching against sentence text.
+
+    Tags are stored as lemmas while sentences keep original surface forms, so
+    the ``words`` of the tag document are matched as well. Single-word forms
+    are looked up in a token set; the rarer multi-word forms keep a regex.
+    """
+    matchers: dict[str, dict[str, Any]] = {
+        tag: {"words": [tag], "tokens": set(), "phrases": []} for tag in tags
+    }
+    if not tags:
+        return matchers
+
+    for tag_doc in app.tags.get_by_tags(
+        owner, list(tags), projection={"_id": False, "tag": True, "words": True}
+    ):
+        matcher: Optional[dict[str, Any]] = matchers.get(str(tag_doc.get("tag", "")))
+        if not matcher:
+            continue
+        for surface in tag_doc.get("words") or []:
+            word: str = str(surface).strip()
+            if word and word not in matcher["words"]:
+                matcher["words"].append(word)
+
+    for matcher in matchers.values():
+        for word in matcher["words"]:
+            parts: list[str] = _WORD_RE.findall(word.lower())
+            if len(parts) == 1:
+                matcher["tokens"].add(parts[0])
+            elif len(parts) > 1:
+                matcher["phrases"].append(
+                    re.compile(rf"\b{re.escape(word.lower())}\b", re.UNICODE)
+                )
+    return matchers
+
+
+def _tag_matches_sentence(
+    matcher: dict[str, Any], tokens: set[str], lowered_text: str
+) -> bool:
+    """Whether any surface form of a tag occurs in a sentence, word-bounded."""
+    if matcher["tokens"] & tokens:
+        return True
+    return any(phrase.search(lowered_text) for phrase in matcher["phrases"])
+
+
+def _collect_topic_tag_counts(
+    app: "RSSTagApplication", owner: str, post_ids: list[str], topic: str,
+    only_unread: bool,
+) -> tuple[dict[str, dict[str, Any]], int]:
+    """Count the sentences of a topic that mention each tag of their post.
+
+    Returns the per-tag counters and the number of sentences of the topic scope
+    itself, both already narrowed by the only-unread setting.
+    """
+    scoped_sentences: dict[str, list[str]] = {}
+    candidate_tags: set[str] = set()
+    post_tags: dict[str, list[str]] = {}
+
+    for post_id in post_ids:
+        sentences: list[str] = _topic_scope_sentences(
+            app, owner, post_id, topic, only_unread
+        )
+        if sentences:
+            scoped_sentences[post_id] = sentences
+
+    if scoped_sentences:
+        for post in app.posts.get_by_pids(
+            owner,
+            list(scoped_sentences),
+            {"_id": False, "pid": True, "tags": True},
+        ):
+            tags: list[str] = [
+                str(tag)
+                for tag in post.get("tags", []) or []
+                if str(tag) and len(str(tag)) >= MIN_TAG_LEN
+            ]
+            post_tags[str(post.get("pid", ""))] = tags
+            candidate_tags.update(tags)
+
+    matchers: dict[str, dict[str, Any]] = _build_tag_matchers(
+        app, owner, candidate_tags
+    )
+    counters: dict[str, dict[str, Any]] = {}
+    sentences_count: int = 0
+
+    for post_id, sentences in scoped_sentences.items():
+        tags = post_tags.get(post_id, [])
+        for text in sentences:
+            sentences_count += 1
+            lowered: str = text.lower()
+            tokens: set[str] = set(_WORD_RE.findall(lowered))
+            for tag in tags:
+                matcher = matchers.get(tag)
+                if not matcher or not _tag_matches_sentence(matcher, tokens, lowered):
+                    continue
+                counter: dict[str, Any] = counters.setdefault(
+                    tag, {"count": 0, "posts": set()}
+                )
+                counter["count"] += 1
+                counter["posts"].add(post_id)
+
+    return counters, sentences_count
+
+
+def on_topic_tags_post(
+    app: "RSSTagApplication", user: dict, request: Request
+) -> Response:
+    """Tags mentioned by the sentences of one topic, for the topic tags dialog.
+
+    The canvas and hierarchy pages send the topic path and the posts it covers;
+    the sentences and their read state are re-read from the grouping documents
+    here, and narrowed by the user's only-unread setting exactly as the pages
+    themselves are.
+    """
+    try:
+        body: dict[str, Any] = request.get_json() or {}
+    except Exception as exc:
+        logging.warning("Invalid JSON for topic tags. Cause: %s", exc)
+        return Response(
+            json.dumps({"error": "Invalid JSON"}),
+            mimetype="application/json",
+            status=400,
+        )
+
+    topic: str = _normalize_topic_path(body.get("topic", ""))
+    post_ids: list[str] = [
+        str(post_id)
+        for post_id in (body.get("post_ids") or [])
+        if str(post_id or "").strip()
+    ]
+    if not topic:
+        return Response(
+            json.dumps({"error": "Bad topic"}),
+            mimetype="application/json",
+            status=400,
+        )
+
+    only_unread: bool = bool(user["settings"]["only_unread"])
+    try:
+        counters, sentences_count = _collect_topic_tag_counts(
+            app, user["sid"], post_ids, topic, only_unread
+        )
+    except Exception as exc:
+        logging.exception("Unable to collect tags for topic %s: %s", topic, exc)
+        return Response(
+            json.dumps({"error": "Unable to load topic tags"}),
+            mimetype="application/json",
+            status=500,
+        )
+
+    tags: list[dict[str, Any]] = [
+        {
+            "tag": tag,
+            "url": app.routes.get_url_by_endpoint(
+                endpoint="on_get_tag_page", params={"tag": tag}
+            ),
+            "count": counter["count"],
+            "posts_count": len(counter["posts"]),
+        }
+        for tag, counter in counters.items()
+    ]
+    tags.sort(key=lambda item: (-item["count"], item["tag"]))
+
+    return Response(
+        json.dumps(
+            {
+                "data": {
+                    "topic": topic,
+                    "tags": tags,
+                    "sentences_count": sentences_count,
+                }
+            }
+        ),
+        mimetype="application/json",
+        status=200,
+    )
+
+
 # TODO: delete or change or something other
 def on_get_posts_with_tags(
     app: "RSSTagApplication", user: dict, s_tags: str

@@ -1,6 +1,7 @@
 /* global CSS, CustomEvent, Element, console, document, fetch, window */
 
 import { PageMeta, countPostsMeta } from './page-meta.js';
+import { TopicTagsDialog } from './topic-tags.js';
 
 /** Fired on `#feed_canvas` when the toolbar moves it and its cached rect goes stale. */
 const CANVAS_OFFSET_EVENT = 'canvas:offsetchange';
@@ -305,6 +306,7 @@ class FeedCanvas {
     /** @type {object|null} */
     this.hoverLayout = null;
     this.pageMeta = new PageMeta();
+    this.topicTags = new TopicTagsDialog();
   }
 
   init() {
@@ -1067,6 +1069,23 @@ class FeedCanvas {
       this.requestSummary(layout, card);
     });
     menu.appendChild(summaryButton);
+
+    const tagsButton = document.createElement('button');
+    tagsButton.type = 'button';
+    tagsButton.textContent = 'Tags';
+    tagsButton.title = 'Show the tags of this topic';
+    // The card recycles, so the scope is snapshotted here rather than read
+    // from `layout` after the dialog's request comes back.
+    const topicScope = {
+      topic: layout.node.path,
+      postIds: [...layout.node.posts.keys()],
+    };
+    tagsButton.addEventListener('click', () => {
+      this.closeContextMenu();
+      this.topicTags.open(topicScope);
+    });
+    menu.appendChild(tagsButton);
+
     document.body.appendChild(menu);
     const rect = anchor.getBoundingClientRect();
     menu.style.left = `${Math.min(rect.left, window.innerWidth - menu.offsetWidth - 8)}px`;

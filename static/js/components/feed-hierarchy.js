@@ -1,6 +1,7 @@
 /* global HTMLButtonElement, URLSearchParams, console, document, fetch, setTimeout, window */
 
 import { PageMeta, countTopicsMeta } from './page-meta.js';
+import { TopicTagsDialog } from './topic-tags.js';
 
 /**
  * Feed Hierarchy page (/hierarchy)
@@ -619,6 +620,31 @@ export function collectOriginalSources(entry) {
 }
 
 /**
+ * Post ids covered by a topic and everything nested under it.
+ *
+ * The tags dialog scopes its request by post rather than by sentence: the
+ * page may hold unread sentences only, so the server re-reads the topic's
+ * sentences and their read state from the grouping documents.
+ *
+ * @param {TreeEntry} entry
+ * @returns {string[]}
+ */
+export function collectTopicPostIds(entry) {
+  const postIds = new Set();
+  const visit = (current) => {
+    (Array.isArray(current?.node?.topic?.sources) ? current.node.topic.sources : []).forEach(
+      (source) => {
+        const postId = String(source?.post_id || '').trim();
+        if (postId) postIds.add(postId);
+      }
+    );
+    Array.from(current?.children?.values?.() || []).forEach(visit);
+  };
+  visit(entry);
+  return Array.from(postIds);
+}
+
+/**
  * Unread sentences of one source. Plain strings carry no read state and are
  * therefore kept.
  *
@@ -778,6 +804,7 @@ class FeedHierarchy {
     /** @type {RegExp|null} */
     this.tagHighlightRe = buildTagHighlightRe(getTagHighlightWords());
     this.pageMeta = new PageMeta();
+    this.topicTags = new TopicTagsDialog();
   }
 
   init() {
@@ -855,12 +882,30 @@ class FeedHierarchy {
     });
     menu.appendChild(originalButton);
 
+    const tagsButton = document.createElement('button');
+    tagsButton.type = 'button';
+    tagsButton.textContent = 'Tags';
+    tagsButton.title = 'Show the tags of this topic';
+    tagsButton.addEventListener('click', () => {
+      this.closeContextMenu();
+      this.showTopicTags(entry);
+    });
+    menu.appendChild(tagsButton);
+
     document.body.appendChild(menu);
     const rect = anchor.getBoundingClientRect();
     menu.style.left = `${Math.min(rect.left, window.innerWidth - menu.offsetWidth - 8)}px`;
     menu.style.top = `${Math.min(rect.bottom + 4, window.innerHeight - menu.offsetHeight - 8)}px`;
     this.contextMenu = menu;
     button.focus();
+  }
+
+  /** @param {TreeEntry} entry */
+  showTopicTags(entry) {
+    this.topicTags.open({
+      topic: entry.node.fullPath.replace(/>/g, ' > '),
+      postIds: collectTopicPostIds(entry),
+    });
   }
 
   /** @param {TreeEntry} entry @returns {string[]} */

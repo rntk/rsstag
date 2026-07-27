@@ -28,8 +28,11 @@ COVERAGE_THRESHOLD=80
 MUTATION_THRESHOLD=80
 TEST_LOADER="./test/es-module-loader.mjs"
 
+# Suites for Node's built-in runner. The vitest-based ones (see
+# vitest.config.cjs, run by `npm run test:dom`) cannot be loaded by node --test,
+# so c8 and Stryker skip them here.
 discover_test_files() {
-    find ./test -type f \( -name '*.test.js' -o -name '*.spec.js' \) | sort
+    grep -rL "from 'vitest'" ./test --include='*.test.js' --include='*.spec.js' | sort
 }
 
 load_test_files() {

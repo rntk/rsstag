@@ -375,7 +375,7 @@ describe('FeedHierarchy (DOM smoke test)', () => {
     expect(empty.textContent).toBe('No topics have been processed for this feed yet.');
   });
 
-  it('adds Original alongside Summary in the topic context menu', () => {
+  it('adds Original and Tags alongside Summary in the topic context menu', () => {
     new FeedHierarchy().init();
     document.querySelector('.fh-topic-menu').click();
 
@@ -383,7 +383,7 @@ describe('FeedHierarchy (DOM smoke test)', () => {
       [...document.querySelectorAll('.canvas-topic-menu button')].map(
         (button) => button.textContent
       )
-    ).toEqual(['Summary', 'Original']);
+    ).toEqual(['Summary', 'Original', 'Tags']);
   });
 
   it('renders read controls for original sentences', () => {
