@@ -29,6 +29,7 @@ from rsstag.tasks import (
     TASK_RAW_DOWNLOAD,
     TASK_RAW_TO_POSTS,
     TASK_TAGS_TOPICS,
+    TASK_SOURCE_QUALITY,
     get_task_scope_hint,
 )
 
@@ -63,6 +64,10 @@ def on_tasks_get(app, user: dict, request: Request) -> Response:
         TASK_RAW_DOWNLOAD: "Download raw provider data",
         TASK_RAW_TO_POSTS: "Convert raw data to posts",
         TASK_TAGS_TOPICS: "Find tags appearing in post topics",
+        # TASK_POST_QUALITY is deliberately absent: this form sends no scope, so
+        # picking it here would mean one LLM call for every post the user owns.
+        # Quality scans are started per feed/category from /group/category.
+        TASK_SOURCE_QUALITY: "Roll up feed quality",
     }
     available_tasks = {
         task_type: f"{title} ({get_task_scope_hint(task_type)})"

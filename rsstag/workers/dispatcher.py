@@ -35,9 +35,11 @@ from rsstag.tasks import (
     TASK_POST_GROUPING,
     TASK_POST_GROUPING_BATCH,
     TASK_POST_GROUPING_CLEANUP,
+    TASK_POST_QUALITY,
     TASK_RAW_DOWNLOAD,
     TASK_RAW_TO_POSTS,
     TASK_SNIPPET_CLUSTERING,
+    TASK_SOURCE_QUALITY,
     TASK_TAGS,
     TASK_TAGS_GROUP,
     TASK_TAGS_RANK,
@@ -184,6 +186,8 @@ def _build_registry(tag_worker: TagWorker, llm_worker: LLMWorker, provider_worke
     registry.register(TASK_ANTHOLOGY, llm_worker.handle_anthology)
     registry.register(TASK_TOPIC_MERGE, llm_worker.handle_topic_merge)
     registry.register(TASK_TAG_CLASSIFICATION, llm_worker.handle_tags_classification)
+    registry.register(TASK_POST_QUALITY, llm_worker.handle_post_quality)
+    registry.register(TASK_SOURCE_QUALITY, llm_worker.handle_source_quality)
     registry.register(TASK_POST_GROUPING_BATCH, llm_worker.make_post_grouping_batch)
     registry.register(TASK_POST_GROUPING_CLEANUP, llm_worker.handle_post_grouping_cleanup)
     registry.register(

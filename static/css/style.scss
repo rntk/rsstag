@@ -6353,6 +6353,37 @@ input[type="text"]:focus {
     font-weight: bold;
   }
 
+  .quality-badge {
+    padding: 0.2em 0.6em;
+    border-radius: 0;
+    font-size: 12px;
+    font-weight: bold;
+    color: #ffffff;
+  }
+
+  .quality-badge.quality-good {
+    background: #16a34a;
+  }
+
+  .quality-badge.quality-mixed {
+    background: #ca8a04;
+  }
+
+  .quality-badge.quality-poor {
+    background: #dc2626;
+  }
+
+  .quality-scan-btn {
+    background: none;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .quality-scan-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
   .feeds {
     padding: 0;
     background: #ffffff;

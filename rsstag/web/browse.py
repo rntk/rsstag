@@ -7,6 +7,7 @@ from urllib.parse import urlencode
 
 from rsstag.html_cleaner import HTMLCleaner
 from rsstag.lda import LDA
+from rsstag.quality import summarize_category_quality
 from rsstag.utils import get_sorted_dict_by_alphabet
 
 from werkzeug.wrappers import Request, Response
@@ -14,6 +15,15 @@ from werkzeug.exceptions import NotFound
 
 if TYPE_CHECKING:
     from rsstag.web.app import RSSTagApplication
+
+
+def _attach_category_quality(by_category: dict) -> None:
+    """Roll each category's feed scores up into a category score."""
+    for category in by_category.values():
+        feed_qualities = [
+            feed["quality"] for feed in category["feeds"] if feed.get("quality")
+        ]
+        category["quality"] = summarize_category_quality(feed_qualities)
 
 
 def on_group_by_category_get(app: "RSSTagApplication", user: dict, request: Request) -> Response:
@@ -35,6 +45,7 @@ def on_group_by_category_get(app: "RSSTagApplication", user: dict, request: Requ
         only_unread = None
 
     grouped = app.posts.get_grouped_stat(user["sid"], only_unread)
+    feeds_quality = app.quality.get_feeds_quality(user["sid"])
     by_category = {
         app.feeds.all_feeds: {
             "unread_count": 0,
@@ -71,8 +82,10 @@ def on_group_by_category_get(app: "RSSTagApplication", user: dict, request: Requ
                     "title": by_feed[g["_id"]]["title"],
                     "canvas_url": f"{canvas_url}?{urlencode({'feed': g['_id']})}",
                     "hierarchy_url": f"{hierarchy_url}?{urlencode({'feed': g['_id']})}",
+                    "quality": feeds_quality.get(g["_id"]),
                 }
             )
+    _attach_category_quality(by_category)
     if len(by_category) > 1:
         data = get_sorted_dict_by_alphabet(by_category)
         if app.no_category_name in data:

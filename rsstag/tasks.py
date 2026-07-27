@@ -7,6 +7,7 @@ from pymongo import MongoClient, UpdateOne, ReturnDocument
 from bson.objectid import ObjectId
 from rsstag.llm.batch import BatchTaskStatus
 from rsstag.post_grouping import RssTagPostGrouping
+from rsstag.quality import build_scope_key
 from rsstag.tags import RssTagTags
 from rsstag.topic_merge import build_pending_topic_merge_query
 from rsstag.task_state import (
@@ -48,6 +49,8 @@ TASK_TOPIC_MERGE = 27
 TASK_RAW_DOWNLOAD = 28
 TASK_RAW_TO_POSTS = 29
 TASK_TAGS_TOPICS = 30
+TASK_POST_QUALITY = 31
+TASK_SOURCE_QUALITY = 32
 
 SCOPE_MODE_ALL = "all"
 SCOPE_MODE_POSTS = "posts"
@@ -86,7 +89,26 @@ TASK_SCOPE_REGISTRY: Dict[int, Dict[str, Any]] = {
     TASK_POST_GROUPING_CLEANUP: {"scope": SCOPE_CAPABILITY_SCOPED_SUPPORTED},
     TASK_ANTHOLOGY: {"scope": SCOPE_CAPABILITY_SCOPED_SUPPORTED},
     TASK_TOPIC_MERGE: {"scope": SCOPE_CAPABILITY_SCOPED_SUPPORTED},
+    TASK_POST_QUALITY: {"scope": SCOPE_CAPABILITY_SCOPED_SUPPORTED},
+    TASK_SOURCE_QUALITY: {"scope": SCOPE_CAPABILITY_SCOPED_SUPPORTED},
 }
+
+# Task types whose queue identity includes their scope, so that scoring one
+# category and then another queues two independent runs instead of the second
+# silently replacing the first's scope.
+SCOPE_KEYED_TASK_TYPES: Set[int] = {TASK_POST_QUALITY, TASK_SOURCE_QUALITY}
+
+# Task types that carry their scope onto the task doc even when the caller
+# passed no explicit scope.
+SCOPE_CARRYING_TASK_TYPES: Tuple[int, ...] = (
+    TASK_POST_GROUPING,
+    TASK_POST_GROUPING_BATCH,
+    TASK_POST_GROUPING_CLEANUP,
+    TASK_ANTHOLOGY,
+    TASK_TOPIC_MERGE,
+    TASK_POST_QUALITY,
+    TASK_SOURCE_QUALITY,
+)
 
 
 def get_task_scope_capability(task_type: int) -> str:
@@ -100,6 +122,10 @@ def get_task_scope_hint(task_type: int) -> str:
         return "incremental; supports scope"
     if task_type == TASK_POST_GROUPING_CLEANUP:
         return "reprocesses selected scope"
+    if task_type == TASK_POST_QUALITY:
+        return "incremental; supports scope"
+    if task_type == TASK_SOURCE_QUALITY:
+        return "rolls up scored posts; supports scope"
     capability = get_task_scope_capability(task_type)
     if capability == SCOPE_CAPABILITY_SCOPED_SUPPORTED:
         return "supports scoped reprocess"
@@ -142,6 +168,7 @@ TASK_LEASE_SECONDS: Dict[int, float] = {
     TASK_RAW_TO_POSTS: 3600.0,
     TASK_ANTHOLOGY: 3600.0,
     TASK_TAGS_TOPICS: 7200.0,
+    TASK_POST_QUALITY: 3600.0,
 }
 
 
@@ -183,6 +210,9 @@ class RssTagTasks:
         self._posts_bath_size = 200
         self._bigrams_bath_size = 1000
         self._tags_bath_size = 1000
+        # One LLM call per post, so keep the claimed batch small enough that a
+        # worker returns to the queue (and refreshes its lease) regularly.
+        self._quality_batch_size = 20
         self._scope_filter_builders: Dict[str, Callable[[str, Dict[str, Any]], Dict[str, Any]]] = {
             SCOPE_MODE_POSTS: self._scope_filter_for_posts,
             SCOPE_MODE_FEEDS: self._scope_filter_for_feeds,
@@ -344,6 +374,47 @@ class RssTagTasks:
             if str(post.get("pid")) not in existing_post_ids
         ]
 
+    def resolve_scope_feed_ids(self, owner: str, task_doc: dict) -> List[str]:
+        """Distinct feed ids covered by a task's scope.
+
+        Derived from the posts predicate rather than the feeds collection so
+        every scope mode resolves the same way, including ``posts`` and
+        ``provider`` which have no direct feeds query.
+        """
+        scope_query = self._build_post_scope_predicate(owner, task_doc)
+        try:
+            feed_ids = self._db.posts.distinct("feed_id", scope_query)
+        except Exception as e:
+            self._log.error("Can`t resolve scope feed ids for %s. Info: %s", owner, e)
+            return []
+        return [feed_id for feed_id in feed_ids if feed_id]
+
+    def _enqueue_quality_rollup(self, owner: str, task_doc: dict) -> None:
+        """Queue a feed rollup for a quality scan that just drained.
+
+        The worker already enqueues a rollup after every batch, but
+        ``TaskStateMachine.enqueue`` no-ops while an earlier rollup is still
+        running, so the final batch's scores could otherwise never reach
+        ``feeds.quality``. Enqueuing again once the scan is provably drained
+        gives that a second chance. The rollup recomputes from scratch, so an
+        extra run costs nothing but the aggregation.
+        """
+        self.add_task(
+            {
+                "user": owner,
+                "type": TASK_SOURCE_QUALITY,
+                "provider": task_doc.get("provider", ""),
+                "scope": task_doc.get("scope") or {},
+            },
+            manual=False,
+        )
+
+    def _count_pending_quality_posts(self, owner: str, task_doc: dict) -> int:
+        scope_query = self._build_post_scope_predicate(owner, task_doc)
+        return self._db.posts.count_documents(
+            {**scope_query, "quality": {"$exists": False}}
+        )
+
     def _count_pending_anthologies(self, owner: str) -> int:
         return self._db.anthologies.count_documents({"owner": owner, "status": "pending"})
 
@@ -483,21 +554,23 @@ class RssTagTasks:
                         "manual": manual,
                         "provider": data.get("provider", ""),
                     }
-                    if data.get("scope") is not None or data["type"] in (
-                        TASK_POST_GROUPING,
-                        TASK_POST_GROUPING_BATCH,
-                        TASK_POST_GROUPING_CLEANUP,
-                        TASK_ANTHOLOGY,
-                        TASK_TOPIC_MERGE,
+                    if (
+                        data.get("scope") is not None
+                        or data["type"] in SCOPE_CARRYING_TASK_TYPES
                     ):
                         fields["scope"] = normalized_scope
                     for key in data:
                         if key not in fields and key != "processing":
                             fields[key] = data[key]
-                    result = self._state.enqueue(
-                        {"user": data["user"], "type": data["type"]},
-                        fields,
-                    )
+                    task_key: Dict[str, Any] = {
+                        "user": data["user"],
+                        "type": data["type"],
+                    }
+                    if data["type"] in SCOPE_KEYED_TASK_TYPES:
+                        scope_key = build_scope_key(normalized_scope)
+                        task_key["scope_key"] = scope_key
+                        fields["scope_key"] = scope_key
+                    result = self._state.enqueue(task_key, fields)
             except Exception as e:
                 result = None
                 self._log.warning(
@@ -838,6 +911,37 @@ class RssTagTasks:
                             unlock_task = False
                 if unlock_task:
                     self._state.release(user_task["_id"])
+            elif user_task["type"] == TASK_POST_QUALITY:
+                data = []
+                owner = task["user"]["sid"]
+                scope_query = self._build_post_scope_predicate(owner, user_task)
+                ps = self._db.posts.find(
+                    {
+                        **scope_query,
+                        "quality": {"$exists": False},
+                        "processing": claimable_item_processing(),
+                    }
+                ).limit(self._quality_batch_size)
+                ids = []
+                for p in ps:
+                    data.append(p)
+                    ids.append(p["_id"])
+                unlock_task = True
+                if ids:
+                    self._db.posts.update_many(
+                        {"_id": {"$in": ids}},
+                        {"$set": {"processing": time.time()}},
+                    )
+                else:
+                    task["type"] = TASK_NOOP
+                    if self._count_pending_quality_posts(owner, user_task) == 0:
+                        can_delete = self._can_finalize_completed_task(user_task)
+                        if can_delete:
+                            self._enqueue_quality_rollup(owner, user_task)
+                            self._state.complete(user_task["_id"])
+                            unlock_task = False
+                if unlock_task:
+                    self._state.release(user_task["_id"])
             elif user_task["type"] == TASK_TAG_CLASSIFICATION_BATCH:
                 data = []
                 unlock_task = True
@@ -1079,6 +1183,21 @@ class RssTagTasks:
                         )
                     )
                 self._db.posts.bulk_write(updates, ordered=False)
+            elif task["type"] == TASK_POST_QUALITY:
+                # The handler writes each post's own ``quality`` marker, so all
+                # this has to do is drop the item locks and keep the task in the
+                # queue for the next batch.
+                remove_task = False
+                updates = []
+                for post in task["data"]:
+                    updates.append(
+                        UpdateOne(
+                            {"_id": post["_id"]},
+                            {"$set": {"processing": POST_NOT_IN_PROCESSING}},
+                        )
+                    )
+                if updates:
+                    self._db.posts.bulk_write(updates, ordered=False)
             elif task["type"] == TASK_TAG_CLASSIFICATION:
                 remove_task = False
                 updates = []
@@ -1293,6 +1412,8 @@ class RssTagTasks:
                     info["count"] = self._count_pending_anthologies(user_id)
                 elif task["type"] == TASK_TOPIC_MERGE:
                     info["count"] = self._count_pending_topic_merge_docs(user_id, task)
+                elif task["type"] == TASK_POST_QUALITY:
+                    info["count"] = self._count_pending_quality_posts(user_id, task)
 
                 status.append(info)
         except Exception as e:
@@ -1332,6 +1453,8 @@ class RssTagTasks:
             TASK_RAW_DOWNLOAD: "Download raw provider data (incremental)",
             TASK_RAW_TO_POSTS: "Convert raw provider data to posts (incremental)",
             TASK_TAGS_TOPICS: "Find tags appearing in post topics",
+            TASK_POST_QUALITY: "Post quality scoring (incremental, supports scope)",
+            TASK_SOURCE_QUALITY: "Feed/category quality rollup (supports scope)",
         }
 
         if task_type in task_titles:

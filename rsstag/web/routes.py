@@ -604,6 +604,11 @@ class RSSTagRoutes:
                 "methods": ["POST"],
             },
             {
+                "url": "/api/quality/scan",
+                "endpoint": "on_quality_scan_post",
+                "methods": ["POST"],
+            },
+            {
                 "url": "/delete-feeds-categories",
                 "endpoint": "on_delete_feeds_categories_post",
                 "methods": ["POST"],

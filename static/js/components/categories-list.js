@@ -9,6 +9,55 @@ export default class CategoriesList extends React.Component {
     };
   }
 
+  qualityBand(score) {
+    if (score >= 70) {
+      return 'good';
+    }
+    if (score >= 45) {
+      return 'mixed';
+    }
+    return 'poor';
+  }
+
+  renderQuality(quality) {
+    if (!quality || typeof quality.score !== 'number') {
+      return null;
+    }
+
+    return (
+      <span
+        className={'quality-badge quality-' + this.qualityBand(quality.score)}
+        title={'Quality ' + quality.score + '/100 over ' + quality.posts_count + ' scored posts'}
+      >
+        {quality.score}
+      </span>
+    );
+  }
+
+  scanQuality(payload, event) {
+    const button = event.currentTarget;
+
+    button.disabled = true;
+    fetch('/api/quality/scan', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      headers: { 'Content-Type': 'application/json' },
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        button.disabled = false;
+        if (data.status !== 'success') {
+          alert('Error: ' + data.message);
+        } else {
+          alert(data.message);
+        }
+      })
+      .catch((err) => {
+        button.disabled = false;
+        alert('Error: ' + err);
+      });
+  }
+
   changeFeedsState(cat_name) {
     let state = Object.assign({}, this.state);
 
@@ -41,6 +90,7 @@ export default class CategoriesList extends React.Component {
                   <a className="feed-title-link" href={feed.url}>
                     {feed.title}
                   </a>
+                  {this.renderQuality(feed.quality)}
                   <span className="category-count">{feed.unread_count}</span>
                   <div className="feed-actions" aria-label={`${feed.title} views`}>
                     <a className="feed-action-link" href={feed.hierarchy_url}>
@@ -49,6 +99,12 @@ export default class CategoriesList extends React.Component {
                     <a className="feed-action-link" href={feed.canvas_url}>
                       Canvas
                     </a>
+                    <button
+                      className="feed-action-link quality-scan-btn"
+                      onClick={this.scanQuality.bind(this, { feed_ids: [feed.feed_id] })}
+                    >
+                      Score
+                    </button>
                   </div>
                 </li>
               );
@@ -79,6 +135,7 @@ export default class CategoriesList extends React.Component {
                 <a className="category-title-link" href={cat.url}>
                   {cat.title}
                 </a>
+                {this.renderQuality(cat.quality)}
                 <span className="category-count">{cat.unread_count}</span>
                 <div className="category-actions" aria-label={`${cat.title} views`}>
                   <a className="category-action-link" href={cat.hierarchy_url}>
@@ -87,6 +144,18 @@ export default class CategoriesList extends React.Component {
                   <a className="category-action-link" href={cat.canvas_url}>
                     Canvas
                   </a>
+                  {cat.category_id ? (
+                    <button
+                      className="category-action-link quality-scan-btn"
+                      onClick={this.scanQuality.bind(this, {
+                        category_ids: [cat.category_id],
+                      })}
+                    >
+                      Score
+                    </button>
+                  ) : (
+                    ''
+                  )}
                 </div>
               </div>
               <ul className={'feeds ' + (cat.showed ? 'not_hidden' : 'hidden')}>{feeds}</ul>

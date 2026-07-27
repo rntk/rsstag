@@ -41,6 +41,8 @@ EXPECTED_INTERNAL_TASK_TYPES: List[int] = [
     task_module.TASK_TAG_CLASSIFICATION_BATCH,
     task_module.TASK_DELETE_FEEDS,
     task_module.TASK_POST_GROUPING_CLEANUP,
+    task_module.TASK_POST_QUALITY,
+    task_module.TASK_SOURCE_QUALITY,
 ]
 
 
