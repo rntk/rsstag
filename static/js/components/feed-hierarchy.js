@@ -1011,6 +1011,28 @@ class FeedHierarchy {
       sourceTitle.setAttribute('rel', 'noopener noreferrer');
     }
     header.appendChild(sourceTitle);
+
+    const actions = document.createElement('div');
+    actions.className = 'canvas-original-source__actions';
+    if (source.post_id) {
+      const fullPostLink = document.createElement('a');
+      fullPostLink.className = 'canvas-original-source__action';
+      fullPostLink.href = `/posts/${encodeURIComponent(source.post_id)}`;
+      fullPostLink.textContent = 'Show full post';
+      fullPostLink.title = 'Show the full post';
+      actions.appendChild(fullPostLink);
+    }
+    if (source.url) {
+      const originalLink = document.createElement('a');
+      originalLink.className = 'canvas-original-source__action';
+      originalLink.href = source.url;
+      originalLink.target = '_blank';
+      originalLink.rel = 'noopener noreferrer';
+      originalLink.textContent = 'Original ↗';
+      originalLink.title = 'Open the original page';
+      actions.appendChild(originalLink);
+    }
+    if (actions.childElementCount > 0) header.appendChild(actions);
     article.appendChild(header);
 
     const sentences = document.createElement('ol');

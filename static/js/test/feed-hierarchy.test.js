@@ -392,6 +392,7 @@ describe('FeedHierarchy (DOM smoke test)', () => {
       {
         post_id: 'post-1',
         title: 'First post',
+        url: 'https://example.com/first-post',
         sentences: [
           { number: 1, text: 'Unread sentence.', read: false },
           { number: 2, text: 'Read sentence.', read: true },
@@ -407,6 +408,12 @@ describe('FeedHierarchy (DOM smoke test)', () => {
       )
     ).toEqual(['Mark Read', 'Mark Unread']);
     expect(source.querySelectorAll('.canvas-original-sentence.is-read')).toHaveLength(1);
+    expect(source.querySelector('.canvas-original-source__action').getAttribute('href')).toBe(
+      '/posts/post-1'
+    );
+    expect(source.querySelectorAll('.canvas-original-source__action')[1].getAttribute('href')).toBe(
+      'https://example.com/first-post'
+    );
   });
 
   it('marks all addressable Original sentences read and then unread', async () => {

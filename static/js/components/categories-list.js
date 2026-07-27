@@ -6,7 +6,17 @@ export default class CategoriesList extends React.Component {
     super(props);
     this.state = {
       cats: window.initial_cats_list,
+      activeCategory: null,
+      activeFeed: null,
     };
+  }
+
+  selectCategory(cat_name) {
+    this.setState({ activeCategory: cat_name });
+  }
+
+  selectFeed(feed_id) {
+    this.setState({ activeFeed: feed_id });
   }
 
   qualityBand(score) {
@@ -79,7 +89,13 @@ export default class CategoriesList extends React.Component {
           if (cat.feeds) {
             feeds = cat.feeds.map((feed, i) => {
               return (
-                <li key={i} className="feed-item">
+                <li
+                  key={i}
+                  className={
+                    'feed-item' + (this.state.activeFeed === feed.feed_id ? ' active-row' : '')
+                  }
+                  onClick={this.selectFeed.bind(this, feed.feed_id)}
+                >
                   <input
                     type="checkbox"
                     className="feed-checkbox"
@@ -112,7 +128,12 @@ export default class CategoriesList extends React.Component {
           }
           cats.push(
             <li className="category" key={cat_name}>
-              <div className="category-header">
+              <div
+                className={
+                  'category-header' + (this.state.activeCategory === cat_name ? ' active-row' : '')
+                }
+                onClick={this.selectCategory.bind(this, cat_name)}
+              >
                 {cat_name !== 'All' ? (
                   <span
                     className={'show_btn ' + (cat.showed ? 'not_minimized' : 'minimized')}
