@@ -6498,6 +6498,104 @@ input[type="text"]:focus {
   .show_btn:hover {
     background: #cbd5e1;
   }
+
+  .categories-page-root {
+    display: flex;
+    flex-direction: column;
+    gap: 1em;
+  }
+
+  .feeds-list-refresh-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6em;
+  }
+
+  .feeds-list-refresh-btn {
+    background: #ffffff;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .feeds-list-refresh-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .available-sources {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 0;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+  }
+
+  .available-sources-header {
+    display: flex;
+    align-items: center;
+    gap: 0.8em;
+    padding: 0.8em 1.2em;
+    background: #f8fafc;
+    cursor: pointer;
+  }
+
+  .available-sources-header:hover {
+    background: #eef2f7;
+  }
+
+  .available-sources-title {
+    font-weight: 600;
+    color: #1e293b;
+    font-size: 15px;
+  }
+
+  .available-sources-body {
+    padding: 0;
+    background: #ffffff;
+  }
+
+  .available-sources-hint {
+    padding: 0.8em 1.2em;
+    color: #64748b;
+    font-size: 13px;
+  }
+
+  .available-sources-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .available-source-item {
+    display: flex;
+    align-items: center;
+    padding: 0.6em 1.2em;
+    border-top: 1px solid #f1f5f9;
+    gap: 0.8em;
+  }
+
+  .available-source-item .feed-title-link {
+    color: #334155;
+    text-decoration: none;
+    font-size: 14px;
+    flex-grow: 1;
+  }
+
+  .available-source-item .feed-title-link:hover {
+    color: #008ec9;
+  }
+
+  .available-source-item .feed-refresh-btn {
+    margin-left: auto;
+  }
+
+  .available-source-category {
+    color: #64748b;
+    font-size: 12px;
+    background: #f1f5f9;
+    padding: 0.2em 0.6em;
+    border-radius: 0;
+  }
 }
 
 .download-button:hover,

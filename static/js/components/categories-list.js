@@ -8,6 +8,9 @@ export default class CategoriesList extends React.Component {
       cats: window.initial_cats_list,
       activeCategory: null,
       activeFeed: null,
+      sources: window.initial_sources_list || [],
+      feedsListProviders: window.feeds_list_providers || [],
+      sourcesExpanded: false,
     };
   }
 
@@ -109,6 +112,34 @@ export default class CategoriesList extends React.Component {
       });
   }
 
+  refreshSourcesList(provider, event) {
+    const button = event.currentTarget;
+
+    button.disabled = true;
+    fetch('/api/provider/feeds/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ provider: provider }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        button.disabled = false;
+        if (data.status !== 'success') {
+          alert('Error: ' + data.message);
+        } else {
+          alert(data.message);
+        }
+      })
+      .catch((err) => {
+        button.disabled = false;
+        alert('Error: ' + err);
+      });
+  }
+
+  toggleSourcesExpanded() {
+    this.setState({ sourcesExpanded: !this.state.sourcesExpanded });
+  }
+
   changeFeedsState(cat_name) {
     let state = Object.assign({}, this.state);
 
@@ -118,7 +149,86 @@ export default class CategoriesList extends React.Component {
     }
   }
 
+  renderProviderRefreshButtons() {
+    const providers = this.state.feedsListProviders || [];
+    if (!providers.length) {
+      return null;
+    }
+
+    return (
+      <div className="feeds-list-refresh-controls">
+        {providers.map((provider) => (
+          <button
+            key={provider}
+            className="feed-action-link feeds-list-refresh-btn"
+            onClick={this.refreshSourcesList.bind(this, provider)}
+          >
+            {`Refresh ${provider} sources`}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  renderAvailableSources() {
+    const sources = this.state.sources || [];
+
+    return (
+      <div className="available-sources">
+        <div className="available-sources-header" onClick={this.toggleSourcesExpanded.bind(this)}>
+          <span
+            className={'show_btn ' + (this.state.sourcesExpanded ? 'not_minimized' : 'minimized')}
+          ></span>
+          <span className="available-sources-title">Available sources ({sources.length})</span>
+        </div>
+        <div
+          className={
+            'available-sources-body ' + (this.state.sourcesExpanded ? 'not_hidden' : 'hidden')
+          }
+        >
+          {sources.length === 0 ? (
+            <p className="available-sources-hint">
+              No extra sources. Use Refresh sources list to fetch what is available.
+            </p>
+          ) : (
+            <ul className="available-sources-list">
+              {sources.map((source) => (
+                <li className="available-source-item" key={source.feed_id}>
+                  <a className="feed-title-link" href={source.url}>
+                    {source.title}
+                  </a>
+                  <span className="available-source-category">{source.category_title}</span>
+                  {this.renderQuality(source.quality)}
+                  {source.provider === 'telegram' ? (
+                    <button
+                      className="feed-action-link feed-refresh-btn"
+                      onClick={this.refreshFeed.bind(this, source)}
+                    >
+                      Refresh
+                    </button>
+                  ) : (
+                    ''
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   render() {
+    return (
+      <div className="categories-page-root">
+        {this.renderProviderRefreshButtons()}
+        {this.renderCategoriesTree()}
+        {this.renderAvailableSources()}
+      </div>
+    );
+  }
+
+  renderCategoriesTree() {
     if (this.state && this.state.cats) {
       let cats = [];
 

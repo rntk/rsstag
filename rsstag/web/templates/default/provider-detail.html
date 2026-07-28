@@ -67,7 +67,9 @@
                 </form>
             {% endif %}
 
-            {% if provider == "telegram" or provider == "bazqux" or provider == "x" %}
+            {% if provider == "telegram" %}
+                <a href="{{ feeds_url }}" class="provider-button provider-button-secondary">Manage channels on the categories page</a>
+            {% elif provider == "bazqux" or provider == "x" %}
                 <a href="{{ feeds_url }}" class="provider-button provider-button-secondary">Select channels or feeds</a>
             {% endif %}
         </div>

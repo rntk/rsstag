@@ -21,6 +21,7 @@ from rsstag.feeds import RssTagFeeds
 from rsstag.posts import RssTagPosts
 from rsstag.providers.providers import TELEGRAM
 from rsstag.providers.pid import generate_post_pid
+from rsstag.providers.feed_docs import build_feed_doc
 
 from pymongo import MongoClient
 
@@ -613,6 +614,46 @@ class TelegramProvider:
 
         return channels
 
+    def _build_feed_doc(
+        self,
+        owner: str,
+        feed_id: Any,
+        title: str,
+        routes: RSSTagRoutes,
+        origin_feed_id: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """Build a feeds document for one chat, identical on every code path."""
+        return build_feed_doc(
+            owner=owner,
+            feed_id=feed_id,
+            title=title,
+            provider=TELEGRAM,
+            routes=routes,
+            category_id=self.no_category_name,
+            origin_feed_id=origin_feed_id,
+        )
+
+    def list_feeds(self, user: dict) -> List[dict]:
+        """Return feed documents for every available chat, without any posts.
+
+        This is the provider-agnostic "refresh sources list" capability: it
+        only enumerates what the account can read, so the caller can store the
+        sources and let the user pick what to download later.
+        """
+        routes = RSSTagRoutes(self._config["settings"]["host_name"])
+        feeds: List[dict] = []
+        for channel in self.list_channels(user):
+            feeds.append(
+                self._build_feed_doc(
+                    user["sid"], channel["id"], channel.get("title", ""), routes
+                )
+            )
+        logging.info(
+            "Listed %d telegram sources for user %s", len(feeds), user.get("sid")
+        )
+
+        return feeds
+
     def download(
         self, user: dict, selection: Optional[dict] = None
     ) -> Tuple[List, List]:
@@ -697,23 +738,9 @@ class TelegramProvider:
                 tasks_q.put_nowait((all_channels, max_limit, channel))
                 stream_id = str(channel["id"])
                 if stream_id not in feeds:
-                    feeds[stream_id] = {
-                        "createdAt": datetime.now(timezone.utc),
-                        "title": channel["title"],
-                        "owner": user["sid"],
-                        "category_id": self.no_category_name,
-                        "feed_id": stream_id,
-                        "origin_feed_id": channel["id"],
-                        "category_title": self.no_category_name,
-                        "category_local_url": routes.get_url_by_endpoint(
-                            endpoint="on_category_get",
-                            params={"quoted_category": self.no_category_name},
-                        ),
-                        "local_url": routes.get_url_by_endpoint(
-                            endpoint="on_feed_get", params={"quoted_feed": stream_id}
-                        ),
-                        "favicon": "",
-                    }
+                    feeds[stream_id] = self._build_feed_doc(
+                        user["sid"], channel["id"], channel["title"], routes
+                    )
             workers = []
             workers_n = 1  # int(self._config["settings"]["downloaders_count"])
             if not workers_n:
@@ -907,26 +934,13 @@ class TelegramProvider:
                 continue
             posts.append(post)
             if stream_id and stream_id not in feeds:
-                feeds[stream_id] = {
-                    "createdAt": datetime.now(timezone.utc),
-                    "title": chat.get("title", stream_id) if chat else stream_id,
-                    "owner": owner,
-                    "category_id": self.no_category_name,
-                    "feed_id": stream_id,
-                    "origin_feed_id": chat.get("id", stream_id)
-                    if chat
-                    else stream_id,
-                    "category_title": self.no_category_name,
-                    "category_local_url": routes.get_url_by_endpoint(
-                        endpoint="on_category_get",
-                        params={"quoted_category": self.no_category_name},
-                    ),
-                    "local_url": routes.get_url_by_endpoint(
-                        endpoint="on_feed_get",
-                        params={"quoted_feed": stream_id},
-                    ),
-                    "favicon": "",
-                }
+                feeds[stream_id] = self._build_feed_doc(
+                    owner,
+                    stream_id,
+                    chat.get("title", stream_id) if chat else stream_id,
+                    routes,
+                    origin_feed_id=chat.get("id", stream_id) if chat else stream_id,
+                )
         return posts, list(feeds.values())
 
     def _tlg_sync(self, phone: str, sid: str, sync_ids: List[Tuple[int, int]]) -> None:

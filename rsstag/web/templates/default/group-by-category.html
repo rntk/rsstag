@@ -48,6 +48,8 @@
     <div id="progressbar" class="fixed bottom-0 left-0 h-1 bg-primary transition-all duration-300"></div>
     <script type="text/javascript">
         var initial_cats_list = {{ data| json}};
+        window.initial_sources_list = {{ sources| json}};
+        window.feeds_list_providers = {{ feeds_list_providers| json}};
 
         function toggleSelectAll() {
             var cbs = document.querySelectorAll('.category-checkbox, .feed-checkbox');

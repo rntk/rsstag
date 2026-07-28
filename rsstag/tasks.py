@@ -51,6 +51,7 @@ TASK_RAW_TO_POSTS = 29
 TASK_TAGS_TOPICS = 30
 TASK_POST_QUALITY = 31
 TASK_SOURCE_QUALITY = 32
+TASK_FEEDS_LIST = 33
 
 SCOPE_MODE_ALL = "all"
 SCOPE_MODE_POSTS = "posts"
@@ -496,6 +497,24 @@ class RssTagTasks:
                             "provider": data.get("provider", ""),
                             "user": data["user"],
                             "type": TASK_DOWNLOAD,
+                        },
+                    )
+                elif data["type"] == TASK_FEEDS_LIST:
+                    # One sources-list refresh per (user, provider). Keyed by
+                    # type as well so it never collides with the download docs
+                    # for the same user+provider.
+                    result = self._state.enqueue(
+                        {
+                            "user": data["user"],
+                            "type": TASK_FEEDS_LIST,
+                            "provider": data.get("provider", ""),
+                        },
+                        {
+                            "user": data["user"],
+                            "type": TASK_FEEDS_LIST,
+                            "host": data.get("host", ""),
+                            "manual": manual,
+                            "provider": data.get("provider", ""),
                         },
                     )
                 elif data["type"] == TASK_RAW_DOWNLOAD:
@@ -1455,6 +1474,7 @@ class RssTagTasks:
             TASK_TAGS_TOPICS: "Find tags appearing in post topics",
             TASK_POST_QUALITY: "Post quality scoring (incremental, supports scope)",
             TASK_SOURCE_QUALITY: "Feed/category quality rollup (supports scope)",
+            TASK_FEEDS_LIST: "Refresh sources list from provider (no posts)",
         }
 
         if task_type in task_titles:

@@ -43,6 +43,10 @@ EXPECTED_INTERNAL_TASK_TYPES: List[int] = [
     task_module.TASK_POST_GROUPING_CLEANUP,
     task_module.TASK_POST_QUALITY,
     task_module.TASK_SOURCE_QUALITY,
+    task_module.TASK_FEEDS_LIST,
+    task_module.TASK_TOPIC_MERGE,
+    task_module.TASK_RAW_DOWNLOAD,
+    task_module.TASK_RAW_TO_POSTS,
 ]
 
 
@@ -202,6 +206,9 @@ class TestWorkerRegistryCompleteness(unittest.TestCase):
 
         expected_sources: Dict[int, Callable[..., Any]] = {
             task_module.TASK_DOWNLOAD: provider_worker.handle_download,
+            task_module.TASK_FEEDS_LIST: provider_worker.handle_feeds_list,
+            task_module.TASK_RAW_DOWNLOAD: provider_worker.handle_raw_download,
+            task_module.TASK_RAW_TO_POSTS: provider_worker.handle_raw_to_posts,
             task_module.TASK_MARK: provider_worker.handle_mark,
             task_module.TASK_MARK_TELEGRAM: provider_worker.handle_mark_telegram,
             task_module.TASK_GMAIL_SORT: provider_worker.handle_gmail_sort,
@@ -224,6 +231,9 @@ class TestWorkerRegistryCompleteness(unittest.TestCase):
             task_module.TASK_POST_GROUPING_BATCH: llm_worker.make_post_grouping_batch,
             task_module.TASK_TAG_CLASSIFICATION_BATCH: llm_worker.make_tags_classification_batch,
             task_module.TASK_POST_GROUPING_CLEANUP: llm_worker.handle_post_grouping_cleanup,
+            task_module.TASK_TOPIC_MERGE: llm_worker.handle_topic_merge,
+            task_module.TASK_POST_QUALITY: llm_worker.handle_post_quality,
+            task_module.TASK_SOURCE_QUALITY: llm_worker.handle_source_quality,
             task_module.TASK_DELETE_FEEDS: tag_worker.handle_delete_feeds,
         }
 

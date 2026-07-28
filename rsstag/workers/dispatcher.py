@@ -26,6 +26,7 @@ from rsstag.tasks import (
     TASK_DELETE_FEEDS,
     TASK_DOWNLOAD,
     TASK_FASTTEXT,
+    TASK_FEEDS_LIST,
     TASK_GMAIL_SORT,
     TASK_LETTERS,
     TASK_MARK,
@@ -164,6 +165,7 @@ class RSSTagWorkerDispatcher:
 def _build_registry(tag_worker: TagWorker, llm_worker: LLMWorker, provider_worker: ProviderWorker) -> WorkerRegistry:
     registry = WorkerRegistry()
     registry.register(TASK_DOWNLOAD, provider_worker.handle_download)
+    registry.register(TASK_FEEDS_LIST, provider_worker.handle_feeds_list)
     registry.register(TASK_RAW_DOWNLOAD, provider_worker.handle_raw_download)
     registry.register(TASK_RAW_TO_POSTS, provider_worker.handle_raw_to_posts)
     registry.register(TASK_MARK, provider_worker.handle_mark)
@@ -324,7 +326,10 @@ def worker(config: Dict[str, Any]) -> None:
                             task,
                             f"finish_task returned false for type {task['type']}",
                         )
-                    if task["type"] == TASK_DOWNLOAD:
+                    if task["type"] in (TASK_DOWNLOAD, TASK_FEEDS_LIST):
+                        # Both tasks talk to the provider under the same
+                        # per-provider queue flag, so both must release it or
+                        # every later download for that provider is rejected.
                         provider = task.get("provider", "")
                         if provider:
                             users.update_by_sid(

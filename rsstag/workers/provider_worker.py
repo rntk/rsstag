@@ -5,9 +5,11 @@ import time
 import traceback
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from pymongo import UpdateOne
 from pymongo.errors import BulkWriteError
 
 from rsstag.providers import providers as data_providers
+from rsstag.providers.feed_docs import dedup_feed_docs
 
 
 class ProviderWorker:
@@ -160,6 +162,127 @@ class ProviderWorker:
         self._record_bulk_write("posts", inserted_count)
         return inserted_count, 0
 
+    def _store_feeds(
+        self,
+        owner: str,
+        provider_name: str,
+        feeds: List[Dict[str, Any]],
+        refresh_titles: bool = False,
+    ) -> Tuple[int, int]:
+        """Insert feeds the owner does not have yet; report (new, known).
+
+        Sources arrive from several paths (posts download, raw conversion, a
+        sources-list refresh), so the same feed is offered over and over. The
+        ``feed_id`` is the identity: anything already stored for this owner is
+        skipped instead of inserted a second time.
+        """
+        unique_feeds: List[Dict[str, Any]] = dedup_feed_docs(feeds)
+        if not unique_feeds:
+            return 0, 0
+
+        feed_ids: List[str] = [feed["feed_id"] for feed in unique_feeds]
+        existing_feeds: Any = self._db.feeds.find(
+            {"owner": owner, "feed_id": {"$in": feed_ids}},
+            projection={"feed_id": True, "_id": False},
+        )
+        existing_feed_ids: set[str] = {feed["feed_id"] for feed in existing_feeds}
+        new_feeds: List[Dict[str, Any]] = []
+        title_updates: List[UpdateOne] = []
+        for feed in unique_feeds:
+            if feed["feed_id"] not in existing_feed_ids:
+                feed["provider"] = provider_name
+                new_feeds.append(feed)
+            elif refresh_titles:
+                title_updates.append(
+                    UpdateOne(
+                        {"owner": owner, "feed_id": feed["feed_id"]},
+                        {
+                            "$set": {
+                                "title": feed["title"],
+                                "provider": provider_name,
+                            }
+                        },
+                    )
+                )
+
+        if new_feeds:
+            self._db.feeds.insert_many(new_feeds)
+            self._record_bulk_write("feeds", len(new_feeds))
+        if title_updates:
+            self._db.feeds.bulk_write(title_updates, ordered=False)
+
+        return len(new_feeds), len(unique_feeds) - len(new_feeds)
+
+    def handle_feeds_list(self, task: Dict[str, Any]) -> bool:
+        """Refresh the stored list of sources for one provider, without posts.
+
+        Providers opt in by implementing ``list_feeds``; a provider without it
+        simply has nothing to refresh. Nothing here is provider specific.
+        """
+        provider_name: str = task["data"].get("provider")
+        owner: str = task["user"]["sid"]
+        provider_user: Optional[Dict[str, Any]] = self._users.get_provider_user(
+            task["user"], provider_name
+        )
+        if not provider_user:
+            logging.warning(
+                "No provider credentials for %s on user %s", provider_name, owner
+            )
+            return True
+
+        provider: Any = self._providers.get(provider_name)
+        if not provider:
+            error: str = f"Unknown provider {provider_name}"
+            logging.warning(error)
+            self._tasks.mark_task_failed(task.get("_id"), error)
+            return False
+        if not data_providers.supports_feeds_list(provider):
+            error = f"Provider {provider_name} can`t list sources"
+            logging.warning(error)
+            self._tasks.mark_task_failed(task.get("_id"), error)
+            return False
+
+        try:
+            feeds: List[Dict[str, Any]] = provider.list_feeds(provider_user)
+            new_count: int
+            known_count: int
+            new_count, known_count = self._store_feeds(
+                owner, provider_name, feeds, refresh_titles=True
+            )
+        except Exception as e:
+            logging.error(
+                "Can`t refresh %s sources list for user %s. Info: %s. %s",
+                provider_name,
+                owner,
+                e,
+                traceback.format_exc(),
+            )
+            self._handle_provider_error(task, provider_name, e)
+            # A failed refresh must not keep the provider queue flag raised:
+            # otherwise every later download for this provider is rejected.
+            self._users.update_by_sid(owner, {f"in_queue.{provider_name}": False})
+            return False
+        finally:
+            self._save_refreshed_oauth_token(task, provider_user, provider_name)
+
+        logging.info(
+            "Refreshed %s sources for user %s. New=%d already known=%d",
+            provider_name,
+            owner,
+            new_count,
+            known_count,
+        )
+        self._save_provider_updates(task, provider_user, provider_name)
+        self._users.update_by_sid(
+            owner,
+            {
+                "message": f"Sources list updated: {new_count} new, "
+                f"{known_count} already known"
+            },
+        )
+
+        return True
+
     def handle_download(self, task: Dict[str, Any]) -> bool:
         """Incrementally download new posts/feeds for one connected source.
 
@@ -203,23 +326,6 @@ class ProviderWorker:
             feeds: List[Dict[str, Any]]
             for posts, feeds in provider.download(provider_user, selection):
                 received_count += len(posts)
-                f_ids: List[str] = [feed["feed_id"] for feed in feeds]
-                existing_feeds: Any = self._db.feeds.find(
-                    {
-                        "owner": task["user"]["sid"],
-                        "feed_id": {"$in": f_ids},
-                    },
-                    projection={"feed_id": True, "_id": False},
-                )
-                existing_feed_ids: set[str] = {
-                    feed["feed_id"] for feed in existing_feeds
-                }
-                new_feeds: List[Dict[str, Any]] = []
-                for feed in feeds:
-                    if feed["feed_id"] in existing_feed_ids:
-                        continue
-                    feed["provider"] = provider_name
-                    new_feeds.append(feed)
                 if posts:
                     new_posts: List[Dict[str, Any]]
                     filtered_count: int
@@ -234,9 +340,8 @@ class ProviderWorker:
                     )
                     inserted_count += batch_inserted
                     skipped_count += duplicate_count
-                if new_feeds:
-                    self._db.feeds.insert_many(new_feeds)
-                    self._record_bulk_write("feeds", len(new_feeds))
+                if feeds:
+                    self._store_feeds(task["user"]["sid"], provider_name, feeds)
             success = True
         except Exception as e:
             logging.error(

@@ -696,6 +696,14 @@ def on_provider_detail_get(
         return redirect(app.routes.get_url_by_endpoint(endpoint="on_data_sources_get"))
     page = app.template_env.get_template("provider-detail.html")
     entry = app.users.get_provider_entry(user, provider)
+    # Telegram manages its sources on the categories page; the other providers
+    # still use the shared selection page.
+    if provider == TELEGRAM:
+        feeds_url = app.routes.get_url_by_endpoint(endpoint="on_group_by_category_get")
+    else:
+        feeds_url = app.routes.get_url_by_endpoint(
+            endpoint="on_provider_feeds_get_post", params={"provider": provider}
+        )
     return Response(
         page.render(
             err=err or [],
@@ -710,9 +718,7 @@ def on_provider_detail_get(
             x_auth_url=app.routes.get_url_by_endpoint(
                 endpoint="on_login_x_auth_get"
             ),
-            feeds_url=app.routes.get_url_by_endpoint(
-                endpoint="on_provider_feeds_get_post", params={"provider": provider}
-            ),
+            feeds_url=feeds_url,
             data_sources_url=app.routes.get_url_by_endpoint(
                 endpoint="on_data_sources_get"
             ),

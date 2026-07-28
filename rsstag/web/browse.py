@@ -9,6 +9,7 @@ from rsstag.html_cleaner import HTMLCleaner
 from rsstag.lda import LDA
 from rsstag.quality import summarize_category_quality
 from rsstag.utils import get_sorted_dict_by_alphabet
+from rsstag.web.providers import feeds_list_capable_providers
 
 from werkzeug.wrappers import Request, Response
 from werkzeug.exceptions import NotFound
@@ -24,6 +25,35 @@ def _attach_category_quality(by_category: dict) -> None:
             feed["quality"] for feed in category["feeds"] if feed.get("quality")
         ]
         category["quality"] = summarize_category_quality(feed_qualities)
+
+
+def _build_available_sources(
+    db_feeds: list, shown_feed_ids: set, feeds_quality: dict
+) -> list:
+    """List stored feeds that the unread view does not show.
+
+    A sources-list refresh stores feeds before any post is downloaded, and a
+    fully-read feed drops out of the unread grouping. Both belong in the
+    "available sources" block so the user can see what exists and pull posts
+    from it, without changing what the main category listing means.
+    """
+    sources = []
+    for feed in db_feeds:
+        if feed["feed_id"] in shown_feed_ids:
+            continue
+        sources.append(
+            {
+                "feed_id": feed["feed_id"],
+                "title": feed.get("title", feed["feed_id"]),
+                "url": feed.get("local_url", ""),
+                "provider": feed.get("provider", ""),
+                "category_title": feed.get("category_title", ""),
+                "quality": feeds_quality.get(feed["feed_id"]),
+            }
+        )
+    sources.sort(key=lambda source: (source["title"] or "").lower())
+
+    return sources
 
 
 def on_group_by_category_get(app: "RSSTagApplication", user: dict, request: Request) -> Response:
@@ -93,11 +123,21 @@ def on_group_by_category_get(app: "RSSTagApplication", user: dict, request: Requ
             data.move_to_end(app.no_category_name)
     else:
         data = OrderedDict()
+    shown_feed_ids = {
+        feed["feed_id"]
+        for category in by_category.values()
+        for feed in category["feeds"]
+    }
+    sources = _build_available_sources(
+        list(by_feed.values()), shown_feed_ids, feeds_quality
+    )
     page = app.template_env.get_template("group-by-category.html")
 
     return Response(
         page.render(
             data=data,
+            sources=sources,
+            feeds_list_providers=feeds_list_capable_providers(user),
             group_by_link=app.routes.get_url_by_endpoint(
                 endpoint="on_group_by_tags_get", params={"page_number": page_number}
             ),

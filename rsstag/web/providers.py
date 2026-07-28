@@ -10,10 +10,19 @@ import rsstag.providers.providers as data_providers
 from rsstag.providers.bazqux import BazquxProvider
 from rsstag.providers.telegram import TelegramProvider
 from rsstag.providers.x import XProvider
-from rsstag.tasks import TASK_DOWNLOAD
+from rsstag.tasks import TASK_DOWNLOAD, TASK_FEEDS_LIST
 
 if TYPE_CHECKING:
     from rsstag.web.app import RSSTagApplication
+
+# Provider implementations the web layer can ask about capabilities. A
+# provider joins the "refresh sources list" feature by implementing
+# ``list_feeds``; no per-provider branch is needed here.
+PROVIDER_CLASSES: Dict[str, type] = {
+    data_providers.TELEGRAM: TelegramProvider,
+    data_providers.BAZQUX: BazquxProvider,
+    data_providers.X: XProvider,
+}
 
 
 _TLG_LOAD_MODES = ("unread", "limit", "unread_or_limit")
@@ -216,11 +225,131 @@ def on_provider_feed_download_post(
     )
 
 
+def feeds_list_capable_providers(user: dict) -> List[str]:
+    """Return the user's connected providers that can refresh a sources list."""
+    connected: Dict[str, object] = user.get("providers", {}) or {}
+    return sorted(
+        name
+        for name, provider_class in PROVIDER_CLASSES.items()
+        if name in connected and data_providers.supports_feeds_list(provider_class)
+    )
+
+
+def _parse_feeds_refresh_request(request: Request) -> Tuple[str, str]:
+    """Pull the provider name out of a sources-refresh request."""
+    try:
+        data: Any = json.loads(request.data or b"{}")
+    except (TypeError, ValueError) as exc:
+        logging.warning("Invalid sources refresh request: %s", exc)
+        return "", "Invalid request body"
+
+    if not isinstance(data, dict):
+        return "", "Invalid request body"
+
+    provider: str = str(data.get("provider", "")).strip()
+    if not provider:
+        return "", "Provider is required"
+
+    return provider, ""
+
+
+def on_provider_feeds_refresh_post(
+    app: "RSSTagApplication", user: dict, request: Request
+) -> Response:
+    """Queue a sources-list refresh: fetch the feeds list, but no posts."""
+    provider: str
+    error: str
+    provider, error = _parse_feeds_refresh_request(request)
+    if error:
+        return _json_response({"status": "error", "message": error}, status=400)
+
+    provider_class: Optional[type] = PROVIDER_CLASSES.get(provider)
+    if provider_class is None or not data_providers.supports_feeds_list(provider_class):
+        return _json_response(
+            {
+                "status": "error",
+                "message": f"Provider {provider} can`t refresh its sources list",
+            },
+            status=400,
+        )
+    if not app.users.is_provider_connected(user, provider):
+        return _json_response(
+            {"status": "error", "message": f"Provider {provider} is not connected"},
+            status=400,
+        )
+
+    try:
+        app.users.reset_in_queue_if_legacy(user["sid"], user)
+        if app.users.get_in_queue(user).get(provider, False):
+            return _json_response(
+                {
+                    "status": "error",
+                    "message": f"A {provider} download is already in progress",
+                },
+                status=409,
+            )
+
+        added: bool = app.tasks.add_task(
+            {
+                "type": TASK_FEEDS_LIST,
+                "user": user["sid"],
+                "host": request.environ.get(
+                    "HTTP_HOST", app.config["settings"]["host_name"]
+                ),
+                "provider": provider,
+            },
+            manual=False,
+        )
+        if not added:
+            logging.error(
+                "Can`t queue %s sources refresh for user %s", provider, user["sid"]
+            )
+            return _json_response(
+                {"status": "error", "message": "Can`t start sources refresh"},
+                status=500,
+            )
+
+        updated: Optional[bool] = app.users.update_by_sid(
+            user["sid"],
+            {
+                f"in_queue.{provider}": True,
+                "message": f"Refreshing the {provider} sources list",
+            },
+        )
+        if not updated:
+            logging.error(
+                "Can`t update queue status for user %s after queueing %s sources refresh",
+                user["sid"],
+                provider,
+            )
+    except Exception as exc:
+        logging.exception(
+            "Can`t queue %s sources refresh for user %s: %s",
+            provider,
+            user["sid"],
+            exc,
+        )
+        return _json_response(
+            {"status": "error", "message": "Can`t start sources refresh"}, status=500
+        )
+
+    logging.info("Queued %s sources refresh for user %s", provider, user["sid"])
+    return _json_response(
+        {"status": "success", "message": f"{provider} sources refresh started"}
+    )
+
+
 def on_provider_feeds_get_post(
     app, user: dict, request: Request, provider: Optional[str] = None
 ) -> Response:
     provider = provider
-    if provider not in (data_providers.TELEGRAM, data_providers.BAZQUX, data_providers.X):
+    if provider == data_providers.TELEGRAM:
+        # Telegram picks its sources on the categories page now: the list is
+        # refreshed there and every feed is downloaded on its own.
+        return redirect(
+            app.routes.get_url_by_endpoint(endpoint="on_group_by_category_get")
+        )
+    if provider not in (data_providers.BAZQUX, data_providers.X):
         return redirect(app.routes.get_url_by_endpoint(endpoint="on_root_get"))
 
     provider_user = app.users.get_provider_user(user, provider)

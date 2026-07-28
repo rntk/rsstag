@@ -619,6 +619,11 @@ class RSSTagRoutes:
                 "methods": ["POST"],
             },
             {
+                "url": "/api/provider/feeds/refresh",
+                "endpoint": "on_provider_feeds_refresh_post",
+                "methods": ["POST"],
+            },
+            {
                 "url": "/delete-feeds-categories",
                 "endpoint": "on_delete_feeds_categories_post",
                 "methods": ["POST"],
