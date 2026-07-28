@@ -440,6 +440,84 @@ test('render includes "Show links" text', () => {
 });
 
 // ============================================================
+// Topic links tests
+// ============================================================
+
+test('render reads topics from the links payload with a fallback', () => {
+  const src = readSource();
+  assert.ok(
+    /post\.links\.topics\s*\|\|\s*\[\]/.test(src),
+    'should fall back to an empty list when links carry no topics'
+  );
+});
+
+test('render only builds the topics block for a post with topics', () => {
+  const src = readSource();
+  assert.ok(
+    /topic_links\.length/.test(src),
+    'should skip the topics block when there are no topics'
+  );
+});
+
+test('render links every topic to its grouped page', () => {
+  const src = readSource();
+  assert.ok(
+    /href=\{topic\.url\}[\s\S]*className="post_topic_link"/.test(src),
+    'should render a post_topic_link anchor pointing at topic.url'
+  );
+});
+
+test('render links every topic to its grouped snippets page', () => {
+  const src = readSource();
+  assert.ok(
+    /href=\{topic\.snippets_url\}[\s\S]*className="post_topic_snippets_link"/.test(src),
+    'should render a post_topic_snippets_link anchor pointing at topic.snippets_url'
+  );
+});
+
+test('render marks the nesting level of a topic with a CSS class', () => {
+  const src = readSource();
+  assert.ok(
+    /post_topic_level_'?\s*\+\s*topic\.level/.test(src),
+    'should build the level class from topic.level'
+  );
+});
+
+test('render shows the full topic path as link title', () => {
+  const src = readSource();
+  assert.ok(/title=\{topic\.topic\}/.test(src), 'should use the full path as the link title');
+});
+
+test('render keys topic items by their full path', () => {
+  const src = readSource();
+  assert.ok(/key=\{topic\.topic\}/.test(src), 'should key topic items by topic.topic');
+});
+
+test('render shows the sentence count of a topic', () => {
+  const src = readSource();
+  assert.ok(
+    /post_topic_count[\s\S]*topic\.sentences/.test(src),
+    'should render topic.sentences in the post_topic_count element'
+  );
+});
+
+test('render places the topics block inside the links block', () => {
+  const src = readSource();
+  assert.ok(
+    /\{topics\}[\s\S]{0,40}\{tags\}/.test(src),
+    'should render topics next to tags inside the links block'
+  );
+});
+
+test('render guards the tags list against a missing tags field', () => {
+  const src = readSource();
+  assert.ok(
+    /post\.links\.tags\s*\|\|\s*\[\]/.test(src),
+    'should not throw when links carry no tags'
+  );
+});
+
+// ============================================================
 // Import and dependency tests
 // ============================================================
 

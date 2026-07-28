@@ -27,6 +27,9 @@ class RssTagPostGrouping:
             self._db.post_grouping.create_index(
                 [("owner", 1), ("post_ids_hash", 1)], unique=True
             )
+            # Lookups by a single post id (post links block) match on membership,
+            # not on the exact id list the hash identifies.
+            self._db.post_grouping.create_index([("owner", 1), ("post_ids", 1)])
         except Exception as e:
             self._log.warning(
                 "Can't create post_grouping indexes. May already exist. Info: %s", e
@@ -42,6 +45,44 @@ class RssTagPostGrouping:
     def get_all_by_owner(self, owner: str, projection: Optional[dict] = None) -> Iterator[dict]:
         """Get all grouped posts data by owner"""
         return self._db.post_grouping.find({"owner": owner}, projection=projection)
+
+    def get_by_post_id(
+        self, owner: str, post_id: PostId, projection: Optional[dict] = None
+    ) -> List[dict]:
+        """Get every grouping doc of an owner that contains the given post id.
+
+        Unlike `get_grouped_posts` this matches multi post groupings too: the
+        hash identifies an exact post id list, while a post may be grouped
+        together with others. Post ids are stored both as int and as str
+        depending on the writer, so both variants are queried.
+        """
+        if post_id is None:
+            return []
+
+        query_values: List[PostId] = [post_id]
+        for value in (str(post_id), self._as_int(post_id)):
+            if value is not None and value not in query_values:
+                query_values.append(value)
+
+        try:
+            return list(
+                self._db.post_grouping.find(
+                    {"owner": owner, "post_ids": {"$in": query_values}},
+                    projection=projection,
+                )
+            )
+        except Exception as e:
+            self._log.error(
+                "Can't get grouped posts for post %s. Info: %s", post_id, e
+            )
+            return []
+
+    @staticmethod
+    def _as_int(post_id: PostId) -> Optional[int]:
+        try:
+            return int(post_id)
+        except (ValueError, TypeError):
+            return None
 
     def get_existing_post_ids(
         self, owner: str, post_ids: List[PostId]

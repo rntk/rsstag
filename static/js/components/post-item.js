@@ -117,7 +117,7 @@ export default class PostsItem extends React.Component {
       if (post.links) {
         let tags = [],
           grouped_links = {};
-        let tgs = post.links.tags.slice(0);
+        let tgs = (post.links.tags || []).slice(0);
         tgs.sort((f, s) => {
           if (f.tag > s.tag) {
             return 1;
@@ -149,6 +149,33 @@ export default class PostsItem extends React.Component {
             </div>
           );
         }
+        let topics = null;
+        const topic_links = post.links.topics || [];
+        if (topic_links.length) {
+          topics = (
+            <div className="post_topics_block">
+              <span className="post_topics_title">Topics</span>
+              {topic_links.map((topic) => (
+                <span
+                  key={topic.topic}
+                  className={'post_topic_item post_topic_level_' + topic.level}
+                >
+                  <a href={topic.url} className="post_topic_link" title={topic.topic}>
+                    {topic.name}
+                  </a>
+                  <a
+                    href={topic.snippets_url}
+                    className="post_topic_snippets_link"
+                    title="Grouped snippets"
+                  >
+                    S
+                  </a>
+                  <span className="post_topic_count">({topic.sentences})</span>
+                </span>
+              ))}
+            </div>
+          );
+        }
         let clst_link = null;
         if (post.links.clst_url) {
           clst_link = (
@@ -166,6 +193,7 @@ export default class PostsItem extends React.Component {
             <a href={post.links.ctx_url}>With context</a>
             {clst_link ? <span>&nbsp;| &nbsp;</span> : <br />}
             {clst_link}
+            {topics}
             {tags}
           </div>
         );

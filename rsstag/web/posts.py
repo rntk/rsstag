@@ -1748,6 +1748,87 @@ def on_posts_content_post(
     return Response(json.dumps(result), mimetype="application/json", status=code)
 
 
+def _topic_prefix_paths(topic_path: str) -> list[str]:
+    """Every path from the root topic down to the topic itself.
+
+    "AI > LLMs > Training" yields "AI", "AI > LLMs" and the full path, so the
+    links block can offer a page for the topic and for each of its parents.
+    """
+    parts: list[str] = _split_topic_parts(topic_path)
+    return [" > ".join(parts[: i + 1]) for i in range(len(parts))]
+
+
+def _post_topic_sentence_counts(grouping_docs: list[dict]) -> dict[str, int]:
+    """Count sentences per topic path, subtree included.
+
+    A parent accumulates the sentences of its children, the same way the
+    topics-list tree aggregates counts upwards. Sentence numbers are local to
+    a grouping doc, so they are kept unique per doc before counting.
+    """
+    scoped: dict[str, set[tuple[int, int]]] = defaultdict(set)
+    for doc_number, doc in enumerate(grouping_docs):
+        groups: Any = doc.get("groups") or {}
+        if not isinstance(groups, dict):
+            continue
+        for raw_topic, indices in groups.items():
+            if not isinstance(indices, list):
+                continue
+            sentence_keys: set[tuple[int, int]] = {
+                (doc_number, index) for index in indices if isinstance(index, int)
+            }
+            if not sentence_keys:
+                continue
+            for path in _topic_prefix_paths(str(raw_topic)):
+                scoped[path].update(sentence_keys)
+    return {path: len(sentence_keys) for path, sentence_keys in scoped.items()}
+
+
+def _topic_sort_key(topic_path: str) -> list[str]:
+    """Sort topics as a tree: a parent right before its own children."""
+    return [part.casefold() for part in _split_topic_parts(topic_path)]
+
+
+def _build_post_topic_links(
+    app: "RSSTagApplication", post_id: str, grouping_docs: list[dict]
+) -> list[dict]:
+    """Build topic/subtopic links for one post.
+
+    Topic paths are kept raw (not alias resolved) because the grouped pages
+    filter the very same grouping doc by raw group name.
+    """
+    sentence_counts: dict[str, int] = _post_topic_sentence_counts(grouping_docs)
+    topic_links: list[dict] = []
+    for path in sorted(sentence_counts, key=_topic_sort_key):
+        parts: list[str] = _split_topic_parts(path)
+        topic_links.append(
+            {
+                "topic": path,
+                "name": parts[-1],
+                "level": len(parts),
+                "sentences": sentence_counts[path],
+                "url": app.routes.get_url_by_endpoint(
+                    endpoint="on_post_grouped_get",
+                    params={"pids": post_id, "topic": path},
+                ),
+                "snippets_url": app.routes.get_url_by_endpoint(
+                    endpoint="on_post_grouped_snippets_get",
+                    params={"pids": post_id, "topic": path},
+                ),
+            }
+        )
+    return topic_links
+
+
+def _post_topic_links(
+    app: "RSSTagApplication", owner: str, post_id: str
+) -> list[dict]:
+    """Topic links of a post, empty when it was never grouped."""
+    grouping_docs: list[dict] = app.post_grouping.get_by_post_id(
+        owner, post_id, projection={"_id": 0, "groups": 1}
+    )
+    return _build_post_topic_links(app, post_id, grouping_docs)
+
+
 def on_post_links_get(app: "RSSTagApplication", user: dict, post_id: str) -> Response:
     projection = {"tags": True, "feed_id": True, "url": True, "clusters": True}
     current_post = app.posts.get_by_pid(user["sid"], post_id, projection)
@@ -1761,7 +1842,7 @@ def on_post_links_get(app: "RSSTagApplication", user: dict, post_id: str) -> Res
                     "c_title": feed["category_title"],
                     "f_url": feed["local_url"],
                     "f_title": feed["title"],
-                    "p_url": current_post["url"],
+                    "p_url": current_post.get("url", ""),
                     "ctx_url": app.routes.get_url_by_endpoint(
                         endpoint="on_posts_get",
                         params={
@@ -1770,6 +1851,7 @@ def on_post_links_get(app: "RSSTagApplication", user: dict, post_id: str) -> Res
                         },
                     ),
                     "tags": [],
+                    "topics": _post_topic_links(app, user["sid"], post_id),
                 }
             }
             if "clusters" in current_post:
