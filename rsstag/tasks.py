@@ -185,24 +185,6 @@ def claimable_item_processing() -> Dict[str, Any]:
 
 class RssTagTasks:
     indexes = ["user", "processing"]
-    _tasks_after = {
-        TASK_DOWNLOAD: [TASK_TAGS],
-        TASK_TAGS: [TASK_CLEAN_BIGRAMS],
-        TASK_CLEAN_BIGRAMS: [
-            TASK_BIGRAMS_RANK,
-            TASK_TAGS_RANK,
-            TASK_LETTERS,
-            TASK_TAGS_SENTIMENT,
-        ],  # TASK_TAGS_COORDS
-        TASK_BIGRAMS_RANK: [TASK_NER],
-        TASK_NER: [TASK_CLUSTERING],
-        TASK_CLUSTERING: [TASK_W2V],
-        TASK_W2V: [TASK_FASTTEXT],
-        TASK_FASTTEXT: [TASK_POST_GROUPING],
-        TASK_POST_GROUPING: [TASK_TOPIC_MERGE],
-        # TASK_W2V: [TASK_TAGS_GROUP],
-        # TASK_TAGS_GROUP: [TASK_FASTTEXT]
-    }
 
     def __init__(self, db: MongoClient) -> None:
         self._db = db
@@ -390,26 +372,6 @@ class RssTagTasks:
             return []
         return [feed_id for feed_id in feed_ids if feed_id]
 
-    def _enqueue_quality_rollup(self, owner: str, task_doc: dict) -> None:
-        """Queue a feed rollup for a quality scan that just drained.
-
-        The worker already enqueues a rollup after every batch, but
-        ``TaskStateMachine.enqueue`` no-ops while an earlier rollup is still
-        running, so the final batch's scores could otherwise never reach
-        ``feeds.quality``. Enqueuing again once the scan is provably drained
-        gives that a second chance. The rollup recomputes from scratch, so an
-        extra run costs nothing but the aggregation.
-        """
-        self.add_task(
-            {
-                "user": owner,
-                "type": TASK_SOURCE_QUALITY,
-                "provider": task_doc.get("provider", ""),
-                "scope": task_doc.get("scope") or {},
-            },
-            manual=False,
-        )
-
     def _count_pending_quality_posts(self, owner: str, task_doc: dict) -> int:
         scope_query = self._build_post_scope_predicate(owner, task_doc)
         return self._db.posts.count_documents(
@@ -464,7 +426,7 @@ class RssTagTasks:
             if claimed_post:
                 return claimed_post
 
-    def add_task(self, data: dict, manual: bool = True):
+    def add_task(self, data: dict, manual: bool = True) -> Optional[bool]:
         result = True
         if data and "type" in data:
             try:
@@ -633,36 +595,6 @@ class RssTagTasks:
         data["status"] = bool(data.get("mark_status", True))
         return data
 
-    def add_next_tasks(self, user: str, task_type: int) -> Optional[bool]:
-        result = False
-        if task_type in self._tasks_after:
-            try:
-                # Idempotent per-successor enqueue: a crash/retry between
-                # successors no longer duplicates chain docs.
-                result = all(
-                    self._state.enqueue(
-                        {"user": user, "type": t}, {"manual": False}
-                    )
-                    for t in self._tasks_after[task_type]
-                )
-            except Exception as e:
-                result = None
-                self._log.warning(
-                    "Can`t add tasks after %s for user %s. Info: %s", task_type, user, e
-                )
-
-        return result
-
-    def _can_finalize_completed_task(self, user_task: dict) -> bool:
-        if user_task.get("manual", False):
-            return True
-
-        task_type = user_task.get("type")
-        if task_type not in self._tasks_after:
-            return True
-
-        return bool(self.add_next_tasks(user_task["user"], task_type))
-
     def get_task(self, users: RssTagUsers) -> dict:
         task = {"type": TASK_NOOP, "user": None, "data": None, "_id": ""}
         try:
@@ -736,10 +668,8 @@ class RssTagTasks:
                         }
                     )
                     if psc == 0:
-                        can_delete = self._can_finalize_completed_task(user_task)
-                        if can_delete:
-                            self._state.complete(user_task["_id"])
-                            unlock_task = False
+                        self._state.complete(user_task["_id"])
+                        unlock_task = False
                 if unlock_task:
                     self._state.release(user_task["_id"])
             elif user_task["type"] == TASK_BIGRAMS_RANK:
@@ -764,9 +694,7 @@ class RssTagTasks:
                     self._state.release(user_task["_id"])
                 else:
                     task["type"] = TASK_NOOP
-                    can_delete = self._can_finalize_completed_task(user_task)
-                    if can_delete:
-                        self._state.complete(user_task["_id"])
+                    self._state.complete(user_task["_id"])
             elif user_task["type"] == TASK_POST_GROUPING:
                 data = []
                 owner: str = task["user"]["sid"]
@@ -788,10 +716,8 @@ class RssTagTasks:
                         {**scope_query, "grouping": {"$exists": False}}
                     )
                     if psc == 0:
-                        can_delete = self._can_finalize_completed_task(user_task)
-                        if can_delete:
-                            self._state.complete(user_task["_id"])
-                            unlock_task = False
+                        self._state.complete(user_task["_id"])
+                        unlock_task = False
                 if unlock_task:
                     self._state.release(user_task["_id"])
             elif user_task["type"] == TASK_POST_GROUPING_BATCH:
@@ -837,10 +763,8 @@ class RssTagTasks:
                             }
                         )
                         if psc == 0:
-                            can_delete = self._can_finalize_completed_task(user_task)
-                            if can_delete:
-                                self._state.complete(user_task["_id"])
-                                unlock_task = False
+                            self._state.complete(user_task["_id"])
+                            unlock_task = False
                 if unlock_task:
                     self._state.release(user_task["_id"])
             elif user_task["type"] == TASK_POST_GROUPING_CLEANUP:
@@ -852,11 +776,7 @@ class RssTagTasks:
                 )
                 if pending_docs == 0:
                     task["type"] = TASK_NOOP
-                    can_delete = self._can_finalize_completed_task(user_task)
-                    if can_delete:
-                        self._state.complete(user_task["_id"])
-                    else:
-                        self._state.release(user_task["_id"])
+                    self._state.complete(user_task["_id"])
                 data = {"pending_topic_groupings": pending_docs}
             elif user_task["type"] == TASK_ANTHOLOGY:
                 data = self._db.anthologies.find_one_and_update(
@@ -868,10 +788,8 @@ class RssTagTasks:
                 if not data:
                     task["type"] = TASK_NOOP
                     if self._count_pending_anthologies(task["user"]["sid"]) == 0:
-                        can_delete = self._can_finalize_completed_task(user_task)
-                        if can_delete:
-                            self._state.complete(user_task["_id"])
-                            unlock_task = False
+                        self._state.complete(user_task["_id"])
+                        unlock_task = False
                 if unlock_task:
                     self._state.release(user_task["_id"])
             elif user_task["type"] == TASK_TAGS_RANK:
@@ -896,9 +814,7 @@ class RssTagTasks:
                     self._state.release(user_task["_id"])
                 else:
                     task["type"] = TASK_NOOP
-                    can_delete = self._can_finalize_completed_task(user_task)
-                    if can_delete:
-                        self._state.complete(user_task["_id"])
+                    self._state.complete(user_task["_id"])
             elif user_task["type"] == TASK_NER:
                 data = []
                 ps = self._db.posts.find(
@@ -924,10 +840,8 @@ class RssTagTasks:
                         {"owner": task["user"]["sid"], "ner": {"$exists": False}}
                     )
                     if psc == 0:
-                        can_delete = self._can_finalize_completed_task(user_task)
-                        if can_delete:
-                            self._state.complete(user_task["_id"])
-                            unlock_task = False
+                        self._state.complete(user_task["_id"])
+                        unlock_task = False
                 if unlock_task:
                     self._state.release(user_task["_id"])
             elif user_task["type"] == TASK_POST_QUALITY:
@@ -954,11 +868,8 @@ class RssTagTasks:
                 else:
                     task["type"] = TASK_NOOP
                     if self._count_pending_quality_posts(owner, user_task) == 0:
-                        can_delete = self._can_finalize_completed_task(user_task)
-                        if can_delete:
-                            self._enqueue_quality_rollup(owner, user_task)
-                            self._state.complete(user_task["_id"])
-                            unlock_task = False
+                        self._state.complete(user_task["_id"])
+                        unlock_task = False
                 if unlock_task:
                     self._state.release(user_task["_id"])
             elif user_task["type"] == TASK_TAG_CLASSIFICATION_BATCH:
@@ -1000,10 +911,8 @@ class RssTagTasks:
                             }
                         )
                         if psc == 0:
-                            can_delete = self._can_finalize_completed_task(user_task)
-                            if can_delete:
-                                self._state.complete(user_task["_id"])
-                                unlock_task = False
+                            self._state.complete(user_task["_id"])
+                            unlock_task = False
                 if unlock_task:
                     self._state.release(user_task["_id"])
             elif user_task["type"] == TASK_TAG_CLASSIFICATION:
@@ -1034,10 +943,8 @@ class RssTagTasks:
                         }
                     )
                     if psc == 0:
-                        can_delete = self._can_finalize_completed_task(user_task)
-                        if can_delete:
-                            self._state.complete(user_task["_id"])
-                            unlock_task = False
+                        self._state.complete(user_task["_id"])
+                        unlock_task = False
                 if unlock_task:
                     self._state.release(user_task["_id"])
 
@@ -1289,10 +1196,6 @@ class RssTagTasks:
                     # path.
                     self._state.release(task["_id"])
             if remove_task:
-                # Chain-first: enqueue successors (idempotently) BEFORE deleting
-                # so a crash between the two never loses the chain.
-                if not task.get("manual", False):
-                    self.add_next_tasks(task["user"]["sid"], task["type"])
                 self._state.complete(task["_id"])
             else:
                 # Intermittent failures during a long batch run must not
@@ -1502,11 +1405,8 @@ class RssTagTasks:
         if not user_task:
             return True
 
-        can_delete = self._can_finalize_completed_task(user_task)
-
-        if can_delete:
-            self._db.tasks.delete_one({"_id": user_task["_id"]})
-        return can_delete
+        self._db.tasks.delete_one({"_id": user_task["_id"]})
+        return True
 
     def _find_external_user_task(self, owner: str) -> Optional[dict]:
         pipeline = [

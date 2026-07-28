@@ -1,38 +1,27 @@
 import unittest
+from typing import Any, Dict
+from unittest.mock import MagicMock
 
-from rsstag.tasks import RssTagTasks, TASK_POST_GROUPING, TASK_TAGS
-
-
-class _TasksForFinalizeTest(RssTagTasks):
-    def __init__(self) -> None:
-        self._tasks_after = {TASK_TAGS: [999]}
-        self.called_with: tuple[str, int] | None = None
-
-    def add_next_tasks(self, user: str, task_type: int):
-        self.called_with = (user, task_type)
-        return False
+from rsstag.tasks import RssTagTasks, TASK_DOWNLOAD
 
 
 class TestTasksQueueCleanup(unittest.TestCase):
-    def test_auto_task_without_successors_can_be_deleted(self) -> None:
-        tasks = _TasksForFinalizeTest()
+    def test_completed_background_task_does_not_enqueue_a_successor(self) -> None:
+        db: MagicMock = MagicMock()
+        tasks: RssTagTasks = RssTagTasks(db)
+        tasks._state = MagicMock()
+        task: Dict[str, Any] = {
+            "_id": "task-1",
+            "type": TASK_DOWNLOAD,
+            "user": {"sid": "user-1"},
+            "manual": False,
+            "data": {},
+        }
 
-        result = tasks._can_finalize_completed_task(
-            {"user": "user-1", "type": TASK_POST_GROUPING, "manual": False}
-        )
+        self.assertTrue(tasks.finish_task(task))
 
-        self.assertTrue(result)
-        self.assertIsNone(tasks.called_with)
-
-    def test_auto_task_with_successors_requires_successful_chaining(self) -> None:
-        tasks = _TasksForFinalizeTest()
-
-        result = tasks._can_finalize_completed_task(
-            {"user": "user-1", "type": TASK_TAGS, "manual": False}
-        )
-
-        self.assertFalse(result)
-        self.assertEqual(tasks.called_with, ("user-1", TASK_TAGS))
+        tasks._state.complete.assert_called_once_with("task-1")
+        tasks._state.enqueue.assert_not_called()
 
 
 if __name__ == "__main__":

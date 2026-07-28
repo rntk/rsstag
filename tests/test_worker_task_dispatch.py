@@ -9,6 +9,7 @@ from rsstag.tasks import (
     TASK_LETTERS,
     TASK_NOOP,
     TASK_POST_GROUPING,
+    TASK_POST_GROUPING_CLEANUP,
     TASK_TAGS,
     TASK_TAGS_TOPICS,
     TASK_TOPIC_MERGE,
@@ -162,6 +163,45 @@ class TestWorkerTaskDispatch(MongoTaskDispatchTestCase):
         self.assertIsNotNone(stored_grouping)
         self.assertEqual(stored_grouping.get("groups"), {"Existing topic": [1]})
 
+    def test_post_grouping_cleanup_does_not_enqueue_grouping_task(self) -> None:
+        owner: str = "cleanup-owner"
+        post_id = self.db.posts.insert_one(
+            {
+                "owner": owner,
+                "pid": "post-1",
+                "grouping": 1,
+                "processing": 123.0,
+            }
+        ).inserted_id
+        self.db.post_grouping.insert_one(
+            {
+                "owner": owner,
+                "post_ids": ["post-1"],
+                "groups": {"Old topic": [1]},
+            }
+        )
+        worker: _PostGroupingWorker = _PostGroupingWorker(
+            self.db,
+            {},
+            MagicMock(),
+            MagicMock(),
+            MagicMock(),
+        )
+        task: Dict[str, Any] = {
+            "type": TASK_POST_GROUPING_CLEANUP,
+            "user": {"sid": owner, "settings": {}},
+            "scope": {"mode": "all"},
+            "data": [],
+        }
+
+        self.assertTrue(worker.make_post_grouping_cleanup(task))
+
+        stored_post: Dict[str, Any] | None = self.db.posts.find_one({"_id": post_id})
+        self.assertIsNotNone(stored_post)
+        self.assertNotIn("grouping", stored_post)
+        self.assertEqual(stored_post["processing"], POST_NOT_IN_PROCESSING)
+        self.assertEqual(self.db.tasks.count_documents({"user": owner}), 0)
+
     def test_tag_topics_worker_sets_topic_backed_flag(self) -> None:
         user: Dict[str, Any] = self._create_user("topic_flag_user")
         owner: str = user["sid"]
@@ -260,7 +300,7 @@ class TestWorkerTaskDispatch(MongoTaskDispatchTestCase):
         self.assertIsNotNone(post)
         self.assertNotEqual(post["processing"], POST_NOT_IN_PROCESSING)
 
-    def test_finish_task_removes_download_and_chains_tags_task(self) -> None:
+    def test_finish_task_removes_download_without_creating_tags_task(self) -> None:
         user: Dict[str, Any] = self._create_user("bob")
         task_id = self.db.tasks.insert_one(
             {
@@ -288,8 +328,7 @@ class TestWorkerTaskDispatch(MongoTaskDispatchTestCase):
         next_task: Dict[str, Any] | None = self.db.tasks.find_one(
             {"user": user["sid"], "type": TASK_TAGS}
         )
-        self.assertIsNotNone(next_task)
-        self.assertFalse(bool(next_task["manual"]))
+        self.assertIsNone(next_task)
 
     def test_add_task_rejects_invalid_scope_for_global_only_task(self) -> None:
         created: bool | None = self.tasks.add_task(

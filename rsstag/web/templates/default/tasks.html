@@ -39,7 +39,7 @@
 
         <div class="add-task-section">
             <h2>Add Task</h2>
-            <p class="help">Task labels include capability hints: "(global only)" or "(supports scoped reprocess)". Select a provider for provider-specific tasks.</p>
+            <p class="help">Each task runs independently and does not add follow-up tasks. Task labels include capability hints: "(global only)" or "(supports scoped reprocess)". Select a provider for provider-specific tasks.</p>
             <form action="/tasks" method="post" class="add-task-form">
                 <select name="task_type">
                     {% for type_id, title in available_tasks.items() %}

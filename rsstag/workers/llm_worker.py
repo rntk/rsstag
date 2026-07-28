@@ -24,7 +24,6 @@ from rsstag.tasks import (
     SCOPE_MODE_POSTS,
     SCOPE_MODE_PROVIDER,
     TASK_ANTHOLOGY,
-    TASK_POST_GROUPING,
     TASK_POST_GROUPING_BATCH,
 )
 from rsstag.workers.base import BaseWorker
@@ -311,7 +310,6 @@ class _PostGroupingWorker:
     def make_post_grouping_cleanup(self, task: Dict[str, Any]) -> bool:
         try:
             from rsstag.post_grouping import RssTagPostGrouping
-            from rsstag.tasks import RssTagTasks
 
             owner: str = task["user"]["sid"]
             scope: Dict[str, Any] = task.get("scope", {}) or {}
@@ -359,19 +357,7 @@ class _PostGroupingWorker:
                     "$set": {"processing": POST_NOT_IN_PROCESSING},
                 },
             )
-
-            tasks_h = RssTagTasks(self._db)
-            return bool(
-                tasks_h.add_task(
-                    {
-                        "user": owner,
-                        "type": TASK_POST_GROUPING,
-                        "provider": task["user"].get("provider", ""),
-                        "scope": scope,
-                    },
-                    manual=False,
-                )
-            )
+            return True
         except Exception as exc:
             logging.error("Can't cleanup post grouping data. Info: %s", exc)
             return False
@@ -1331,10 +1317,8 @@ class _PostQualityWorker:
         if not posts:
             return True
 
-        owner: str = task["user"]["sid"]
-        judged = self._judge_posts(task, posts)
+        judged: Dict[Any, Dict[str, Any]] = self._judge_posts(task, posts)
         self._save_post_quality(posts, judged)
-        self._enqueue_rollup(task, owner)
 
         # Only a batch that scored nothing at all counts as a failure. Posts
         # whose call failed stay unmarked and come back in a later batch, so
@@ -1470,31 +1454,6 @@ class _PostQualityWorker:
             self._db.posts.bulk_write(updates, ordered=False)
         except Exception as exc:
             logging.error("Failed to save post quality scores: %s", exc)
-
-    def _enqueue_rollup(self, task: Dict[str, Any], owner: str) -> None:
-        """Queue the feed rollup for the same scope.
-
-        Enqueued after every batch rather than once at the end: the enqueue is
-        idempotent, it gives the category page usable numbers while a long scan
-        is still running, and it guarantees a rollup exists after the final
-        batch. Scoring tasks started from the UI are manual, so ``_tasks_after``
-        chaining would never fire for them.
-        """
-        from rsstag.tasks import RssTagTasks, TASK_SOURCE_QUALITY
-
-        try:
-            RssTagTasks(self._db).add_task(
-                {
-                    "user": owner,
-                    "type": TASK_SOURCE_QUALITY,
-                    "provider": task["user"].get("provider", ""),
-                    "scope": task.get("scope") or {},
-                },
-                manual=False,
-            )
-        except Exception as exc:
-            logging.error("Can't enqueue quality rollup for %s: %s", owner, exc)
-
 
 class _AnthologyWorker:
     """Anthology generation operations."""

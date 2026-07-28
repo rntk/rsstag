@@ -161,24 +161,12 @@ class TestPostQualityWorker(unittest.TestCase):
         self.assertEqual(updates["p1"]["quality"]["score"], 100.0)
         self.assertTrue(updates["p2"]["quality"]["failed"])
 
-    def test_enqueues_the_rollup_for_the_same_scope(self):
+    def test_does_not_enqueue_a_rollup(self) -> None:
         self.llm.call.return_value = GOOD_JUDGEMENT
 
         self.worker.handle_post_quality(_task([_post("p1")]))
 
-        payload = self.tasks_cls.return_value.add_task.call_args[0][0]
-        self.assertEqual(payload["type"], 32)
-        self.assertEqual(payload["user"], "alice")
-        self.assertEqual(payload["scope"], {"mode": "feeds", "feed_ids": ["f1"]})
-
-    def test_rollup_is_enqueued_non_manual_so_it_is_not_user_owned(self):
-        self.llm.call.return_value = GOOD_JUDGEMENT
-
-        self.worker.handle_post_quality(_task([_post("p1")]))
-
-        self.assertIs(
-            self.tasks_cls.return_value.add_task.call_args[1]["manual"], False
-        )
+        self.tasks_cls.return_value.add_task.assert_not_called()
 
     def test_judge_prompt_carries_injection_hardening(self):
         self.llm.call.return_value = GOOD_JUDGEMENT

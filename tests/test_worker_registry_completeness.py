@@ -188,16 +188,6 @@ class TestWorkerRegistryCompleteness(unittest.TestCase):
 
         self.assertEqual(len(values), len(set(values)))
 
-    def test_tasks_after_chain_references_valid_task_constants(self) -> None:
-        task_constants: Dict[str, int] = _get_task_constants()
-        valid_values = set(task_constants.values())
-
-        for parent_task, child_tasks in task_module.RssTagTasks._tasks_after.items():
-            with self.subTest(parent_task=parent_task):
-                self.assertIn(parent_task, valid_values)
-                for child_task in child_tasks:
-                    self.assertIn(child_task, valid_values)
-
     def test_registered_handlers_map_to_expected_worker_methods(self) -> None:
         tag_worker: MagicMock = MagicMock()
         llm_worker: MagicMock = MagicMock()

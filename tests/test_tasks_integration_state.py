@@ -123,13 +123,6 @@ class TasksStateIntegrationTestCase(unittest.TestCase):
         self.assertEqual(doc["lease_until"], lease)
         self.assertEqual(doc["worker_id"], "wLive")
 
-    def test_add_next_tasks_is_idempotent(self) -> None:
-        self.assertTrue(self.tasks.add_next_tasks("u1", TASK_DOWNLOAD))
-        self.assertTrue(self.tasks.add_next_tasks("u1", TASK_DOWNLOAD))
-        self.assertEqual(
-            self.db.tasks.count_documents({"user": "u1", "type": TASK_TAGS}), 1
-        )
-
     def test_get_task_claims_simple_task(self) -> None:
         self._insert_user("u1")
         self.assertTrue(
@@ -200,7 +193,7 @@ class TasksStateIntegrationTestCase(unittest.TestCase):
         doc = self._task_doc(user="u1", type=TASK_LETTERS)
         self.assertEqual(doc["status"], TASK_STATUS_PAUSED)
 
-    def test_finish_task_chains_successor_and_deletes(self) -> None:
+    def test_finish_task_deletes_without_creating_successor(self) -> None:
         self._insert_user("u1")
         self.assertTrue(
             self.tasks.add_task(
@@ -217,11 +210,10 @@ class TasksStateIntegrationTestCase(unittest.TestCase):
             "data": original,
         }
         self.assertTrue(self.tasks.finish_task(task))
-        # Successor enqueued, original gone.
-        self.assertEqual(
-            self.db.tasks.count_documents({"user": "u1", "type": TASK_TAGS}), 1
-        )
         self.assertIsNone(self._task_doc(_id=original["_id"]))
+        self.assertEqual(
+            self.db.tasks.count_documents({"user": "u1", "type": TASK_TAGS}), 0
+        )
 
     def test_stale_item_lock_self_heals(self) -> None:
         self._insert_user("u1")

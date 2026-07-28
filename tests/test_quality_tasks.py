@@ -166,29 +166,14 @@ class TestQualityTaskClaim(unittest.TestCase):
         self.assertEqual(task["type"], 0)
         self.storage._state.complete.assert_called_once_with("task-1")
 
-    def test_a_drained_scan_queues_a_final_rollup(self):
+    def test_a_drained_scan_does_not_queue_a_rollup(self) -> None:
         self._set_pending_posts([])
         self.storage.add_task = MagicMock(return_value=True)
 
         self.storage.get_task(self.users)
 
-        payload = self.storage.add_task.call_args[0][0]
-        self.assertEqual(payload["type"], TASK_SOURCE_QUALITY)
-        self.assertEqual(payload["user"], "alice")
-        self.assertEqual(payload["scope"], self.task_doc["scope"])
-        self.assertIs(self.storage.add_task.call_args[1]["manual"], False)
-
-    def test_final_rollup_is_queued_before_the_scan_is_deleted(self):
-        self._set_pending_posts([])
-        calls = []
-        self.storage.add_task = MagicMock(
-            side_effect=lambda *a, **kw: calls.append("rollup") or True
-        )
-        self.storage._state.complete.side_effect = lambda *a: calls.append("complete")
-
-        self.storage.get_task(self.users)
-
-        self.assertEqual(calls, ["rollup", "complete"])
+        self.storage.add_task.assert_not_called()
+        self.storage._state.complete.assert_called_once_with("task-1")
 
     def test_no_rollup_is_queued_while_posts_remain(self):
         cursor = MagicMock()
