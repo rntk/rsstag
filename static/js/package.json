@@ -37,7 +37,7 @@
     "watch": "webpack --config webpack.config.cjs --mode development --watch",
     "dev": "webpack serve --config webpack.dev.config.cjs --mode development --open",
     "clean": "rm -f bundle.js bundle.js.map",
-    "lint": "eslint components/context-filter-bar.js components/post-item.js storages/context-filter-storage.js storages/posts-storage.js libs/rsstag_utils.js topics-list.js provider-feeds.js tag-feeds.js post-grouped-snippets.js webpack.config.cjs webpack.dev.config.cjs eslint.config.cjs vitest.config.cjs test/**/*.js --max-warnings=0",
+    "lint": "eslint components/context-filter-bar.js components/post-item.js storages/context-filter-storage.js storages/posts-storage.js libs/rsstag_utils.js libs/source-grouping.js topics-list.js provider-feeds.js tag-feeds.js post-grouped-snippets.js webpack.config.cjs webpack.dev.config.cjs eslint.config.cjs vitest.config.cjs test/**/*.js --max-warnings=0",
     "lint:all": "eslint \"**/*.{js,jsx,cjs}\"",
     "lint:fix": "npm run lint -- --fix",
     "format": "prettier --write \"{apps,components,storages,libs}/**/*.{js,jsx}\" \"*.{js,json,md,cjs}\" \"test/**/*.js\" \"../css/style.scss\"",

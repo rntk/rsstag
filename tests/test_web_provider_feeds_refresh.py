@@ -100,8 +100,8 @@ class TestProviderFeedsRefreshEndpoint(unittest.TestCase):
         self.app.tasks.add_task.assert_not_called()
 
     def test_rejects_provider_that_cannot_list_feeds(self) -> None:
-        # Bazqux is a known provider class but does not implement list_feeds.
-        result: Dict[str, Any] = self._post({"provider": "bazqux"})
+        # X is a known provider class but does not implement list_feeds.
+        result: Dict[str, Any] = self._post({"provider": "x"})
 
         self.assertEqual(result["status_code"], 400)
         self.assertIn("can`t refresh", result["body"]["message"])
@@ -178,12 +178,13 @@ class TestFeedsListCapableProviders(unittest.TestCase):
             "providers": {
                 "telegram": {"phone": "+1"},
                 "bazqux": {"login": "a"},
+                "x": {"token": "t"},
             },
         }
 
         result = feeds_list_capable_providers(user)
 
-        self.assertEqual(result, ["telegram"])
+        self.assertEqual(result, ["bazqux", "telegram"])
 
     def test_returns_empty_list_when_nothing_connected(self) -> None:
         user: Dict[str, Any] = {"sid": "alice", "providers": {}}

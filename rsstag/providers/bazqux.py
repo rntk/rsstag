@@ -13,6 +13,7 @@ import logging
 from rsstag.tasks import POST_NOT_IN_PROCESSING
 from rsstag.web.routes import RSSTagRoutes
 from rsstag.providers.providers import BAZQUX
+from rsstag.providers.feed_docs import build_feed_doc
 from rsstag.providers.pid import generate_post_pid
 
 import aiohttp
@@ -81,27 +82,51 @@ class BazquxProvider:
             )
             return (posts, data["category"])
 
-    def list_subscriptions(self, user: dict) -> dict:
+    def _fetch_subscriptions(self, user: dict) -> Optional[dict]:
+        """Ask bazqux for the raw subscriptions list. None means "can`t know"."""
         connection = client.HTTPSConnection(self._config[BAZQUX]["api_host"])
         headers = self.get_headers(user)
-        connection.request(
-            "GET", "/reader/api/0/subscription/list?output=json", "", headers
-        )
-        resp = connection.getresponse()
-        json_data = resp.read()
         try:
+            connection.request(
+                "GET", "/reader/api/0/subscription/list?output=json", "", headers
+            )
+            json_data = connection.getresponse().read()
             subscriptions = json.loads(json_data.decode("utf-8"))
         except Exception as e:
             subscriptions = None
-            logging.error("Can`t decode subscriptions %s", e)
+            logging.error("Can`t get subscriptions %s", e)
+        finally:
+            connection.close()
+
+        return subscriptions
+
+    def _require_subscriptions(self, user: dict) -> dict:
+        """Same fetch, but an unreadable answer stops the caller.
+
+        A refresh that quietly reports "0 sources" while bazqux is down looks
+        exactly like a successful one, so the paths that feed the worker raise
+        instead and let the task be marked failed.
+        """
+        subscriptions = self._fetch_subscriptions(user)
+        if subscriptions is None:
+            raise RuntimeError("Can`t read the bazqux subscriptions list")
+
+        return subscriptions
+
+    def _feed_category(self, feed: dict) -> str:
+        categories = feed.get("categories") or []
+        if categories:
+            return categories[0]["label"]
+
+        return self.no_category_name
+
+    def list_subscriptions(self, user: dict) -> dict:
+        subscriptions = self._fetch_subscriptions(user)
         categories = set()
         feeds = []
         if subscriptions and "subscriptions" in subscriptions:
             for feed in subscriptions["subscriptions"]:
-                if len(feed["categories"]) > 0:
-                    category_name = feed["categories"][0]["label"]
-                else:
-                    category_name = self.no_category_name
+                category_name = self._feed_category(feed)
                 categories.add(category_name)
                 feeds.append(
                     {
@@ -111,6 +136,39 @@ class BazquxProvider:
                     }
                 )
         return {"categories": sorted(categories), "feeds": feeds}
+
+    def list_feeds(self, user: dict) -> List[dict]:
+        """Return feed documents for every subscription, without any posts.
+
+        This is the provider-agnostic "refresh sources list" capability: the
+        subscriptions are enumerated and stored so the user can see what
+        exists before pulling posts from it.
+        """
+        subscriptions = self._require_subscriptions(user)
+        routes = RSSTagRoutes(self._config["settings"]["host_name"])
+        feeds: List[dict] = []
+        for feed in subscriptions.get("subscriptions", []):
+            # ``download`` derives the feed id from ``origin.streamId`` of a
+            # post, and bazqux echoes back the subscription id it was asked
+            # for, so hashing the id here yields the very same feed_id and
+            # both paths keep pointing at one stored feed.
+            feed_id = md5(feed["id"].encode("utf-8")).hexdigest()
+            feeds.append(
+                build_feed_doc(
+                    owner=user["sid"],
+                    feed_id=feed_id,
+                    title=feed.get("title", feed["id"]),
+                    provider=BAZQUX,
+                    routes=routes,
+                    category_id=self._feed_category(feed),
+                    origin_feed_id=feed["id"],
+                )
+            )
+        logging.info(
+            "Listed %d bazqux sources for user %s", len(feeds), user.get("sid")
+        )
+
+        return feeds
 
     def download(
         self, user: dict, selection: Optional[dict] = None
@@ -124,18 +182,8 @@ class BazquxProvider:
             selected_categories = set(selection.get("categories", []))
             selected_feeds = set(selection.get("feeds", []))
             selection_active = bool(selected_categories or selected_feeds)
-        connection = client.HTTPSConnection(self._config[BAZQUX]["api_host"])
         headers = self.get_headers(user)
-        connection.request(
-            "GET", "/reader/api/0/subscription/list?output=json", "", headers
-        )
-        resp = connection.getresponse()
-        json_data = resp.read()
-        try:
-            subscriptions = json.loads(json_data.decode("utf-8"))
-        except Exception as e:
-            subscriptions = None
-            logging.error("Can`t decode subscriptions %s", e)
+        subscriptions = self._require_subscriptions(user)
         if subscriptions:
             routes = RSSTagRoutes(self._config["settings"]["host_name"])
             by_category = {}
@@ -143,10 +191,7 @@ class BazquxProvider:
             loop = asyncio.get_event_loop()
             futures = []
             for feed in subscriptions["subscriptions"]:
-                if len(feed["categories"]) > 0:
-                    category_name = feed["categories"][0]["label"]
-                else:
-                    category_name = self.no_category_name
+                category_name = self._feed_category(feed)
                 feed_id = feed["id"]
                 is_uncategorized = category_name == self.no_category_name
                 category_selected = category_name in selected_categories

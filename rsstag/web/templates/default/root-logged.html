@@ -77,7 +77,8 @@
                     <div class="space-y-1">
                         <a href="/data-sources" class="dashboard-card__link font-semibold text-primary">Data sources</a>
                         {% for p in connected_providers %}
-                            {% if p == "bazqux" or p == "x" %}
+                            {# bazqux picks its sources on the categories page now #}
+                            {% if p == "x" %}
                         <a href="/provider/{{p}}/feeds" class="dashboard-card__link">Select channels/feeds ({{p}})</a>
                             {% endif %}
                         {% endfor %}

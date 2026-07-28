@@ -74,6 +74,7 @@ module.exports = [
       'storages/context-filter-storage.js',
       'storages/posts-storage.js',
       'libs/rsstag_utils.js',
+      'libs/source-grouping.js',
     ],
     languageOptions: {
       ecmaVersion: 'latest',

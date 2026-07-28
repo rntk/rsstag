@@ -6344,7 +6344,9 @@ input[type="text"]:focus {
     border-left: 3px solid transparent;
     gap: 0.8em;
     cursor: pointer;
-    transition: background-color 0.15s ease, border-left-color 0.15s ease;
+    transition:
+      background-color 0.15s ease,
+      border-left-color 0.15s ease;
   }
 
   .category:last-child .category-header {
@@ -6460,7 +6462,9 @@ input[type="text"]:focus {
     border-left: 3px solid transparent;
     gap: 0.8em;
     cursor: pointer;
-    transition: background-color 0.15s ease, border-left-color 0.15s ease;
+    transition:
+      background-color 0.15s ease,
+      border-left-color 0.15s ease;
   }
 
   .feed-item:hover {
@@ -6556,6 +6560,92 @@ input[type="text"]:focus {
   .feeds-list-refresh-btn:disabled {
     opacity: 0.5;
     cursor: default;
+  }
+
+  .grouping-switcher {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4em;
+  }
+
+  .grouping-switcher-label {
+    color: #64748b;
+    font-size: 13px;
+    margin-right: 0.2em;
+  }
+
+  .grouping-switcher-btn {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    color: #475569;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+    padding: 0.3em 0.9em;
+  }
+
+  .grouping-switcher-btn:hover {
+    background: #f1f5f9;
+  }
+
+  .grouping-switcher-btn.active {
+    background: #008ec9;
+    border-color: #008ec9;
+    color: #ffffff;
+  }
+
+  .provider-group {
+    list-style: none;
+    margin-bottom: 0.6em;
+  }
+
+  .provider-group-header {
+    display: flex;
+    align-items: center;
+    gap: 0.8em;
+    padding: 0.6em 1.2em;
+    background: #eef2f7;
+    border: 1px solid #e2e8f0;
+    cursor: pointer;
+  }
+
+  .provider-group-header:hover {
+    background: #e2e8f0;
+  }
+
+  .provider-group-title {
+    font-weight: 600;
+    color: #1e293b;
+    font-size: 15px;
+    flex-grow: 1;
+  }
+
+  .provider-group-categories {
+    list-style: none;
+    margin: 0;
+    padding: 0 0 0 1.2em;
+  }
+
+  .available-sources-group-header {
+    display: flex;
+    align-items: center;
+    gap: 0.8em;
+    padding: 0.6em 1.2em;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+    cursor: pointer;
+  }
+
+  .available-sources-group-header:hover {
+    background: #eef2f7;
+  }
+
+  .available-sources-group-title {
+    color: #334155;
+    font-size: 14px;
+    font-weight: 600;
+    flex-grow: 1;
   }
 
   .available-sources {
