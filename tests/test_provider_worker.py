@@ -98,14 +98,23 @@ def test_handle_download_success(
     mock_users.get_provider_user.return_value = {"token": "abc"}
 
     provider = mock_providers["test_provider"]
-    provider.download.return_value = [([{"id": 1}], [{"feed_id": "f1"}])]
+    provider.download.return_value = [
+        ([{"id": 1, "pid": "test-provider:f1:1"}], [{"feed_id": "f1"}])
+    ]
 
     mock_db.feeds.find.return_value = [{"feed_id": "f1"}]
 
     assert worker.handle_download(task) is True
 
     mock_db.posts.insert_many.assert_called_once_with(
-        [{"id": 1, "provider": "test_provider"}], ordered=False
+        [
+            {
+                "id": 1,
+                "pid": "test-provider:f1:1",
+                "provider": "test_provider",
+            }
+        ],
+        ordered=False,
     )
     record_bulk_write.assert_called_once_with("posts", 1)
 
@@ -186,7 +195,9 @@ def test_handle_download_failure_still_persists_refreshed_gmail_token(
     }
     mock_users.get_provider_user.return_value = provider_user
 
-    mock_providers[data_providers.GMAIL].download.return_value = [([{"id": 1}], [])]
+    mock_providers[data_providers.GMAIL].download.return_value = [
+        ([{"id": 1, "pid": "gmail:inbox:1"}], [])
+    ]
     mock_db.posts.insert_many.side_effect = RuntimeError("db write error")
 
     assert worker.handle_download(task) is False
@@ -311,7 +322,9 @@ def test_handle_download_duplicate_post_errors_are_ignored(
     task: Dict[str, Any] = {"user": {"sid": "123"}, "data": {"provider": "test_provider"}}
     mock_users.get_provider_user.return_value = {"token": "abc"}
     provider = mock_providers["test_provider"]
-    provider.download.return_value = [([{"id": 1}], [])]
+    provider.download.return_value = [
+        ([{"id": 1, "pid": "test-provider:f1:1"}], [])
+    ]
     mock_db.posts.insert_many.side_effect = BulkWriteError(
         {"writeErrors": [{"code": 11000}]}
     )
@@ -328,7 +341,9 @@ def test_handle_download_non_duplicate_bulk_write_error_fails(
     task: Dict[str, Any] = {"user": {"sid": "123"}, "data": {"provider": "test_provider"}}
     mock_users.get_provider_user.return_value = {"token": "abc"}
     provider = mock_providers["test_provider"]
-    provider.download.return_value = [([{"id": 1}], [])]
+    provider.download.return_value = [
+        ([{"id": 1, "pid": "test-provider:f1:1"}], [])
+    ]
     mock_db.posts.insert_many.side_effect = BulkWriteError(
         {"writeErrors": [{"code": 999}]}
     )

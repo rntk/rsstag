@@ -53,6 +53,22 @@ def _normalize_context_tags(tags: Optional[list[str]]) -> Optional[list[str]]:
     return normalized or None
 
 
+def _decode_post_lemmas(post: dict[str, Any]) -> str:
+    """Decode processed lemmas, tolerating posts still awaiting tag processing."""
+    payload: Any = post.get("lemmas")
+    if not isinstance(payload, (bytes, bytearray)):
+        return ""
+    try:
+        return gzip.decompress(payload).decode("utf-8", "replace")
+    except (EOFError, OSError) as error:
+        logging.warning(
+            "Can`t decode lemmas for post %s: %s",
+            post.get("pid", "unknown"),
+            error,
+        )
+        return ""
+
+
 def _topic_sentences_match_context(
     sentence_numbers: list[int],
     sentences_map: dict[int, dict],
@@ -887,7 +903,7 @@ def on_category_get(
     posts = []
     pids = set()
     for post in db_posts:
-        post["lemmas"] = gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
+        post["lemmas"] = _decode_post_lemmas(post)
         if post["pid"] not in pids:
             pids.add(post["pid"])
             if post["feed_id"] in by_feed:
@@ -950,7 +966,7 @@ def on_tag_get(
     by_feed = {}
     pids = set()
     for post in db_posts:
-        post["lemmas"] = gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
+        post["lemmas"] = _decode_post_lemmas(post)
         if post["pid"] not in pids:
             pids.add(post["pid"])
             if post["feed_id"] not in by_feed:
@@ -1009,7 +1025,7 @@ def on_bi_gram_get(
     by_feed = {}
     pids = set()
     for post in db_posts:
-        post["lemmas"] = gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
+        post["lemmas"] = _decode_post_lemmas(post)
         if post["pid"] not in pids:
             pids.add(post["pid"])
             if post["feed_id"] not in by_feed:
@@ -1079,7 +1095,7 @@ def on_feed_get(
         db_posts.extend(cl_posts)
     pids = set()
     for post in db_posts:
-        post["lemmas"] = gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
+        post["lemmas"] = _decode_post_lemmas(post)
         if post["pid"] not in pids:
             pids.add(post["pid"])
             posts.append(
@@ -2155,7 +2171,7 @@ def on_entity_get(
     )
 
     for post in db_posts:
-        post["lemmas"] = gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
+        post["lemmas"] = _decode_post_lemmas(post)
 
         # If tag has multiple words, check if they are within the window distance
         if multi_word_tag:
@@ -2402,7 +2418,7 @@ def on_entity_get_(
             logging.error('Failed to get embedding for query "%s": %s', rerank, e)
 
     for post in db_posts:
-        post["lemmas"] = gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
+        post["lemmas"] = _decode_post_lemmas(post)
 
         # If tag has multiple words, check if they are within the window distance
         if multi_word_tag:
@@ -2606,7 +2622,7 @@ def on_posts_get(
     by_feed = {}
     pids = set()
     for post in db_posts:
-        post["lemmas"] = gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
+        post["lemmas"] = _decode_post_lemmas(post)
         if post["pid"] not in pids:
             pids.add(post["pid"])
             if post["feed_id"] not in by_feed:
@@ -2654,7 +2670,7 @@ def on_cluster_get(app: "RSSTagApplication", user: dict, cluster: int) -> Respon
     by_feed = {}
     pids = set()
     for post in db_posts:
-        post["lemmas"] = gzip.decompress(post["lemmas"]).decode("utf-8", "replace")
+        post["lemmas"] = _decode_post_lemmas(post)
         if post["pid"] not in pids:
             pids.add(post["pid"])
             if post["feed_id"] not in by_feed:

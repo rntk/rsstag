@@ -3,7 +3,7 @@
 import logging
 import time
 import traceback
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from pymongo.errors import BulkWriteError
 
@@ -65,19 +65,117 @@ class ProviderWorker:
             self._tasks.mark_task_failed(task.get("_id"), error_text)
         self._users.update_by_sid(task["user"]["sid"], {"message": user_message})
 
+    def _prepare_new_posts(
+        self,
+        owner: str,
+        provider_name: str,
+        posts: List[Dict[str, Any]],
+    ) -> Tuple[List[Dict[str, Any]], int]:
+        """Return posts not already stored, using the provider-scoped PID."""
+        unique_posts: Dict[str, Dict[str, Any]] = {}
+        skipped_count: int = 0
+        for post in posts:
+            pid_value: Any = post.get("pid")
+            if not pid_value:
+                skipped_count += 1
+                logging.warning(
+                    "Skipping %s post without pid. feed_id=%s id=%s",
+                    provider_name,
+                    post.get("feed_id"),
+                    post.get("id"),
+                )
+                continue
+
+            pid: str = str(pid_value)
+            if pid in unique_posts:
+                skipped_count += 1
+                continue
+            post["provider"] = provider_name
+            unique_posts[pid] = post
+
+        if not unique_posts:
+            return [], skipped_count
+
+        existing_posts: Any = self._db.posts.find(
+            {
+                "owner": owner,
+                "pid": {"$in": list(unique_posts)},
+            },
+            projection={"pid": True, "_id": False},
+        )
+        existing_pids: set[str] = {
+            str(post["pid"]) for post in existing_posts if post.get("pid")
+        }
+        skipped_count += len(existing_pids)
+        new_posts: List[Dict[str, Any]] = [
+            post
+            for pid, post in unique_posts.items()
+            if pid not in existing_pids
+        ]
+        return new_posts, skipped_count
+
+    def _insert_posts(
+        self,
+        provider_name: str,
+        posts: List[Dict[str, Any]],
+    ) -> Tuple[int, int]:
+        """Insert posts and report inserted and duplicate-conflict counts."""
+        if not posts:
+            return 0, 0
+
+        try:
+            self._db.posts.insert_many(posts, ordered=False)
+        except BulkWriteError as bulk_error:
+            details: Dict[str, Any] = bulk_error.details or {}
+            write_errors: List[Dict[str, Any]] = details.get("writeErrors", [])
+            duplicate_errors: List[Dict[str, Any]] = [
+                error for error in write_errors if error.get("code") == 11000
+            ]
+            non_duplicate_errors: List[Dict[str, Any]] = [
+                error for error in write_errors if error.get("code") != 11000
+            ]
+            write_concern_errors: List[Dict[str, Any]] = details.get(
+                "writeConcernErrors", []
+            )
+            inserted_count: int = int(details.get("nInserted", 0))
+            duplicate_count: int = len(duplicate_errors)
+            if inserted_count:
+                self._record_bulk_write("posts", inserted_count)
+            if duplicate_count:
+                key_patterns: List[Dict[str, Any]] = [
+                    error.get("keyPattern", {}) for error in duplicate_errors
+                ]
+                logging.warning(
+                    "Skipped %d %s posts because of duplicate-key conflicts. "
+                    "Index keys: %s",
+                    duplicate_count,
+                    provider_name,
+                    key_patterns,
+                )
+            if non_duplicate_errors or write_concern_errors:
+                raise
+            return inserted_count, duplicate_count
+
+        inserted_count = len(posts)
+        self._record_bulk_write("posts", inserted_count)
+        return inserted_count, 0
+
     def handle_download(self, task: Dict[str, Any]) -> bool:
         """Incrementally download new posts/feeds for one connected source.
 
         Contract: this task is strictly additive. It never deletes posts or
         feeds and never wipes prior data when switching/refreshing a source.
-        Incoming posts are deduped against existing rows by ``id`` (per owner)
-        and feeds by ``feed_id``; only genuinely new documents are inserted, so
-        re-running it only fetches and stores the diff. Bulk cleanup is the job
-        of the separate (future) prune task, not download.
+        Incoming posts are deduped against existing rows by their canonical
+        ``pid`` (per owner) and feeds by ``feed_id``; only genuinely new
+        documents are inserted, so re-running it only fetches and stores the
+        diff. Bulk cleanup is the job of the separate (future) prune task, not
+        download.
         """
         logging.info("Start downloading for user")
-        provider_name = task["data"].get("provider")
-        provider_user = self._users.get_provider_user(task["user"], provider_name)
+        provider_name: str = task["data"].get("provider")
+        provider_user: Optional[Dict[str, Any]] = self._users.get_provider_user(
+            task["user"], provider_name
+        )
         if not provider_user:
             logging.warning(
                 "No provider credentials for %s on user %s",
@@ -86,94 +184,85 @@ class ProviderWorker:
             )
             return True
 
-        provider = self._providers.get(provider_name)
+        provider: Any = self._providers.get(provider_name)
         if not provider:
-            error = f"Unknown provider {provider_name}"
+            error: str = f"Unknown provider {provider_name}"
             logging.warning(error)
             self._tasks.mark_task_failed(task.get("_id"), error)
             return False
 
-        posts_n = 0
-        selection = None
+        received_count: int = 0
+        inserted_count: int = 0
+        skipped_count: int = 0
+        selection: Any = None
         if task.get("data"):
             selection = task["data"].get("selection")
-        success = False
+        success: bool = False
         try:
+            posts: List[Dict[str, Any]]
+            feeds: List[Dict[str, Any]]
             for posts, feeds in provider.download(provider_user, selection):
-                posts_n += len(posts)
-                f_ids = [f["feed_id"] for f in feeds]
-                c = self._db.feeds.find(
+                received_count += len(posts)
+                f_ids: List[str] = [feed["feed_id"] for feed in feeds]
+                existing_feeds: Any = self._db.feeds.find(
                     {
                         "owner": task["user"]["sid"],
                         "feed_id": {"$in": f_ids},
                     },
                     projection={"feed_id": True, "_id": False},
                 )
-                skip_ids = {fc["feed_id"] for fc in c}
-                n_feeds = []
-                for fee in feeds:
-                    if fee["feed_id"] in skip_ids:
+                existing_feed_ids: set[str] = {
+                    feed["feed_id"] for feed in existing_feeds
+                }
+                new_feeds: List[Dict[str, Any]] = []
+                for feed in feeds:
+                    if feed["feed_id"] in existing_feed_ids:
                         continue
-                    fee["provider"] = provider_name
-                    n_feeds.append(fee)
+                    feed["provider"] = provider_name
+                    new_feeds.append(feed)
                 if posts:
-                    # 1. Local deduplication of incoming posts by 'id'
-                    unique_incoming_posts = {}
-                    for post in posts:
-                        p_id = post.get("id")
-                        if p_id and p_id not in unique_incoming_posts:
-                            post["provider"] = provider_name
-                            unique_incoming_posts[p_id] = post
-                    
-                    if unique_incoming_posts:
-                        p_ids = list(unique_incoming_posts.keys())
-                        
-                        # 2. Query DB to find existing posts by owner and 'id'
-                        # We exclude 'provider' from filter to be more robust
-                        # against missing or differently-cased provider fields.
-                        existing_posts = self._db.posts.find(
-                            {
-                                "owner": task["user"]["sid"],
-                                "id": {"$in": p_ids},
-                            },
-                            projection={"id": True, "_id": False},
-                        )
-                        skip_p_ids = {pc["id"] for pc in existing_posts}
-
-                        n_posts = [
-                            post for p_id, post in unique_incoming_posts.items()
-                            if p_id not in skip_p_ids
-                        ]
-
-                        if n_posts:
-                            try:
-                                self._db.posts.insert_many(n_posts, ordered=False)
-                                self._record_bulk_write("posts", len(n_posts))
-                            except BulkWriteError as bulk_err:
-                                # Ignore duplicate key errors (code 11000), re-raise others
-                                non_dup = [
-                                    e for e in bulk_err.details.get("writeErrors", [])
-                                    if e.get("code") != 11000
-                                ]
-                                if non_dup:
-                                    raise
-                if n_feeds:
-                    self._db.feeds.insert_many(n_feeds)
-                    self._record_bulk_write("feeds", len(n_feeds))
+                    new_posts: List[Dict[str, Any]]
+                    filtered_count: int
+                    new_posts, filtered_count = self._prepare_new_posts(
+                        task["user"]["sid"], provider_name, posts
+                    )
+                    skipped_count += filtered_count
+                    batch_inserted: int
+                    duplicate_count: int
+                    batch_inserted, duplicate_count = self._insert_posts(
+                        provider_name, new_posts
+                    )
+                    inserted_count += batch_inserted
+                    skipped_count += duplicate_count
+                if new_feeds:
+                    self._db.feeds.insert_many(new_feeds)
+                    self._record_bulk_write("feeds", len(new_feeds))
             success = True
         except Exception as e:
             logging.error(
-                "Can`t save in db for user %s. Info: %s. %s",
+                "Can`t save in db for user %s. Received=%d inserted=%d "
+                "skipped=%d. Info: %s. %s",
                 task["user"]["sid"],
+                received_count,
+                inserted_count,
+                skipped_count,
                 e,
                 traceback.format_exc(),
             )
-            logging.info("Saved posts: %s.", posts_n)
             self._handle_provider_error(task, provider_name, e)
         finally:
             self._save_refreshed_oauth_token(task, provider_user, provider_name)
 
         if success:
+            logging.info(
+                "Completed %s download for user %s. Received=%d inserted=%d "
+                "skipped=%d",
+                provider_name,
+                task["user"]["sid"],
+                received_count,
+                inserted_count,
+                skipped_count,
+            )
             self._save_provider_updates(task, provider_user, provider_name)
 
         return success

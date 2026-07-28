@@ -167,7 +167,8 @@ def on_provider_feed_download_post(
                 ),
                 "provider": data_providers.TELEGRAM,
                 "selection": _single_feed_selection(feed_id, posts_count),
-            }
+            },
+            manual=False,
         )
         if not added:
             logging.error(

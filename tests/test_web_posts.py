@@ -1,6 +1,8 @@
+import gzip
 import unittest
+from typing import Any
 
-from rsstag.web.posts import _build_topics_tree
+from rsstag.web.posts import _build_topics_tree, _decode_post_lemmas
 
 
 class TestWebPostsTopicsTree(unittest.TestCase):
@@ -23,6 +25,21 @@ class TestWebPostsTopicsTree(unittest.TestCase):
         self.assertEqual(philosophy["count"], 2)
         self.assertEqual(religion["count"], 2)
         self.assertEqual(len(philosophy["posts"]), 1)
+
+
+class TestDecodePostLemmas(unittest.TestCase):
+    def test_decodes_processed_lemmas(self) -> None:
+        post: dict[str, Any] = {
+            "pid": "post-1",
+            "lemmas": gzip.compress(b"hello world"),
+        }
+
+        self.assertEqual(_decode_post_lemmas(post), "hello world")
+
+    def test_returns_empty_text_while_post_is_unprocessed(self) -> None:
+        post: dict[str, Any] = {"pid": "post-1"}
+
+        self.assertEqual(_decode_post_lemmas(post), "")
 
 
 if __name__ == "__main__":
