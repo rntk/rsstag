@@ -61,6 +61,20 @@ class TestRssTagFeedsStorage(unittest.TestCase):
             {"owner": "alice"}, projection={"title": 1}
         )
 
+    def test_get_by_provider(self) -> None:
+        cursor: MagicMock = MagicMock()
+        self.db.feeds.find.return_value = cursor
+
+        result: MagicMock = self.storage.get_by_provider(
+            owner="alice", provider="telegram", projection={"title": 1}
+        )
+
+        self.assertIs(result, cursor)
+        self.db.feeds.find.assert_called_once_with(
+            {"owner": "alice", "provider": "telegram"},
+            projection={"title": 1},
+        )
+
     def test_get_by_feed_id(self):
         self.db.feeds.find_one.return_value = {"feed_id": "f-1"}
 

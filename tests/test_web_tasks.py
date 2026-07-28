@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 from werkzeug.wrappers import Request
 
+from rsstag.tasks import TASK_MARK_TELEGRAM, TASK_NOT_IN_PROCESSING
 from rsstag.web.tasks import on_tasks_post, on_tasks_remove_post
 from tests.web_test_utils import MongoWebTestCase
 
@@ -77,7 +78,6 @@ class TestWebTasksPost(MongoWebTestCase):
             self.assertIn("/tasks", response.headers.get("Location", ""))
             mock_add.assert_not_called()
 
-
 class TestWebTasksRemovePost(MongoWebTestCase):
     def setUp(self) -> None:
         super().setUp()
@@ -94,6 +94,35 @@ class TestWebTasksRemovePost(MongoWebTestCase):
 
 
 class TestWebTasksUnit(unittest.TestCase):
+    def test_telegram_read_state_task_uses_telegram_queue_shape(self) -> None:
+        mock_app = MagicMock()
+        mock_app.config = {"settings": {"host_name": "example.com"}}
+        user: dict[str, str] = {"sid": "sid-123"}
+        request = Request.from_values(
+            path="/tasks",
+            method="POST",
+            data={"task_type": str(TASK_MARK_TELEGRAM), "provider": "bazqux"},
+        )
+
+        response = on_tasks_post(mock_app, user, request)
+
+        self.assertEqual(response.status_code, 302)
+        mock_app.tasks.add_task.assert_called_once_with(
+            {
+                "type": TASK_MARK_TELEGRAM,
+                "user": user["sid"],
+                "data": [
+                    {
+                        "user": user["sid"],
+                        "id": "",
+                        "processing": TASK_NOT_IN_PROCESSING,
+                        "type": TASK_MARK_TELEGRAM,
+                        "provider": "telegram",
+                    }
+                ],
+            }
+        )
+
     def test_on_tasks_post_invalid_task_type_logs_error(self) -> None:
         mock_app = MagicMock()
         mock_app.config = {"settings": {"host_name": "example.com"}}

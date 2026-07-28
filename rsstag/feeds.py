@@ -34,6 +34,12 @@ class RssTagFeeds:
 
         return self.db.feeds.find(query, projection=projection)
 
+    def get_by_provider(
+        self, owner: str, provider: str, projection: Optional[dict] = None
+    ) -> Iterator[dict]:
+        query: dict[str, str] = {"owner": owner, "provider": provider}
+        return self.db.feeds.find(query, projection=projection)
+
     def get_by_feed_id(self, owner: str, feed_id: str) -> Optional[dict]:
         query = {"owner": owner, "feed_id": feed_id}
 

@@ -23,6 +23,7 @@ from rsstag.tasks import (
     TASK_MARK_TELEGRAM,
     TASK_GMAIL_SORT,
     TASK_NOT_IN_PROCESSING,
+    build_telegram_read_state_task,
 )
 import rsstag.providers.providers as data_providers
 from rsstag.read_state import ReadStateService
@@ -1674,19 +1675,11 @@ def on_read_posts_post(
 def on_mark_telegram_posts_post(
     app: "RSSTagApplication", user: dict, _: Request
 ) -> Response:
-    for_insert = [
-        {
-            "user": user["sid"],
-            "id": "",
-            "processing": TASK_NOT_IN_PROCESSING,
-            "type": TASK_MARK_TELEGRAM,
-            "provider": data_providers.TELEGRAM,
-        }
-    ]
-    if not app.tasks.add_task(
-        {"type": TASK_MARK_TELEGRAM, "user": user["sid"], "data": for_insert}
-    ):
-        logging.error("Can't add task for mark telegram posts: %s", for_insert)
+    task_data: dict[str, Any] = build_telegram_read_state_task(user["sid"])
+    if not app.tasks.add_task(task_data):
+        logging.error(
+            "Can't add task for mark telegram posts: %s", task_data["data"]
+        )
 
     return redirect(app.routes.get_url_by_endpoint("on_root_get"))
 

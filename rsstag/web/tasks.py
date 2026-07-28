@@ -30,6 +30,7 @@ from rsstag.tasks import (
     TASK_RAW_TO_POSTS,
     TASK_TAGS_TOPICS,
     TASK_SOURCE_QUALITY,
+    build_telegram_read_state_task,
     get_task_scope_hint,
 )
 
@@ -96,14 +97,16 @@ def on_tasks_post(app, user: dict, request: Request) -> Response:
     if task_type:
         try:
             task_type = int(task_type)
-            app.tasks.add_task(
-                {
-                    "user": user["sid"],
-                    "type": task_type,
-                    "host": app.config["settings"]["host_name"],
-                    "provider": provider,
-                }
-            )
+            task_data: dict[str, object] = {
+                "user": user["sid"],
+                "type": task_type,
+                "host": app.config["settings"]["host_name"],
+                "provider": provider,
+                "data": [],
+            }
+            if task_type == TASK_MARK_TELEGRAM:
+                task_data = build_telegram_read_state_task(user["sid"])
+            app.tasks.add_task(task_data)
         except ValueError:
             logging.error("Invalid task type: %s", task_type)
 

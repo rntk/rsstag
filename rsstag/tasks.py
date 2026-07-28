@@ -7,6 +7,7 @@ from pymongo import MongoClient, UpdateOne, ReturnDocument
 from bson.objectid import ObjectId
 from rsstag.llm.batch import BatchTaskStatus
 from rsstag.post_grouping import RssTagPostGrouping
+import rsstag.providers.providers as data_providers
 from rsstag.quality import build_scope_key
 from rsstag.tags import RssTagTags
 from rsstag.topic_merge import build_pending_topic_merge_query
@@ -155,6 +156,23 @@ EXTERNAL_WORKER_ALLOWED_TASK_TYPES: Set[int] = {
     TASK_POST_GROUPING,
     TASK_TAG_CLASSIFICATION,
 }
+
+
+def build_telegram_read_state_task(user_sid: str) -> Dict[str, Any]:
+    """Build the queue payload for a full Telegram read-state sync."""
+    task_doc: Dict[str, Any] = {
+        "user": user_sid,
+        "id": "",
+        "processing": TASK_NOT_IN_PROCESSING,
+        "type": TASK_MARK_TELEGRAM,
+        "provider": data_providers.TELEGRAM,
+    }
+    return {
+        "type": TASK_MARK_TELEGRAM,
+        "user": user_sid,
+        "data": [task_doc],
+    }
+
 
 # Per-type lease durations (seconds). Long-lived model/merge tasks get a much
 # longer lease than incremental download/conversion tasks. Types not listed

@@ -5,7 +5,7 @@ import gzip
 import logging
 from datetime import date, datetime, timezone
 from random import randint, uniform
-from typing import Tuple, List, Optional, Dict, Any
+from typing import Tuple, List, Optional, Dict, Any, Iterator
 from collections import defaultdict
 from io import StringIO
 import unicodedata
@@ -986,14 +986,28 @@ class TelegramProvider:
         return True
 
     def mark_all(self, data: dict, user: dict) -> Optional[bool]:
-        feeds_h = RssTagFeeds(self._db)
-        posts_h = RssTagPosts(self._db)
-        user_id = user["sid"]
-        feeds = feeds_h.get_all(user_id)
-        tlg_ids = []
+        feeds_h: RssTagFeeds = RssTagFeeds(self._db)
+        posts_h: RssTagPosts = RssTagPosts(self._db)
+        user_id: str = user["sid"]
+        feeds: Iterator[dict] = feeds_h.get_by_provider(
+            user_id,
+            TELEGRAM,
+            projection={"feed_id": True, "title": True},
+        )
+        tlg_ids: List[Tuple[int, int]] = []
         for feed in feeds:
-            feed_id = int(feed["feed_id"])
-            posts = list(
+            raw_feed_id: Any = feed.get("feed_id")
+            try:
+                feed_id: int = int(raw_feed_id)
+            except (TypeError, ValueError):
+                logging.warning(
+                    "Skipping Telegram read-state sync for invalid feed id %r "
+                    "owned by user %s",
+                    raw_feed_id,
+                    user_id,
+                )
+                continue
+            posts: List[dict] = list(
                 posts_h.get_by_feed_id(
                     user_id,
                     str(feed_id),
@@ -1001,8 +1015,8 @@ class TelegramProvider:
                 )
             )
             posts.sort(key=lambda x: x["id"], reverse=False)
-            p_id = 0
-            n = 0
+            p_id: int = 0
+            n: int = 0
             for p in posts:
                 if not p["read"]:
                     break
