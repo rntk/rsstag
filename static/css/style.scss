@@ -6396,6 +6396,17 @@ input[type="text"]:focus {
     cursor: default;
   }
 
+  .feed-refresh-btn {
+    background: none;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .feed-refresh-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
   .feeds {
     padding: 0;
     background: #ffffff;

@@ -68,6 +68,7 @@ class TestWebCanvas(MongoWebTestCase):
                         "category_local_url": "/category/canvas-category",
                         "local_url": f"/feed/{feed_id}",
                         "title": "Canvas Feed",
+                        "provider": "telegram",
                         "url": "https://example.com/feed",
                         "favicon": "",
                         "processing": 0,
@@ -80,6 +81,7 @@ class TestWebCanvas(MongoWebTestCase):
                         "category_local_url": "/category/other-category",
                         "local_url": "/feed/other-feed",
                         "title": "Other Feed",
+                        "provider": "bazqux",
                         "url": "https://example.com/other-feed",
                         "favicon": "",
                         "processing": 0,
@@ -188,6 +190,8 @@ class TestWebCanvas(MongoWebTestCase):
         self.assertIn(b'"canvas_url": "/canvas?category=canvas-category"', response.data)
         self.assertIn(b'"hierarchy_url": "/hierarchy?feed=canvas-feed"', response.data)
         self.assertIn(b'"canvas_url": "/canvas?feed=canvas-feed"', response.data)
+        self.assertIn(b'"provider": "telegram"', response.data)
+        self.assertIn(b'"provider": "bazqux"', response.data)
 
     def test_canvas_combines_feed_and_tag_filters(self) -> None:
         sid, feed_id = self._seed_canvas()

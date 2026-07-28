@@ -614,6 +614,11 @@ class RSSTagRoutes:
                 "methods": ["POST"],
             },
             {
+                "url": "/api/provider/feed/download",
+                "endpoint": "on_provider_feed_download_post",
+                "methods": ["POST"],
+            },
+            {
                 "url": "/delete-feeds-categories",
                 "endpoint": "on_delete_feeds_categories_post",
                 "methods": ["POST"],

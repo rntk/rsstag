@@ -1,6 +1,7 @@
 import logging
 import asyncio
-from typing import Dict, List, Optional
+import json
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from werkzeug.wrappers import Request, Response
 from werkzeug.utils import redirect
@@ -11,8 +12,12 @@ from rsstag.providers.telegram import TelegramProvider
 from rsstag.providers.x import XProvider
 from rsstag.tasks import TASK_DOWNLOAD
 
+if TYPE_CHECKING:
+    from rsstag.web.app import RSSTagApplication
+
 
 _TLG_LOAD_MODES = ("unread", "limit", "unread_or_limit")
+_TLG_MAX_SINGLE_FEED_POSTS = 10000
 
 
 def _empty_selection() -> Dict[str, object]:
@@ -59,6 +64,155 @@ def _telegram_limit_from_selection(selection: Dict[str, object]) -> int:
     if mode == "limit":
         return n
     return -n
+
+
+def _json_response(payload: Dict[str, object], status: int = 200) -> Response:
+    return Response(json.dumps(payload), mimetype="application/json", status=status)
+
+
+def _parse_single_feed_request(
+    request: Request,
+) -> Tuple[Optional[str], Optional[int], str]:
+    try:
+        data: Any = json.loads(request.data or b"{}")
+    except (TypeError, ValueError) as exc:
+        logging.warning("Invalid single-feed refresh request: %s", exc)
+        return None, None, "Invalid request body"
+
+    if not isinstance(data, dict):
+        return None, None, "Invalid request body"
+
+    feed_id: str = str(data.get("feed_id", "")).strip()
+    posts_count_value: object = data.get("posts_count")
+    if not feed_id:
+        return None, None, "Feed is required"
+    if isinstance(posts_count_value, bool):
+        return None, None, "Post count must be a whole number"
+
+    try:
+        posts_count: int = int(posts_count_value)
+    except (TypeError, ValueError):
+        return None, None, "Post count must be a whole number"
+
+    if str(posts_count_value).strip() != str(posts_count):
+        return None, None, "Post count must be a whole number"
+    if posts_count < 1 or posts_count > _TLG_MAX_SINGLE_FEED_POSTS:
+        return (
+            None,
+            None,
+            f"Post count must be between 1 and {_TLG_MAX_SINGLE_FEED_POSTS}",
+        )
+
+    return feed_id, posts_count, ""
+
+
+def _single_feed_selection(feed_id: str, posts_count: int) -> Dict[str, object]:
+    return {
+        "channels": [feed_id],
+        "feeds": [],
+        "categories": [],
+        "telegram_load_mode": "limit",
+        "telegram_load_limit": posts_count,
+        "telegram_limit": posts_count,
+    }
+
+
+def on_provider_feed_download_post(
+    app: "RSSTagApplication", user: dict, request: Request
+) -> Response:
+    """Queue a bounded refresh for one Telegram feed owned by the user."""
+    parsed_request: Tuple[Optional[str], Optional[int], str] = (
+        _parse_single_feed_request(request)
+    )
+    feed_id, posts_count, error = parsed_request
+    if feed_id is None or posts_count is None:
+        return _json_response({"status": "error", "message": error}, status=400)
+
+    feed: Optional[dict] = app.feeds.get_by_feed_id(user["sid"], feed_id)
+    if feed is None:
+        return _json_response(
+            {"status": "error", "message": "Feed was not found"}, status=404
+        )
+    if feed.get("provider") != data_providers.TELEGRAM:
+        return _json_response(
+            {
+                "status": "error",
+                "message": "Single-feed refresh is available only for Telegram",
+            },
+            status=400,
+        )
+    if not app.users.is_provider_connected(user, data_providers.TELEGRAM):
+        return _json_response(
+            {"status": "error", "message": "Telegram provider is not connected"},
+            status=400,
+        )
+
+    try:
+        app.users.reset_in_queue_if_legacy(user["sid"], user)
+        if app.users.get_in_queue(user).get(data_providers.TELEGRAM, False):
+            return _json_response(
+                {
+                    "status": "error",
+                    "message": "A Telegram download is already in progress",
+                },
+                status=409,
+            )
+
+        added: bool = app.tasks.add_task(
+            {
+                "type": TASK_DOWNLOAD,
+                "user": user["sid"],
+                "host": request.environ.get(
+                    "HTTP_HOST", app.config["settings"]["host_name"]
+                ),
+                "provider": data_providers.TELEGRAM,
+                "selection": _single_feed_selection(feed_id, posts_count),
+            }
+        )
+        if not added:
+            logging.error(
+                "Can`t queue Telegram feed refresh for user %s, feed %s",
+                user["sid"],
+                feed_id,
+            )
+            return _json_response(
+                {"status": "error", "message": "Can`t start feed refresh"},
+                status=500,
+            )
+
+        updated: Optional[bool] = app.users.update_by_sid(
+            user["sid"],
+            {
+                f"in_queue.{data_providers.TELEGRAM}": True,
+                "message": f"Refreshing {feed.get('title', 'Telegram feed')}",
+            },
+        )
+        if not updated:
+            logging.error(
+                "Can`t update queue status for user %s after queueing feed %s",
+                user["sid"],
+                feed_id,
+            )
+    except Exception as exc:
+        logging.exception(
+            "Can`t queue Telegram feed refresh for user %s, feed %s: %s",
+            user["sid"],
+            feed_id,
+            exc,
+        )
+        return _json_response(
+            {"status": "error", "message": "Can`t start feed refresh"}, status=500
+        )
+
+    logging.info(
+        "Queued refresh of %d posts for Telegram feed %s, user %s",
+        posts_count,
+        feed_id,
+        user["sid"],
+    )
+    return _json_response(
+        {"status": "success", "message": "Telegram feed refresh started"}
+    )
 
 
 def on_provider_feeds_get_post(

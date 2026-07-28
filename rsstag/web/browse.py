@@ -80,6 +80,7 @@ def on_group_by_category_get(app: "RSSTagApplication", user: dict, request: Requ
                     "feed_id": g["_id"],
                     "url": by_feed[g["_id"]]["local_url"],
                     "title": by_feed[g["_id"]]["title"],
+                    "provider": by_feed[g["_id"]].get("provider", ""),
                     "canvas_url": f"{canvas_url}?{urlencode({'feed': g['_id']})}",
                     "hierarchy_url": f"{hierarchy_url}?{urlencode({'feed': g['_id']})}",
                     "quality": feeds_quality.get(g["_id"]),

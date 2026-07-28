@@ -291,6 +291,36 @@ test('render displays feed.unread_count', () => {
   assert.ok(/feed\.unread_count/.test(src), 'should display feed.unread_count');
 });
 
+test('render offers refresh only for Telegram feeds', () => {
+  const src = readSource();
+  assert.ok(
+    /feed\.provider\s*===\s*['"]telegram['"]/.test(src),
+    'should restrict single-feed refresh to Telegram'
+  );
+  assert.ok(/feed-refresh-btn/.test(src), 'should render the feed refresh button');
+});
+
+test('feed refresh asks for and validates the post count', () => {
+  const src = readSource();
+  assert.ok(/window\.prompt\s*\(/.test(src), 'should prompt for a post count before queueing');
+  assert.ok(/Number\.isInteger\s*\(\s*postsCount\s*\)/.test(src), 'should require a whole number');
+  assert.ok(/postsCount\s*>\s*10000/.test(src), 'should enforce the Telegram page limit');
+});
+
+test('feed refresh posts the selected feed and count to the API', () => {
+  const src = readSource();
+  assert.ok(
+    /fetch\s*\(\s*['"]\/api\/provider\/feed\/download['"]/.test(src),
+    'should call the single-feed download endpoint'
+  );
+  assert.ok(
+    /JSON\.stringify\s*\(\s*\{\s*feed_id:\s*feedId,\s*posts_count:\s*postsCount\s*\}\s*\)/.test(
+      src
+    ),
+    'should submit the selected feed and post count'
+  );
+});
+
 // ============================================================
 // Special All category tests
 // ============================================================

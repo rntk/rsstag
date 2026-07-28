@@ -68,6 +68,47 @@ export default class CategoriesList extends React.Component {
       });
   }
 
+  refreshFeed(feed, event) {
+    event.stopPropagation();
+    const postsCountValue = window.prompt(
+      `How many recent posts should be loaded from "${feed.title}"?`,
+      '100'
+    );
+    if (postsCountValue === null) {
+      return;
+    }
+
+    const postsCount = Number(postsCountValue);
+    if (!Number.isInteger(postsCount) || postsCount < 1 || postsCount > 10000) {
+      alert('Enter a whole number between 1 and 10000.');
+      return;
+    }
+
+    this.queueFeedRefresh(feed.feed_id, postsCount, event.currentTarget);
+  }
+
+  queueFeedRefresh(feedId, postsCount, button) {
+    button.disabled = true;
+    fetch('/api/provider/feed/download', {
+      method: 'POST',
+      body: JSON.stringify({ feed_id: feedId, posts_count: postsCount }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+      .then((response) => response.json())
+      .then((data) => {
+        button.disabled = false;
+        if (data.status !== 'success') {
+          alert('Error: ' + data.message);
+        } else {
+          alert(data.message);
+        }
+      })
+      .catch((err) => {
+        button.disabled = false;
+        alert('Error: ' + err);
+      });
+  }
+
   changeFeedsState(cat_name) {
     let state = Object.assign({}, this.state);
 
@@ -121,6 +162,16 @@ export default class CategoriesList extends React.Component {
                     >
                       Score
                     </button>
+                    {feed.provider === 'telegram' ? (
+                      <button
+                        className="feed-action-link feed-refresh-btn"
+                        onClick={this.refreshFeed.bind(this, feed)}
+                      >
+                        Refresh
+                      </button>
+                    ) : (
+                      ''
+                    )}
                   </div>
                 </li>
               );
