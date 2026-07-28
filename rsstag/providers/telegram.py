@@ -3,7 +3,7 @@
 import time
 import gzip
 import logging
-from datetime import date, datetime, timezone
+from datetime import date
 from random import randint, uniform
 from typing import Tuple, List, Optional, Dict, Any, Iterator
 from collections import defaultdict
@@ -16,7 +16,7 @@ import re
 
 from rsstag.tasks import POST_NOT_IN_PROCESSING
 from rsstag.web.routes import RSSTagRoutes
-from rsstag.users import TelegramAuthData, request_telegram_password
+from rsstag.users import TelegramAuthData
 from rsstag.feeds import RssTagFeeds
 from rsstag.posts import RssTagPosts
 from rsstag.providers.providers import TELEGRAM
@@ -327,25 +327,30 @@ class TelegramProvider:
         else:
             self.no_category_name = NOT_CATEGORIZED
 
-    def _fetch(self, tasks_q: Queue, results_q: Queue):
-        while not tasks_q.empty():
+    @staticmethod
+    def _is_channel(chat: Dict[str, Any]) -> bool:
+        """Return whether a TDLib chat is a broadcast Telegram channel."""
+        chat_type: Any = chat.get("type", {})
+        return isinstance(chat_type, dict) and bool(chat_type.get("is_channel"))
+
+    def _fetch(self, tasks_q: Queue, results_q: Queue) -> None:
+        while True:
             try:
                 dt = tasks_q.get_nowait()
             except Empty:
                 return
-            all_channels, max_limit, channel = dt
+            _all_channels, max_limit, channel = dt
 
-            if all_channels:
-                if "is_channel" in channel["type"]:
-                    if not channel["type"]["is_channel"]:
-                        logging.warning("Skip not channel %s: ", channel)
-                        tasks_q.task_done()
-                        continue
-                else:
-                    logging.warning("Skip no is_channel: %s", channel)
-                    tasks_q.task_done()
-                    continue
-            limit = channel["unread_count"]
+            if not self._is_channel(channel):
+                logging.info(
+                    "Skip non-channel Telegram chat %s (%s)",
+                    channel.get("id"),
+                    channel.get("title", ""),
+                )
+                tasks_q.task_done()
+                continue
+
+            limit = int(channel.get("unread_count", 0) or 0)
             if max_limit <= 0:
                 if limit <= 0:
                     tasks_q.task_done()
@@ -603,6 +608,13 @@ class TelegramProvider:
                     logging.warning("Failed to get chat details for chat_id: %d", c_id)
                     continue
                 channel = r.update
+                if not self._is_channel(channel):
+                    logging.info(
+                        "Skip non-channel Telegram chat %s (%s)",
+                        c_id,
+                        channel.get("title", ""),
+                    )
+                    continue
                 channels.append(
                     {"id": channel["id"], "title": channel.get("title", str(c_id))}
                 )
@@ -634,11 +646,11 @@ class TelegramProvider:
         )
 
     def list_feeds(self, user: dict) -> List[dict]:
-        """Return feed documents for every available chat, without any posts.
+        """Return feed documents for every available channel, without posts.
 
         This is the provider-agnostic "refresh sources list" capability: it
-        only enumerates what the account can read, so the caller can store the
-        sources and let the user pick what to download later.
+        enumerates broadcast channels the account can read, so the caller can
+        store the sources and let the user pick what to download later.
         """
         routes = RSSTagRoutes(self._config["settings"]["host_name"])
         feeds: List[dict] = []
