@@ -613,7 +613,7 @@ def _load_posts_for_snippets(
             continue
 
         feed: Optional[dict] = app.feeds.get_by_feed_id(user["sid"], post["feed_id"])
-        feed_title: str = feed["title"] if feed else f"Post {post_id}"
+        feed_title: str = feed["title"] if feed else "Unknown feed"
         feed_titles.add(feed_title)
 
         raw_content: str = gzip.decompress(post["content"]["content"]).decode(
@@ -626,7 +626,7 @@ def _load_posts_for_snippets(
         all_posts[post_id] = {
             "feed_title": feed_title,
             "url": post.get("url"),
-            "title": title or f"Post {post_id}",
+            "title": title or "Untitled post",
             "raw_content": raw_content,
             "feed_id": str(post.get("feed_id", "")),
             "category_id": str(feed.get("category_id", "")) if feed else "",

@@ -2,7 +2,7 @@
 <html>
 
 <head>
-    <title>Grouped Snippets | {{feed_title}}</title>
+    <title>Grouped Snippets</title>
     {% include "head-data.html" %}
 </head>
 
@@ -42,7 +42,7 @@
             {% endif %}
         </div>
 
-        <h2>Grouped Snippets: {{feed_title}}</h2>
+        <h2>Grouped Snippets</h2>
         {% if current_topic_label %}
         <h3 class="filter-title">Filter: {{ current_topic_label }}</h3>
         {% endif %}
@@ -66,7 +66,9 @@
                         <div class="snippet-meta">
                             <span class="snippet-primary-meta">
                                 From <span class="source-tag snippet-source-info">{{
-                                    snippet.post_title }}</span>
+                                    snippet.feed_title }}</span>
+                                <a href="/posts/{{snippet.post_id}}" class="snippet-post-title"
+                                    title="Post ID: {{ snippet.post_id }}">{{ snippet.post_title }}</a>
                             </span>
                             <span class="snippet-actions" aria-label="Snippet actions">
                                 <span
