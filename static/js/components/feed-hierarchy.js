@@ -882,6 +882,15 @@ class FeedHierarchy {
     });
     menu.appendChild(originalButton);
 
+    const snippetsLink = document.createElement('a');
+    const topic = entry.node.fullPath.replace(/>/g, ' > ');
+    snippetsLink.href = `/topic-grouped-snippets?topic=${encodeURIComponent(topic)}`;
+    snippetsLink.textContent = 'Open snippets';
+    snippetsLink.setAttribute('role', 'menuitem');
+    snippetsLink.title = 'Open snippets grouped by this topic';
+    snippetsLink.addEventListener('click', () => this.closeContextMenu());
+    menu.appendChild(snippetsLink);
+
     const tagsButton = document.createElement('button');
     tagsButton.type = 'button';
     tagsButton.textContent = 'Tags';

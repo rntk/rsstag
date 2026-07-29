@@ -8482,17 +8482,25 @@ $topic-font-min: 8px;
   padding: 5px;
   border: 1px solid #cdd2c9;
   background: #fff;
+  font-size: 13px;
   box-shadow: 0 6px 22px rgb(36 42 33 / 18%);
-  button {
+  button,
+  a {
+    display: block;
     width: 100%;
     padding: 8px 12px;
     border: 0;
     background: #fff;
+    color: inherit;
+    font: inherit;
     text-align: left;
+    text-decoration: none;
     cursor: pointer;
   }
   button:hover,
-  button:focus {
+  button:focus,
+  a:hover,
+  a:focus {
     background: #fff9d8;
   }
 }

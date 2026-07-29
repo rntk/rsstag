@@ -1070,16 +1070,24 @@ class FeedCanvas {
     });
     menu.appendChild(summaryButton);
 
+    const snippetsLink = document.createElement('a');
+    const topicScope = {
+      topic: layout.node.path,
+      postIds: [...layout.node.posts.keys()],
+    };
+    snippetsLink.href = `/topic-grouped-snippets?topic=${encodeURIComponent(topicScope.topic)}`;
+    snippetsLink.textContent = 'Open snippets';
+    snippetsLink.setAttribute('role', 'menuitem');
+    snippetsLink.title = 'Open snippets grouped by this topic';
+    snippetsLink.addEventListener('click', () => this.closeContextMenu());
+    menu.appendChild(snippetsLink);
+
     const tagsButton = document.createElement('button');
     tagsButton.type = 'button';
     tagsButton.textContent = 'Tags';
     tagsButton.title = 'Show the tags of this topic';
     // The card recycles, so the scope is snapshotted here rather than read
     // from `layout` after the dialog's request comes back.
-    const topicScope = {
-      topic: layout.node.path,
-      postIds: [...layout.node.posts.keys()],
-    };
     tagsButton.addEventListener('click', () => {
       this.closeContextMenu();
       this.topicTags.open(topicScope);

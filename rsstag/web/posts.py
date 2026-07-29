@@ -3508,6 +3508,66 @@ def on_post_grouped_snippets_get(
     )
 
 
+def on_topic_grouped_snippets_get(
+    app: "RSSTagApplication", user: dict, request: Request
+) -> Response:
+    """Render every snippet in an exact topic without exposing post IDs in the URL."""
+    topic_filter: Optional[dict[str, Any]] = _parse_topic_filter_from_request(request)
+    if not topic_filter or topic_filter.get("mode") != "topic":
+        return app.on_error(user, request, NotFound())
+
+    topic: str = " > ".join(_split_topic_parts(str(topic_filter["topic"])))
+    if not topic:
+        return app.on_error(user, request, NotFound())
+
+    context_tags = _get_context_tags(user)
+    normalized_context_tags = _normalize_context_tags(context_tags)
+    only_unread: bool = bool(user.get("settings", {}).get("only_unread", False))
+    topic_counts, _ = _build_topics_index(
+        app, user, normalized_context_tags, only_unread=only_unread
+    )
+    matching_topic_data: list[dict[str, Any]] = [
+        topic_data
+        for topic_name, topic_data in topic_counts.items()
+        if _topic_matches_requested(topic_name, topic_filter)
+    ]
+    if not matching_topic_data:
+        return app.on_error(user, request, NotFound())
+
+    post_ids: list[str] = []
+    seen_post_ids: set[str] = set()
+    for topic_data in matching_topic_data:
+        for post_group in topic_data.get("posts", []):
+            for post_id in str(post_group).split("_"):
+                if post_id and post_id not in seen_post_ids:
+                    seen_post_ids.add(post_id)
+                    post_ids.append(post_id)
+    if not post_ids:
+        return app.on_error(user, request, NotFound())
+
+    all_posts, combined_feed_title = _load_posts_for_snippets(app, user, post_ids)
+    topics_data = _collect_topic_snippets(
+        app, user, post_ids, all_posts, topic_filter, normalized_context_tags
+    )
+    sorted_topics = sorted(topics_data.items(), key=lambda item: item[0])
+
+    page = app.template_env.get_template("post-grouped-snippets.html")
+    return Response(
+        page.render(
+            topics=sorted_topics,
+            post_id="",
+            feed_title=combined_feed_title,
+            current_topic=_topic_filter_exact_topic(topic_filter),
+            current_topic_label=_topic_filter_label(topic_filter),
+            current_topic_query=_topic_filter_query_string(topic_filter),
+            topic_only_view=True,
+            user_settings=user["settings"],
+            provider=user.get("provider", ""),
+        ),
+        mimetype="text/html",
+    )
+
+
 def _highlight_words_in_html(html_text: str, word_re: re.Pattern) -> str:
     """Wrap matched words in <mark> only inside text nodes, not inside HTML tags."""
     parts = re.split(r"(<[^>]+>)", html_text)

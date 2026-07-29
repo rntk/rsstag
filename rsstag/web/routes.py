@@ -228,6 +228,11 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/topic-grouped-snippets",
+                "endpoint": "on_topic_grouped_snippets_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/topics-mindmap",
                 "endpoint": "on_topics_mindmap_get",
                 "methods": ["GET"],

@@ -173,3 +173,16 @@ class TestWebTopicsOnlyUnread(MongoWebTestCase):
                 body: str = response.data.decode("utf-8")
                 self.assertIn("StillUnread", body)
                 self.assertNotIn("WholePostRead", body)
+
+    def test_topic_snippets_page_resolves_branch_posts_server_side(self) -> None:
+        sid: str = self._seed_topics("topic-snippets", only_unread=False)
+        client = self.get_authenticated_client(sid)
+
+        response = client.get("/topic-grouped-snippets?topic=Gamma")
+
+        self.assertEqual(response.status_code, 200)
+        body: str = response.data.decode("utf-8")
+        self.assertIn("Still unread sentence.", body)
+        self.assertIn("Already read sentence.", body)
+        self.assertNotIn("/post-grouped/partial-post", body)
+        self.assertNotIn("/post-grouped-snippets/partial-post", body)

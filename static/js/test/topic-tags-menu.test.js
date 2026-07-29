@@ -66,19 +66,26 @@ describe('hierarchy topic menu', () => {
     delete globalThis.fetch;
   });
 
-  it('offers a Tags item next to Summary and Original', () => {
+  it('offers a link to the topic snippets alongside its actions', () => {
     new FeedHierarchy().init();
     document.querySelector('.fh-leaf .fh-topic-menu').click();
 
     const items = [...document.querySelectorAll('.canvas-topic-menu button')];
     expect(items.map((item) => item.textContent)).toEqual(['Summary', 'Original', 'Tags']);
+    const snippetsLink = document.querySelector('.canvas-topic-menu a');
+    expect(snippetsLink.textContent).toBe('Open snippets');
+    expect(snippetsLink.getAttribute('href')).toBe(
+      '/topic-grouped-snippets?topic=Tech%20%3E%20AI'
+    );
   });
 
   it('opens the tags dialog for the clicked topic and its posts', async () => {
     const fetchMock = mockFetch();
     new FeedHierarchy().init();
     document.querySelector('.fh-leaf .fh-topic-menu').click();
-    document.querySelector('.canvas-topic-menu button:nth-child(3)').click();
+    [...document.querySelectorAll('.canvas-topic-menu button')]
+      .find((button) => button.textContent === 'Tags')
+      .click();
 
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const [url, options] = fetchMock.mock.calls[0];
@@ -96,13 +103,24 @@ describe('hierarchy topic menu', () => {
     const fetchMock = mockFetch();
     new FeedHierarchy().init();
     document.querySelector('.fh-branch__label .fh-topic-menu').click();
-    document.querySelector('.canvas-topic-menu button:nth-child(3)').click();
+    [...document.querySelectorAll('.canvas-topic-menu button')]
+      .find((button) => button.textContent === 'Tags')
+      .click();
 
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
       topic: 'Tech',
       post_ids: ['p1', 'p2', 'p3'],
     });
+  });
+
+  it('links a branch topic to every snippet source below it', () => {
+    new FeedHierarchy().init();
+    document.querySelector('.fh-branch__label .fh-topic-menu').click();
+
+    expect(document.querySelector('.canvas-topic-menu a').getAttribute('href')).toBe(
+      '/topic-grouped-snippets?topic=Tech'
+    );
   });
 });
 
@@ -157,7 +175,7 @@ describe('canvas topic menu', () => {
     return { canvas, layout };
   }
 
-  it('offers a Tags item next to Summary', () => {
+  it('offers a link to the topic snippets alongside its actions', () => {
     const { canvas, layout } = buildCanvasWithLayout();
     const anchor = document.createElement('button');
     document.body.appendChild(anchor);
@@ -165,6 +183,11 @@ describe('canvas topic menu', () => {
 
     const items = [...document.querySelectorAll('.canvas-topic-menu button')];
     expect(items.map((item) => item.textContent)).toEqual(['Summary', 'Tags']);
+    const snippetsLink = document.querySelector('.canvas-topic-menu a');
+    expect(snippetsLink.textContent).toBe('Open snippets');
+    expect(snippetsLink.getAttribute('href')).toBe(
+      '/topic-grouped-snippets?topic=Tech%20%3E%20AI'
+    );
   });
 
   it('sends every post of the topic node, not just the clicked run', async () => {
@@ -173,7 +196,9 @@ describe('canvas topic menu', () => {
     const anchor = document.createElement('button');
     document.body.appendChild(anchor);
     canvas.openContextMenu(anchor, layout, document.createElement('div'));
-    document.querySelector('.canvas-topic-menu button:nth-child(2)').click();
+    [...document.querySelectorAll('.canvas-topic-menu button')]
+      .find((button) => button.textContent === 'Tags')
+      .click();
 
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
@@ -191,7 +216,9 @@ describe('canvas topic menu', () => {
     canvas.openContextMenu(anchor, layout, card);
     // Cards recycle: the layout the menu was opened for is replaced.
     layout.node = canvas.nodes.find((node) => node.path === 'Tech');
-    document.querySelector('.canvas-topic-menu button:nth-child(2)').click();
+    [...document.querySelectorAll('.canvas-topic-menu button')]
+      .find((button) => button.textContent === 'Tags')
+      .click();
 
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(JSON.parse(fetchMock.mock.calls[0][1].body).topic).toBe('Tech > AI');

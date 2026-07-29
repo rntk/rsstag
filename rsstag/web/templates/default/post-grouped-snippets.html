@@ -31,10 +31,14 @@
 
     <div class="page post-grouped-snippets-page">
         <div class="back-nav">
+            {% if topic_only_view %}
+            <a href="/topics-list" class="back-btn">&larr; Back to Topics</a>
+            {% else %}
             <a href="/post-grouped/{{post_id}}{{ current_topic_query }}" class="back-btn">&larr; Back to Full Posts Grouped View</a>
             {% if current_topic_label %}
             <a href="/post-compare/{{post_id}}{{ current_topic_query }}" class="back-btn">Compare Side by Side</a>
             <a href="/post-grouped-snippets/{{post_id}}" class="back-btn">Show All Topics</a>
+            {% endif %}
             {% endif %}
         </div>
 
@@ -73,9 +77,11 @@
                                     title="Mark as {{ 'unread' if snippet.read else 'read' }}">
                                     {{ 'Mark Unread' if snippet.read else 'Mark Read' }}
                                 </span>
+                                {% if not topic_only_view %}
                                 <a href="/post-grouped/{{post_id}}?highlight_sentence={{snippet.index}}#post_{{snippet.post_id}}"
                                     class="source-tag" title="See this sentence in the grouped full posts view">See in
                                     context</a>
+                                {% endif %}
                                 <a href="/posts/{{snippet.post_id}}" class="source-tag snippet-tag-context"
                                     title="Show only this post content">Show full post</a>
                                 {% if snippet.url %}

@@ -475,6 +475,9 @@ export function resolvePageType(path) {
   if (/^\/post-grouped-snippets\/.+/.test(path)) {
     return 'post-grouped-snippets';
   }
+  if (path === '/topic-grouped-snippets') {
+    return 'post-grouped-snippets';
+  }
   if (/^\/tag-context-tree\//.test(path)) {
     return 'tag-context-tree';
   }
