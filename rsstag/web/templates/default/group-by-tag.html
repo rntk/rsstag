@@ -6,10 +6,9 @@
 </head>
 
 <body class="font-body selection:bg-secondary-container bg-background">
-    {% from 'site-header.html' import site_header with context %}{% from
-    'context-filter-bar.html' import context_filter_bar with context %}
+    {% from 'site-header.html' import site_header with context %}
 
-    {{ site_header(active='tags') }}
+    {{ site_header(active='tags', show_context_filter=True) }}
 
     <div class="flex items-center px-4 md:px-6 py-2 max-w-[1600px] mx-auto">
         <button onclick="document.getElementById('help_window').classList.remove('hidden')" class="p-2 hover:bg-surface-container-high transition-colors">
@@ -20,11 +19,6 @@
     <!-- Main Content Area -->
     <main class="min-h-screen">
         <div class="max-w-[1600px] mx-auto">
-
-            <!-- Filter Bar -->
-            <div class="sticky top-20 z-30 bg-surface/50 backdrop-blur-md px-10 py-2 border-b border-outline-variant/5">
-                {{ context_filter_bar() }}
-            </div>
 
             <!-- Content -->
             <div class="p-4 md:p-6 space-y-6">

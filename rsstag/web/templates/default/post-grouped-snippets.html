@@ -7,9 +7,9 @@
 </head>
 
 <body>
-    {% from 'site-header.html' import site_header with context %}{% from 'context-filter-bar.html' import context_filter_bar with context %}
+    {% from 'site-header.html' import site_header with context %}
 
-    {{ site_header(active='') }}
+    {{ site_header(active='', show_context_filter=True) }}
 
     <div class="flex items-center flex-wrap gap-2 px-4 md:px-6 py-2 max-w-[1600px] mx-auto">
         <div id="help_button" class="text-xs font-bold text-on-surface-variant hover:text-primary bg-surface-container-high px-3 py-1.5 transition-all">
@@ -27,8 +27,6 @@
         </div>
         <div id="show_all" class="flex items-center"></div>
     </div>
-    {{ context_filter_bar() }}
-
     <div class="page post-grouped-snippets-page">
         <div class="back-nav">
             {% if topic_only_view %}

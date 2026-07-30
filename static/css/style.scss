@@ -7970,8 +7970,14 @@ body:has(#global_tools.site-header) {
 .site-header__left {
   display: flex;
   align-items: center;
-  gap: var(--rsst-space-6);
+  gap: var(--rsst-space-4);
+  flex: 0 0 auto;
+  overflow: hidden;
   min-width: 0;
+}
+
+.site-header__left--has-context-filter {
+  flex: 1 1 auto;
 }
 
 .site-header__brand {
@@ -7981,41 +7987,35 @@ body:has(#global_tools.site-header) {
   letter-spacing: -0.01em;
 }
 
-.site-header__nav {
-  display: flex;
-  align-items: center;
-  gap: var(--rsst-space-2);
+/* The filter is the useful content of the header's left side. Keep it on one
+   line so its chips do not push the header into a second row. */
+.site-header__left #context_filter_bar {
+  min-width: 0;
+  overflow: hidden;
 }
 
-.site-header__link {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--rsst-space-2);
-  padding: 0 var(--rsst-space-1);
-  height: var(--rsst-header-height);
-  color: var(--rsst-ink-secondary);
-  font-size: 13px;
-  line-height: 1;
-  text-decoration: none;
-  border-bottom: 2px solid transparent;
-  transition:
-    color 120ms ease,
-    border-color 120ms ease;
+.site-header__left .context-filter-bar {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  scrollbar-width: none;
+  white-space: nowrap;
 
-  &:hover,
-  &:focus-visible {
-    color: var(--rsst-ink);
+  > * {
+    flex: 0 0 auto;
   }
 
-  .material-symbols-outlined {
-    font-size: 18px;
+  .context-filter-group {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--rsst-space-1);
   }
-}
 
-.site-header__link--active {
-  color: var(--rsst-ink);
-  font-weight: 700;
-  border-bottom-color: var(--rsst-ink);
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 /* Page meta strip: names the scope the page is showing and carries the counts
@@ -8023,7 +8023,7 @@ body:has(#global_tools.site-header) {
    .site-header__inner, whose height is fixed, and never wraps -- filling in
    counts must not change the height syncGlobalToolsOffset measures into
    --global-tools-height. Deliberately quiet: it reads as a continuation of the
-   nav rather than a banner. */
+   header rather than a banner. */
 .site-header__page {
   display: flex;
   align-items: baseline;
@@ -8118,10 +8118,6 @@ body:has(#global_tools.site-header) {
 }
 
 @media (max-width: 767px) {
-  .site-header__nav {
-    display: none;
-  }
-
   /* Keep the title and the counts; the kicker is the most redundant part. */
   .site-header__page {
     padding-left: var(--rsst-space-3);
@@ -8129,20 +8125,6 @@ body:has(#global_tools.site-header) {
 
   .site-header__page-scope {
     display: none;
-  }
-}
-
-/* The context filter belongs to the global header. Keeping it in normal header
-   flow lets the sticky header reserve its full height and prevents overlap with
-   page content when filter tags wrap. */
-.site-header__context-filter {
-  max-width: 1600px;
-  margin: 0 auto;
-  padding: var(--rsst-space-2) var(--rsst-space-5);
-  border-top: 1px solid var(--rsst-border);
-
-  .context-filter-bar {
-    padding: var(--rsst-space-1) var(--rsst-space-3);
   }
 }
 
