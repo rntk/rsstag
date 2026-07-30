@@ -31,7 +31,6 @@ TASK_W2V = 8
 TASK_D2V = 9
 TASK_TAGS_SENTIMENT = 10
 TASK_TAGS_GROUP = 11
-TASK_TAGS_COORDS = 12
 TASK_BIGRAMS_RANK = 13
 TASK_TAGS_RANK = 14
 TASK_FASTTEXT = 15
@@ -1377,7 +1376,6 @@ class RssTagTasks:
             TASK_FASTTEXT: "Learning FastText (global only)",
             TASK_TAGS_SENTIMENT: "Tags sentiment",
             TASK_TAGS_GROUP: "Tags groups searching",
-            TASK_TAGS_COORDS: "Searching geo objects in tags",
             TASK_BIGRAMS_RANK: "Bi-grams ranking",
             TASK_TAGS_RANK: "Tags ranking",
             TASK_CLEAN_BIGRAMS: "Clean bi-grams",

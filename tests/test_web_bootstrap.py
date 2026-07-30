@@ -61,8 +61,10 @@ class TestWebBootstrap(unittest.TestCase):
         route_map = routes.get_werkzeug_routes()
         rules = list(route_map.iter_rules())
         endpoints = {rule.endpoint for rule in rules}
+        paths = {rule.rule for rule in rules}
 
         self.assertGreaterEqual(len(rules), 100)
+        self.assertNotIn("/map", paths)
         self.assertIn("on_root_get", endpoints)
         self.assertIn("on_login_get", endpoints)
         self.assertIn("on_login_post", endpoints)

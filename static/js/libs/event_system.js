@@ -26,9 +26,6 @@ export default class EventsSystem {
     this.START_TASK = 'start_task';
     this.END_TASK = 'end_task';
 
-    this.MAP_UPDATED = 'map_updated';
-    this.CHANGE_MAP_OBJECTS_VISIBILITY = 'change_map_objects_visibility';
-
     this.TAGS_NET_UPDATED = 'tags_net_updated';
     this.LOAD_TAG_NET = 'load_tag_net';
     this.NET_TAG_CHANGE = 'net_tag_change';

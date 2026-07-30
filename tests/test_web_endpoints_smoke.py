@@ -161,9 +161,6 @@ class TestEndpointSmoke(MongoWebTestCase):
     def test_prefixes_all(self) -> None:
         self._get("/prefixes/all/2")
 
-    def test_map_page(self) -> None:
-        self._get("/map")
-
     # ------------------------------------------------------------------
     # Downloads
     # ------------------------------------------------------------------

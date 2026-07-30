@@ -315,22 +315,10 @@ h3.post_title {
 }
 
 .page,
-.geomap,
 #bigrams_table_page,
 #tags_page {
   width: 80%;
   margin: 0.5em auto 3em auto;
-}
-
-.geomap,
-#map {
-  width: 90%;
-  height: 600px;
-  max-height: 100%;
-}
-
-#map {
-  width: 100%;
 }
 
 .post {
@@ -2838,7 +2826,6 @@ body.anthology-compare-modal-open {
   }
 
   .page,
-  .geomap,
   #bigrams_table_page,
   #tags_page {
     margin-bottom: 3em;

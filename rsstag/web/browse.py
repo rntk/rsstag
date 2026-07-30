@@ -148,29 +148,6 @@ def on_group_by_category_get(app: "RSSTagApplication", user: dict, request: Requ
     )
 
 
-def on_get_map(app: "RSSTagApplication", user: dict, request: Request) -> Response:
-    projection = {"_id": False}
-    cities = app.tags.get_city_tags(
-        user["sid"], user["settings"]["only_unread"], projection
-    )
-    countries = app.tags.get_country_tags(
-        user["sid"], user["settings"]["only_unread"], projection
-    )
-    page = app.template_env.get_template("map.html")
-
-    return Response(
-        page.render(
-            support=app.config["settings"]["support"],
-            version=app.config["settings"]["version"],
-            user_settings=user["settings"],
-            provider=user.get("provider", ""),
-            cities=list(cities),
-            countries=list(countries),
-        ),
-        mimetype="text/html",
-    )
-
-
 def on_get_tag_net(app: "RSSTagApplication", user: dict, request: Request, tag="") -> Response:
     all_tags = []
     edges = defaultdict(set)

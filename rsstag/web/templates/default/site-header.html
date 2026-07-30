@@ -5,7 +5,7 @@
 
   Signature: site_header(active='', show_posts_tools=False, show_context_filter=False,
                          page_scope='', page_title='')
-    - active: one of 'dashboard', 'categories', 'tags', 'topics', 'map'
+    - active: one of 'dashboard', 'categories', 'tags', 'topics'
               (empty string highlights nothing).
     - show_posts_tools: when True, renders the posts-page tool mount points
               (#player_block, #read_all, #show_all).
@@ -40,10 +40,6 @@
                 <a class="site-header__link{% if active == 'topics' %} site-header__link--active{% endif %}" href="/topics/1">
                     <span class="material-symbols-outlined">topic</span>
                     <span>Topics</span>
-                </a>
-                <a class="site-header__link{% if active == 'map' %} site-header__link--active{% endif %}" href="/map">
-                    <span class="material-symbols-outlined">map</span>
-                    <span>Map</span>
                 </a>
             </nav>
         </div>

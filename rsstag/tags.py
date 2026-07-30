@@ -139,24 +139,6 @@ class RssTagTags:
 
         return True
 
-    def get_city_tags(
-        self, owner: str, only_unread: bool = None, projection: dict = None
-    ) -> Iterator[dict]:
-        query = {"owner": owner, "city": {"$exists": True}}
-        if only_unread:
-            query["unread_count"] = {"$gt": 0}
-
-        return self._db.tags.find(query, projection=projection)
-
-    def get_country_tags(
-        self, owner: str, only_unread: bool = None, projection: dict = None
-    ) -> Iterator[dict]:
-        query = {"owner": owner, "country": {"$exists": True}}
-        if only_unread:
-            query["unread_count"] = {"$gt": 0}
-
-        return self._db.tags.find(query, projection=projection)
-
     def add_sentiment(self, owner: str, tag: str, sentiment: List[str]) -> bool:
         self._db.tags.update_one(
             {"owner": owner, "tag": tag}, {"$set": {"sentiment": sentiment}}

@@ -133,7 +133,6 @@ test('resolvePageType handles expected routes and fallback', () => {
     ['/category/news', 'posts-list'],
     ['/posts/demo', 'posts-list'],
     ['/tag-info/demo', 'tag-info'],
-    ['/map', 'map'],
     ['/tag-net', 'tag-net'],
     ['/topics-mindmap', 'topics-mindmap'],
     ['/topic-hierarchy', 'topic-hierarchy'],
@@ -149,6 +148,11 @@ test('resolvePageType handles expected routes and fallback', () => {
   for (const [path, expected] of cases) {
     assert.equal(resolvePageType(path), expected, `Unexpected page type for ${path}`);
   }
+});
+
+test('resolvePageType does not recognize the removed map page', () => {
+  const { resolvePageType } = loadAppFunctions();
+  assert.equal(resolvePageType('/map'), 'unknown');
 });
 
 test('initSnippetHoverCards sets tabindex when missing, preserves existing tabindex, and adds class', () => {

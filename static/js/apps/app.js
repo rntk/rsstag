@@ -19,10 +19,6 @@ import TagButton from '../components/tag-button.js';
 import TagToolWidget from '../components/tag-tool-widget.js';
 import ProgressBarStorage from '../storages/progressbar-storage.js';
 import ProgressBar from '../components/progressbar.js';
-import GeoTagsStorage from '../storages/geo-tags-storage.js';
-import GeoMapTools from '../components/geomap-tools.js';
-import RssTagYMap from '../components/rsstag-ymaps.js';
-import rsstag_utils from '../libs/rsstag_utils.js';
 import TagsNetStorage from '../storages/tags-net-storage.js';
 import TagsNet from '../components/tags-net.js';
 import TagNetTools from '../components/tag-net-tools.js';
@@ -451,9 +447,6 @@ export function resolvePageType(path) {
   if (/\/context-tags\/.*/.test(path)) {
     return 'context-tags';
   }
-  if (/^\/map$/.test(path)) {
-    return 'map';
-  }
   if (/^\/tag-net$/.test(path)) {
     return 'tag-net';
   }
@@ -712,18 +705,6 @@ export function initApp() {
   } else if (pageType === 'context-tags') {
     let tag = window.initial_tag;
     tagWithContextInfoPage(tag);
-  } else if (pageType === 'map') {
-    let map_handler = new RssTagYMap('map', window.EVSYS);
-    let prom = rsstag_utils.waitFor(map_handler.isReadyToStart);
-
-    window.EVSYS.trigger(window.EVSYS.START_TASK, 'ajax');
-    prom.then(() => {
-      map_handler.start();
-      const geo_tags_storage = new GeoTagsStorage(window.EVSYS);
-      renderToRoot('map_tools', <GeoMapTools ES={window.EVSYS} />);
-      geo_tags_storage.start();
-      window.EVSYS.trigger(window.EVSYS.END_TASK, 'ajax');
-    });
   } else if (pageType === 'tag-net') {
     let tag_hash = decodeURIComponent(document.location.hash);
     let ES = window.EVSYS;

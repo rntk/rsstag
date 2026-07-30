@@ -25,9 +25,6 @@ class RssTagEntityExtractor:
         self._words_stat = defaultdict(lambda: {"u": 0, "l": 0})
         self._log = logging.getLogger("RssTagEntityExtractor")
 
-    def find_geo_entities(self, entities: List[str]) -> List[str]:
-        pass
-
     def tokenize_text(self, text: str) -> Iterator:
         self._html_cleaner.purge()
         self._html_cleaner.feed(text)
