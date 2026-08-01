@@ -51,6 +51,10 @@
                                     title="Compare posts">C</a>
                                 <a href="/post-grouped-snippets/{{ all_post_ids }}?topic={{ node.path|url_encode }}" class="snippet-link"
                                     title="Grouped snippets">S</a>
+                                <a href="{{ hierarchy_url }}?tag={{ node.path|url_encode }}&topic=1" class="snippet-link"
+                                    title="Filter hierarchy by this topic">H</a>
+                                <a href="{{ canvas_url }}?tag={{ node.path|url_encode }}&topic=1" class="snippet-link"
+                                    title="Filter canvas by this topic">Cv</a>
                                 <button type="button" class="snippet-link anthology-trigger-btn"
                                     data-topic-name="{{ node.name }}" data-post-ids="{{ node.posts|join(',') }}"
                                     title="Start anthology">A</button>
@@ -71,6 +75,10 @@
                                 title="Compare posts">C</a>
                             <a href="/post-grouped-snippets/{{ all_post_ids }}?topic={{ node.path|url_encode }}" class="snippet-link"
                                 title="Grouped snippets">S</a>
+                            <a href="{{ hierarchy_url }}?tag={{ node.path|url_encode }}&topic=1" class="snippet-link"
+                                title="Filter hierarchy by this topic">H</a>
+                            <a href="{{ canvas_url }}?tag={{ node.path|url_encode }}&topic=1" class="snippet-link"
+                                title="Filter canvas by this topic">Cv</a>
                             <button type="button" class="snippet-link anthology-trigger-btn"
                                 data-topic-name="{{ node.name }}" data-post-ids="{{ node.posts|join(',') }}"
                                 title="Start anthology">A</button>

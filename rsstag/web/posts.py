@@ -4352,6 +4352,11 @@ def on_topics_list_get(
         "children": _convert_topics_to_sunburst(paginated_topics)
     }
 
+    canvas_url: str = app.routes.get_url_by_endpoint(endpoint="on_canvas_get") or "/canvas"
+    hierarchy_url: str = (
+        app.routes.get_url_by_endpoint(endpoint="on_hierarchy_get") or "/hierarchy"
+    )
+
     page: Template = app.template_env.get_template("topics-list.html")
     return Response(
         page.render(
@@ -4362,6 +4367,8 @@ def on_topics_list_get(
             current_page=new_cookie_page_value,
             user_settings=user["settings"],
             provider=user.get("provider", ""),
+            canvas_url=canvas_url,
+            hierarchy_url=hierarchy_url,
         ),
         mimetype="text/html",
     )
