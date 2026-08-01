@@ -18,6 +18,7 @@
                             <div>
                                 <p class="canvas-post__number">Post {{ loop.index }}</p>
                                 <h2>{% if post.url %}<a href="{{ post.url }}" target="_blank" rel="noopener noreferrer">{{ post.title }}</a>{% else %}{{ post.title }}{% endif %}</h2>
+                                {% if post.feed_title %}<p class="canvas-post__feed">{% if post.feed_url %}<a href="{{ post.feed_url }}">{{ post.feed_title }}</a>{% else %}{{ post.feed_title }}{% endif %}</p>{% endif %}
                             </div>
                             <button type="button" class="canvas-post__read-toggle" data-post-read-toggle aria-pressed="{{ 'true' if post.read else 'false' }}">Mark {{ 'unread' if post.read else 'read' }}</button>
                         </header>

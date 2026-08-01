@@ -8304,6 +8304,22 @@ body:has(#global_tools.site-header) {
   letter-spacing: 0.06em;
 }
 
+.canvas-post__feed {
+  margin: 4px 0 0;
+  color: #5f695b;
+  font:
+    600 12px/1.4 Inter,
+    sans-serif;
+  a {
+    color: inherit;
+    text-decoration: none;
+    &:hover,
+    &:focus-visible {
+      text-decoration: underline;
+    }
+  }
+}
+
 .canvas-post__read-toggle {
   flex: 0 0 auto;
   padding: 6px 9px;

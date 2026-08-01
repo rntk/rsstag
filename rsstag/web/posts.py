@@ -1131,6 +1131,7 @@ def _build_canvas_post(
     match_topic: bool = False,
     match_sentences: bool = False,
     bypass_filter: bool = False,
+    feeds_by_id: Optional[dict[str, dict[str, Any]]] = None,
 ) -> dict[str, Any]:
     """Build the small, JSON-safe post model consumed by the canvas page."""
     post_id: str = str(post.get("pid", ""))
@@ -1177,11 +1178,17 @@ def _build_canvas_post(
             sentence for sentence in sentences if sentence["number"] in allowed_numbers
         ]
 
+    post_feed: Optional[dict[str, Any]] = (
+        (feeds_by_id or {}).get(str(post.get("feed_id", "")))
+    )
+
     return {
         "post_id": post_id,
         "title": str(content.get("title", "Untitled post")),
         "url": str(post.get("url", "")),
         "read": bool(post.get("read", False)),
+        "feed_title": str(post_feed.get("title", "")).strip() if post_feed else "",
+        "feed_url": str(post_feed.get("local_url", "")).strip() if post_feed else "",
         "sentences": sentences,
         "groups": groups,
     }
@@ -1281,6 +1288,7 @@ def on_canvas_get(
         "read": True,
         "content.title": True,
         "tags": True,
+        "feed_id": True,
     }
     try:
         context_tags: list[str] = _get_context_tags(user) or []
@@ -1313,11 +1321,29 @@ def on_canvas_get(
         else:
             posts_cursor = app.posts.get_all(user["sid"], only_unread, projection)
         db_posts: list[dict[str, Any]] = list(posts_cursor)
+        feed_ids: set[str] = {
+            str(post.get("feed_id", "")) for post in db_posts if post.get("feed_id")
+        }
+        feeds_by_id: dict[str, dict[str, Any]] = {
+            feed["feed_id"]: feed
+            for feed in app.feeds.get_by_feed_ids(
+                user["sid"],
+                list(feed_ids),
+                {"feed_id": True, "title": True, "local_url": True},
+            )
+        } if feed_ids else {}
         canvas_posts: list[dict[str, Any]] = []
         for post in db_posts:
             bypass: bool = text_filter_active and _post_tags_match(post, tag)
             built_post: dict[str, Any] = _build_canvas_post(
-                app, user, post, tag, match_topic, match_sentences, bypass_filter=bypass
+                app,
+                user,
+                post,
+                tag,
+                match_topic,
+                match_sentences,
+                bypass_filter=bypass,
+                feeds_by_id=feeds_by_id,
             )
             if text_filter_active and not bypass and not built_post["groups"]:
                 continue
