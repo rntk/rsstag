@@ -224,9 +224,8 @@ class TopicsSunburst {
         return;
       }
       // Clicked on a topic segment - navigate to grouped posts
-      const postIds = d._topicPosts.join('_');
       const topicPath = encodeURIComponent(d._topicPath);
-      const url = `/post-grouped/${postIds}?topic=${topicPath}`;
+      const url = `/post-grouped?topic=${topicPath}`;
 
       if (event.ctrlKey || event.metaKey) {
         // Open in new tab

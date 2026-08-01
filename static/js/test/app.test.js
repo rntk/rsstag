@@ -121,6 +121,7 @@ test('resolvePageType handles expected routes and fallback', () => {
     ['/canvas', 'canvas'],
     ['/hierarchy', 'hierarchy'],
     ['/post-compare/demo', 'post-compare'],
+    ['/post-grouped', 'post-grouped'],
     ['/post-grouped/demo', 'post-grouped'],
     ['/s-tree/demo', 's-tree'],
     ['/sunburst/demo', 'sunburst'],

@@ -186,3 +186,69 @@ class TestWebTopicsOnlyUnread(MongoWebTestCase):
         self.assertIn("Already read sentence.", body)
         self.assertNotIn("/post-grouped/partial-post", body)
         self.assertNotIn("/post-grouped-snippets/partial-post", body)
+
+    def test_topic_only_grouped_page_resolves_more_than_one_hundred_posts(self) -> None:
+        """The topic URL must not grow with the number of matching posts."""
+        user, sid = self.seed_test_user("topic-only-grouped", "topic-only-grouped")
+        owner: str = user["sid"]
+        feed_id: str = "topic-only-feed"
+        topic: str = "Large topic"
+        post_count: int = 101
+        posts: list[dict[str, Any]] = []
+        grouped_posts: list[tuple[str, dict[str, Any]]] = []
+
+        for index in range(post_count):
+            post_id: str = f"topic-only-post-{index:03d}"
+            posts.append(
+                {
+                    "owner": owner,
+                    "pid": post_id,
+                    "feed_id": feed_id,
+                    "processing": 0,
+                    "read": False,
+                    "tags": ["topics"],
+                    "url": f"https://example.com/{post_id}",
+                    "content": {
+                        "title": f"Topic-only post {index}",
+                        "content": gzip.compress(f"Sentence {index}.".encode("utf-8")),
+                    },
+                }
+            )
+            grouped_posts.append(
+                (
+                    post_id,
+                    {"number": 0, "text": f"Sentence {index}.", "read": False},
+                )
+            )
+
+        self.db_helper.init_db_from_dict(
+            self.test_db,
+            {
+                "feeds": [
+                    {
+                        "owner": owner,
+                        "feed_id": feed_id,
+                        "category_id": "topic-only-category",
+                        "category_title": "Topic-only category",
+                        "local_url": f"/feed/{feed_id}",
+                        "title": "Topic-only feed",
+                        "url": "https://example.com/feed",
+                        "favicon": "",
+                        "processing": 0,
+                    }
+                ],
+                "posts": posts,
+            },
+        )
+        for post_id, sentence in grouped_posts:
+            self.app.post_grouping.save_grouped_posts(
+                owner, [post_id], [sentence], {topic: [0]}
+            )
+
+        client = self.get_authenticated_client(sid)
+        response = client.get("/post-grouped?topic=Large%20topic")
+
+        self.assertEqual(response.status_code, 200)
+        body: str = response.data.decode("utf-8")
+        self.assertEqual(body.count('id="post_topic-only-post-'), post_count)
+        self.assertIn('window.post_id = "";', body)

@@ -45,7 +45,7 @@
                         <details class="topic-tree-details">
                             <summary class="topic-header">
                                 <span class="topic-link" title="{{ node.path }}">{{ node.name }}</span>
-                                <a href="/post-grouped/{{ all_post_ids }}?topic={{ node.path|url_encode }}" class="snippet-link"
+                                <a href="/post-grouped?topic={{ node.path|url_encode }}" class="snippet-link"
                                     title="Grouped posts">G</a>
                                 <a href="/post-compare/{{ all_post_ids }}?topic={{ node.path|url_encode }}" class="snippet-link"
                                     title="Compare posts">C</a>
@@ -65,7 +65,7 @@
                         {% else %}
                         <div class="topic-header">
                             <span class="topic-link" title="{{ node.path }}">{{ node.name }}</span>
-                            <a href="/post-grouped/{{ all_post_ids }}?topic={{ node.path|url_encode }}" class="snippet-link"
+                            <a href="/post-grouped?topic={{ node.path|url_encode }}" class="snippet-link"
                                 title="Grouped posts">G</a>
                             <a href="/post-compare/{{ all_post_ids }}?topic={{ node.path|url_encode }}" class="snippet-link"
                                 title="Compare posts">C</a>

@@ -324,6 +324,15 @@ test('getTopicLinks uses window.post_id in hrefs', () => {
   assert.ok(links[2].href.includes('/post-grouped-snippets/99?topic='));
 });
 
+test('getTopicLinks uses topic-only URLs in a topic-only view', () => {
+  const page = new PostGroupedPage();
+  globalThis.window = { post_id: '', topic_only_view: true };
+  const links = page.getTopicLinks('Science > Physics');
+  assert.deepEqual(links.map((link) => link.text), ['Sentences', 'Snippets']);
+  assert.equal(links[0].href, '/post-grouped?topic=Science%20%3E%20Physics');
+  assert.equal(links[1].href, '/topic-grouped-snippets?topic=Science%20%3E%20Physics');
+});
+
 // ============================================================
 // === handleTopicSelection ===
 // ============================================================

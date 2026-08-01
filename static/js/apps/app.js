@@ -395,7 +395,7 @@ export function resolvePageType(path) {
   if (/^\/post-compare\//.test(path)) {
     return 'post-compare';
   }
-  if (/^\/post-grouped\//.test(path)) {
+  if (path === '/post-grouped' || /^\/post-grouped\//.test(path)) {
     return 'post-grouped';
   }
   if (/^\/s-tree\//.test(path)) {

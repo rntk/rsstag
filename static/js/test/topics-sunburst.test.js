@@ -466,13 +466,10 @@ test('handleClick with shiftKey triggers triggerAnthology', () => {
   assert.ok(/d\._topicPosts/.test(source), 'should pass topic posts to anthology');
 });
 
-test('handleClick navigates to /post-grouped/ URL for normal click', () => {
-  assert.ok(/\/post-grouped\/\$\{postIds\}/.test(source), 'should navigate to /post-grouped/');
+test('handleClick navigates to topic-only /post-grouped URL for normal click', () => {
+  assert.ok(/\/post-grouped\?topic=\$\{topicPath\}/.test(source), 'should navigate to /post-grouped by topic');
   assert.ok(/encodeURIComponent\s*\(\s*d\._topicPath/.test(source), 'should encode topic path');
-  assert.ok(
-    /d\._topicPosts\.join\s*\(\s*['_"]_['_"]/.test(source),
-    'should join post IDs with underscore'
-  );
+  assert.ok(!/d\._topicPosts\.join\s*\(\s*['_"]_['_"]/.test(source), 'should not put post IDs in the URL');
 });
 
 test('handleClick opens new tab for ctrl/meta key', () => {

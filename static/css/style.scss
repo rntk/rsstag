@@ -3295,6 +3295,11 @@ body.anthology-compare-modal-open {
     font-size: 12px;
     font-weight: bold;
     margin-bottom: 8px;
+    text-decoration: none;
+
+    &:hover {
+      background-color: #3367d6;
+    }
   }
 
   .post-divider {

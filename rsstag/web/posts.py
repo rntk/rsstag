@@ -2777,8 +2777,35 @@ def on_cluster_get(app: "RSSTagApplication", user: dict, cluster: int) -> Respon
     )
 
 
+def _resolve_topic_post_ids(
+    app: "RSSTagApplication", user: dict, topic_filter: dict[str, Any]
+) -> list[str]:
+    """Resolve the posts belonging to a topic without accepting IDs in the URL."""
+    context_tags: Optional[list[str]] = _get_context_tags(user)
+    normalized_context_tags: Optional[list[str]] = _normalize_context_tags(context_tags)
+    only_unread: bool = bool(user.get("settings", {}).get("only_unread", False))
+    topic_counts, _ = _build_topics_index(
+        app, user, normalized_context_tags, only_unread=only_unread
+    )
+
+    post_ids: list[str] = []
+    seen_post_ids: set[str] = set()
+    for topic_name, topic_data in topic_counts.items():
+        if not _topic_matches_requested(topic_name, topic_filter):
+            continue
+        for post_group in topic_data.get("posts", []):
+            for post_id in str(post_group).split("_"):
+                if post_id and post_id not in seen_post_ids:
+                    seen_post_ids.add(post_id)
+                    post_ids.append(post_id)
+    return post_ids
+
+
 def on_post_grouped_get(
-    app: "RSSTagApplication", user: dict, request: Request, pids: str
+    app: "RSSTagApplication",
+    user: dict,
+    request: Request,
+    pids: Optional[str] = None,
 ) -> Response:
     """Handler for grouped posts view with server-side highlighting."""
     page_context: Optional[dict[str, Any]] = _build_grouped_posts_page_context(
@@ -2799,7 +2826,10 @@ def on_post_grouped_get(
 
 
 def _build_grouped_posts_page_context(
-    app: "RSSTagApplication", user: dict, request: Request, pids: str
+    app: "RSSTagApplication",
+    user: dict,
+    request: Request,
+    pids: Optional[str],
 ) -> Optional[dict[str, Any]]:
     """Build shared page context for grouped-post based pages."""
     topic_filter: Optional[dict[str, Any]] = _parse_topic_filter_from_request(request)
@@ -2813,7 +2843,12 @@ def _build_grouped_posts_page_context(
         "url": True,
         "read": True,
     }
-    post_ids: list[str] = [pid for pid in pids.split("_") if pid]
+    topic_only_view: bool = not pids
+    post_ids: list[str] = [pid for pid in (pids or "").split("_") if pid]
+    if topic_only_view:
+        if not topic_filter:
+            return None
+        post_ids = _resolve_topic_post_ids(app, user, topic_filter)
     if not post_ids:
         return None
 
@@ -3069,7 +3104,7 @@ def _build_grouped_posts_page_context(
             all_group_colors[group_name] = _group_color(group_name)
 
     return {
-        "post_id": pids,
+        "post_id": pids or "",
         "posts": final_posts,
         "sentences": all_sentences_data,
         "groups": all_groups,
@@ -3081,6 +3116,7 @@ def _build_grouped_posts_page_context(
         "current_topic": _topic_filter_exact_topic(topic_filter),
         "current_topic_label": _topic_filter_label(topic_filter),
         "current_topic_query": _topic_filter_query_string(topic_filter),
+        "topic_only_view": topic_only_view,
     }
 
 
@@ -4419,12 +4455,12 @@ def on_topics_search(
 
     data: list[dict[str, str | int]] = []
     for topic_name, topic_data in limited_matches:
-        post_ids: list[str] = topic_data.get("posts", [])
-        all_post_ids: str = "_".join(post_ids)
         grouped_url: str = app.routes.get_url_by_endpoint(
-            "on_post_grouped_get", {"pids": all_post_ids}
+            "on_post_grouped_get"
         )
         grouped_url = f"{grouped_url}?topic={quote_plus(topic_name)}"
+        post_ids: list[str] = topic_data.get("posts", [])
+        all_post_ids: str = "_".join(post_ids)
         compare_base_url: str = app.routes.get_url_by_endpoint(
             "on_post_compare_get", {"pids": all_post_ids}
         )

@@ -815,11 +815,10 @@ export default class TopicsMindmap {
 
   _navigateToTopic(node) {
     const scope = this._getNodeScope(node);
-    if (!scope.topic_path || !Array.isArray(scope.post_ids) || scope.post_ids.length === 0) {
+    if (!scope.topic_path) {
       return;
     }
-    const postIds = scope.post_ids.join('_');
-    window.location.href = `/post-grouped/${postIds}?topic=${encodeURIComponent(scope.topic_path)}`;
+    window.location.href = `/post-grouped?topic=${encodeURIComponent(scope.topic_path)}`;
   }
 
   _setHorizontalPosition(node, y) {

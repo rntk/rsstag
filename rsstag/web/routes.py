@@ -208,6 +208,11 @@ class RSSTagRoutes:
                 "methods": ["POST"],
             },
             {
+                "url": "/post-grouped",
+                "endpoint": "on_post_grouped_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/post-grouped/<string:pids>",
                 "endpoint": "on_post_grouped_get",
                 "methods": ["GET"],

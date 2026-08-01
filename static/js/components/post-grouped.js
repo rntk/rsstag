@@ -192,6 +192,20 @@ export default class PostGroupedPage {
 
   getTopicLinks(topicPath) {
     const topicParam = encodeURIComponent(topicPath);
+    if (window.topic_only_view) {
+      return [
+        {
+          className: 'topic-link topic-link-grouped',
+          href: `/post-grouped?topic=${topicParam}`,
+          text: 'Sentences',
+        },
+        {
+          className: 'topic-link topic-link-snippets',
+          href: `/topic-grouped-snippets?topic=${topicParam}`,
+          text: 'Snippets',
+        },
+      ];
+    }
     return [
       {
         className: 'topic-link topic-link-grouped',
