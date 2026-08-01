@@ -1373,6 +1373,17 @@ def _build_hierarchy_topics(
     sentences_count: dict[str, int] = defaultdict(int)
     topic_sentences: dict[str, list[str]] = defaultdict(list)
     topic_sources: dict[str, dict[str, dict[str, Any]]] = defaultdict(dict)
+    feed_ids: set[str] = {
+        str(post.get("feed_id", "")) for post in posts if post.get("feed_id")
+    }
+    feeds_by_id: dict[str, dict[str, Any]] = {
+        feed["feed_id"]: feed
+        for feed in app.feeds.get_by_feed_ids(
+            user["sid"],
+            list(feed_ids),
+            {"feed_id": True, "title": True, "local_url": True},
+        )
+    } if feed_ids else {}
     for post in posts:
         post_id: str = str(post.get("pid", ""))
         grouped: Optional[dict[str, Any]] = app.post_grouping.get_grouped_posts(
@@ -1394,6 +1405,9 @@ def _build_hierarchy_topics(
         content: dict[str, Any] = post.get("content", {}) or {}
         source_title: str = str(content.get("title", "")).strip() or f"Post {post_id}"
         source_url: str = str(post.get("url", "")).strip()
+        post_feed: Optional[dict[str, Any]] = feeds_by_id.get(str(post.get("feed_id", "")))
+        feed_title: str = str(post_feed.get("title", "")).strip() if post_feed else ""
+        feed_url: str = str(post_feed.get("local_url", "")).strip() if post_feed else ""
         for topic, numbers in groups.items():
             if not topic or not isinstance(numbers, list):
                 continue
@@ -1432,6 +1446,8 @@ def _build_hierarchy_topics(
                         "post_id": post_id,
                         "title": source_title,
                         "url": source_url,
+                        "feed_title": feed_title,
+                        "feed_url": feed_url,
                         "sentences": [],
                     },
                 )
@@ -1525,6 +1541,7 @@ def on_hierarchy_get(
         "url": True,
         "content.title": True,
         "tags": True,
+        "feed_id": True,
     }
     try:
         context_tags: list[str] = _get_context_tags(user) or []

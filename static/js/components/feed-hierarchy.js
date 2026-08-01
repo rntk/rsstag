@@ -17,7 +17,7 @@ import { TopicTagsDialog } from './topic-tags.js';
 
 /**
  * @typedef {{number?: number, text: string, read?: boolean}} TopicSentence
- * @typedef {{title?: string, post_id?: string, url?: string, sentences?: (TopicSentence|string)[]}} TopicSource
+ * @typedef {{title?: string, post_id?: string, url?: string, feed_title?: string, feed_url?: string, sentences?: (TopicSentence|string)[]}} TopicSource
  * @typedef {{name: string, posts_count?: number, sentences_count?: number, sentences?: string[], sources?: TopicSource[]}} Topic
  * @typedef {{name: string, fullPath: string, uid: string, depth: number, topic: Topic|null}} TreeNode
  * @typedef {{node: TreeNode, children: Map<string, TreeEntry>, parent: TreeEntry|null, leafCount: number}} TreeEntry
@@ -602,6 +602,8 @@ export function collectOriginalSources(entry) {
       title: String(source?.title || '').trim(),
       post_id: String(source?.post_id || '').trim(),
       url: String(source?.url || '').trim(),
+      feed_title: String(source?.feed_title || '').trim(),
+      feed_url: String(source?.feed_url || '').trim(),
       sentences,
     });
   };
@@ -1065,6 +1067,14 @@ class FeedHierarchy {
       sourceTitle.setAttribute('rel', 'noopener noreferrer');
     }
     header.appendChild(sourceTitle);
+
+    if (source.feed_title) {
+      const feedLabel = document.createElement(source.feed_url ? 'a' : 'span');
+      feedLabel.className = 'canvas-original-source__feed';
+      feedLabel.textContent = source.feed_title;
+      if (source.feed_url) feedLabel.setAttribute('href', source.feed_url);
+      header.appendChild(feedLabel);
+    }
 
     const actions = document.createElement('div');
     actions.className = 'canvas-original-source__actions';

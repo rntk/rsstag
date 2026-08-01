@@ -8631,6 +8631,19 @@ $topic-font-min: 8px;
     text-decoration: underline;
   }
 }
+.canvas-original-source__feed {
+  display: block;
+  margin-top: 4px;
+  color: #5f695b;
+  font:
+    600 12px/1.4 Inter,
+    sans-serif;
+  text-decoration: none;
+  &:hover,
+  &:focus-visible {
+    text-decoration: underline;
+  }
+}
 .canvas-original-source__actions {
   display: flex;
   flex-wrap: wrap;
