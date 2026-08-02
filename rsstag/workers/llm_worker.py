@@ -26,6 +26,11 @@ from rsstag.tasks import (
     TASK_ANTHOLOGY,
     TASK_POST_GROUPING_BATCH,
 )
+from rsstag.grouping_cache import (
+    NAMESPACE_CHUNK_BATCH,
+    PostGroupingCache,
+    model_identity,
+)
 from rsstag.workers.base import BaseWorker
 
 
@@ -176,6 +181,17 @@ class _PostGroupingWorker:
         self._llm: LLMRouter = llm
         self._batch_storage: _LLMBatchStorage = batch_storage
         self._response_parser: _LLMResponseParser = response_parser
+        self._cache: PostGroupingCache = PostGroupingCache(
+            db, enabled=self._is_cache_enabled(config)
+        )
+        self._cache.prepare()
+
+    @staticmethod
+    def _is_cache_enabled(config: Dict[str, Any]) -> bool:
+        raw_value: Any = config.get("settings", {}).get("post_grouping_cache", True)
+        if isinstance(raw_value, bool):
+            return raw_value
+        return str(raw_value).strip().lower() not in {"0", "false", "no", "off", ""}
 
     def handle_post_grouping(self, task: Dict[str, Any]) -> bool:
         if task["data"]:
@@ -232,6 +248,70 @@ class _PostGroupingWorker:
             if str(post.get("pid")) not in existing_post_ids
         ]
 
+    def _post_text(self, post: Dict[str, Any]) -> Tuple[str, str, str]:
+        """Return (content, title, pipeline text) for a post."""
+        from rsstag.post_splitter import build_grouping_text
+
+        content: str = gzip.decompress(post["content"]["content"]).decode(
+            "utf-8", "replace"
+        )
+        title: str = post["content"].get("title", "")
+        return content, title, build_grouping_text(content, title)
+
+    def _save_cached_documents(
+        self,
+        owner: str,
+        posts: List[Dict[str, Any]],
+        model_id: str,
+        post_grouping: Any,
+    ) -> List[Dict[str, Any]]:
+        """Save groupings for posts whose text was grouped before.
+
+        Returns the posts that still need LLM work.
+        """
+        if not self._cache.enabled:
+            return posts
+
+        remaining: List[Dict[str, Any]] = []
+        updates: List[UpdateOne] = []
+        for post in posts:
+            try:
+                _, _, text = self._post_text(post)
+                cached: Optional[Dict[str, Any]] = self._cache.get_document(
+                    owner, model_id, text
+                )
+            except Exception as exc:
+                logging.error("Can`t read grouping cache for %s: %s", post.get("pid"), exc)
+                remaining.append(post)
+                continue
+
+            if not cached:
+                remaining.append(post)
+                continue
+
+            saved: bool = post_grouping.save_grouped_posts(
+                owner, [post["pid"]], cached["sentences"], cached.get("groups", {})
+            )
+            if not saved:
+                remaining.append(post)
+                continue
+            updates.append(
+                UpdateOne(
+                    {"_id": post["_id"]},
+                    {"$set": {"processing": POST_NOT_IN_PROCESSING, "grouping": 1}},
+                )
+            )
+
+        if updates:
+            self._db.posts.bulk_write(updates, ordered=False)
+            logging.info(
+                "Post grouping cache served %d of %d post(s) for owner %s",
+                len(updates),
+                len(posts),
+                owner,
+            )
+        return remaining
+
     def make_post_grouping(self, task: Dict[str, Any]) -> bool:
         try:
             from rsstag.post_grouping import RssTagPostGrouping
@@ -249,19 +329,28 @@ class _PostGroupingWorker:
             llm_handler: Any = self._llm.get_handler(
                 task["user"]["settings"], provider_key="worker_llm"
             )
-            post_splitter = PostSplitter(llm_handler)
+            model_id: str = model_identity(llm_handler)
             post_grouping = RssTagPostGrouping(self._db)
+            chunk_cache: Optional[Any] = self._cache.chunk_cache(owner, model_id)
+            post_splitter = PostSplitter(llm_handler, chunk_cache=chunk_cache)
 
             updates: List[UpdateOne] = []
             for post in posts:
                 try:
-                    content: str = gzip.decompress(post["content"]["content"]).decode(
-                        "utf-8", "replace"
+                    content: str
+                    title: str
+                    text: str
+                    content, title, text = self._post_text(post)
+                    # An identical text -- a repost, a re-download or a duplicate
+                    # inside this very batch -- is already grouped.
+                    cached: Optional[Dict[str, Any]] = self._cache.get_document(
+                        owner, model_id, text
                     )
-                    title: str = post["content"].get("title", "")
-                    result: Optional[Dict[str, Any]] = post_splitter.generate_grouped_data(
-                        content, title
-                    )
+                    result: Optional[Dict[str, Any]] = cached
+                    if result is None:
+                        if chunk_cache:
+                            chunk_cache.bind_document(text)
+                        result = post_splitter.generate_grouped_data(content, title)
                     if result is None:
                         logging.warning(
                             "Skipping grouped data save for post %s due to LLM failure",
@@ -277,6 +366,8 @@ class _PostGroupingWorker:
                         result["groups"],
                     )
                     if save_success:
+                        if cached is None:
+                            self._cache.set_document(owner, model_id, text, result)
                         updates.append(
                             UpdateOne(
                                 {"_id": post["_id"]},
@@ -306,6 +397,33 @@ class _PostGroupingWorker:
         except Exception as exc:
             logging.error("Can't make post grouping. Info: %s", exc)
             return False
+
+    def _invalidate_cache_for_cleanup(
+        self, owner: str, scope_mode: str, posts: List[Dict[str, Any]]
+    ) -> int:
+        """Drop cache entries for the posts a cleanup is about to reprocess."""
+        if not self._cache.enabled:
+            return 0
+        if scope_mode not in (
+            SCOPE_MODE_POSTS,
+            SCOPE_MODE_FEEDS,
+            SCOPE_MODE_CATEGORIES,
+            SCOPE_MODE_PROVIDER,
+        ):
+            # Unscoped cleanup: skip decompressing every post, drop everything.
+            return self._cache.clear(owner)
+
+        texts: List[str] = []
+        for post in posts:
+            try:
+                texts.append(self._post_text(post)[2])
+            except Exception as exc:
+                logging.warning(
+                    "Can`t read text of post %s for cache invalidation: %s",
+                    post.get("pid"),
+                    exc,
+                )
+        return self._cache.invalidate_documents(owner, texts)
 
     def make_post_grouping_cleanup(self, task: Dict[str, Any]) -> bool:
         try:
@@ -344,8 +462,12 @@ class _PostGroupingWorker:
                 if provider:
                     query["provider"] = provider
 
-            posts = list(self._db.posts.find(query, projection={"pid": True}))
+            posts = list(self._db.posts.find(query, projection={"pid": True, "content": True}))
             post_ids = [post.get("pid") for post in posts if post.get("pid")]
+
+            # A cleanup is a request to redo the work, so the cached answers for
+            # these posts must go too, otherwise they would be replayed as is.
+            self._invalidate_cache_for_cleanup(owner, scope_mode, posts)
 
             post_grouping = RssTagPostGrouping(self._db)
             post_grouping.delete_grouped_posts_by_post_ids(owner, post_ids)
@@ -361,6 +483,32 @@ class _PostGroupingWorker:
         except Exception as exc:
             logging.error("Can't cleanup post grouping data. Info: %s", exc)
             return False
+
+    def _complete_batch_task(
+        self, task: Dict[str, Any], batch_state: Dict[str, Any]
+    ) -> bool:
+        """Mark a batch task done when no request has to be sent.
+
+        finish_task only drops a batch task whose state says "done", so a task
+        fully served from the cache has to say so explicitly instead of staying
+        claimed until its lease expires.
+        """
+        batch_state.update(
+            {
+                "status": BatchTaskStatus.COMPLETED.value,
+                "batch_id": None,
+                "input_file_id": None,
+                "output_file_id": None,
+                "error_file_id": None,
+                "raw_result_id": None,
+                "raw_processed": True,
+                "item_ids": [],
+                "pending_item_ids": [],
+            }
+        )
+        self._batch_storage.update_task_batch_state(task["_id"], batch_state)
+        task["data"] = []
+        return True
 
     def make_post_grouping_batch(self, task: Dict[str, Any]) -> bool:
         try:
@@ -437,20 +585,40 @@ class _PostGroupingWorker:
                     return True
                 return False
 
+            from rsstag.post_grouping import RssTagPostGrouping
+
             post_splitter = PostSplitter()
             posts: List[Dict[str, Any]] = task.get("data") or []
             owner: str = task["user"]["sid"]
+            model_id: str = model_identity(provider)
             posts = self._exclude_posts_with_existing_groupings(owner, posts)
+            posts = self._save_cached_documents(
+                owner, posts, model_id, RssTagPostGrouping(self._db)
+            )
             task["data"] = posts
             if not posts:
-                task["data"] = []
-                return True
+                return self._complete_batch_task(task, batch_state)
 
-            requests, item_ids, skipped_posts, remaining_item_ids = self._build_post_grouping_batch_subset(
-                str(task["_id"]), posts, provider, post_splitter
+            (
+                requests,
+                item_ids,
+                skipped_posts,
+                remaining_item_ids,
+                cached_posts,
+            ) = self._build_post_grouping_batch_subset(
+                str(task["_id"]), posts, provider, post_splitter, owner, model_id
             )
             if skipped_posts:
                 self._reset_posts_processing(skipped_posts)
+            if cached_posts:
+                finalized_ids: Set[str] = self._finalize_cached_batch_posts(
+                    owner, model_id, cached_posts, post_splitter
+                )
+                if finalized_ids:
+                    posts = [
+                        post for post in posts if str(post["_id"]) not in finalized_ids
+                    ]
+                    task["data"] = posts
 
             if not requests:
                 if remaining_item_ids:
@@ -468,8 +636,7 @@ class _PostGroupingWorker:
                     )
                     self._batch_storage.update_task_batch_state(task["_id"], batch_state)
                     return False
-                task["data"] = []
-                return True
+                return self._complete_batch_task(task, batch_state)
 
             batch_resp: Dict[str, Any] = provider.create_batch(
                 requests,
@@ -487,6 +654,7 @@ class _PostGroupingWorker:
                 "pending_item_ids": remaining_item_ids,
                 "prompt_count": len(requests),
                 "raw_processed": True,
+                "model_id": model_id,
             }
             self._batch_storage.update_task_batch_state(task["_id"], batch_state)
             logging.info("Submitted post grouping batch %s for task %s", batch.id, task["_id"])
@@ -554,26 +722,45 @@ class _PostGroupingWorker:
             return None
         return post_id, parsed_chunk_id
 
+    def _batch_chunk_cache(self, owner: str, model_id: str) -> Optional[Any]:
+        return self._cache.chunk_cache(owner, model_id, NAMESPACE_CHUNK_BATCH)
+
     def _build_post_grouping_batch_subset(
         self,
         task_id: str,
         posts: List[Dict[str, Any]],
         provider: Any,
         post_splitter: Any,
-    ) -> Tuple[List[Dict[str, Any]], List[str], List[Dict[str, Any]], List[str]]:
+        owner: str = "",
+        model_id: str = "",
+    ) -> Tuple[
+        List[Dict[str, Any]],
+        List[str],
+        List[Dict[str, Any]],
+        List[str],
+        List[Tuple[Dict[str, Any], Any, List[str]]],
+    ]:
+        """Build batch requests, skipping prompts already answered before.
+
+        Chunks whose prompt is cached are left out of the batch; they are
+        restored from the cache when the batch output is processed. A post whose
+        chunks are all cached needs no request at all and is returned in the
+        last element for immediate finalization.
+        """
         lines_limit: int = self._get_post_grouping_batch_lines_limit()
+        chunk_cache: Optional[Any] = self._batch_chunk_cache(owner, model_id)
         requests: List[Dict[str, Any]] = []
         item_ids: List[str] = []
         skipped_posts: List[Dict[str, Any]] = []
         remaining_item_ids: List[str] = []
+        cached_posts: List[Tuple[Dict[str, Any], Any, List[str]]] = []
 
         row_index: int = 0
         for idx, post in enumerate(posts):
             try:
-                content: str = gzip.decompress(post["content"]["content"]).decode(
-                    "utf-8", "replace"
-                )
-                title: str = post["content"].get("title", "")
+                content: str
+                title: str
+                content, title, _ = self._post_text(post)
                 prepared: Any = post_splitter.prepare_for_batch(content, title)
                 if prepared is None:
                     logging.warning("Empty content for post %s, skipping", post.get("_id"))
@@ -581,8 +768,15 @@ class _PostGroupingWorker:
                     continue
 
                 post_requests: List[Dict[str, Any]] = []
+                cached_responses: List[str] = []
                 for chunk in prepared.chunks:
                     prompt: str = post_splitter.build_batch_prompt(chunk.tagged_text)
+                    cached_response: Optional[str] = (
+                        chunk_cache.get(prompt, 0.0) if chunk_cache else None
+                    )
+                    cached_responses.append(cached_response or "")
+                    if cached_response:
+                        continue
                     custom_id: str = self._build_post_grouping_custom_id(
                         task_id=task_id,
                         post_id=str(post["_id"]),
@@ -591,6 +785,10 @@ class _PostGroupingWorker:
                     )
                     row_index += 1
                     post_requests.append(provider.build_request(custom_id, prompt))
+
+                if not post_requests and any(cached_responses):
+                    cached_posts.append((post, prepared, cached_responses))
+                    continue
 
                 if (
                     lines_limit > 0
@@ -606,7 +804,68 @@ class _PostGroupingWorker:
                 logging.error("Error preparing post %s for batch: %s", post.get("_id"), exc)
                 skipped_posts.append(post)
 
-        return requests, item_ids, skipped_posts, remaining_item_ids
+        if cached_posts:
+            logging.info(
+                "Post grouping batch: %d post(s) fully served from the chunk cache",
+                len(cached_posts),
+            )
+
+        return requests, item_ids, skipped_posts, remaining_item_ids, cached_posts
+
+    def _finalize_cached_batch_posts(
+        self,
+        owner: str,
+        model_id: str,
+        cached_posts: List[Tuple[Dict[str, Any], Any, List[str]]],
+        post_splitter: Any,
+    ) -> Set[str]:
+        """Save groupings for posts whose chunk responses all came from cache."""
+        from rsstag.post_grouping import RssTagPostGrouping
+
+        post_grouping = RssTagPostGrouping(self._db)
+        finalized: Set[str] = set()
+        failed_posts: List[Dict[str, Any]] = []
+        updates: List[UpdateOne] = []
+        for post, prepared, responses in cached_posts:
+            post_id: str = str(post["_id"])
+            try:
+                merged: str = "\n".join(response for response in responses if response)
+                result: Optional[Dict[str, Any]] = post_splitter.finalize_batch(
+                    prepared, merged
+                )
+                if not result:
+                    logging.error("Cached batch finalize failed for post %s", post_id)
+                    failed_posts.append(post)
+                    continue
+                saved: bool = post_grouping.save_grouped_posts(
+                    owner, [post["pid"]], result["sentences"], result["groups"]
+                )
+                if not saved:
+                    # Never mark a post grouped, or cache the result, when the
+                    # grouping document did not reach the database.
+                    logging.error("Can`t save cached grouping for post %s", post_id)
+                    failed_posts.append(post)
+                    continue
+                _, _, text = self._post_text(post)
+                self._cache.set_document(owner, model_id, text, result)
+                finalized.add(post_id)
+                updates.append(
+                    UpdateOne(
+                        {"_id": post["_id"]},
+                        {"$set": {"processing": POST_NOT_IN_PROCESSING, "grouping": 1}},
+                    )
+                )
+            except Exception as exc:
+                logging.error("Error finalizing cached post %s: %s", post_id, exc)
+                failed_posts.append(post)
+
+        if updates:
+            self._db.posts.bulk_write(updates, ordered=False)
+        if failed_posts:
+            # Nothing was sent to the provider for them, so release the claim
+            # instead of leaving the posts stuck in processing.
+            self._reset_posts_processing(failed_posts)
+        return finalized
 
     def _process_post_grouping_raw(self, task: Dict[str, Any], batch_state: Dict[str, Any]) -> bool:
         from rsstag.post_grouping import RssTagPostGrouping
@@ -703,13 +962,19 @@ class _PostGroupingWorker:
             chunk_responses.setdefault(post_id, {})[chunk_id] = cleaned_text
 
         owner: str = task["user"]["sid"]
+        # Batches submitted before the cache existed carry no model id; writing
+        # entries under an empty model would create rows nothing can ever hit.
+        model_id: str = str(batch_state.get("model_id", ""))
+        chunk_cache: Optional[Any] = (
+            self._batch_chunk_cache(owner, model_id) if model_id else None
+        )
         posts: List[Dict[str, Any]] = task.get("data") or []
         successfully_grouped: Set[str] = set()
         for post in posts:
             post_id = str(post["_id"])
             try:
-                content = gzip.decompress(post["content"]["content"]).decode("utf-8", "replace")
-                title = post["content"].get("title", "")
+                post_text: str
+                content, title, post_text = self._post_text(post)
                 prepared = post_splitter.prepare_for_batch(content, title)
                 if prepared is None:
                     logging.warning(
@@ -719,13 +984,26 @@ class _PostGroupingWorker:
                     continue
 
                 post_chunk_responses: Dict[int, str] = chunk_responses.get(post_id, {})
-                ordered_responses: List[str] = [
-                    post_chunk_responses.get(chunk.chunk_id, "") for chunk in prepared.chunks
+                prompts: List[str] = [
+                    post_splitter.build_batch_prompt(chunk.tagged_text)
+                    for chunk in prepared.chunks
                 ]
+                ordered_responses: List[str] = []
+                fresh_responses: List[Tuple[str, str]] = []
+                for index, chunk in enumerate(prepared.chunks):
+                    response_text: str = post_chunk_responses.get(chunk.chunk_id, "")
+                    if response_text:
+                        fresh_responses.append((prompts[index], response_text))
+                    elif chunk_cache:
+                        # Chunks left out of the batch because an identical
+                        # prompt was answered before.
+                        response_text = chunk_cache.get(prompts[index], 0.0) or ""
+                    ordered_responses.append(response_text)
+
                 missing_chunks: List[int] = [
                     chunk.chunk_id
-                    for chunk in prepared.chunks
-                    if not post_chunk_responses.get(chunk.chunk_id, "")
+                    for chunk, response_text in zip(prepared.chunks, ordered_responses)
+                    if not response_text
                 ]
                 if missing_chunks:
                     logging.warning(
@@ -742,13 +1020,20 @@ class _PostGroupingWorker:
 
                 result: Optional[Dict[str, Any]] = post_splitter.finalize_batch(prepared, merged_response)
                 if result:
-                    post_grouping.save_grouped_posts(
+                    saved: bool = post_grouping.save_grouped_posts(
                         owner,
                         [post["pid"]],
                         result["sentences"],
                         result["groups"],
                     )
                     successfully_grouped.add(post_id)
+                    # Only responses that produced a usable, persisted grouping
+                    # are worth replaying for the next copy of the same text.
+                    if chunk_cache and saved:
+                        chunk_cache.bind_document(post_text)
+                        for prompt, response_text in fresh_responses:
+                            chunk_cache.set(prompt, 0.0, response_text)
+                        self._cache.set_document(owner, model_id, post_text, result)
                 else:
                     logging.error("finalize_batch returned None for post %s", post_id)
             except Exception as exc:

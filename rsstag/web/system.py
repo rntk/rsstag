@@ -44,6 +44,7 @@ def _prune_owner_data(app: "RSSTagApplication", owner: str) -> Dict[str, int]:
         "anthology_runs",
         "llm_batch_results",
         "llm_cache",
+        "post_grouping_cache",
     ]
     deleted_counts: Dict[str, int] = {}
     for collection_name in collection_names:

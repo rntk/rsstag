@@ -598,14 +598,17 @@ export function collectOriginalSources(entry) {
       });
       return;
     }
-    sources.set(key, {
+    const normalizedSource = {
       title: String(source?.title || '').trim(),
       post_id: String(source?.post_id || '').trim(),
       url: String(source?.url || '').trim(),
-      feed_title: String(source?.feed_title || '').trim(),
-      feed_url: String(source?.feed_url || '').trim(),
       sentences,
-    });
+    };
+    const feedTitle = String(source?.feed_title || '').trim();
+    const feedUrl = String(source?.feed_url || '').trim();
+    if (feedTitle) normalizedSource.feed_title = feedTitle;
+    if (feedUrl) normalizedSource.feed_url = feedUrl;
+    sources.set(key, normalizedSource);
   };
 
   const visit = (current) => {

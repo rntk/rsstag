@@ -8,6 +8,13 @@ class TestDBUtils(unittest.TestCase):
     def setUp(self):
         # Default to localhost:27017 for testing, but can be overridden by env vars if needed
         self.db_helper = DBHelper()
+        try:
+            self.db_helper.client.admin.command("ping")
+        except Exception as exc:
+            self.db_helper.close()
+            raise unittest.SkipTest(
+                f"MongoDB on port 27017 is required for DB helper tests: {exc}"
+            )
         self.db = self.db_helper.create_test_db()
 
     def tearDown(self):

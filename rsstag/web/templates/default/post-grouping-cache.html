@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>RSSTag - Post Grouping Cache</title>
+{% include 'head-data.html' %}
+</head>
+<body>
+{% from 'site-header.html' import site_header with context %}
+{{ site_header(active='') }}
+<div class="page screen_middle">
+    <h1>Post Grouping Cache</h1>
+    <p class="cache-hint">
+        Grouping results are stored under a hash of the exact text sent to the LLM.
+        A <b>document</b> entry saves a whole post from being processed again, a
+        <b>chunk</b> entry saves a single LLM request. "Hits" counts how many times
+        an entry was reused; "hits/day" is that count divided by the age of the entry
+        in days (minimum one day), which is the number to sort by when looking for
+        useless records.
+    </p>
+
+    <div class="cache-summary">
+        <span><b>{{ summary.entries }}</b> entries</span>
+        <span><b>{{ summary.hits }}</b> hits</span>
+        <span><b>{{ (summary.size / 1024 / 1024)|round(2) }}</b> MB</span>
+        <span>documents: <b>{{ summary.document_entries }}</b> / hits <b>{{ summary.document_hits }}</b></span>
+        <span>chunks: <b>{{ summary.chunk_entries }}</b> / hits <b>{{ summary.chunk_hits }}</b></span>
+        <span>never used: <b>{{ summary.unused_entries }}</b></span>
+    </div>
+
+    <form action="/post-grouping-cache" method="get" class="cache-filter-form">
+        <label>Kind
+            <select name="kind">
+                <option value="" {% if not kind %}selected{% endif %}>all</option>
+                <option value="document" {% if kind == 'document' %}selected{% endif %}>document</option>
+                <option value="chunk" {% if kind == 'chunk' %}selected{% endif %}>chunk</option>
+            </select>
+        </label>
+        <label>Sort by
+            <select name="sort">
+                {% for field in sortable_fields %}
+                <option value="{{ field }}" {% if sort_by == field %}selected{% endif %}>{{ field }}</option>
+                {% endfor %}
+            </select>
+        </label>
+        <label>Order
+            <select name="order">
+                <option value="asc" {% if order == 'asc' %}selected{% endif %}>ascending</option>
+                <option value="desc" {% if order == 'desc' %}selected{% endif %}>descending</option>
+            </select>
+        </label>
+        <input type="submit" value="Apply">
+    </form>
+
+    <form action="/post-grouping-cache/purge" method="post" class="cache-purge-form"
+          onsubmit="return confirm('Delete all matching cache records?');">
+        <span>Purge entries with</span>
+        <label>hits &le; <input type="number" name="max_hits" value="0" min="0" step="1"></label>
+        <label>older than <input type="number" name="older_than_days" value="7" min="0" step="1"> days</label>
+        <label>kind
+            <select name="kind">
+                <option value="">all</option>
+                <option value="document">document</option>
+                <option value="chunk">chunk</option>
+            </select>
+        </label>
+        <input type="submit" value="Purge">
+    </form>
+
+    <form action="/post-grouping-cache/delete" method="post"
+          onsubmit="return confirm('Delete the selected cache records?');">
+        <input type="hidden" name="kind" value="{{ kind }}">
+        <input type="hidden" name="sort" value="{{ sort_by }}">
+        <input type="hidden" name="order" value="{{ order }}">
+        <table class="cache-table">
+            <thead>
+                <tr>
+                    <th></th>
+                    <th>Hash</th>
+                    <th>Kind</th>
+                    <th>Model</th>
+                    <th>Hits</th>
+                    <th>Hits/day</th>
+                    <th>Age, days</th>
+                    <th>Last hit</th>
+                    <th>Size, KB</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for entry in entries %}
+                <tr{% if entry.hits == 0 %} class="cache-row--unused"{% endif %}>
+                    <td><input type="checkbox" name="keys" value="{{ entry.key }}"></td>
+                    <td class="cache-hash" title="{{ entry.key }}">{{ entry.key[:16] }}</td>
+                    <td>{{ entry.kind }}</td>
+                    <td>{{ entry.model|e }}</td>
+                    <td>{{ entry.hits }}</td>
+                    <td>{{ entry.hits_per_day }}</td>
+                    <td>{{ entry.age_days|round(2) }}</td>
+                    <td>{{ entry.last_hit_at | timestamp_to_datetime }}</td>
+                    <td>{{ (entry.value_size / 1024)|round(1) }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% if entries %}
+        <input type="submit" value="Delete selected">
+        {% else %}
+        <p>No cache records yet.</p>
+        {% endif %}
+    </form>
+
+    {% if pages_count > 1 %}
+    <div class="cache-pages">
+        {% for page in range(1, pages_count + 1) %}
+            {% if page == page_number %}
+            <span class="cache-pages__current">{{ page }}</span>
+            {% else %}
+            <a href="/post-grouping-cache?kind={{ kind }}&sort={{ sort_by }}&order={{ order }}&page={{ page }}">{{ page }}</a>
+            {% endif %}
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="root_item"><a href="/">Back to Home</a></div>
+</div>
+<div id="status"><span></span></div>
+{% include "root-footer.html" %}
+</body>
+</html>

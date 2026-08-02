@@ -5,6 +5,13 @@ from tests.db_utils import DBHelper
 class TestRssTagPostGrouping(unittest.TestCase):
     def setUp(self):
         self.db_helper = DBHelper(port=8765)
+        try:
+            self.db_helper.client.admin.command("ping")
+        except Exception as exc:
+            self.db_helper.close()
+            raise unittest.SkipTest(
+                f"MongoDB on port 8765 is required for post grouping tests: {exc}"
+            )
         self.db = self.db_helper.create_test_db()
         self.post_grouping = RssTagPostGrouping(self.db)
         self.owner = "test_user"

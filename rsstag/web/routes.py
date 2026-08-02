@@ -668,6 +668,21 @@ class RSSTagRoutes:
                 "methods": ["POST"],
             },
             {
+                "url": "/post-grouping-cache",
+                "endpoint": "on_post_grouping_cache_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/post-grouping-cache/delete",
+                "endpoint": "on_post_grouping_cache_delete_post",
+                "methods": ["POST"],
+            },
+            {
+                "url": "/post-grouping-cache/purge",
+                "endpoint": "on_post_grouping_cache_purge_post",
+                "methods": ["POST"],
+            },
+            {
                 "url": "/statistics",
                 "endpoint": "on_statistics_get",
                 "methods": ["GET"],

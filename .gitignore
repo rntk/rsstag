@@ -1,6 +1,7 @@
 *.pyc
 nbproject
-*cache*
+__pycache__/
+.cache/
 *.bat
 .idea
 log

@@ -45,9 +45,11 @@ import rsstag.web.clusters as clusters_handlers
 import rsstag.web.system as system_handlers
 import rsstag.web.browse as browse_handlers
 import rsstag.web.quality as quality_handlers
+import rsstag.web.grouping_cache as grouping_cache_handlers
 
 from rsstag.llm.router import LLMRouter
 from rsstag.llm import LLMCache
+from rsstag.grouping_cache import PostGroupingCache
 
 from werkzeug.wrappers import Response, Request
 from werkzeug.exceptions import HTTPException, InternalServerError, BadRequest
@@ -80,6 +82,7 @@ HANDLER_MODULES = (
     system_handlers,
     browse_handlers,
     quality_handlers,
+    grouping_cache_handlers,
 )
 
 
@@ -196,6 +199,8 @@ class RSSTagApplication(object):
         self.llm = LLMRouter(self.config)
         self.llm_cache = LLMCache(self.db)
         self.llm_cache.prepare()
+        self.post_grouping_cache = PostGroupingCache(self.db)
+        self.post_grouping_cache.prepare()
         try:
             from rsstag.observability.business_metrics import register_business_metrics
             from rsstag.observability.worker_instrumentation import instrument_tasks

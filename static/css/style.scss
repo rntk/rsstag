@@ -1241,6 +1241,71 @@ body.anthology-compare-modal-open {
   display: inline;
 }
 
+/* Post grouping cache management page */
+.cache-hint {
+  max-width: 60em;
+  color: #555;
+  font-size: 10pt;
+}
+
+.cache-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.2em;
+  margin: 1em 0;
+  padding: 0.6em;
+  background-color: #f4f4f4;
+  border: 1px solid #ddd;
+}
+
+.cache-filter-form,
+.cache-purge-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.8em;
+  margin: 0.8em 0;
+}
+
+.cache-purge-form input[type="number"] {
+  width: 5em;
+}
+
+.cache-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.2em 0;
+}
+
+.cache-table th,
+.cache-table td {
+  padding: 0.4em 0.6em;
+  border: 1px solid #ddd;
+  text-align: left;
+}
+
+.cache-table th {
+  background-color: #f4f4f4;
+}
+
+.cache-row--unused {
+  background-color: #fff6f6;
+}
+
+.cache-hash {
+  font-family: monospace;
+}
+
+.cache-pages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+}
+
+.cache-pages__current {
+  font-weight: bold;
+}
+
 .clusters-topics-page {
   display: flex;
   flex-direction: column;

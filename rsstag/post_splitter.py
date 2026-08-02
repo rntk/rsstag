@@ -1,7 +1,7 @@
 """Post splitting and LLM interaction logic"""
 
 import logging
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Protocol, Tuple
 
 # Import txt_splitt components
 from txt_splitt import Tracer, TracingLLMCallable
@@ -43,6 +43,68 @@ class ParsingError(PostSplitterError):
     pass
 
 
+def build_grouping_text(content: str, title: str = "") -> str:
+    """Build the exact text the pipeline consumes.
+
+    Cache keys hash this string, so every caller that needs the key must use
+    this helper instead of re-implementing the concatenation.
+    """
+    if title:
+        return title + ". " + content
+    return content
+
+
+class ChunkCache(Protocol):
+    """Prompt level cache used to skip repeated LLM calls."""
+
+    def get(self, prompt: str, temperature: float) -> Optional[str]: ...
+
+    def set(self, prompt: str, temperature: float, value: str) -> bool: ...
+
+
+class CachingLLMCallable:
+    """Serve repeated prompts from a cache, buffering writes until validation.
+
+    Responses are only committed once the pipeline attempt produced a valid
+    result: caching a malformed answer would make every retry replay it and
+    lock the post into permanent failure. For the same reason reads are
+    disabled on retries, so a retry really re-asks the LLM.
+    """
+
+    def __init__(self, inner: Any, cache: Optional[ChunkCache]) -> None:
+        self._inner = inner
+        self._cache = cache
+        self._pending: List[Tuple[str, float, str]] = []
+        self._read_enabled: bool = True
+        self.hits: int = 0
+        self.misses: int = 0
+
+    def start_attempt(self, read_enabled: bool) -> None:
+        self._pending = []
+        self._read_enabled = read_enabled
+
+    def call(self, prompt: str, temperature: float) -> str:
+        if self._cache is not None and self._read_enabled:
+            cached: Optional[str] = self._cache.get(prompt, temperature)
+            if cached:
+                self.hits += 1
+                return cached
+
+        response: str = self._inner.call(prompt, temperature)
+        self.misses += 1
+        if self._cache is not None and response:
+            self._pending.append((prompt, temperature, response))
+        return response
+
+    def commit(self) -> None:
+        if self._cache is None:
+            self._pending = []
+            return
+        for prompt, temperature, response in self._pending:
+            self._cache.set(prompt, temperature, response)
+        self._pending = []
+
+
 class LLMHandlerAdapter:
     """Adapter to make rsstag LLM handler compatible with txt_splitt LLMCallable protocol."""
 
@@ -67,9 +129,14 @@ class PostSplitter:
     MAX_TOPIC_LENGTH = 500
     MAX_PIPELINE_RETRIES = 3
 
-    def __init__(self, llm_handler: Optional[Any] = None) -> None:
+    def __init__(
+        self,
+        llm_handler: Optional[Any] = None,
+        chunk_cache: Optional[ChunkCache] = None,
+    ) -> None:
         self._log = logging.getLogger("post_splitter")
         self._llm_handler = llm_handler
+        self._chunk_cache = chunk_cache
 
     def generate_grouped_data(
         self,
@@ -83,10 +150,7 @@ class PostSplitter:
         Raises:
             PostSplitterError: If splitting or grouping fails
         """
-        if title:
-            text = title + ". " + content
-        else:
-            text = content
+        text = build_grouping_text(content, title)
 
         if not text.strip():
             return None
@@ -96,13 +160,18 @@ class PostSplitter:
             raise LLMGenerationError("LLM handler not configured")
 
         # Create adapter once and retry whole pipeline execution on invalid topic output.
-        llm_adapter = LLMHandlerAdapter(self._llm_handler)
+        llm_adapter = CachingLLMCallable(
+            LLMHandlerAdapter(self._llm_handler), self._chunk_cache
+        )
         base_tracer = tracer
         last_error: Optional[Exception] = None
         saw_validation_error = False
 
         for attempt in range(1, self.MAX_PIPELINE_RETRIES + 1):
             attempt_tracer = base_tracer if attempt == 1 and base_tracer is not None else Tracer()
+            # Only the first attempt may reuse cached answers: a retry means the
+            # previous response was unusable, so it must reach the LLM again.
+            llm_adapter.start_attempt(read_enabled=attempt == 1)
 
             try:
                 # Initialize the pipeline components
@@ -144,6 +213,7 @@ class PostSplitter:
                 result = self._run_pipeline_session(pipeline, text, llm_callable)
                 transformed = self._transform_result(result)
                 self._validate_topic_lengths(transformed.get("groups", {}))
+                llm_adapter.commit()
                 self._log.info(
                     "Pipeline trace for attempt %s:\n%s",
                     attempt,
@@ -226,10 +296,7 @@ class PostSplitter:
         Returns a PreparedDocument whose .chunks contain tagged_text for LLM prompts,
         or None if the text is empty.
         """
-        if title:
-            text = title + ". " + content
-        else:
-            text = content
+        text = build_grouping_text(content, title)
 
         if not text.strip():
             return None
