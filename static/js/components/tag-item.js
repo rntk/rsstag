@@ -100,6 +100,11 @@ export default class TagItem extends React.Component {
               tree
             </a>
           )}
+          {hide_tag_info_link ? null : (
+            <a href={'/tag-explorer/' + encodeURIComponent(this.state.tag.tag)} className="get_tag_explorer">
+              explorer
+            </a>
+          )}
         </div>
       </li>
     );

@@ -2182,15 +2182,17 @@ def on_ba_surprise_get(app: "RSSTagApplication", user: dict, rqst: Request) -> R
     )
 
 
-def _build_tag_context_tree(post_lemmas: list, root_tag: str, max_levels: int) -> list:
+def _build_tag_context_tree(
+    post_lemmas: list[dict[str, Any]], root_tag: str, max_levels: int,
+    max_children: int = 30,
+) -> list[dict[str, Any]]:
     """Build a context word tree for root_tag using pre-loaded lemma lists."""
-    MAX_CHILDREN = 30
 
-    def _build(chain_offsets: list, level: int) -> list:
+    def _build(chain_offsets: list[tuple[int, str]], level: int) -> list[dict[str, Any]]:
         if level > max_levels:
             return []
 
-        word_data: dict = {}
+        word_data: dict[tuple[str, int], dict] = {}
         for p in post_lemmas:
             lemmas = p["lemmas"]
             for root_pos in p["root_positions"]:
@@ -2209,18 +2211,20 @@ def _build_tag_context_tree(post_lemmas: list, root_tag: str, max_levels: int) -
                     if 0 <= pos < len(lemmas):
                         w = lemmas[pos]
                         if w not in excluded and w.isalpha():
-                            if w not in word_data:
-                                word_data[w] = {"count": 0, "pids": set(), "offset": sign * level}
-                            word_data[w]["count"] += 1
-                            word_data[w]["pids"].add(p["pid"])
+                            key: tuple[str, int] = (w, sign * level)
+                            if key not in word_data:
+                                word_data[key] = {"count": 0, "pids": set()}
+                            word_data[key]["count"] += 1
+                            word_data[key]["pids"].add(p["pid"])
 
-        top_words = sorted(word_data.items(), key=lambda x: -x[1]["count"])[:MAX_CHILDREN]
+        top_words = sorted(word_data.items(), key=lambda x: -x[1]["count"])[:max_children]
 
         children = []
-        for word, info in top_words:
-            child_offsets = chain_offsets + [(info["offset"], word)]
+        for (word, offset), info in top_words:
+            child_offsets = chain_offsets + [(offset, word)]
             child = {
                 "name": word,
+                "offset": offset,
                 "value": info["count"],
                 "_topicPosts": list(info["pids"]),
                 "_topicPath": root_tag + " > " + " > ".join(w for _, w in child_offsets),
@@ -2230,6 +2234,17 @@ def _build_tag_context_tree(post_lemmas: list, root_tag: str, max_levels: int) -
         return children
 
     return _build([], 1)
+
+
+def _label_tag_context_tree(nodes: list[dict[str, Any]], path: str) -> None:
+    """Show each context word's position in the mindmap and its path."""
+    for node in nodes:
+        offset: int = node["offset"]
+        direction: str = "after" if offset > 0 else "before"
+        label: str = f"{node['name']} ({direction} {abs(offset)})"
+        node["name"] = label
+        node["_topicPath"] = f"{path} > {label}"
+        _label_tag_context_tree(node["children"], node["_topicPath"])
 
 
 def on_tag_context_tree_get(
@@ -2261,6 +2276,7 @@ def on_tag_context_tree_get(
             post_lemmas.append({"pid": post["pid"], "lemmas": lemmas, "root_positions": root_positions})
 
     children = _build_tag_context_tree(post_lemmas, tag, max_levels)
+    _label_tag_context_tree(children, tag)
 
     mindmap_data = {
         "name": tag,

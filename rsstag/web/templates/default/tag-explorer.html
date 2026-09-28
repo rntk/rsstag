@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tag explorer: {{ tag|e }}</title>
+    {% include "head-data.html" %}
+    <script src="/static/js/tag-explorer.js" defer></script>
+</head>
+<body class="tag-explorer-page">
+    {% from 'site-header.html' import site_header with context %}
+    {{ site_header(active='tags', show_context_filter=True) }}
+    <main class="tag-explorer" data-tag="{{ tag|e }}">
+        <div class="tag-explorer__workspace">
+            <aside class="tag-explorer__sidebar" aria-label="Tag explorer filters">
+                <div id="tag-explorer-root" class="tag-explorer__root"></div>
+                <div id="tag-explorer-filter-tabs" class="tag-explorer__tabs tag-explorer__filter-tabs" role="tablist" aria-label="Explorer sections"></div>
+                <div id="tag-explorer-tree" class="tag-explorer__tree"></div>
+            </aside>
+            <section class="tag-explorer__results" aria-label="Filtered results">
+                <div class="tag-explorer__filters" aria-label="Active filters" role="region">
+                    <strong>Active filters</strong>
+                    <dl class="tag-explorer__filter-summary" aria-live="polite" aria-atomic="true">
+                        <div><dt>Tag</dt><dd>{{ tag|e }}</dd></div>
+                        <div><dt id="tag-explorer-selection-label">Branch</dt><dd id="tag-explorer-selection">All branches</dd></div>
+                        <div><dt>Read status</dt><dd id="tag-explorer-read-filter" data-only-unread="{{ 'true' if user_settings.get('only_unread') else 'false' }}">{{ 'Unread only' if user_settings.get('only_unread') else 'Read and unread' }}</dd></div>
+                    </dl>
+                    <button id="tag-explorer-clear-filter" type="button" hidden>Clear branch filter</button>
+                </div>
+                <div class="tag-explorer__tabs" role="tablist" aria-label="Result type">
+                    <button type="button" id="tag-explorer-sentences-tab" role="tab" aria-controls="tag-explorer-sentences" aria-selected="true">Sentences</button>
+                    <button type="button" id="tag-explorer-posts-tab" role="tab" aria-controls="tag-explorer-posts" aria-selected="false">Posts</button>
+                </div>
+                <div class="tag-explorer__read-tools" aria-label="Read status actions">
+                    <button type="button" id="tag-explorer-read-page" title="Mark items on this page as read">Read page</button>
+                    <button type="button" id="tag-explorer-unread-page" title="Mark items on this page as unread">Unread page</button>
+                    <button type="button" id="tag-explorer-read-all" title="Mark items on all pages as read">Read all</button>
+                    <button type="button" id="tag-explorer-unread-all" title="Mark items on all pages as unread">Unread all</button>
+                </div>
+                <div id="tag-explorer-status" class="tag-explorer__status" role="status" aria-live="polite"></div>
+                <div id="tag-explorer-sentences" class="tag-explorer__list" role="tabpanel" aria-labelledby="tag-explorer-sentences-tab"></div>
+                <div id="tag-explorer-posts" class="tag-explorer__list" role="tabpanel" aria-labelledby="tag-explorer-posts-tab" hidden></div>
+                <nav class="tag-explorer__pagination" aria-label="Results pages">
+                    <button type="button" id="tag-explorer-previous" disabled>Previous</button>
+                    <span id="tag-explorer-page" role="status" aria-live="polite">Page 1</span>
+                    <button type="button" id="tag-explorer-next" disabled>Next</button>
+                </nav>
+            </section>
+        </div>
+    </main>
+    <script type="application/json" id="tag-explorer-data">{{ tree|tojson }}</script>
+</body>
+</html>

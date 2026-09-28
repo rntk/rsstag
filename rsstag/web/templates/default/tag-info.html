@@ -44,6 +44,7 @@
                 <a class="tag-info-link" href="/sentences/with/tags/{{tag['tag']}}">Sentences</a>
                 <a class="tag-info-link" href="{{chain_link}}">Chain</a>
                 <a class="tag-info-link" href="{{context_tree_link}}">Context tree</a>
+                <a class="tag-info-link" href="/tag-explorer/{{ tag['tag']|urlencode }}">Explorer</a>
                 <button id="start_tag_anthology"
                     class="tag-info-button tag-info-button--primary anthology-action-button" type="button"
                     data-seed-value="{{ tag['tag'] }}">Start Anthology</button>

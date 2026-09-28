@@ -738,6 +738,11 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/tag-explorer/<string:tag>",
+                "endpoint": "on_tag_explorer_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/api/chats",
                 "endpoint": "on_chats_list_get",
                 "methods": ["GET"],

@@ -115,6 +115,12 @@ class RssTagPosts:
             .sort(sort_data)
         )
 
+    def count_by_tags(self, owner: str, tags: List[str], only_unread: Optional[bool] = None) -> int:
+        query: dict = {"owner": owner, "tags": {"$all": tags}}
+        if only_unread is not None:
+            query["read"] = not only_unread
+        return self._db.posts.count_documents(query)
+
     def get_by_bi_grams(
         self,
         owner: str,
@@ -161,7 +167,7 @@ class RssTagPosts:
         )
 
     def get_by_pid(
-        self, owner: str, pid: str, projection: Optional[dict] = None
+        self, owner: str, pid: str | int, projection: Optional[dict] = None
     ) -> Optional[dict]:
         query = {"owner": owner, "pid": pid}
 
@@ -175,7 +181,7 @@ class RssTagPosts:
         return self._db.posts.find_one(query, projection=projection)
 
     def get_by_pids(
-        self, owner: str, pids: List[str], projection: Optional[dict] = None
+        self, owner: str, pids: List[str | int], projection: Optional[dict] = None
     ) -> Iterator[dict]:
         query = {"owner": owner, "pid": {"$in": pids}}
 
@@ -197,7 +203,7 @@ class RssTagPosts:
     def reset_processing(self, owner: str, pid: str) -> None:
         self._db.posts.update_one({"owner": owner, "pid": pid}, {"$set": {"processing": 0}})
 
-    def change_status(self, owner: str, pids: List[str], readed: bool) -> bool:
+    def change_status(self, owner: str, pids: List[str | int], readed: bool) -> bool:
         query = {"owner": owner, "pid": {"$in": pids}}
         self._db.posts.update_many(query, {"$set": {"read": readed}})
 

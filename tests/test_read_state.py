@@ -196,6 +196,20 @@ class TestReadStateServiceMarkSentences(unittest.TestCase):
             ],
         )
 
+    def test_numeric_post_id_uses_stored_pid_for_status_change(self) -> None:
+        self.post_grouping.update_snippets_read_status.return_value = True
+        self.posts.get_by_pid.side_effect = [None, {
+            "pid": 42, "id": "provider-42", "read": False,
+            "tags": [], "bi_grams": [],
+        }]
+
+        result: Dict[str, Any] = self.service.mark_sentences(
+            self.owner, "provider", [{"post_id": 42, "sentence_indices": [1]}], True,
+        )
+
+        self.assertTrue(result["ok"])
+        self.posts.change_status.assert_called_once_with(self.owner, [42], True)
+
     def test_no_task_when_post_is_already_read(self) -> None:
         self.post_grouping.update_snippets_read_status.return_value = True
         self._set_post(read=True)

@@ -77,6 +77,27 @@ class RssTagPostGrouping:
             )
             return []
 
+    def get_by_post_ids(
+        self, owner: str, post_ids: List[PostId], projection: Optional[dict] = None
+    ) -> List[dict]:
+        """Get grouping documents containing any requested post in one query."""
+        query_values: Set[PostId] = set()
+        for post_id in post_ids:
+            query_values.add(str(post_id))
+            numeric_id: Optional[int] = self._as_int(post_id)
+            if numeric_id is not None:
+                query_values.add(numeric_id)
+        if not query_values:
+            return []
+        try:
+            return list(self._db.post_grouping.find(
+                {"owner": owner, "post_ids": {"$in": list(query_values)}},
+                projection=projection,
+            ))
+        except Exception as exc:
+            self._log.warning("Could not load grouped topics for post IDs: %s", exc)
+            return []
+
     @staticmethod
     def _as_int(post_id: PostId) -> Optional[int]:
         try:

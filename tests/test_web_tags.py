@@ -386,6 +386,61 @@ class TestWebTags(MongoWebTestCase):
         self.assertIn("testtag", body)
         self.assertIn("mindmap_data", body)
 
+    def test_tag_explorer_page_and_json_selections(self) -> None:
+        self._seed_post_with_lemmas(
+            "explorer-context", ["testtag", "related"],
+            "before testtag right after", "Before testtag right after. Extra sentence.",
+        )
+        self._seed_post_with_lemmas(
+            "explorer-other", ["testtag", "other"],
+            "before testtag elsewhere", "Before testtag elsewhere.",
+        )
+
+        self._seed_post_grouping(
+            "explorer-context",
+            [{"number": 1, "text": "Before testtag right after.", "read": False},
+             {"number": 2, "text": "Extra sentence.", "read": False}],
+            {"Examples > Context": [1], "Examples > Other": [2]},
+        )
+
+        page_response = self.client.get("/tag-explorer/testtag")
+        self.assertEqual(page_response.status_code, 200)
+        page_body = page_response.get_data(as_text=True)
+        self.assertIn("tag-explorer-tree", page_body)
+        self.assertIn("right", page_body)
+
+        context_response = self.client.get(
+            "/tag-explorer/testtag",
+            query_string={
+                "format": "json",
+                "selection": json.dumps(
+                    {"kind": "context", "chain": ["right"]}
+                ),
+            },
+        )
+        self.assertEqual(context_response.status_code, 200)
+        context_result = context_response.get_json()
+        self.assertEqual(context_result["total"], 1)
+        self.assertEqual(context_result["posts"][0]["pid"], "explorer-context")
+
+        self.assertIn('"topics"', page_body)
+        for chain in (["Examples"], ["Examples", "Context"]):
+            topic_response = self.client.get(
+                "/tag-explorer/testtag",
+                query_string={
+                    "format": "json",
+                    "selection": json.dumps({"kind": "topic", "chain": chain}),
+                },
+            )
+            self.assertEqual(topic_response.status_code, 200)
+            topic_result = topic_response.get_json()
+            self.assertEqual(topic_result["total"], 1)
+            self.assertEqual(topic_result["posts"][0]["pid"], "explorer-context")
+            self.assertEqual(
+                [sentence["number"] for sentence in topic_result["sentences"]],
+                [1, 2] if len(chain) == 1 else [1],
+            )
+
     # ------------------------------------------------------------------
     # on_ba_surprise_get
     # ------------------------------------------------------------------

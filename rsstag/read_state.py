@@ -67,18 +67,7 @@ class ReadStateService:
                 skipped_posts.append(post_id)
                 continue
 
-            post = self._posts.get_by_pid(
-                owner,
-                post_id,
-                {
-                    "pid": True,
-                    "read": True,
-                    "id": True,
-                    "tags": True,
-                    "bi_grams": True,
-                    "provider": True,
-                },
-            )
+            post = self._get_post(owner, post_id)
             if not post:
                 skipped_posts.append(post_id)
                 continue
@@ -114,7 +103,7 @@ class ReadStateService:
                 )
                 return {"ok": False, "error": "Failed to queue mark task"}
 
-            changed = self._posts.change_status(owner, [post_id], readed)
+            changed = self._posts.change_status(owner, [post["pid"]], readed)
             tags, bi_grams, letters = self._collect_counters(post)
             if changed and tags:
                 changed = self._tags.change_unread(owner, tags, readed)
@@ -128,6 +117,16 @@ class ReadStateService:
             changed_posts.append(post_id)
 
         return {"ok": True, "changed_posts": changed_posts, "skipped_posts": skipped_posts}
+
+    def _get_post(self, owner: str, post_id: str) -> dict[str, Any] | None:
+        projection: dict[str, bool] = {
+            "pid": True, "read": True, "id": True, "tags": True,
+            "bi_grams": True, "provider": True,
+        }
+        post: dict[str, Any] | None = self._posts.get_by_pid(owner, post_id, projection)
+        if not post and post_id.isdecimal():
+            post = self._posts.get_by_pid(owner, int(post_id), projection)
+        return post
 
     @staticmethod
     def _normalize_indices(values: Any) -> list[int]:
