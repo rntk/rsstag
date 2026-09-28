@@ -25,15 +25,17 @@
                     </dl>
                     <button id="tag-explorer-clear-filter" type="button" hidden>Clear branch filter</button>
                 </div>
-                <div class="tag-explorer__tabs" role="tablist" aria-label="Result type">
-                    <button type="button" id="tag-explorer-sentences-tab" role="tab" aria-controls="tag-explorer-sentences" aria-selected="true">Sentences</button>
-                    <button type="button" id="tag-explorer-posts-tab" role="tab" aria-controls="tag-explorer-posts" aria-selected="false">Posts</button>
-                </div>
-                <div class="tag-explorer__read-tools" aria-label="Read status actions">
-                    <button type="button" id="tag-explorer-read-page" title="Mark items on this page as read">Read page</button>
-                    <button type="button" id="tag-explorer-unread-page" title="Mark items on this page as unread">Unread page</button>
-                    <button type="button" id="tag-explorer-read-all" title="Mark items on all pages as read">Read all</button>
-                    <button type="button" id="tag-explorer-unread-all" title="Mark items on all pages as unread">Unread all</button>
+                <div class="tag-explorer__toolbar">
+                    <div class="tag-explorer__tabs" role="tablist" aria-label="Result type">
+                        <button type="button" id="tag-explorer-sentences-tab" role="tab" aria-controls="tag-explorer-sentences" aria-selected="true">Sentences</button>
+                        <button type="button" id="tag-explorer-posts-tab" role="tab" aria-controls="tag-explorer-posts" aria-selected="false">Posts</button>
+                    </div>
+                    <div class="tag-explorer__read-tools" aria-label="Read status actions">
+                        <button type="button" id="tag-explorer-read-page" title="Mark items on this page as read">Read page</button>
+                        <button type="button" id="tag-explorer-unread-page" title="Mark items on this page as unread">Unread page</button>
+                        <button type="button" id="tag-explorer-read-all" title="Mark items on all pages as read">Read all</button>
+                        <button type="button" id="tag-explorer-unread-all" title="Mark items on all pages as unread">Unread all</button>
+                    </div>
                 </div>
                 <div id="tag-explorer-status" class="tag-explorer__status" role="status" aria-live="polite"></div>
                 <div id="tag-explorer-sentences" class="tag-explorer__list" role="tabpanel" aria-labelledby="tag-explorer-sentences-tab"></div>
