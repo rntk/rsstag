@@ -10,7 +10,7 @@ function pageMarkup() {
     'tag-explorer-read-all', 'tag-explorer-unread-all',
     'tag-explorer-selection-label', 'tag-explorer-selection', 'tag-explorer-read-filter',
   ];
-  return `${ids.map((id) => `<div id="${id}"></div>`).join('')}
+  return `${ids.map((id) => `<div id="${id}"${id === 'tag-explorer-posts' ? ' hidden' : ''}></div>`).join('')}
     <button id="tag-explorer-clear-filter" hidden>Clear branch filter</button>
     <script id="tag-explorer-data" type="application/json">${JSON.stringify({
       name: 'codex',
@@ -160,6 +160,33 @@ describe('tag explorer context tree', () => {
     await settle();
     expect(document.getElementById('tag-explorer-selection-label').textContent).toBe('Context chain');
     expect(document.getElementById('tag-explorer-selection').textContent).toBe('codex → cli (either side of the tag)');
+    vi.unstubAllGlobals();
+  });
+
+  it('renders the full post body and sentence text in their respective tabs', async () => {
+    const body = 'Opening paragraph. ' + 'Full post text. '.repeat(60) + 'Closing paragraph.';
+    const sentence = 'Full post text.';
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({
+      total: 1,
+      posts: [{ pid: 1, title: 'Example', url: '/posts/1', excerpt: body, read: false }],
+      sentences: [{ pid: 1, title: 'Example', url: '/posts/1', text: sentence, number: 1, read: false }],
+      page_size: 30, has_more: false, only_unread: false,
+    }) })));
+    window.eval(source);
+    document.dispatchEvent(new Event('DOMContentLoaded'));
+    await settle();
+
+    const sentencesPanel = document.getElementById('tag-explorer-sentences');
+    const postsPanel = document.getElementById('tag-explorer-posts');
+    expect(sentencesPanel.querySelector('p').textContent).toBe(sentence);
+    expect(postsPanel.hidden).toBe(true);
+    document.getElementById('tag-explorer-posts-tab').click();
+    expect(postsPanel.hidden).toBe(false);
+    expect(sentencesPanel.hidden).toBe(true);
+    expect(postsPanel.querySelector('p').textContent).toBe(body);
+    expect(postsPanel.querySelector('a').getAttribute('href')).toBe('/posts/1');
+    expect(sentencesPanel.querySelector('a').getAttribute('href')).toBe('/posts/1');
+    expect(fetch).toHaveBeenCalledTimes(1);
     vi.unstubAllGlobals();
   });
 

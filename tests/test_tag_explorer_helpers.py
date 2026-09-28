@@ -74,6 +74,50 @@ class TestTagExplorerHelpers(unittest.TestCase):
         self.assertTrue(result["sentences"][0]["read"])
         self.assertFalse(result["posts"][0]["read"])
 
+    def test_posts_show_full_body_independently_of_sentence_filters(self) -> None:
+        body: str = "Root read sentence. " + "Unrelated body text. " * 40 + "Root cli unread sentence."
+        post: dict[str, Any] = {
+            "pid": 1, "content": {"title": "Example", "content": gzip.compress(body.encode())},
+        }
+        grouped: dict[str, list[dict[str, Any]]] = {"1": [
+            {"number": 1, "text": "Root read sentence.", "read": True},
+            {"number": 2, "text": "Root cli unread sentence.", "read": False},
+        ]}
+        selections: list[dict[str, Any]] = [
+            {"kind": "root"}, {"kind": "context", "chain": ["cli"]},
+            {"kind": "topic", "chain": ["Tech"]},
+        ]
+        for selection in selections:
+            with self.subTest(selection=selection):
+                selected_post: dict[str, Any] = {**post, "topic_numbers": {2}} if selection["kind"] == "topic" else post
+                result: dict[str, Any] = _results([selected_post], "root", selection, grouped, True)
+                self.assertEqual(result["posts"][0]["excerpt"], body)
+                self.assertEqual([sentence["number"] for sentence in result["sentences"]], [2])
+                self.assertEqual(result["sentences"][0]["text"], "Root cli unread sentence.")
+
+    def test_long_sentence_cannot_exceed_full_post_body(self) -> None:
+        for body in ("Root " + "word " * 120, "Root short body."):
+            with self.subTest(length=len(body)):
+                post: dict[str, Any] = {
+                    "pid": "one", "content": {"content": gzip.compress(f"<p>{body}</p>".encode())},
+                }
+                grouped: dict[str, list[dict[str, Any]]] = {"one": [
+                    {"number": 1, "text": f"<b>{body}</b> Additional grouping text."},
+                ]}
+                result: dict[str, Any] = _results([post], "root", {"kind": "root"}, grouped)
+                self.assertEqual(result["posts"][0]["excerpt"], body.strip())
+                sentence_text: str = result["sentences"][0]["text"]
+                self.assertEqual(sentence_text, (body + " Additional grouping text.")[:min(500, len(body.strip()))])
+                self.assertLessEqual(len(sentence_text), len(result["posts"][0]["excerpt"]))
+
+    def test_ungrouped_posts_show_whole_body_and_matching_sentence(self) -> None:
+        body: str = "Opening sentence. Root matching sentence. Closing sentence."
+        post: dict[str, Any] = {"pid": 1, "content": {"content": gzip.compress(body.encode())}}
+        result: dict[str, Any] = _results([post], "root", {"kind": "root"}, {})
+        self.assertEqual(result["posts"][0]["excerpt"], body)
+        self.assertEqual(result["sentences"][0]["text"], "Root matching sentence.")
+        self.assertIsNone(result["sentences"][0]["number"])
+
     def test_chain_counts_documents_and_includes_all_posts(self) -> None:
         posts: list[dict[str, Any]] = [
             {"pid": index, "lemmas": gzip.compress(b"codex cli tool codex cli tool")}

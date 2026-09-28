@@ -272,11 +272,15 @@ def _results(
         raw_pid: str | int = post.get("pid", "")
         pid: str = str(raw_pid)
         title: str = str((post.get("content") or {}).get("title") or "Untitled post")
-        source: list[dict[str, Any]] = _sentence_source(pid, _post_text(post), grouped, only_unread)
+        post_text: str = _post_text(post)
+        source: list[dict[str, Any]] = _sentence_source(pid, post_text, grouped, only_unread)
         excerpts: list[dict[str, Any]] = _post_excerpts(post, source, terms, tag)
-        post_items.append({"pid": raw_pid, "title": title, "url": f"/posts/{quote(pid, safe='')}", "excerpt": " ".join(str(sentence.get("text", "")) for sentence in excerpts)[:400], "read": bool(post.get("read", False))})
+        # Keep the existing API field, but show the complete stored body.
+        post_items.append({"pid": raw_pid, "title": title, "url": f"/posts/{quote(pid, safe='')}", "excerpt": post_text, "read": bool(post.get("read", False))})
         for sentence in excerpts:
-            sentence_items.append({"pid": raw_pid, "title": title, "url": f"/posts/{quote(pid, safe='')}", "text": str(sentence.get("text", ""))[:500], "number": sentence.get("number"), "read": bool(post.get("read", False) or sentence.get("read", False))})
+            # Grouping text can contain the title as well as the body.
+            sentence_text: str = strip_html_markup(str(sentence.get("text", "")))[:min(500, len(post_text))]
+            sentence_items.append({"pid": raw_pid, "title": title, "url": f"/posts/{quote(pid, safe='')}", "text": sentence_text, "number": sentence.get("number"), "read": bool(post.get("read", False) or sentence.get("read", False))})
     return {"total": len(posts), "posts": post_items, "sentences": sentence_items}
 
 
