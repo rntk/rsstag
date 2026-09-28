@@ -181,6 +181,39 @@ document.addEventListener('DOMContentLoaded', () => {
     panel.append(group);
   }
 
+  function appendTagGroup(panel, tags) {
+    const sorted = tags.slice().sort((a, b) => a.tag.localeCompare(b.tag));
+    const grouped = new Map();
+    for (const tag of sorted) {
+      const letter = tag.tag.charAt(0).toUpperCase();
+      if (!grouped.has(letter)) grouped.set(letter, []);
+      grouped.get(letter).push(tag);
+    }
+    if (!grouped.size) return;
+    const group = document.createElement('nav');
+    group.className = 'tag-explorer__link-group';
+    group.setAttribute('aria-label', 'Tags');
+    const heading = document.createElement('strong');
+    heading.textContent = 'Tags';
+    group.append(heading);
+    for (const [letter, letterTags] of grouped) {
+      const block = document.createElement('div');
+      block.className = 'post_tag_letter_block';
+      const letterSpan = document.createElement('span');
+      letterSpan.className = 'post_tag_letter';
+      letterSpan.textContent = letter;
+      block.append(letterSpan);
+      for (const tag of letterTags) {
+        const link = navigationLink(tag.tag, tag.url);
+        if (!link) continue;
+        link.className = 'post_tag_link';
+        block.append(link);
+      }
+      group.append(block);
+    }
+    panel.append(group);
+  }
+
   async function loadRelatedLinks(item, panel) {
     panel.textContent = 'Loading related links…';
     const key = String(item.pid);
@@ -204,7 +237,7 @@ document.addEventListener('DOMContentLoaded', () => {
         [topic.topic || topic.name, topic.url],
         [`${topic.name || topic.topic} snippets`, topic.snippets_url],
       ]));
-      appendLinkGroup(panel, 'Tags', (links.tags || []).map(tag => [tag.tag, tag.url]));
+      appendTagGroup(panel, links.tags || []);
       panel.dataset.loaded = 'true';
     } catch (error) {
       relatedLinks.delete(key);
