@@ -196,7 +196,7 @@ describe('tag explorer context tree', () => {
     document.dispatchEvent(new Event('DOMContentLoaded'));
     await settle();
     document.getElementById('tag-explorer-filter-topics-tab').click();
-    expect(document.getElementById('tag-explorer-filter-topics').textContent).toContain('No grouped topics available');
+    expect(document.getElementById('tag-explorer-filter-topics').textContent).toContain('No grouped topics contain sentences mentioning this tag.');
     vi.unstubAllGlobals();
   });
   it('marks only the current page with page buttons and every page with all buttons', async () => {
@@ -275,6 +275,125 @@ describe('tag explorer context tree', () => {
     await settle();
     expect(document.getElementById('tag-explorer-status').textContent).toBe('Could not load results.');
     expect(summary.textContent).toBe('codex → <b>cli</b> (either side of the tag)');
+    vi.unstubAllGlobals();
+  });
+
+  it('shows metadata and lazily shares related links between a post and its sentences', async () => {
+    const metadata = { source: '<b>Source</b>', source_url: '/feed/source', provider: 'rss', date: '2026-09-28' };
+    const post = { pid: 1, title: 'Title', url: '/posts/1', excerpt: 'codex', read: false, metadata };
+    const fetchMock = vi.fn(async input => {
+      if (String(input) === '/post-links/1') return { ok: true, json: async () => ({ data: {
+        f_title: 'Source', f_url: '/feed/source', c_title: 'News', c_url: '/category/news',
+        p_url: 'https://example.com', ctx_url: '/posts/1/10', clst_url: '/cluster/1',
+        tags: [{ tag: '<script>tag</script>', url: '/tag/tag' }, { tag: 'unsafe', url: 'javascript:alert(1)' }],
+        topics: [{ topic: 'Tech > AI', name: 'AI', url: '/topic/ai', snippets_url: '/snippets/ai' }],
+      } }) };
+      return { ok: true, json: async () => ({ total: 1, posts: [post],
+        sentences: [{ ...post, text: 'codex sentence', number: 2 }], page_size: 30, has_more: false }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    window.eval(source);
+    document.dispatchEvent(new Event('DOMContentLoaded'));
+    await settle();
+    const sentence = document.querySelector('#tag-explorer-sentences article');
+    expect(sentence.querySelector('.tag-explorer__metadata').textContent).toContain('<b>Source</b>rss2026-09-28Unread#2');
+    expect(sentence.querySelector('.tag-explorer__metadata b')).toBeNull();
+    const details = sentence.querySelector('details');
+    expect(details.open).toBe(false);
+    expect(details.contains(sentence.querySelector('.tag-explorer__read-button'))).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    details.open = true;
+    details.dispatchEvent(new Event('toggle'));
+    await settle();
+    expect(sentence.querySelector('.tag-explorer__related-links').textContent).toContain('With contextCluster');
+    expect(sentence.querySelector('.tag-explorer__related-links').textContent).toContain('Tech > AI');
+    expect(sentence.querySelector('.tag-explorer__related-links script')).toBeNull();
+    expect(sentence.querySelector('a[href^="javascript:"]')).toBeNull();
+    const postDetails = document.querySelector('#tag-explorer-posts details');
+    postDetails.open = true;
+    postDetails.dispatchEvent(new Event('toggle'));
+    await settle();
+    expect(fetchMock.mock.calls.filter(([url]) => String(url) === '/post-links/1')).toHaveLength(1);
+    vi.unstubAllGlobals();
+  });
+
+  it('offers retry when related links fail without losing the excerpt', async () => {
+    let attempts = 0;
+    vi.stubGlobal('fetch', vi.fn(async input => {
+      if (String(input) === '/post-links/1') {
+        attempts += 1;
+        if (attempts === 1) throw new Error('Links unavailable');
+        return { ok: true, json: async () => ({ data: { tags: [], topics: [] } }) };
+      }
+      return { ok: true, json: async () => ({ total: 1, posts: [], sentences: [
+        { pid: 1, title: 'Title', url: '/posts/1', text: 'codex sentence', number: 2, read: false },
+      ], page_size: 30, has_more: false }) };
+    }));
+    window.eval(source);
+    document.dispatchEvent(new Event('DOMContentLoaded'));
+    await settle();
+    const card = document.querySelector('#tag-explorer-sentences article');
+    const details = card.querySelector('details');
+    details.open = true;
+    details.dispatchEvent(new Event('toggle'));
+    await settle();
+    expect(card.querySelector('p').textContent).toBe('codex sentence');
+    const links = card.querySelector('.tag-explorer__related-links');
+    expect(links.textContent).toContain('Links unavailable');
+    links.querySelector('button').click();
+    await settle();
+    expect(links.textContent).toContain('Open post');
+    expect(attempts).toBe(2);
+    vi.unstubAllGlobals();
+  });
+
+  it('animates disclosure collapse and safely reverses a quick toggle', async () => {
+    vi.stubGlobal('fetch', vi.fn(async input => {
+      if (String(input) === '/post-links/1') return { ok: true, json: async () => ({ data: { tags: [], topics: [] } }) };
+      return { ok: true, json: async () => resultFor({ kind: 'root' }) };
+    }));
+    window.eval(source);
+    document.dispatchEvent(new Event('DOMContentLoaded'));
+    await settle();
+    const details = document.querySelector('#tag-explorer-posts details');
+    const summary = details.querySelector('summary');
+    const body = details.querySelector('.tag-explorer__item-tools-body');
+    summary.click();
+    await settle();
+    expect(details.open).toBe(true);
+    expect(details.classList.contains('is-expanded')).toBe(true);
+    expect(body.inert).toBe(false);
+    summary.click();
+    expect(details.open).toBe(true);
+    expect(details.classList.contains('is-expanded')).toBe(false);
+    expect(body.inert).toBe(true);
+    summary.click();
+    await new Promise(resolve => setTimeout(resolve, 220));
+    expect(details.open).toBe(true);
+    expect(details.classList.contains('is-expanded')).toBe(true);
+    expect(body.inert).toBe(false);
+    summary.click();
+    await new Promise(resolve => setTimeout(resolve, 220));
+    expect(details.open).toBe(false);
+    expect(details.classList.contains('is-expanded')).toBe(false);
+    vi.unstubAllGlobals();
+  });
+
+  it('closes immediately when reduced motion is requested', async () => {
+    vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })));
+    vi.stubGlobal('fetch', vi.fn(async input => {
+      if (String(input) === '/post-links/1') return { ok: true, json: async () => ({ data: { tags: [], topics: [] } }) };
+      return { ok: true, json: async () => resultFor({ kind: 'root' }) };
+    }));
+    window.eval(source);
+    document.dispatchEvent(new Event('DOMContentLoaded'));
+    await settle();
+    const details = document.querySelector('#tag-explorer-posts details');
+    details.querySelector('summary').click();
+    await settle();
+    details.querySelector('summary').click();
+    expect(details.open).toBe(false);
+    expect(details.classList.contains('is-expanded')).toBe(false);
     vi.unstubAllGlobals();
   });
 });

@@ -1,6 +1,7 @@
 """Small explorer checks that do not require a MongoDB service."""
 
 import gzip
+import json
 import unittest
 from types import SimpleNamespace
 from typing import Any, Iterator
@@ -17,6 +18,7 @@ from rsstag.web.tag_explorer import (
     _matching_posts,
     _posts_for_tag,
     _results,
+    _sentence_matches,
     _topic_memberships,
     _topic_nodes,
     on_tag_explorer_get,
@@ -55,7 +57,58 @@ class TestTagExplorerHelpers(unittest.TestCase):
         self.assertEqual(len(visible), DEFAULT_POSTS_ON_PAGE + 5)
         self.assertEqual(visible[0]["content"]["title"], "Post 0")
         self.assertEqual(len(posts.get_by_pids.call_args.args[1]), DEFAULT_POSTS_ON_PAGE + 5)
-        self.assertEqual(posts.get_by_pids.call_args.kwargs["projection"], {"_id": 0, "pid": 1, "content": 1, "read": 1})
+        self.assertEqual(posts.get_by_pids.call_args.kwargs["projection"], {
+            "_id": 0, "pid": 1, "content": 1, "read": 1,
+            "feed_id": 1, "provider": 1, "date": 1, "url": 1,
+        })
+
+    def test_page_metadata_is_shared_by_posts_and_sentences(self) -> None:
+        posts: Mock = Mock()
+        posts.get_by_pids.return_value = [
+            {"pid": pid, "feed_id": "source", "date": "2026-09-28",
+             "url": "https://example.com/post", "content": {"title": "Root"}}
+            for pid in (1, 2, 3)
+        ]
+        feeds: Mock = Mock()
+        feeds.get_by_feed_ids.return_value = [{
+            "feed_id": "source", "title": "Example source", "provider": "rss",
+            "category_title": "News", "local_url": "/feed/source",
+            "category_local_url": "/category/news",
+        }]
+        app: Any = SimpleNamespace(posts=posts, feeds=feeds)
+        visible: list[dict[str, Any]] = _load_result_content(app, self.user, [{"pid": 2}, {"pid": 1}])
+        result: dict[str, Any] = _results(visible, "root", {"kind": "root"}, {
+            "1": [{"number": 1, "text": "Root sentence."}],
+            "2": [{"number": 2, "text": "Root sentence."}],
+        })
+        self.assertEqual([item["pid"] for item in result["posts"]], [2, 1])
+        self.assertEqual(result["posts"][0]["metadata"], result["sentences"][0]["metadata"])
+        self.assertEqual(result["posts"][0]["metadata"]["source"], "Example source")
+        self.assertEqual(result["posts"][0]["metadata"]["provider"], "rss")
+        self.assertEqual(result["posts"][0]["metadata"]["date"], "2026-09-28")
+        feeds.get_by_feed_ids.assert_called_once()
+        self.assertEqual(feeds.get_by_feed_ids.call_args.args, ("owner", ["source"]))
+
+    def test_missing_feed_keeps_post_metadata_and_provider(self) -> None:
+        posts: Mock = Mock()
+        posts.get_by_pids.return_value = [{"pid": 1, "feed_id": "missing", "provider": "telegram"}]
+        feeds: Mock = Mock()
+        feeds.get_by_feed_ids.return_value = []
+        app: Any = SimpleNamespace(posts=posts, feeds=feeds)
+        visible: list[dict[str, Any]] = _load_result_content(app, self.user, [{"pid": 1}])
+        self.assertEqual(visible[0]["metadata"]["source"], "")
+        self.assertEqual(visible[0]["metadata"]["provider"], "telegram")
+
+    def test_source_lookup_failure_preserves_readable_content(self) -> None:
+        posts: Mock = Mock()
+        posts.get_by_pids.return_value = [{"pid": 1, "feed_id": "source", "content": {"title": "Root"}}]
+        feeds: Mock = Mock()
+        feeds.get_by_feed_ids.side_effect = RuntimeError("Source lookup failed")
+        app: Any = SimpleNamespace(posts=posts, feeds=feeds)
+        with self.assertLogs("rsstag.web.tag_explorer", level="ERROR"):
+            visible: list[dict[str, Any]] = _load_result_content(app, self.user, [{"pid": 1}])
+        self.assertEqual(visible[0]["content"]["title"], "Root")
+        self.assertEqual(visible[0]["metadata"]["source"], "")
 
     def test_results_include_addressable_sentence_and_post_read_state(self) -> None:
         grouping: Mock = Mock()
@@ -95,7 +148,7 @@ class TestTagExplorerHelpers(unittest.TestCase):
                 self.assertEqual([sentence["number"] for sentence in result["sentences"]], [2])
                 self.assertEqual(result["sentences"][0]["text"], "Root cli unread sentence.")
 
-    def test_long_sentence_cannot_exceed_full_post_body(self) -> None:
+    def test_matching_sentences_are_not_truncated(self) -> None:
         for body in ("Root " + "word " * 120, "Root short body."):
             with self.subTest(length=len(body)):
                 post: dict[str, Any] = {
@@ -107,8 +160,7 @@ class TestTagExplorerHelpers(unittest.TestCase):
                 result: dict[str, Any] = _results([post], "root", {"kind": "root"}, grouped)
                 self.assertEqual(result["posts"][0]["excerpt"], body.strip())
                 sentence_text: str = result["sentences"][0]["text"]
-                self.assertEqual(sentence_text, (body + " Additional grouping text.")[:min(500, len(body.strip()))])
-                self.assertLessEqual(len(sentence_text), len(result["posts"][0]["excerpt"]))
+                self.assertEqual(sentence_text, body.strip() + " Additional grouping text.")
 
     def test_ungrouped_posts_show_whole_body_and_matching_sentence(self) -> None:
         body: str = "Opening sentence. Root matching sentence. Closing sentence."
@@ -117,6 +169,44 @@ class TestTagExplorerHelpers(unittest.TestCase):
         self.assertEqual(result["posts"][0]["excerpt"], body)
         self.assertEqual(result["sentences"][0]["text"], "Root matching sentence.")
         self.assertIsNone(result["sentences"][0]["number"])
+
+    def test_sentence_matching_uses_whole_words_and_indexed_stems(self) -> None:
+        cases: list[tuple[str, str, bool]] = [
+            ("A PARTY won the election.", "parti", True),
+            ("Новости о машинах.", "машин", True),
+            ("Earth and cartoons.", "art", False),
+            ("<a href='/root'>Unrelated news.</a>", "root", False),
+            ("<b>Root</b> news.", "root", True),
+            ("Artificial intelligence news.", "artifici intellig", True),
+        ]
+        for text, tag, expected in cases:
+            with self.subTest(text=text, tag=tag):
+                self.assertEqual(_sentence_matches({"text": text}, {tag}), expected)
+
+    def test_sentences_without_tag_are_never_used_as_fallback(self) -> None:
+        post: dict[str, Any] = {
+            "pid": 1, "content": {"content": gzip.compress(b"Earth news. Other news.")},
+        }
+        sources: list[dict[str, list[dict[str, Any]]]] = [
+            {}, {"1": [{"number": 1, "text": "Earth news."}]},
+        ]
+        selections: list[dict[str, Any]] = [
+            {"kind": "root"}, {"kind": "context", "chain": ["news"]},
+            {"kind": "topic", "chain": ["News"]},
+        ]
+        for grouped in sources:
+            for selection in selections:
+                with self.subTest(grouped=grouped, selection=selection):
+                    selected_post: dict[str, Any] = {**post, "topic_numbers": {1}} if selection["kind"] == "topic" else post
+                    result: dict[str, Any] = _results([selected_post], "art", selection, grouped)
+                    self.assertEqual(result["sentences"], [])
+                    self.assertEqual(len(result["posts"]), 1)
+
+    def test_tag_late_in_sentence_remains_visible(self) -> None:
+        body: str = "Opening words " * 50 + "root appears at the end."
+        post: dict[str, Any] = {"pid": 1, "content": {"content": gzip.compress(body.encode())}}
+        result: dict[str, Any] = _results([post], "root", {"kind": "root"}, {})
+        self.assertEqual(result["sentences"][0]["text"], body)
 
     def test_chain_counts_documents_and_includes_all_posts(self) -> None:
         posts: list[dict[str, Any]] = [
@@ -282,16 +372,16 @@ class TestTagExplorerHelpers(unittest.TestCase):
         grouping: Mock = Mock()
         grouping.get_by_post_ids.return_value = [
             {"post_ids": [1], "groups": {"Tech > AI": [1], "Tech>Tools": [2]},
-             "sentences": [{"number": 1, "text": "AI sentence."}, {"number": 2, "text": "Tools sentence."}]},
+             "sentences": [{"number": 1, "text": "Root AI sentence."}, {"number": 2, "text": "Root tools sentence."}]},
             {"post_ids": ["2"], "groups": {"Tech > AI": [1]},
-             "sentences": [{"number": 1, "text": "Other AI sentence.", "read": True}]},
+             "sentences": [{"number": 1, "text": "Other root AI sentence.", "read": True}]},
             {"post_ids": [3], "groups": {"Technology > AI": [1]},
-             "sentences": [{"number": 1, "text": "Unrelated sentence."}]},
+             "sentences": [{"number": 1, "text": "Root in a different topic."}]},
             {"post_ids": ["outside"], "groups": {"Tech > AI": [1]}, "sentences": []},
         ]
         app: Any = SimpleNamespace(post_grouping=grouping)
         posts: list[dict[str, Any]] = [{"pid": pid} for pid in (1, 2, 3)]
-        memberships: dict[tuple[str, ...], dict[str, set[int]]] = _topic_memberships(app, self.user, posts)
+        memberships: dict[tuple[str, ...], dict[str, set[int]]] = _topic_memberships(app, self.user, posts, "root")
         tree: list[dict[str, Any]] = _topic_nodes(memberships)
         self.assertEqual(tree[0]["name"], "Tech")
         self.assertEqual(tree[0]["count"], 2)
@@ -302,7 +392,7 @@ class TestTagExplorerHelpers(unittest.TestCase):
         self.assertEqual([post["pid"] for post in matches], [1, 2])
         self.assertEqual(matches[0]["topic_numbers"], {1, 2})
         unread_user: dict[str, Any] = {"sid": "owner", "settings": {"only_unread": True}}
-        self.assertEqual(_topic_memberships(app, unread_user, posts)[("Tech", "AI")], {"1": {1}})
+        self.assertEqual(_topic_memberships(app, unread_user, posts, "root")[("Tech", "AI")], {"1": {1}})
 
     def test_topic_results_show_only_selected_sentences_for_page_and_all_scope(self) -> None:
         posts: Mock = Mock()
@@ -311,7 +401,7 @@ class TestTagExplorerHelpers(unittest.TestCase):
         grouping: Mock = Mock()
         grouping.get_by_post_ids.return_value = [{
             "post_ids": ["1"], "groups": {"Tech > AI": [2, 3, 4], "Tech > Tools": [1]},
-            "sentences": [{"number": number, "text": f"Sentence {number}."} for number in range(1, 5)],
+            "sentences": [{"number": number, "text": f"Root sentence {number}."} for number in range(1, 5)],
         }]
         app: Any = SimpleNamespace(posts=posts, post_grouping=grouping)
         for scope in ("page", "all"):
@@ -323,6 +413,45 @@ class TestTagExplorerHelpers(unittest.TestCase):
             self.assertEqual(response.status_code, 200)
             self.assertEqual(response.get_json()["total"], 1)
             self.assertEqual([item["number"] for item in response.get_json()["sentences"]], [2, 3, 4])
+
+    def test_digest_topics_and_bulk_actions_exclude_unrelated_sentences(self) -> None:
+        posts: Mock = Mock()
+        posts.get_by_tags.side_effect = lambda *args: iter([{"pid": 1}, {"pid": 2}])
+        posts.get_by_pids.return_value = [{"pid": 1, "content": {"title": "Digest"}}]
+        grouping: Mock = Mock()
+        grouping.get_by_post_ids.return_value = [
+            {"post_ids": [1], "groups": {"News > Art": [1, 2], "News > Space": [3]},
+             "sentences": [{"number": 1, "text": "Art exhibition."},
+                           {"number": 2, "text": "Other news."},
+                           {"number": 3, "text": "Earth exploration."}]},
+            {"post_ids": [2], "groups": {"News > Space": [1]},
+             "sentences": [{"number": 1, "text": "Earth exploration."}]},
+        ]
+        template_env: Mock = Mock()
+        template_env.get_template.return_value.render.return_value = "page"
+        app: Any = SimpleNamespace(posts=posts, post_grouping=grouping, template_env=template_env)
+        response: Any = on_tag_explorer_get(app, self.user, Request.from_values("/tag-explorer/art"), "art")
+        self.assertEqual(response.status_code, 200)
+        topics: list[dict[str, Any]] = template_env.get_template.return_value.render.call_args.kwargs["tree"]["topics"]
+        self.assertEqual(topics[0]["count"], 1)
+        self.assertEqual([node["name"] for node in topics[0]["children"]], ["Art"])
+        selections: list[dict[str, Any]] = [
+            {"kind": "root"}, {"kind": "topic", "chain": ["News"]},
+            {"kind": "topic", "chain": ["News", "Space"]},
+        ]
+        for scope in ("page", "all"):
+            for selection in selections:
+                with self.subTest(scope=scope, selection=selection):
+                    request: Request = Request.from_values("/tag-explorer/art", query_string={
+                        "format": "json", "scope": scope, "selection": json.dumps(selection),
+                    })
+                    response = on_tag_explorer_get(app, self.user, request, "art")
+                    self.assertEqual(response.status_code, 200)
+                    result: dict[str, Any] = response.get_json()
+                    expected_numbers: list[int] = [] if selection.get("chain") == ["News", "Space"] else [1]
+                    self.assertEqual([item["number"] for item in result["sentences"]], expected_numbers)
+                    if selection["kind"] == "topic":
+                        self.assertEqual(result["total"], len(expected_numbers))
 
     def test_invalid_topic_paths_are_rejected(self) -> None:
         for chain in ([], "Tech", [True], [""], [" Tech"], ["Tech > AI"], ["x"] * 101):

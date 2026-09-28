@@ -10,6 +10,7 @@ from urllib.parse import quote
 from werkzeug.wrappers import Request, Response
 
 from rsstag.snippets import strip_html_markup
+from rsstag.tags_builder import TagsBuilder
 
 if TYPE_CHECKING:
     from rsstag.web.app import RSSTagApplication
@@ -18,6 +19,7 @@ if TYPE_CHECKING:
 LOG: logging.Logger = logging.getLogger(__name__)
 DEFAULT_POSTS_ON_PAGE: int = 30
 CONTEXT_WINDOW: int = 5
+_TAG_BUILDER: TagsBuilder = TagsBuilder()
 
 
 def _decode_lemmas(post: dict[str, Any]) -> list[str]:
@@ -108,7 +110,7 @@ def _matches_context(lemmas: list[str], tag: str, chain: list[str]) -> bool:
 
 
 def _topic_memberships(
-    app: "RSSTagApplication", user: dict[str, Any], posts: list[dict[str, Any]],
+    app: "RSSTagApplication", user: dict[str, Any], posts: list[dict[str, Any]], tag: str,
 ) -> dict[tuple[str, ...], dict[str, set[int]]]:
     """Index each topic prefix by post and its addressable sentences."""
     pids: set[str] = {str(post["pid"]) for post in posts}
@@ -128,6 +130,7 @@ def _topic_memberships(
             sentence["number"] for sentence in doc.get("sentences", [])
             if isinstance(sentence.get("number"), int) and sentence.get("text")
             and (not _only_unread(user) or not sentence.get("read", False))
+            and _sentence_matches(sentence, {tag})
         }
         groups: Any = doc.get("groups") or {}
         if not isinstance(groups, dict):
@@ -164,7 +167,7 @@ def _matching_posts(
 ) -> Iterator[dict[str, Any]]:
     if selection["kind"] == "topic":
         candidates: list[dict[str, Any]] = list(posts)
-        memberships: dict[tuple[str, ...], dict[str, set[int]]] = _topic_memberships(app, user, candidates)
+        memberships: dict[tuple[str, ...], dict[str, set[int]]] = _topic_memberships(app, user, candidates, tag)
         selected: dict[str, set[int]] = memberships.get(tuple(selection["chain"]), {})
         for post in candidates:
             numbers: set[int] = selected.get(str(post["pid"]), set())
@@ -243,21 +246,30 @@ def _sentence_source(
     return sentences
 
 
-def _excerpts(source: list[dict[str, Any]], terms: set[str], tag: str) -> list[dict[str, Any]]:
-    def text_of(sentence: dict[str, Any]) -> str:
-        return str(sentence.get("text", "")).casefold()
+def _sentence_matches(sentence: dict[str, Any], terms: set[str]) -> bool:
+    """Match whole words or phrases, including the stems used to index tags."""
+    words: list[str] = _TAG_BUILDER.text2words(strip_html_markup(str(sentence.get("text", ""))))
+    surface: str = " " + " ".join(words) + " "
+    lemmas: str = " " + " ".join(_TAG_BUILDER.process_word(word) for word in words) + " "
+    return all(
+        bool(term.strip()) and (f" {term.casefold()} " in surface or f" {term.casefold()} " in lemmas)
+        for term in terms
+    )
 
-    selected: list[dict[str, Any]] = [sentence for sentence in source if all(term in text_of(sentence) for term in terms)]
+
+def _excerpts(source: list[dict[str, Any]], terms: set[str], tag: str) -> list[dict[str, Any]]:
+    selected: list[dict[str, Any]] = [sentence for sentence in source if _sentence_matches(sentence, terms)]
     if not selected:
-        selected = [sentence for sentence in source if tag.casefold() in text_of(sentence)]
-    return (selected or source)[:2]
+        selected = [sentence for sentence in source if _sentence_matches(sentence, {tag})]
+    return selected[:2]
 
 
 def _post_excerpts(
     post: dict[str, Any], source: list[dict[str, Any]], terms: set[str], tag: str,
 ) -> list[dict[str, Any]]:
     if "topic_numbers" in post:
-        return [sentence for sentence in source if sentence.get("number") in post["topic_numbers"]]
+        return [sentence for sentence in source if sentence.get("number") in post["topic_numbers"]
+                and _sentence_matches(sentence, {tag})]
     return _excerpts(source, terms, tag)
 
 
@@ -275,12 +287,13 @@ def _results(
         post_text: str = _post_text(post)
         source: list[dict[str, Any]] = _sentence_source(pid, post_text, grouped, only_unread)
         excerpts: list[dict[str, Any]] = _post_excerpts(post, source, terms, tag)
+        metadata: dict[str, Any] = post.get("metadata") or {}
         # Keep the existing API field, but show the complete stored body.
-        post_items.append({"pid": raw_pid, "title": title, "url": f"/posts/{quote(pid, safe='')}", "excerpt": post_text, "read": bool(post.get("read", False))})
+        post_items.append({"pid": raw_pid, "title": title, "url": f"/posts/{quote(pid, safe='')}", "excerpt": post_text, "read": bool(post.get("read", False)), "metadata": metadata})
         for sentence in excerpts:
-            # Grouping text can contain the title as well as the body.
-            sentence_text: str = strip_html_markup(str(sentence.get("text", "")))[:min(500, len(post_text))]
-            sentence_items.append({"pid": raw_pid, "title": title, "url": f"/posts/{quote(pid, safe='')}", "text": sentence_text, "number": sentence.get("number"), "read": bool(post.get("read", False) or sentence.get("read", False))})
+            # Keep the matching word visible even when it occurs late in a sentence.
+            sentence_text: str = strip_html_markup(str(sentence.get("text", "")))
+            sentence_items.append({"pid": raw_pid, "title": title, "url": f"/posts/{quote(pid, safe='')}", "text": sentence_text, "number": sentence.get("number"), "read": bool(post.get("read", False) or sentence.get("read", False)), "metadata": metadata})
     return {"total": len(posts), "posts": post_items, "sentences": sentence_items}
 
 
@@ -310,15 +323,47 @@ def _load_result_content(
     if not pids:
         return posts
     content_by_pid: dict[str, dict[str, Any]] = {
-        str(post["pid"]): {"content": post.get("content") or {}, "read": post.get("read", False)}
+        str(post["pid"]): post
         for post in app.posts.get_by_pids(
-            user["sid"], pids, projection={"_id": 0, "pid": 1, "content": 1, "read": 1}
+            user["sid"], pids, projection={"_id": 0, "pid": 1, "content": 1, "read": 1,
+                                          "feed_id": 1, "provider": 1, "date": 1, "url": 1}
         )
     }
-    return [
+    loaded: list[dict[str, Any]] = [
         {**post, **content_by_pid.get(str(post.get("pid", "")), {})}
         for post in posts
     ]
+    feeds: dict[str, dict[str, Any]] = _result_feeds(app, user, loaded)
+    for post in loaded:
+        feed: dict[str, Any] = feeds.get(str(post.get("feed_id", "")), {})
+        post["metadata"] = {
+            "source": feed.get("title", ""), "source_url": feed.get("local_url", ""),
+            "category": feed.get("category_title", ""),
+            "category_url": feed.get("category_local_url", ""),
+            "provider": post.get("provider") or feed.get("provider") or user.get("provider", ""),
+            "date": str(post.get("date") or ""), "original_url": post.get("url", ""),
+        }
+    return loaded
+
+
+def _result_feeds(
+    app: "RSSTagApplication", user: dict[str, Any], posts: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Fetch source metadata once per displayed page, scoped to its owner."""
+    feed_ids: list[str] = list({str(post["feed_id"]) for post in posts if post.get("feed_id")})
+    if not feed_ids:
+        return {}
+    try:
+        return {
+            str(feed["feed_id"]): feed
+            for feed in app.feeds.get_by_feed_ids(user["sid"], feed_ids, projection={
+                "_id": 0, "feed_id": 1, "title": 1, "local_url": 1,
+                "category_title": 1, "category_local_url": 1, "provider": 1,
+            })
+        }
+    except Exception:
+        LOG.exception("Could not load tag explorer source metadata")
+        return {}
 
 
 def _grouped_sentences(
@@ -381,7 +426,7 @@ def _json_response(app: "RSSTagApplication", user: dict[str, Any], request: Requ
 def _html_response(app: "RSSTagApplication", user: dict[str, Any], tag: str) -> Response:
     posts: list[dict[str, Any]] = list(_posts_for_tag(app, user, tag))
     tree: dict[str, Any] = _make_tree(posts, tag)
-    tree["topics"] = _topic_nodes(_topic_memberships(app, user, posts))
+    tree["topics"] = _topic_nodes(_topic_memberships(app, user, posts, tag))
     page: Any = app.template_env.get_template("tag-explorer.html")
     return Response(page.render(tag=tag, tree=tree, user_settings=user["settings"], provider=user.get("provider", "")), mimetype="text/html")
 
