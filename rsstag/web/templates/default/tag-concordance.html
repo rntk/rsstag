@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Tag context: {{ tag|e }}</title>
+    {% include "head-data.html" %}
+</head>
+<body>
+    {% from 'site-header.html' import site_header with context %}
+    {{ site_header(active='tags', show_context_filter=True) }}
+    <main class="tag-concordance">
+        <header class="tag-concordance__intro">
+            <h1>Context for “{{ tag|e }}”</h1>
+            <p>Ten words on either side of each occurrence. Topics belong to the matching sentence.</p>
+            <p>{{ rows|length }} occurrences in {{ article_count }} articles on this page · {{ 'Unread only' if user_settings.get('only_unread') else 'Read and unread' }}</p>
+            <a href="/tag-explorer/{{ tag|url_encode|replace('+', '%20') }}">Explore topics and context</a>
+        </header>
+        <div class="tag-concordance__head" aria-hidden="true"><span>Before</span><span>Tag &amp; article</span><span>After</span></div>
+        <section aria-label="Tag occurrences">
+        {% for row in rows %}
+            <article class="tag-concordance__row" aria-label="Occurrence {{ loop.index }}">
+                <div class="tag-concordance__before">{{ row.before|e }}</div>
+                <div class="tag-concordance__center">
+                    <strong class="tag-concordance__tag">{{ row.match|e }}</strong>
+                    <a class="tag-concordance__title" href="{{ row.url|e }}" title="{{ row.title|e }}">{{ row.title|e }}</a>
+                    {% if row.metadata.source %}<span>Source: {{ row.metadata.source|e }}</span>{% endif %}
+                    {% if row.metadata.provider %}<span>Provider: {{ row.metadata.provider|e }}</span>{% endif %}
+                    {% if row.metadata.category %}<span>Category: {{ row.metadata.category|e }}</span>{% endif %}
+                    {% if row.number is not none %}<span>Sentence {{ row.number }}</span>{% endif %}
+                    {% if row.topics %}
+                    <details class="tag-concordance__topics">
+                        <summary>Topic: {{ row.topics[0]|e }}{% if row.topics|length > 1 %} (+{{ row.topics|length - 1 }}){% endif %}</summary>
+                        <ul>{% for topic in row.topics %}<li>{{ topic|e }}</li>{% endfor %}</ul>
+                    </details>
+                    {% else %}<span>No sentence topic available</span>{% endif %}
+                </div>
+                <div class="tag-concordance__after">{{ row.after|e }}</div>
+            </article>
+        {% else %}
+            <p class="tag-concordance__empty">No matching sentences on this page.{% if has_more %} Continue to the next page of articles.{% endif %}</p>
+        {% endfor %}
+        </section>
+        <nav class="tag-concordance__pagination" aria-label="Article pages">
+            {% if page_number > 1 %}<a href="?page={{ page_number - 1 }}">Previous</a>{% endif %}
+            <span>Page {{ page_number }}</span>
+            {% if has_more %}<a href="?page={{ page_number + 1 }}">Next</a>{% endif %}
+        </nav>
+    </main>
+</body>
+</html>
