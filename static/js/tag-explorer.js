@@ -27,6 +27,9 @@ document.addEventListener('DOMContentLoaded', () => {
   let onlyUnread = readFilter.dataset.onlyUnread === 'true';
   let busy = false;
   const relatedLinks = new Map();
+  const supportsHighlightApi = typeof Highlight === 'function' && typeof CSS !== 'undefined' && CSS.highlights;
+  const tagHighlight = supportsHighlightApi ? new Highlight() : null;
+  if (supportsHighlightApi) CSS.highlights.set('tag-explorer-match', tagHighlight);
   const previousPage = document.getElementById('tag-explorer-previous');
   const nextPage = document.getElementById('tag-explorer-next');
   const pageLabel = document.getElementById('tag-explorer-page');
@@ -141,6 +144,58 @@ document.addEventListener('DOMContentLoaded', () => {
       return link;
     } catch {
       return null;
+    }
+  }
+
+  function escapeRegExp(value) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  function highlightTerms() {
+    const terms = new Set([tree.name]);
+    if (currentSelection.kind === 'context') {
+      for (const word of currentSelection.chain) terms.add(word);
+    } else if (currentSelection.kind === 'topic') {
+      for (const part of currentSelection.chain) {
+        for (const word of part.split(/\s+/)) if (word) terms.add(word);
+      }
+    }
+    return [...terms].filter(Boolean);
+  }
+
+  function buildHighlightRegExp() {
+    const terms = highlightTerms();
+    if (!terms.length) return null;
+    // Longest first so multi-word/longer terms win over shorter substrings.
+    const escaped = terms.map(escapeRegExp).sort((a, b) => b.length - a.length);
+    // Tags are stored as stems, so match the term as a word-start prefix and
+    // include the rest of the inflected word (e.g. "cat" also marks "cats").
+    try {
+      return new RegExp(`(?<![\\p{L}\\p{N}])(?:${escaped.join('|')})[\\p{L}\\p{N}]*`, 'giu');
+    } catch {
+      return new RegExp(`\\b(?:${escaped.join('|')})\\w*`, 'gi');
+    }
+  }
+
+  // Must run after the container is attached to the document: Chrome ignores
+  // highlight ranges on nodes that are disconnected when they are registered.
+  function highlightMatches(container, re) {
+    if (!tagHighlight || !re) return;
+    const textNode = container.firstChild;
+    if (!textNode) return;
+    const value = textNode.textContent;
+    re.lastIndex = 0;
+    let match = re.exec(value);
+    while (match) {
+      if (match[0].length > 0) {
+        const range = new Range();
+        range.setStart(textNode, match.index);
+        range.setEnd(textNode, match.index + match[0].length);
+        tagHighlight.add(range);
+      } else {
+        re.lastIndex += 1;
+      }
+      match = re.exec(value);
     }
   }
 
@@ -298,6 +353,7 @@ document.addEventListener('DOMContentLoaded', () => {
       panel.append(empty);
       return;
     }
+    const highlightRe = buildHighlightRegExp();
     for (const item of items) {
       const card = document.createElement('article');
       card.className = 'tag-explorer__card';
@@ -306,7 +362,7 @@ document.addEventListener('DOMContentLoaded', () => {
       link.textContent = item.title;
       link.className = 'tag-explorer__title';
       const excerpt = document.createElement('p');
-      excerpt.textContent = kind === 'sentences' ? item.text : item.excerpt;
+      excerpt.textContent = String((kind === 'sentences' ? item.text : item.excerpt) || '');
       card.classList.toggle('is-read', item.read);
       const button = document.createElement('button');
       button.type = 'button';
@@ -349,6 +405,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       card.append(link, renderMetadata(item, kind), excerpt, details);
       panel.append(card);
+      highlightMatches(excerpt, highlightRe);
     }
   }
 
@@ -361,6 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
     nextPage.disabled = true;
     panels.sentences.replaceChildren();
     panels.posts.replaceChildren();
+    if (tagHighlight) tagHighlight.clear();
     displayed = { sentences: [], posts: [] };
     currentTotal = 0;
     updateReadTools();

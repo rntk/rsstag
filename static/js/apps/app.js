@@ -44,8 +44,6 @@ import TagTree, { BidirectionalTagTree } from '../components/dendrogram.js';
 import SentenceTree from '../components/SentenceTree.js';
 import TagContextsClassificationStorage from '../storages/tag-contexts-classification-storage.js';
 import BigramsTable from '../components/bigrams-table.js';
-import BiGramsGraphSimple from '../components/bi-grams-graph-simple.js';
-import BiGramsGraph from '../components/bi-grams-graph.js';
 import { BiGramsTabs } from '../components/bigrams-tabs.js';
 import ContextFilterStorage from '../storages/context-filter-storage.js';
 import PathStorage from '../storages/path-storage.js';
@@ -860,94 +858,6 @@ function tagWithContextInfoPage(tag) {
       is_bigram={true}
     />
   );
-
-  // Bi-grams graph
-  const bi_grams_graph_evsys = new EventsSystem();
-  let bi_grams_graph;
-
-  // Leave the graph container empty until loaded, so it collapses into the
-  // same compact "unloaded" row as the other on-demand sections.
-  const biGramsGraphContainer = document.getElementById('bi_grams_graph');
-  const loadGraphSpan = document.getElementById('load_bi_grams_graph');
-
-  if (biGramsGraphContainer) {
-    biGramsGraphContainer.style.height = 'auto';
-    biGramsGraphContainer.style.minHeight = '0';
-  }
-
-  try {
-    // Try to use the D3.js visualization first
-    bi_grams_graph = new BiGramsGraph('#bi_grams_graph', tag.tag, bi_grams_graph_evsys);
-  } catch (e) {
-    console.warn('D3.js visualization failed to load, falling back to simple version:', e);
-    // Fall back to simple table visualization
-    bi_grams_graph = new BiGramsGraphSimple('#bi_grams_graph', tag.tag, bi_grams_graph_evsys);
-  }
-
-  // Create a simple load button for the graph
-  let isGraphLoaded = false;
-  let isGraphVisible = false;
-
-  const loadGraphButton = document.createElement('button');
-  loadGraphButton.type = 'button';
-  loadGraphButton.className = 'tag-info-control tag-info-graph-control';
-  loadGraphButton.textContent = 'Load bi-grams graph';
-  loadGraphButton.setAttribute('aria-controls', 'bi_grams_graph');
-  loadGraphButton.setAttribute('aria-expanded', 'false');
-  loadGraphButton.addEventListener('click', () => {
-    if (!isGraphLoaded) {
-      // Loading the graph for the first time
-      loadGraphButton.disabled = true;
-      loadGraphButton.textContent = 'Loading...';
-
-      // Clear the placeholder and restore full size before loading the graph
-      if (biGramsGraphContainer) {
-        biGramsGraphContainer.innerHTML = '';
-        biGramsGraphContainer.style.height = '750px';
-      }
-
-      bi_grams_graph.start();
-
-      // After a short delay, enable the button and change to "Hide"
-      setTimeout(() => {
-        isGraphLoaded = true;
-        isGraphVisible = true;
-        loadGraphButton.disabled = false;
-        loadGraphButton.textContent = 'Hide bi-grams graph';
-        loadGraphButton.classList.add('tag-info-control--active');
-        loadGraphButton.setAttribute('aria-expanded', 'true');
-      }, 500);
-    } else {
-      // Toggle visibility
-      if (isGraphVisible) {
-        // Hide the graph - clear it and collapse back to a small height
-        if (biGramsGraphContainer) {
-          biGramsGraphContainer.innerHTML = '';
-          biGramsGraphContainer.style.height = 'auto';
-          biGramsGraphContainer.style.minHeight = '0';
-        }
-        loadGraphButton.textContent = 'Show bi-grams graph';
-        loadGraphButton.classList.remove('tag-info-control--active');
-        loadGraphButton.setAttribute('aria-expanded', 'false');
-        isGraphVisible = false;
-      } else {
-        // Show the graph - restore full size and re-render
-        if (biGramsGraphContainer) {
-          biGramsGraphContainer.innerHTML = '';
-          biGramsGraphContainer.style.height = '750px';
-        }
-        bi_grams_graph.start();
-        loadGraphButton.textContent = 'Hide bi-grams graph';
-        loadGraphButton.classList.add('tag-info-control--active');
-        loadGraphButton.setAttribute('aria-expanded', 'true');
-        isGraphVisible = true;
-      }
-    }
-  });
-
-  if (loadGraphSpan) {
-    loadGraphSpan.appendChild(loadGraphButton);
-  }
 
   renderToRoot(
     'load_pmi',

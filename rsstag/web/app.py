@@ -478,14 +478,6 @@ class RSSTagApplication(object):
     def on_get_tag_bi_grams(self, user: dict, _: Request, tag: str) -> Response:
         return bigrams_handlers.on_get_tag_bi_grams(self, user, tag)
 
-    def on_get_tag_bi_grams_graph(self, user: dict, _: Request, tag: str) -> Response:
-        return bigrams_handlers.on_get_tag_bi_grams_graph(self, user, tag)
-
-    def on_get_tag_bi_grams_graph_debug(
-        self, user: dict, _: Request, tag: str
-    ) -> Response:
-        return bigrams_handlers.on_get_tag_bi_grams_graph_debug(self, user, tag)
-
     def on_post_links_get(self, user: dict, _: Request, post_id: str) -> Response:
         return posts_handlers.on_post_links_get(self, user, post_id)
 

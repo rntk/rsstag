@@ -3744,11 +3744,6 @@ body.anthology-compare-modal-open {
     height: 600px;
   }
 
-  #bi_grams_graph {
-    height: 750px;
-    overflow: hidden;
-  }
-
   .topic-posts {
     display: none;
   }
@@ -9460,6 +9455,8 @@ body.tag-explorer-page {
   &__link-group strong { flex-basis: 100%; color: var(--rsst-on-surface-variant, #66736c); font-size: .75rem; }
   &__card :is(a, button, summary):focus-visible { outline: 2px solid var(--rsst-primary, #365e4c); outline-offset: 3px; }
   &__card p { margin: 7px 0 0; line-height: 1.55; overflow-wrap: anywhere; }
+  // ::highlight() only accepts a small property set (no padding/border-radius).
+  &__card p::highlight(tag-explorer-match) { background-color: #ffe066; color: inherit; }
   &__read-button { margin-top: 9px; }
   &__empty { padding: 12px; color: var(--rsst-on-surface-variant, #66736c); font-size: .85rem; }
   &__pagination { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 8px 14px; border-top: 1px solid var(--rsst-border, #d7dfd9); }
