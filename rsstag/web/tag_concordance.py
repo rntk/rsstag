@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
 LOG: logging.Logger = logging.getLogger(__name__)
 BUILDER: TagsBuilder = TagsBuilder()
-CONTEXT_WORDS: int = 10
+CONTEXT_WORDS: int = 20
 
 
 def _contexts(text: str, tag: str) -> Iterator[dict[str, str]]:
@@ -83,16 +83,59 @@ def _rows(
         document: dict[str, Any] = documents.get(pid, {})
         grouped: dict[str, list[dict[str, Any]]] = {pid: document.get("sentences") or []}
         fallback_text: str = "" if grouped[pid] else _post_text(post)
-        sentences: list[dict[str, Any]] = _sentence_source(pid, fallback_text, grouped, only_unread)
-        for sentence in sentences:
+        sentences: list[dict[str, Any]] = _sentence_source(pid, fallback_text, grouped, None)
+        for index, sentence in enumerate(sentences):
+            if only_unread and sentence.get("read", False):
+                continue
+            contexts: list[dict[str, str]] = list(_contexts(str(sentence.get("text", "")), tag))
+            if not contexts:
+                continue
             number: int | None = sentence.get("number")
-            for context in _contexts(str(sentence.get("text", "")), tag):
+            topics: list[str] = _topics(document, number)
+            for context in contexts:
                 yield {
-                    **context, "number": number, "topics": _topics(document, number),
+                    **context, "number": number, "topics": topics,
+                    "pid": pid, "read": bool(sentence.get("read", False)),
+                    "detail_key": f"{pid}:{index}", "sentence_index": index,
                     "title": (post.get("content") or {}).get("title") or "Untitled article",
                     "url": "/posts/" + quote(pid, safe=""),
                     "metadata": post.get("metadata") or {},
                 }
+
+
+def _detail_sentence(sentence: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "number": sentence.get("number"),
+        "text": strip_html_markup(str(sentence.get("text", ""))),
+        "read": bool(sentence.get("read", False)),
+    }
+
+
+def _detail_data(
+    posts: list[dict[str, Any]], documents: dict[str, dict[str, Any]],
+    rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Store sentence text and topic membership once per matching article."""
+    entries: dict[str, dict[str, Any]] = {
+        row["detail_key"]: {key: row[key] for key in ("pid", "number", "topics", "sentence_index")}
+        for row in rows
+    }
+    matching_pids: set[str] = {row["pid"] for row in rows}
+    sources: dict[str, dict[str, Any]] = {}
+    for post in posts:
+        pid: str = str(post["pid"])
+        if pid not in matching_pids:
+            continue
+        document: dict[str, Any] = documents.get(pid, {})
+        grouped: dict[str, list[dict[str, Any]]] = {pid: document.get("sentences") or []}
+        text: str = "" if grouped[pid] else _post_text(post)
+        sources[pid] = {
+            "title": (post.get("content") or {}).get("title") or "Untitled article",
+            "url": "/posts/" + quote(pid, safe=""),
+            "sentences": [_detail_sentence(sentence) for sentence in _sentence_source(pid, text, grouped, None)],
+            "groups": document.get("groups") or {},
+        }
+    return {"posts": sources, "entries": entries}
 
 
 def on_tag_concordance_get(
@@ -112,12 +155,13 @@ def on_tag_concordance_get(
         )
         selected: list[dict[str, Any]] = list(islice(candidates, offset, offset + page_size + 1))
         posts: list[dict[str, Any]] = _load_result_content(app, user, selected[:page_size])
-        rows: list[dict[str, Any]] = list(_rows(
-            posts, _sentence_documents(app, user, posts), tag, _only_unread(user),
-        ))
+        documents: dict[str, dict[str, Any]] = _sentence_documents(app, user, posts)
+        rows: list[dict[str, Any]] = list(_rows(posts, documents, tag, _only_unread(user)))
         template: Any = app.template_env.get_template("tag-concordance.html")
+        details: dict[str, Any] = _detail_data(posts, documents, rows)
         return Response(template.render(
             tag=tag, rows=rows, page_number=page_number, has_more=len(selected) > page_size,
+            details=details,
             article_count=len(posts), user_settings=user["settings"], provider=user.get("provider", ""),
         ), mimetype="text/html")
     except Exception:

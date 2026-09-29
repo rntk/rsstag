@@ -1,6 +1,7 @@
 """Concordance behavior checks without a database service."""
 
 import gzip
+import json
 import re
 import unittest
 from pathlib import Path
@@ -13,20 +14,20 @@ from jinja2 import ChoiceLoader, DictLoader, Environment, FileSystemLoader
 from werkzeug.wrappers import Request, Response
 
 from rsstag.web.routes import RSSTagRoutes
-from rsstag.web.tag_concordance import _contexts, _rows, _sentence_documents, on_tag_concordance_get
+from rsstag.web.tag_concordance import _contexts, _detail_data, _rows, _sentence_documents, on_tag_concordance_get
 
 
 class TestTagConcordance(unittest.TestCase):
     def setUp(self) -> None:
         self.user: dict[str, Any] = {"sid": "owner", "settings": {"only_unread": False, "posts_on_page": 2}}
 
-    def test_late_occurrence_has_ten_words_on_each_side(self) -> None:
-        text: str = " ".join([f"before{i}" for i in range(90)] + ["Root,"] + [f"after{i}" for i in range(20)])
+    def test_late_occurrence_has_twenty_words_on_each_side(self) -> None:
+        text: str = " ".join([f"before{i}" for i in range(90)] + ["Root,"] + [f"after{i}" for i in range(30)])
         rows: list[dict[str, str]] = list(_contexts(text, "root"))
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["match"], "Root")
-        self.assertEqual(re.findall(r"\w+", rows[0]["before"]), [f"before{i}" for i in range(80, 90)])
-        self.assertEqual(re.findall(r"\w+", rows[0]["after"]), [f"after{i}" for i in range(10)])
+        self.assertEqual(re.findall(r"\w+", rows[0]["before"]), [f"before{i}" for i in range(70, 90)])
+        self.assertEqual(re.findall(r"\w+", rows[0]["after"]), [f"after{i}" for i in range(20)])
         self.assertTrue(rows[0]["before"].startswith("… "))
         self.assertTrue(rows[0]["after"].startswith(","))
         self.assertTrue(rows[0]["after"].endswith(" …"))
@@ -73,6 +74,63 @@ class TestTagConcordance(unittest.TestCase):
         )
         self.assertEqual(result, {"one": {"post_ids": ["one"], "groups": {"Right": [1]}}})
         self.assertEqual(grouping.get_by_post_ids.call_args.args, ("owner", ["one", "two"]))
+
+    def test_details_include_all_topic_sentences_even_read_nonmatches(self) -> None:
+        posts: list[dict[str, Any]] = [{"pid": "one"}, {"pid": "two"}]
+        documents: dict[str, dict[str, Any]] = {
+            "one": {"sentences": [
+                {"number": 1, "text": "Root root."},
+                {"number": 2, "text": "<b>Full context.</b>", "read": True},
+                {"number": 3, "text": "Unrelated."},
+            ], "groups": {"Topic": [1, 2], "Second topic": [1, 3]}},
+            "two": {"sentences": [{"number": 2, "text": "Other article."}], "groups": {"Topic": [2]}},
+        }
+        rows: list[dict[str, Any]] = list(_rows(posts, documents, "root", True))
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["detail_key"], rows[1]["detail_key"])
+        details: dict[str, Any] = _detail_data(posts, documents, rows)
+        self.assertEqual(set(details["posts"]), {"one"})
+        self.assertEqual(details["posts"]["one"]["sentences"][:2], [
+            {"number": 1, "text": "Root root.", "read": False},
+            {"number": 2, "text": "Full context.", "read": True},
+        ])
+        self.assertEqual(details["posts"]["one"]["groups"]["Second topic"], [1, 3])
+        self.assertEqual(details["entries"][rows[0]["detail_key"]]["topics"], ["Second topic", "Topic"])
+        self.assertNotIn("sections", rows[0])
+
+    def test_shared_topic_text_is_serialized_once_per_post(self) -> None:
+        posts: list[dict[str, Any]] = [{"pid": "one"}]
+        sentences: list[dict[str, Any]] = [
+            {"number": index, "text": f"Root sentence unique_{index}."} for index in range(300)
+        ]
+        documents: dict[str, dict[str, Any]] = {"one": {
+            "sentences": sentences, "groups": {"Large topic": list(range(300))},
+        }}
+        rows: list[dict[str, Any]] = list(_rows(posts, documents, "root", None))
+        details: dict[str, Any] = _detail_data(posts, documents, rows)
+        serialized: str = json.dumps(details)
+        self.assertEqual(len(details["entries"]), 300)
+        self.assertEqual(serialized.count('"text":'), 300)
+        self.assertEqual(serialized.count('"groups":'), 1)
+        self.assertTrue(all("sections" not in row for row in rows))
+
+    def test_detail_indices_preserve_read_sentences_and_fallback_text(self) -> None:
+        posts: list[dict[str, Any]] = [
+            {"pid": "grouped"},
+            {"pid": "fallback", "content": {"content": gzip.compress(b"Opening. Root full fallback.")}},
+        ]
+        documents: dict[str, dict[str, Any]] = {"grouped": {"sentences": [
+            {"number": 5, "text": "Read first.", "read": True},
+            {"number": 7, "text": "Root without topic."},
+        ]}}
+        rows: list[dict[str, Any]] = list(_rows(posts, documents, "root", True))
+        details: dict[str, Any] = _detail_data(posts, documents, rows)
+        for row in rows:
+            entry: dict[str, Any] = details["entries"][row["detail_key"]]
+            sentence: dict[str, Any] = details["posts"][row["pid"]]["sentences"][entry["sentence_index"]]
+            self.assertEqual(sentence["number"], row["number"])
+            self.assertIn("Root", sentence["text"])
+            self.assertEqual(entry["topics"], [])
 
     def test_unread_filter_never_falls_back_to_read_sentences(self) -> None:
         posts: list[dict[str, Any]] = [{"pid": "one", "content": {"content": gzip.compress(b"Root read.")}}]
@@ -161,6 +219,9 @@ class TestTagConcordance(unittest.TestCase):
         self.assertNotIn("<img", html)
         self.assertIn("&lt;img", html)
         self.assertNotIn("?page=2", html)
+        buttons: list[str] = re.findall(r'<button[^>]*class="tag-concordance__context[^>]*>', html)
+        self.assertEqual(len(buttons), 2)
+        self.assertTrue(all('aria-label=' not in button for button in buttons))
         phrase_html: str = environment.get_template("tag-concordance.html").render(
             tag="artificial intelligence", rows=[], article_count=0, user_settings={}, page_number=1, has_more=False,
         )

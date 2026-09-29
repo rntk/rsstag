@@ -9676,3 +9676,61 @@ body.tag-explorer-page {
     font-size: 0.7rem;
   }
 }
+
+.tag-concordance__context {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.tag-concordance__after { text-align: left; }
+.tag-concordance__context:hover {
+  background: var(--rsst-surface, #f7f8f4);
+  border-color: var(--rsst-border, #d7dfd9);
+}
+.tag-concordance button:focus-visible,
+.tag-concordance__dialog button:focus-visible {
+  outline: 2px solid var(--rsst-primary, #365e4c);
+  outline-offset: 3px;
+}
+.tag-concordance__read,
+.tag-concordance__close {
+  padding: 6px 12px;
+  border: 1px solid var(--rsst-border, #d7dfd9);
+  border-radius: 6px;
+  background: var(--rsst-surface, #f7f8f4);
+  color: var(--rsst-on-surface, #24352b);
+  cursor: pointer;
+}
+.tag-concordance__read:disabled { opacity: 0.6; cursor: wait; }
+.tag-concordance__dialog {
+  margin: auto;
+  width: min(800px, calc(100vw - 32px));
+  max-height: 85vh;
+  padding: 24px;
+  border: 1px solid var(--rsst-border, #d7dfd9);
+  border-radius: 12px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  background: var(--rsst-surface, #f7f8f4);
+  color: var(--rsst-on-surface, #24352b);
+}
+.tag-concordance__dialog::backdrop { background: rgb(0 0 0 / 45%); }
+.tag-concordance__close { float: right; }
+.tag-concordance__sentences h3 { margin: 20px 0 8px; }
+.tag-concordance__sentences ol { padding-left: 24px; }
+.tag-concordance__sentence { padding: 12px; line-height: 1.7; }
+.tag-concordance__sentence p { margin-bottom: 8px; white-space: pre-wrap; }
+.tag-concordance__sentence.is-match { border-left: 3px solid var(--rsst-primary, #365e4c); }
+.tag-concordance__sentence.is-read p,
+.tag-concordance__row.is-read .tag-concordance__context { opacity: 0.65; }
+.tag-concordance__status { color: var(--rsst-error, #a4262c); margin-top: 12px; }
+.tag-concordance__page-status { text-align: center; }

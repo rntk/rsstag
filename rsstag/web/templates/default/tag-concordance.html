@@ -10,15 +10,15 @@
     <main class="tag-concordance">
         <header class="tag-concordance__intro">
             <h1>Context for “{{ tag|e }}”</h1>
-            <p>Ten words on either side of each occurrence. Topics belong to the matching sentence.</p>
+            <p>Twenty words on either side of each occurrence. Click either side to read the full topic sentences.</p>
             <p>{{ rows|length }} occurrences in {{ article_count }} articles on this page · {{ 'Unread only' if user_settings.get('only_unread') else 'Read and unread' }}</p>
             <a href="/tag-explorer/{{ tag|url_encode|replace('+', '%20') }}">Explore topics and context</a>
         </header>
         <div class="tag-concordance__head" aria-hidden="true"><span>Before</span><span>Tag &amp; article</span><span>After</span></div>
         <section aria-label="Tag occurrences">
         {% for row in rows %}
-            <article class="tag-concordance__row" aria-label="Occurrence {{ loop.index }}">
-                <div class="tag-concordance__before">{{ row.before|e }}</div>
+            <article class="tag-concordance__row{% if row.read %} is-read{% endif %}" aria-label="Occurrence {{ loop.index }}" data-post-id="{{ row.pid|e }}" data-sentence-number="{{ row.number if row.number is not none else '' }}">
+                <button type="button" class="tag-concordance__context tag-concordance__before" data-detail-key="{{ row.detail_key|e }}" aria-haspopup="dialog" aria-controls="concordance-dialog">{{ row.before|e or 'Read full sentences' }}</button>
                 <div class="tag-concordance__center">
                     <strong class="tag-concordance__tag">{{ row.match|e }}</strong>
                     <a class="tag-concordance__title" href="{{ row.url|e }}" title="{{ row.title|e }}">{{ row.title|e }}</a>
@@ -32,8 +32,11 @@
                         <ul>{% for topic in row.topics %}<li>{{ topic|e }}</li>{% endfor %}</ul>
                     </details>
                     {% else %}<span>No sentence topic available</span>{% endif %}
+                    {% if row.number is not none %}
+                    <button type="button" class="tag-concordance__read" data-post-id="{{ row.pid|e }}" data-sentence-number="{{ row.number }}" data-read="{{ '1' if row.read else '0' }}">{{ 'Mark Unread' if row.read else 'Mark Read' }}</button>
+                    {% endif %}
                 </div>
-                <div class="tag-concordance__after">{{ row.after|e }}</div>
+                <button type="button" class="tag-concordance__context tag-concordance__after" data-detail-key="{{ row.detail_key|e }}" aria-haspopup="dialog" aria-controls="concordance-dialog">{{ row.after|e or 'Read full sentences' }}</button>
             </article>
         {% else %}
             <p class="tag-concordance__empty">No matching sentences on this page.{% if has_more %} Continue to the next page of articles.{% endif %}</p>
@@ -45,5 +48,15 @@
             {% if has_more %}<a href="?page={{ page_number + 1 }}">Next</a>{% endif %}
         </nav>
     </main>
+    <dialog id="concordance-dialog" class="tag-concordance__dialog" aria-labelledby="concordance-dialog-title">
+        <button type="button" class="tag-concordance__close" aria-label="Close sentence dialog">Close</button>
+        <h2 id="concordance-dialog-title">Topic sentences</h2>
+        <a class="tag-concordance__article"></a>
+        <div class="tag-concordance__sentences"></div>
+        <p class="tag-concordance__status" role="status" aria-live="polite"></p>
+    </dialog>
+    <p class="tag-concordance__status tag-concordance__page-status" role="status" aria-live="polite"></p>
+    <script id="concordance-details" type="application/json">{{ (details|default({}))|tojson }}</script>
+    <script type="module" src="/static/js/tag-concordance.js"></script>
 </body>
 </html>
