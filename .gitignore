@@ -18,7 +18,6 @@ bundle.js
 bundle.js.LICENSE.txt
 .ipynb_checkpoints
 .vscode
-static/css/style.css
 
 # Backend quality artifacts
 htmlcov/

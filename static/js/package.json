@@ -9,14 +9,8 @@
     "sunburst-chart": "^1.19.2"
   },
   "devDependencies": {
-    "@babel/cli": "^7.26.5",
-    "@babel/core": "^7.29.6",
-    "@babel/preset-env": "^7.26.0",
-    "@babel/preset-react": "^7.26.3",
     "@stryker-mutator/core": "^9.6.1",
-    "babel-loader": "^9.2.1",
     "c8": "^10.0.0",
-    "core-js": "^3.39.0",
     "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react": "^7.37.5",
@@ -25,23 +19,19 @@
     "prettier": "^3.7.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "sass": "^1.82.0",
-    "vitest": "^4.1.10",
-    "webpack": "^5.97.1",
-    "webpack-cli": "^5.1.4",
-    "webpack-dev-server": "^6.0.0"
+    "vite": "^8.1.5",
+    "vitest": "^4.1.10"
   },
   "scripts": {
-    "build": "NODE_ENV=production webpack --config webpack.config.cjs --mode production",
-    "build:dev": "webpack --config webpack.config.cjs --mode development",
-    "watch": "webpack --config webpack.config.cjs --mode development --watch",
-    "dev": "webpack serve --config webpack.dev.config.cjs --mode development --open",
+    "build": "vite build --mode production",
+    "build:dev": "vite build --mode development",
+    "watch": "vite build --mode development --watch",
     "clean": "rm -f bundle.js bundle.js.map",
-    "lint": "eslint components/context-filter-bar.js components/post-item.js storages/context-filter-storage.js storages/posts-storage.js libs/rsstag_utils.js libs/source-grouping.js topics-list.js provider-feeds.js tag-feeds.js post-grouped-snippets.js webpack.config.cjs webpack.dev.config.cjs eslint.config.cjs vitest.config.cjs test/**/*.js --max-warnings=0",
-    "lint:all": "eslint \"**/*.{js,jsx,cjs}\"",
+    "lint": "eslint components/context-filter-bar.js components/post-item.js storages/context-filter-storage.js storages/posts-storage.js libs/rsstag_utils.js libs/source-grouping.js topics-list.js provider-feeds.js tag-feeds.js post-grouped-snippets.js vite.config.mjs eslint.config.cjs vitest.config.cjs test/**/*.js --max-warnings=0",
+    "lint:all": "eslint \"**/*.{js,jsx,cjs,mjs}\"",
     "lint:fix": "npm run lint -- --fix",
-    "format": "prettier --write \"{apps,components,storages,libs}/**/*.{js,jsx}\" \"*.{js,json,md,cjs}\" \"test/**/*.js\" \"../css/style.scss\"",
-    "format:check": "prettier --check \"{apps,components,storages,libs}/**/*.{js,jsx}\" \"*.{js,json,md,cjs}\" \"test/**/*.js\" \"../css/style.scss\"",
+    "format": "prettier --write \"{apps,components,storages,libs}/**/*.{js,jsx}\" \"*.{js,json,md,cjs,mjs}\" \"test/**/*.js\" \"../css/style.css\"",
+    "format:check": "prettier --check \"{apps,components,storages,libs}/**/*.{js,jsx}\" \"*.{js,json,md,cjs,mjs}\" \"test/**/*.js\" \"../css/style.css\"",
     "test": "sh -c 'node --loader ./test/es-module-loader.mjs --test $(grep -rL \"from '\\''vitest'\\''\" ./test --include=\"*.test.js\" --include=\"*.spec.js\" | sort)'",
     "test:watch": "sh -c 'node --loader ./test/es-module-loader.mjs --test --watch $(grep -rL \"from '\\''vitest'\\''\" ./test --include=\"*.test.js\" --include=\"*.spec.js\" | sort)'",
     "test:dom": "vitest run --config vitest.config.cjs",
@@ -54,7 +44,7 @@
   "author": "",
   "license": "ISC",
   "engines": {
-    "node": ">=18.0.0",
+    "node": "^20.19.0 || >=22.12.0",
     "npm": ">=9.0.0"
   }
 }

@@ -12,7 +12,7 @@ RUN cd static/js && npm install
 COPY static/js/ ./static/js/
 COPY static/css/ ./static/css/
 
-# Build assets (compiles SCSS to CSS and runs Webpack)
+# Build assets (runs Webpack)
 RUN cd static/js && npm run build
 
 # Stage 2: Final application image
@@ -39,8 +39,6 @@ COPY . /rsstag
 # This ensures we have the latest built versions and overwrites any existing ones
 COPY --from=builder /app/static/js/bundle.js /rsstag/static/js/
 COPY --from=builder /app/static/js/bundle.js.map /rsstag/static/js/
-COPY --from=builder /app/static/css/style.css /rsstag/static/css/
-COPY --from=builder /app/static/css/style.css.map /rsstag/static/css/
 
 EXPOSE 8885
 CMD python3 worker.py & python3 web.py

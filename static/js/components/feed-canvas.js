@@ -7,7 +7,7 @@ import { TopicTagsDialog } from './topic-tags.js';
 const CANVAS_OFFSET_EVENT = 'canvas:offsetchange';
 
 /* Topic card width, gap, rail padding and base font size live in
-   static/css/style.scss, which derives them from the zoom scalars set by
+   static/css/style.css, which derives them from the zoom scalars set by
    FeedCanvas#applyTransform. */
 const MIN_SCALE = 0.15;
 const MAX_SCALE = 1.8;

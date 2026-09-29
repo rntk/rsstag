@@ -23,9 +23,6 @@ npm run build:dev
 
 # Development with auto-rebuild on file changes
 npm run watch
-
-# Development with live reload server (port 8886)
-npm run dev
 ```
 
 **Note:** This project uses Node.js 22. Use `nvm use` to switch to the correct version if you have nvm installed.

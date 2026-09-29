@@ -4,9 +4,8 @@
 
 The rsstag frontend is built using:
 - **React 18** - UI component library
-- **Webpack 5** - Module bundler
-- **Babel** - JavaScript transpiler
-- **SASS** - CSS preprocessor
+- **Vite 8** - Bundler (library-mode IIFE build, output `bundle.js`)
+- **Native CSS** - plain modern CSS (nesting, custom properties) in `static/css/style.css`, served as-is with no build step
 - **D3.js** - Data visualization
 
 ## Project Structure
@@ -18,8 +17,7 @@ static/js/
 ├── storages/       # Data management modules
 ├── libs/           # Utility libraries
 ├── test/           # Unit and integration tests
-├── webpack.config.cjs      # Production webpack configuration
-├── webpack.dev.config.cjs  # Development server configuration
+├── vite.config.mjs         # Vite build configuration
 ├── eslint.config.cjs       # ESLint configuration
 ├── vitest.config.cjs       # Vitest configuration (optional)
 ├── package.json            # Dependencies and scripts
@@ -30,26 +28,21 @@ static/js/
 ## Build System Features
 
 ### Modern Configuration
-- ✅ Webpack 5 with proper mode configuration (dev/production)
+- ✅ Vite with proper mode configuration (dev/production)
 - ✅ React 18 with latest optimizations
-- ✅ Babel with modern preset-env targeting
-- ✅ Automatic SASS compilation with error handling
+- ✅ Modern browser targeting (Vite default `baseline-widely-available`)
 - ✅ Source maps for both development and production
-- ✅ Build performance optimizations (caching, code splitting ready)
 - ✅ Zero security vulnerabilities in dependencies
 - ✅ ES Module support with Node.js 22
 
 ### Development Workflow
-- Hot Module Replacement (HMR) support via webpack-dev-server
-- Watch mode for continuous rebuilding
-- Fast development builds with eval-source-map
-- Proxy support for backend API during development
+- Watch mode for continuous rebuilding (`npm run watch`)
+- Fast development builds with full source maps
 
 ### Production Optimizations
 - Automatic code minification and tree-shaking
 - Proper source maps for debugging
-- Bundle size warnings and optimization hints
-- Modern browser targeting with polyfills only where needed
+- Bundle size warnings
 
 ## NPM Scripts
 
@@ -58,7 +51,6 @@ static/js/
 | `npm run build` | Production build with minification and source maps |
 | `npm run build:dev` | Development build with full source maps |
 | `npm run watch` | Development build with auto-rebuild on file changes |
-| `npm run dev` | Start webpack-dev-server with hot reload (port 8886) |
 | `npm run clean` | Remove generated bundle files |
 | `npm run lint` | Run ESLint on JS/JSX sources |
 | `npm run lint:fix` | Run ESLint with auto-fixes |
@@ -92,16 +84,6 @@ Automatically rebuild when source files change:
 ```bash
 npm run watch
 ```
-
-### Development Server
-
-Run a development server with hot module replacement:
-
-```bash
-npm run dev
-```
-
-Then open `http://localhost:8886` in your browser. The dev server proxies API requests to the main backend on port 8885.
 
 ### Docker Build
 
@@ -198,8 +180,6 @@ docker run --rm -v "$PWD":/workspace rsstag-js-lint npm run format
 The build process generates:
 - `bundle.js` - Main application bundle
 - `bundle.js.map` - Source map for debugging
-- `bundle.js.LICENSE.txt` - Third-party license information
-- `../css/style.css` - Compiled CSS from SASS
 
 ## Dependencies
 
@@ -208,16 +188,8 @@ The build process generates:
 - **sunburst-chart** - Hierarchical data visualization
 
 ### Development Dependencies
-- **@babel/core** - JavaScript transpiler core
-- **@babel/preset-env** - Smart preset for modern JavaScript
-- **@babel/preset-react** - JSX and React transformation
-- **babel-loader** - Webpack loader for Babel
-- **core-js** - Polyfills for modern JavaScript features
+- **vite** - Bundler and build tool
 - **react** & **react-dom** - UI library
-- **sass** - CSS preprocessor
-- **webpack** - Module bundler
-- **webpack-cli** - Command line interface for webpack
-- **webpack-dev-server** - Development server with live reload
 
 ## Upgrading Dependencies
 
@@ -241,12 +213,6 @@ npm audit
 
 ## Troubleshooting
 
-### SASS Compilation Errors
-
-If SASS compilation fails, the build will continue but warn you. Check that:
-- `../css/style.scss` exists
-- The SCSS syntax is valid
-
 ### Module Not Found Errors
 
 If you get module resolution errors:
@@ -258,7 +224,6 @@ If you get module resolution errors:
 For faster builds:
 - Use `npm run build:dev` instead of `npm run build` during development
 - Use `npm run watch` to avoid repeated build startups
-- Ensure you have enough RAM (webpack can be memory-intensive)
 
 ### Docker Build Issues
 
@@ -268,7 +233,7 @@ If the Docker build fails:
 
 ## Node.js Version
 
-This project requires Node.js 18 or higher (Node.js 22 recommended).
+This project requires Node.js 20.19 or higher (Node.js 22 recommended), as required by Vite 8.
 
 Use `.nvmrc` to automatically switch to the correct version:
 
@@ -279,16 +244,10 @@ nvm use
 ## Recent Improvements (2026)
 
 - ⬆️ Upgraded React from 17 to 18
-- ⬆️ Upgraded Babel dependencies to latest versions
-- ⬆️ Upgraded webpack-cli from 4 to 5
-- ➕ Added webpack-dev-server for better DX
-- ➕ Added core-js for optimized polyfills
+- 🔁 Migrated bundling from Webpack + Babel to Vite
 - ➕ Added Node.js built-in test runner for frontend
 - ➕ Added ES Module support via `"type": "module"`
-- 🐛 Fixed SASS compilation path (was using absolute `/css/` path)
-- 🐛 Fixed webpack mode configuration
 - 🔒 Fixed all npm security vulnerabilities (4 → 0)
-- ⚡ Improved build performance with caching
 - 📝 Added proper npm scripts for common tasks
 - 📝 Added comprehensive documentation
 - 🎯 Improved source map configuration for better debugging

@@ -52,15 +52,18 @@ module.exports = [
   },
   js.configs.recommended,
   {
-    files: [
-      'webpack.config.cjs',
-      'webpack.dev.config.cjs',
-      'eslint.config.cjs',
-      'vitest.config.cjs',
-    ],
+    files: ['eslint.config.cjs', 'vitest.config.cjs'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'commonjs',
+      globals: nodeGlobals,
+    },
+  },
+  {
+    files: ['vite.config.mjs'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
       globals: nodeGlobals,
     },
   },
