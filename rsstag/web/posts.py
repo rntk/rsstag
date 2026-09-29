@@ -1646,6 +1646,61 @@ def on_hierarchy_get(
     )
 
 
+def _change_posts_status(
+    app: "RSSTagApplication", user: dict, post_ids: list, readed: bool
+) -> tuple[dict, int]:
+    """Mark posts read/unread and update derived counters. Returns (body, code)."""
+    tags: dict[str, int] = defaultdict(int)
+    bi_grams: dict[str, int] = defaultdict(int)
+    letters: dict[str, int] = defaultdict(int)
+    for_insert: list[dict] = []
+    db_posts = app.posts.get_by_pids(
+        user["sid"],
+        post_ids,
+        {"id": True, "tags": True, "bi_grams": True, "read": True, "provider": True},
+    )
+    for d in db_posts:
+        if d["read"] != readed:
+            for_insert.append(
+                {
+                    "user": user["sid"],
+                    "id": d["id"],
+                    "status": readed,
+                    "processing": TASK_NOT_IN_PROCESSING,
+                    "type": TASK_MARK,
+                    "provider": d.get("provider") or user.get("provider", ""),
+                }
+            )
+            for t in d["tags"]:
+                tags[t] += 1
+                if not t:
+                    continue
+                letters[t[0]] += 1
+            for bi_g in d["bi_grams"]:
+                bi_grams[bi_g] += 1
+
+    if not app.tasks.add_task(
+        {"type": TASK_MARK, "user": user["sid"], "data": for_insert}
+    ):
+        return {"error": "Database error"}, 500
+
+    changed = app.posts.change_status(user["sid"], post_ids, readed)
+    if changed and tags:
+        changed = app.tags.change_unread(user["sid"], tags, readed)
+    if changed and bi_grams:
+        changed = app.bi_grams.change_unread(user["sid"], bi_grams, readed)
+    if changed and letters:
+        app.letters.change_unread(user["sid"], letters, readed)
+        changed = True
+    if not changed:
+        return {"error": "Database error"}, 500
+
+    for pid in post_ids:
+        app.post_grouping.mark_sequences_read(user["sid"], pid, readed)
+
+    return {"data": "ok"}, 200
+
+
 def on_read_posts_post(
     app: "RSSTagApplication", user: dict, request: Request
 ) -> Response:
@@ -1658,61 +1713,95 @@ def on_read_posts_post(
         readed = bool(data["readed"])
     except Exception as e:
         logging.warning("Send wrond data for read posts. Cause: %s", e)
-        post_ids = None
-        result = {"error": "Bad ids or status"}
-        code = 400
-
-    if post_ids:
-        tags = defaultdict(int)
-        bi_grams = defaultdict(int)
-        letters = defaultdict(int)
-        for_insert = []
-        db_posts = app.posts.get_by_pids(
-            user["sid"],
-            post_ids,
-            {"id": True, "tags": True, "bi_grams": True, "read": True, "provider": True},
+        return Response(
+            json.dumps({"error": "Bad ids or status"}),
+            mimetype="application/json",
+            status=400,
         )
-        for d in db_posts:
-            if d["read"] != readed:
-                for_insert.append(
-                    {
-                        "user": user["sid"],
-                        "id": d["id"],
-                        "status": readed,
-                        "processing": TASK_NOT_IN_PROCESSING,
-                        "type": TASK_MARK,
-                        "provider": d.get("provider") or user.get("provider", ""),
-                    }
-                )
-                for t in d["tags"]:
-                    tags[t] += 1
-                    if not t:
-                        continue
-                    letters[t[0]] += 1
-                for bi_g in d["bi_grams"]:
-                    bi_grams[bi_g] += 1
 
-        if app.tasks.add_task(
-            {"type": TASK_MARK, "user": user["sid"], "data": for_insert}
-        ):
-            changed = app.posts.change_status(user["sid"], post_ids, readed)
-            if changed and tags:
-                changed = app.tags.change_unread(user["sid"], tags, readed)
-            if changed and bi_grams:
-                changed = app.bi_grams.change_unread(user["sid"], bi_grams, readed)
-            if changed and letters:
-                app.letters.change_unread(user["sid"], letters, readed)
-                changed = True
-            if changed:
-                for pid in post_ids:
-                    app.post_grouping.mark_sequences_read(user["sid"], pid, readed)
-                code = 200
-                result = {"data": "ok"}
-            else:
-                code = 500
-                result = {"error": "Database error"}
+    result, code = _change_posts_status(app, user, post_ids, readed)
 
     return Response(json.dumps(result), mimetype="application/json", status=code)
+
+
+READ_CATEGORY_CHUNK_SIZE: int = 1000
+
+
+def _chunks(items: list, size: int) -> Iterator[list]:
+    for i in range(0, len(items), size):
+        yield items[i : i + size]
+
+
+def _parse_read_scope(request: Request, key: str) -> tuple[str, bool]:
+    """Read `key` (a non-empty id) and `readed` from a JSON request body."""
+    data = json.loads(request.get_data(as_text=True))
+    scope_id: str = str(data[key])
+    if not scope_id:
+        raise ValueError("Empty %s" % key)
+
+    return scope_id, bool(data["readed"])
+
+
+def _change_scope_status(
+    app: "RSSTagApplication", user: dict, db_posts: Iterable[dict], readed: bool
+) -> Response:
+    """Mark the given posts read/unread chunk by chunk and build the response."""
+    post_ids: list = [post["pid"] for post in db_posts]
+    for chunk in _chunks(post_ids, READ_CATEGORY_CHUNK_SIZE):
+        result, code = _change_posts_status(app, user, chunk, readed)
+        if code != 200:
+            logging.error("Can't change status for %s posts", len(chunk))
+            return Response(
+                json.dumps(result), mimetype="application/json", status=code
+            )
+
+    return Response(
+        json.dumps({"data": "ok", "changed": len(post_ids)}),
+        mimetype="application/json",
+    )
+
+
+def _bad_read_scope_response(error: Exception, what: str) -> Response:
+    logging.warning("Bad data for read %s. Cause: %s", what, error)
+
+    return Response(
+        json.dumps({"error": "Bad %s or status" % what}),
+        mimetype="application/json",
+        status=400,
+    )
+
+
+def on_read_category_post(
+    app: "RSSTagApplication", user: dict, request: Request
+) -> Response:
+    """Mark every post of one category read or unread."""
+    try:
+        category_id, readed = _parse_read_scope(request, "category_id")
+    except Exception as e:
+        return _bad_read_scope_response(e, "category")
+
+    # Only posts in the opposite state need to change.
+    db_posts = app.posts.get_by_category(
+        user["sid"], only_unread=readed, category=category_id, projection={"pid": True}
+    )
+
+    return _change_scope_status(app, user, db_posts, readed)
+
+
+def on_read_feed_post(
+    app: "RSSTagApplication", user: dict, request: Request
+) -> Response:
+    """Mark every post of one feed read or unread."""
+    try:
+        feed_id, readed = _parse_read_scope(request, "feed_id")
+    except Exception as e:
+        return _bad_read_scope_response(e, "feed")
+
+    db_posts = app.posts.get_by_feed_id(
+        user["sid"], feed_id, only_unread=readed, projection={"pid": True}
+    )
+
+    return _change_scope_status(app, user, db_posts, readed)
 
 
 def on_mark_telegram_posts_post(

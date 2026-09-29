@@ -124,6 +124,22 @@ class TestRssTagPosts(unittest.TestCase):
         self.assertEqual(f1_stat["count"], 2)
         self.assertEqual(f1_stat["category_id"], "c1")
 
+    def test_get_grouped_read_stat(self) -> None:
+        posts: list[dict] = [
+            {"owner": self.owner, "feed_id": "f1", "category_id": "c1", "read": False},
+            {"owner": self.owner, "feed_id": "f1", "category_id": "c1", "read": True},
+            {"owner": self.owner, "feed_id": "f1", "category_id": "c1", "read": True},
+            {"owner": self.owner, "feed_id": "f2", "category_id": "c2", "read": False},
+        ]
+        self.db_helper.init_db_from_dict(self.db, {"posts": posts})
+
+        results: list[dict] = list(self.posts.get_grouped_read_stat(self.owner))
+
+        by_feed: dict[str, dict] = {r["_id"]: r for r in results}
+        self.assertEqual((by_feed["f1"]["read"], by_feed["f1"]["unread"]), (2, 1))
+        self.assertEqual((by_feed["f2"]["read"], by_feed["f2"]["unread"]), (0, 1))
+        self.assertEqual(by_feed["f1"]["category_id"], "c1")
+
     def test_get_by_tags(self):
         data = {
             "posts": [

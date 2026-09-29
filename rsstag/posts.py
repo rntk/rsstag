@@ -80,6 +80,22 @@ class RssTagPosts:
             ]
         )
 
+    def get_grouped_read_stat(self, owner: str) -> Iterator[dict]:
+        """Per-feed counts of read and unread posts, regardless of user filters."""
+        return self._db.posts.aggregate(
+            [
+                {"$match": {"owner": owner}},
+                {
+                    "$group": {
+                        "_id": "$feed_id",
+                        "category_id": {"$first": "$category_id"},
+                        "read": {"$sum": {"$cond": [{"$eq": ["$read", True]}, 1, 0]}},
+                        "unread": {"$sum": {"$cond": [{"$eq": ["$read", True]}, 0, 1]}},
+                    }
+                },
+            ]
+        )
+
     def get_by_tags(
         self,
         owner: str,

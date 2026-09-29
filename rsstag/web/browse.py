@@ -2,7 +2,7 @@ import gzip
 import json
 import re
 from collections import OrderedDict, defaultdict
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 from urllib.parse import urlencode
 
 from rsstag.html_cleaner import HTMLCleaner
@@ -56,6 +56,11 @@ def _build_available_sources(
     return sources
 
 
+def _shown_count(stat: dict, only_unread: Optional[bool]) -> int:
+    """Posts a feed contributes to the list under the user's only_unread setting."""
+    return stat["unread"] if only_unread else stat["read"] + stat["unread"]
+
+
 def on_group_by_category_get(app: "RSSTagApplication", user: dict, request: Request) -> Response:
     page_number = 1
     by_feed = {}
@@ -74,11 +79,13 @@ def on_group_by_category_get(app: "RSSTagApplication", user: dict, request: Requ
     else:
         only_unread = None
 
-    grouped = app.posts.get_grouped_stat(user["sid"], only_unread)
+    grouped = app.posts.get_grouped_read_stat(user["sid"])
     feeds_quality = app.quality.get_feeds_quality(user["sid"])
     by_category = {
         app.feeds.all_feeds: {
             "unread_count": 0,
+            "read_posts": 0,
+            "unread_posts": 0,
             "title": app.feeds.all_feeds,
             "url": app.routes.get_url_by_endpoint(
                 endpoint="on_category_get",
@@ -90,11 +97,14 @@ def on_group_by_category_get(app: "RSSTagApplication", user: dict, request: Requ
         }
     }
     for g in grouped:
+        g["count"] = _shown_count(g, only_unread)
         if g["count"] > 0:
             if g["category_id"] not in by_category:
                 category_query: str = urlencode({"category": g["category_id"]})
                 by_category[g["category_id"]] = {
                     "unread_count": 0,
+                    "read_posts": 0,
+                    "unread_posts": 0,
                     "category_id": g["category_id"],
                     "title": by_feed[g["_id"]]["category_title"],
                     "url": by_feed[g["_id"]]["category_local_url"],
@@ -102,11 +112,15 @@ def on_group_by_category_get(app: "RSSTagApplication", user: dict, request: Requ
                     "hierarchy_url": f"{hierarchy_url}?{category_query}",
                     "feeds": [],
                 }
-            by_category[g["category_id"]]["unread_count"] += g["count"]
-            by_category[app.feeds.all_feeds]["unread_count"] += g["count"]
+            for key in (g["category_id"], app.feeds.all_feeds):
+                by_category[key]["unread_count"] += g["count"]
+                by_category[key]["read_posts"] += g["read"]
+                by_category[key]["unread_posts"] += g["unread"]
             by_category[g["category_id"]]["feeds"].append(
                 {
                     "unread_count": g["count"],
+                    "read_posts": g["read"],
+                    "unread_posts": g["unread"],
                     "feed_id": g["_id"],
                     "url": by_feed[g["_id"]]["local_url"],
                     "title": by_feed[g["_id"]]["title"],

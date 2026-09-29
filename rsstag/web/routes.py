@@ -188,6 +188,16 @@ class RSSTagRoutes:
                 "methods": ["POST"],
             },
             {
+                "url": "/read/category",
+                "endpoint": "on_read_category_post",
+                "methods": ["POST"],
+            },
+            {
+                "url": "/read/feed",
+                "endpoint": "on_read_feed_post",
+                "methods": ["POST"],
+            },
+            {
                 "url": "/posts-content",
                 "endpoint": "on_posts_content_post",
                 "methods": ["POST"],

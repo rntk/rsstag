@@ -356,3 +356,10 @@ test('source uses window.initial_cats_list', () => {
   const src = readSource();
   assert.ok(/window\.initial_cats_list/.test(src), 'should reference window.initial_cats_list');
 });
+
+test('renders read/unread stats for feeds and categories', () => {
+  const src = readSource();
+  assert.ok(/feedReadStats\(/.test(src), 'should compute feed read stats');
+  assert.ok(/categoryReadStats\(/.test(src), 'should compute category read stats');
+  assert.ok(/className="read-stats"/.test(src), 'should render read-stats element');
+});

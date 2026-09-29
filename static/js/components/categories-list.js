@@ -20,6 +20,9 @@ export default class CategoriesList extends React.Component {
       sourcesExpanded: false,
       groupBy: 'provider',
       expandedGroups: {},
+      readCategories: {},
+      readFeeds: {},
+      busy: {},
     };
   }
 
@@ -78,6 +81,142 @@ export default class CategoriesList extends React.Component {
         button.disabled = false;
         alert('Error: ' + err);
       });
+  }
+
+  isCategoryRead(cat) {
+    return Boolean(this.state.readCategories[cat.category_id]);
+  }
+
+  // A feed follows its category until it is toggled on its own.
+  feedOverride(feed, cat) {
+    const flag = this.state.readFeeds[feed.feed_id];
+
+    if (flag !== undefined) {
+      return flag;
+    }
+
+    return cat && cat.category_id ? this.state.readCategories[cat.category_id] : undefined;
+  }
+
+  isFeedRead(feed, cat) {
+    return Boolean(this.feedOverride(feed, cat));
+  }
+
+  feedCount(feed, cat) {
+    return this.isFeedRead(feed, cat) ? 0 : feed.unread_count;
+  }
+
+  // Read/unread post totals of a feed, following any pending read/unread toggle.
+  feedReadStats(feed, cat) {
+    const override = this.feedOverride(feed, cat);
+    const total = (feed.read_posts || 0) + (feed.unread_posts || 0);
+
+    if (override === undefined) {
+      return { read: feed.read_posts || 0, unread: feed.unread_posts || 0 };
+    }
+
+    return override ? { read: total, unread: 0 } : { read: 0, unread: total };
+  }
+
+  categoryCount(cat, feeds, count) {
+    if (!cat.category_id || !feeds.length) {
+      return count;
+    }
+
+    return feeds.reduce((sum, feed) => sum + this.feedCount(feed, cat), 0);
+  }
+
+  categoryReadStats(cat, feeds) {
+    if (!cat.category_id || !feeds.length) {
+      return { read: cat.read_posts || 0, unread: cat.unread_posts || 0 };
+    }
+
+    return feeds.reduce(
+      (sum, feed) => {
+        const stats = this.feedReadStats(feed, cat);
+
+        return { read: sum.read + stats.read, unread: sum.unread + stats.unread };
+      },
+      { read: 0, unread: 0 }
+    );
+  }
+
+  renderReadStats(stats) {
+    return (
+      <span className="read-stats" title="unread / read posts">
+        {stats.unread} unread · {stats.read} read
+      </span>
+    );
+  }
+
+  setFlag(field, key, value) {
+    const flags = Object.assign({}, this.state[field]);
+
+    flags[key] = value;
+    this.setState({ [field]: flags });
+  }
+
+  // Sends one read/unread request for a category or a feed and reports the
+  // result to onDone; busy state and error alerts are shared by both scopes.
+  postReadStatus(url, payload, busyKey, onDone) {
+    this.setFlag('busy', busyKey, true);
+    fetch(url, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      headers: { 'Content-Type': 'application/json' },
+    })
+      .then((response) => response.json().then((data) => ({ ok: response.ok, data: data })))
+      .then((result) => {
+        this.setFlag('busy', busyKey, false);
+        if (!result.ok) {
+          alert('Error: ' + (result.data.error || 'Can not change read status'));
+        } else {
+          onDone();
+        }
+      })
+      .catch((err) => {
+        this.setFlag('busy', busyKey, false);
+        alert('Error: ' + err);
+      });
+  }
+
+  toggleCategoryRead(cat, event) {
+    event.stopPropagation();
+    const busyKey = 'category::' + cat.category_id;
+    const readed = !this.isCategoryRead(cat);
+
+    if (this.state.busy[busyKey]) {
+      return;
+    }
+    this.postReadStatus(
+      '/read/category',
+      { category_id: cat.category_id, readed: readed },
+      busyKey,
+      () => {
+        const readFeeds = Object.assign({}, this.state.readFeeds);
+
+        (cat.feeds || []).forEach((feed) => delete readFeeds[feed.feed_id]);
+        this.setState({
+          readFeeds: readFeeds,
+          readCategories: Object.assign({}, this.state.readCategories, {
+            [cat.category_id]: readed,
+          }),
+        });
+      }
+    );
+  }
+
+  toggleFeedRead(feed, cat, event) {
+    event.stopPropagation();
+    const busyKey = 'feed::' + feed.feed_id;
+    const readed = !this.isFeedRead(feed, cat);
+
+    if (this.state.busy[busyKey]) {
+      return;
+    }
+    this.postReadStatus('/read/feed', { feed_id: feed.feed_id, readed: readed }, busyKey, () =>
+      this.setFlag('readFeeds', feed.feed_id, readed)
+    );
   }
 
   refreshFeed(feed, event) {
@@ -319,7 +458,7 @@ export default class CategoriesList extends React.Component {
     return this.renderCategoriesTree();
   }
 
-  renderFeedItem(feed, key) {
+  renderFeedItem(feed, key, cat) {
     return (
       <li
         key={key}
@@ -337,7 +476,8 @@ export default class CategoriesList extends React.Component {
           {feed.title}
         </a>
         {this.renderQuality(feed.quality)}
-        <span className="category-count">{feed.unread_count}</span>
+        <span className="category-count">{this.feedCount(feed, cat)}</span>
+        {this.renderReadStats(this.feedReadStats(feed, cat))}
         <div className="feed-actions" aria-label={`${feed.title} views`}>
           <a className="feed-action-link" href={feed.hierarchy_url}>
             Hierarchy
@@ -350,6 +490,13 @@ export default class CategoriesList extends React.Component {
             onClick={this.scanQuality.bind(this, { feed_ids: [feed.feed_id] })}
           >
             Score
+          </button>
+          <button
+            className="feed-action-link category-read-btn"
+            disabled={Boolean(this.state.busy['feed::' + feed.feed_id])}
+            onClick={this.toggleFeedRead.bind(this, feed, cat)}
+          >
+            {this.isFeedRead(feed, cat) ? 'unread all' : 'read all'}
           </button>
           {feed.provider === 'telegram' ? (
             <button
@@ -400,7 +547,8 @@ export default class CategoriesList extends React.Component {
             {cat.title}
           </a>
           {this.renderQuality(cat.quality)}
-          <span className="category-count">{options.unread_count}</span>
+          <span className="category-count">{this.categoryCount(cat, feeds, options.unread_count)}</span>
+          {this.renderReadStats(this.categoryReadStats(cat, feeds))}
           <div className="category-actions" aria-label={`${cat.title} views`}>
             <a className="category-action-link" href={cat.hierarchy_url}>
               Hierarchy
@@ -420,10 +568,21 @@ export default class CategoriesList extends React.Component {
             ) : (
               ''
             )}
+            {cat.category_id ? (
+              <button
+                className="category-action-link category-read-btn"
+                disabled={Boolean(this.state.busy['category::' + cat.category_id])}
+                onClick={this.toggleCategoryRead.bind(this, cat)}
+              >
+                {this.isCategoryRead(cat) ? 'unread all' : 'read all'}
+              </button>
+            ) : (
+              ''
+            )}
           </div>
         </div>
         <ul className={'feeds ' + (expanded ? 'not_hidden' : 'hidden')}>
-          {feeds.map((feed, i) => this.renderFeedItem(feed, options.key + '::' + i))}
+          {feeds.map((feed, i) => this.renderFeedItem(feed, options.key + '::' + i, cat))}
         </ul>
       </li>
     );
