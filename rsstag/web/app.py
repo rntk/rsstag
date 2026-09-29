@@ -541,6 +541,15 @@ class RSSTagApplication(object):
     def on_tag_tfidf_get(self, user: dict, _: Request, tag: str) -> Response:
         return tags_handlers.on_tag_tfidf_get(self, user, tag)
 
+    def on_tag_ba_surprise_get(self, user: dict, rqst: Request, tag: str) -> Response:
+        return tags_handlers.on_tag_ba_surprise_get(self, user, tag, rqst)
+
+    def on_tag_rake_dyn_get(self, user: dict, _: Request, tag: str) -> Response:
+        return keywords_handlers.on_tag_rake_dyn_get(self, user, tag)
+
+    def on_tag_yake_dyn_get(self, user: dict, _: Request, tag: str) -> Response:
+        return keywords_handlers.on_tag_yake_dyn_get(self, user, tag)
+
     def on_tag_clusters_get(self, user: dict, _: Request, tag: str) -> Response:
         return tags_handlers.on_tag_clusters_get(self, user, tag)
 

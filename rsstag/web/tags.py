@@ -2060,10 +2060,120 @@ def on_group_by_tags_by_category_get(
     )
 
 
-def on_ba_surprise_get(app: "RSSTagApplication", user: dict, rqst: Request) -> Response:
-    """Bayesian Surprise page: find tags whose co-occurrence patterns shifted most."""
+def _collect_surprise_tag_lists(cursor: Any) -> list[list[str]]:
+    """Keep only posts with at least two tags (needed for surprise)."""
+    tag_lists: list[list[str]] = []
+    for post in cursor:
+        tags = post.get("tags", [])
+        if len(tags) >= 2:
+            tag_lists.append(tags)
+    return tag_lists
+
+
+def _build_surprise_tags(
+    app: "RSSTagApplication",
+    user: dict,
+    tag_lists: list[list[str]],
+    post_idx: int,
+    min_tags: int,
+    only_unread: Optional[bool],
+    exclude_tag: Optional[str] = None,
+    limit: int = 500,
+) -> list[dict]:
+    """Compute leave-one-out surprise and build tag dicts sorted by score."""
     from rsstag.surprise import LeaveOneOutSurprise
 
+    log = logging.getLogger("ba_surprise")
+    log.info("ba_surprise: post_idx=%d total_posts=%d", post_idx, len(tag_lists))
+    tag_scores = LeaveOneOutSurprise().compute(tag_lists, post_idx=post_idx)
+    log.info(
+        "ba_surprise: computed scores for %d tags, max=%.4f",
+        len(tag_scores),
+        max(tag_scores.values()) if tag_scores else 0,
+    )
+
+    tags_sorted = sorted(tag_scores.keys(), key=lambda t: tag_scores[t], reverse=True)
+    cursor = app.tags.get_by_tags(
+        user["sid"], tags_sorted, only_unread, projection={"_id": False}
+    )
+    db_tags = {t["tag"]: t for t in cursor}
+    log.info("ba_surprise: db_tags found=%d", len(db_tags))
+
+    all_tags: list[dict] = []
+    filtered_by_count = 0
+    for tag in tags_sorted:
+        if len(all_tags) >= limit:
+            break
+        if tag not in db_tags or tag == exclude_tag:
+            continue
+        tg = db_tags[tag]
+        count = tg["unread_count"] if only_unread else tg["posts_count"]
+        if count < min_tags:
+            filtered_by_count += 1
+            continue
+        all_tags.append({
+            "tag": tg["tag"],
+            "url": "/tag/" + quote(tg["tag"]),
+            "words": tg.get("words", []),
+            "count": count,
+            "sentiment": tg.get("sentiment", []),
+            "temp": round(tag_scores[tag], 4),
+            "freq": tg.get("freq", 0),
+        })
+
+    log.info(
+        "ba_surprise: final all_tags=%d, filtered_by_count=%d",
+        len(all_tags), filtered_by_count,
+    )
+    return all_tags
+
+
+def _parse_int_value(rqst: Optional[Request], name: str, default: int) -> int:
+    if rqst is None:
+        return default
+    try:
+        return int(rqst.values.get(name, default=default))
+    except (TypeError, ValueError):
+        return default
+
+
+def on_tag_ba_surprise_get(
+    app: "RSSTagApplication", user: dict, tag: str, rqst: Optional[Request] = None
+) -> Response:
+    """Bayesian Surprise restricted to posts containing tag (JSON)."""
+    log = logging.getLogger("ba_surprise")
+    if not tag or not tag.strip():
+        return Response(
+            json.dumps({"error": "Tag is required"}),
+            mimetype="application/json",
+            status=400,
+        )
+    try:
+        only_unread = user["settings"]["only_unread"] or None
+        cursor = app.posts.get_by_tags(
+            user["sid"], [tag], only_unread, projection={"_id": False, "tags": True}
+        )
+        all_tags = _build_surprise_tags(
+            app,
+            user,
+            _collect_surprise_tag_lists(cursor),
+            post_idx=_parse_int_value(rqst, "post_idx", -1),
+            min_tags=_parse_int_value(rqst, "min_tags", 3),
+            only_unread=only_unread,
+            exclude_tag=tag,
+        )
+        return Response(json.dumps({"data": all_tags}), mimetype="application/json")
+    except Exception as exc:
+        log.exception("tag_ba_surprise failed for tag %r: %s", tag, exc)
+        return Response(
+            json.dumps({"error": "Failed to compute surprise"}),
+            mimetype="application/json",
+            status=500,
+        )
+
+
+def on_ba_surprise_get(app: "RSSTagApplication", user: dict, rqst: Request) -> Response:
+    """Bayesian Surprise page: find tags whose co-occurrence patterns shifted most."""
     log = logging.getLogger("ba_surprise")
     tag_filter = rqst.values.get("tag", default=None)
     feed_filter = rqst.values.get("feed", default=None)
@@ -2099,56 +2209,10 @@ def on_ba_surprise_get(app: "RSSTagApplication", user: dict, rqst: Request) -> R
             projection=projection,
         )
 
-    tag_lists = []
-    for post in cursor:
-        tags = post.get("tags", [])
-        if len(tags) >= 2:
-            tag_lists.append(tags)
-
+    tag_lists = _collect_surprise_tag_lists(cursor)
     log.info("ba_surprise: fetched %d posts", len(tag_lists))
-
-    log.info("ba_surprise: post_idx=%d total_posts=%d", post_idx, len(tag_lists))
-    tag_scores = LeaveOneOutSurprise().compute(tag_lists, post_idx=post_idx)
-
-    log.info(
-        "ba_surprise: computed scores for %d tags, max=%.4f",
-        len(tag_scores),
-        max(tag_scores.values()) if tag_scores else 0,
-    )
-
-    tags_sorted = sorted(tag_scores.keys(), key=lambda t: tag_scores[t], reverse=True)
-
-    cursor = app.tags.get_by_tags(
-        user["sid"], tags_sorted, only_unread, projection={"_id": False}
-    )
-    db_tags = {t["tag"]: t for t in cursor}
-    log.info("ba_surprise: db_tags found=%d", len(db_tags))
-
-    all_tags = []
-    filtered_by_count = 0
-    for tag in tags_sorted:
-        if len(all_tags) >= 500:
-            break
-        if tag not in db_tags:
-            continue
-        tg = db_tags[tag]
-        count = tg["unread_count"] if only_unread else tg["posts_count"]
-        if count < min_tags:
-            filtered_by_count += 1
-            continue
-        all_tags.append({
-            "tag": tg["tag"],
-            "url": "/tag/" + quote(tg["tag"]),
-            "words": tg.get("words", []),
-            "count": count,
-            "sentiment": tg.get("sentiment", []),
-            "temp": round(tag_scores[tag], 4),
-            "freq": tg.get("freq", 0),
-        })
-
-    log.info(
-        "ba_surprise: final all_tags=%d, filtered_by_count=%d",
-        len(all_tags), filtered_by_count,
+    all_tags = _build_surprise_tags(
+        app, user, tag_lists, post_idx, min_tags, only_unread
     )
 
     db_letters = app.letters.get(user["sid"], make_sort=True)

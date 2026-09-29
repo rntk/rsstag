@@ -3,17 +3,10 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import TagsList from './tags-list.js';
 import rsstag_utils from '../libs/rsstag_utils.js';
+import { rankedComparator } from '../libs/tag-sort.js';
 
-function normalizedTags(data) {
-  data.sort((a, b) => {
-    const countDiff = (b.count || 0) - (a.count || 0);
-    if (countDiff !== 0) {
-      return countDiff;
-    }
-    const at = (a.tag || '').toString();
-    const bt = (b.tag || '').toString();
-    return at.localeCompare(bt, undefined, { numeric: true, sensitivity: 'base' });
-  });
+function normalizedTags(data, scoreKey) {
+  data.sort(rankedComparator(scoreKey));
 
   const tags = new Map();
   data.forEach((tag) => {
@@ -60,7 +53,7 @@ export default class TagToolWidget extends React.Component {
       })
       .then((data) => {
         if (data.data) {
-          const tags = normalizedTags(data.data);
+          const tags = normalizedTags(data.data, this.props.scoreKey);
           this.setState({ hidden: false, loading: false, tags });
           if (this.props.renderData) {
             const container = document.getElementById(this.props.listContainerId);
@@ -108,6 +101,8 @@ export default class TagToolWidget extends React.Component {
                 tags={this.state.tags}
                 is_bigram={this.props.is_bigram}
                 is_entities={this.props.is_entities}
+                scoreKey={this.props.scoreKey}
+                scoreLabel={this.props.scoreLabel}
               />,
               container
             )

@@ -1,8 +1,10 @@
 import gzip
+import json
+import logging
 import math
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Set
+from typing import TYPE_CHECKING, Callable, Dict, Iterable, List, Optional, Set
 from urllib.parse import quote
 
 from werkzeug.wrappers import Response
@@ -20,11 +22,17 @@ class KeywordItem:
     frequency: int
 
 
-def _load_lemmas_texts(app: "RSSTagApplication", user: dict) -> List[str]:
+def _load_lemmas_texts(
+    app: "RSSTagApplication", user: dict, tag: Optional[str] = None
+) -> List[str]:
+    """Load decompressed lemma texts, optionally only from posts containing tag."""
     only_unread: Optional[bool] = user["settings"]["only_unread"] or None
-    posts: Iterable[dict] = app.posts.get_all(
-        user["sid"], only_unread, projection={"lemmas": True}
-    )
+    projection: Dict[str, bool] = {"lemmas": True}
+    posts: Iterable[dict]
+    if tag:
+        posts = app.posts.get_by_tags(user["sid"], [tag], only_unread, projection)
+    else:
+        posts = app.posts.get_all(user["sid"], only_unread, projection=projection)
     texts: List[str] = []
     for post in posts:
         lemmas_data: Optional[bytes] = post.get("lemmas")
@@ -184,6 +192,27 @@ def _extract_yake_keywords(
     return ranked[:max_keywords]
 
 
+def _keyword_to_tag_dict(app: "RSSTagApplication", item: KeywordItem) -> dict:
+    return {
+        "tag": item.phrase,
+        "url": app.routes.get_url_by_endpoint(
+            endpoint="on_entity_get", params={"quoted_tag": quote(item.phrase)}
+        ),
+        "words": [item.phrase],
+        "count": round(item.score, 4),
+        "sentiment": [],
+    }
+
+
+def _keyword_to_scoped_dict(app: "RSSTagApplication", item: KeywordItem) -> dict:
+    """Tag-info JSON item: count/freq are occurrences, temp is the keyword score."""
+    data: dict = _keyword_to_tag_dict(app, item)
+    data["count"] = item.frequency
+    data["temp"] = round(item.score, 4)
+    data["freq"] = item.frequency
+    return data
+
+
 def _render_keywords_page(
     app: "RSSTagApplication",
     user: dict,
@@ -211,19 +240,7 @@ def _render_keywords_page(
     )
 
     page_keywords: List[KeywordItem] = keywords[start_range:end_range]
-    sorted_tags: List[dict] = []
-    for item in page_keywords:
-        sorted_tags.append(
-            {
-                "tag": item.phrase,
-                "url": app.routes.get_url_by_endpoint(
-                    endpoint="on_entity_get", params={"quoted_tag": quote(item.phrase)}
-                ),
-                "words": [item.phrase],
-                "count": round(item.score, 4),
-                "sentiment": [],
-            }
-        )
+    sorted_tags: List[dict] = [_keyword_to_tag_dict(app, item) for item in page_keywords]
 
     page = app.template_env.get_template("group-by-tag.html")
     return Response(
@@ -286,4 +303,49 @@ def on_group_by_yake_dyn_get(
         endpoint="on_group_by_yake_dyn_get",
         keywords=keywords,
         title="YAKE dynamic",
+    )
+
+
+def _json_response(payload: dict, status: int = 200) -> Response:
+    return Response(
+        json.dumps(payload), mimetype="application/json", status=status
+    )
+
+
+def _scoped_keywords_response(
+    app: "RSSTagApplication",
+    user: dict,
+    tag: str,
+    extractor: Callable[[List[str], Set[str], int], List[KeywordItem]],
+    name: str,
+) -> Response:
+    """Run extractor over posts containing tag and return tag-info JSON."""
+    log: logging.Logger = logging.getLogger(name)
+    if not tag or not tag.strip():
+        return _json_response({"error": "Tag is required"}, 400)
+    try:
+        texts: List[str] = _load_lemmas_texts(app, user, tag)
+        max_keywords: int = max(50, user["settings"]["tags_on_page"] * 12)
+        keywords: List[KeywordItem] = extractor(texts, _get_stopwords(), max_keywords)
+        scoped_tag: str = tag.strip().casefold()
+        data: List[dict] = [
+            _keyword_to_scoped_dict(app, item)
+            for item in keywords
+            if item.phrase.casefold() != scoped_tag
+        ]
+        return _json_response({"data": data})
+    except Exception as exc:
+        log.exception("%s failed for tag %r: %s", name, tag, exc)
+        return _json_response({"error": "Failed to compute keywords"}, 500)
+
+
+def on_tag_rake_dyn_get(app: "RSSTagApplication", user: dict, tag: str) -> Response:
+    return _scoped_keywords_response(
+        app, user, tag, _extract_rake_keywords, "tag_rake_dyn"
+    )
+
+
+def on_tag_yake_dyn_get(app: "RSSTagApplication", user: dict, tag: str) -> Response:
+    return _scoped_keywords_response(
+        app, user, tag, _extract_yake_keywords, "tag_yake_dyn"
     )

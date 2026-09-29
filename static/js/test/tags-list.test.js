@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { rankedComparator, compareByName } from '../libs/tag-sort.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const COMPONENT_PATH = path.join(__dirname, '..', 'components', 'tags-list.js');
@@ -38,11 +39,11 @@ test('constructor calls super(props)', () => {
   assert.ok(/super\s*\(\s*props\s*\)/.test(src), 'should call super(props)');
 });
 
-test('constructor initializes state with groupByLetter true', () => {
+test('constructor initializes groupByLetter to true unless scoreKey is given', () => {
   const src = readSource();
   assert.ok(
-    /this\.state\s*=\s*\{\s*groupByLetter\s*:\s*true/.test(src),
-    'should set state.groupByLetter = true'
+    /this\.state\s*=\s*\{\s*groupByLetter\s*:\s*!props\.scoreKey\s*\}/.test(src),
+    'should default groupByLetter to !props.scoreKey (true without a score)'
   );
 });
 
@@ -222,16 +223,57 @@ test('render returns div with key=flat for flat view', () => {
   assert.ok(/key\s*=\s*\{?\s*mode/.test(src), 'should use mode as key');
 });
 
-test('flat view sorts by count descending', () => {
+test('flat view sorts with rankedComparator(scoreKey)', () => {
   const src = readSource();
-  assert.ok(/b\.count/.test(src) && /a\.count/.test(src), 'should sort by count');
+  assert.ok(/rankedComparator\(this\.props\.scoreKey\)/.test(src), 'should rank by scoreKey');
+  assert.ok(/tag-sort\.js/.test(src), 'should import the shared comparators');
 });
 
-test('flat view uses localeCompare for secondary sort', () => {
+test('grouped view sorts alphabetically with compareByName', () => {
   const src = readSource();
-  assert.ok(/localeCompare/.test(src), 'should use localeCompare for tag comparison');
-  assert.ok(/numeric\s*:\s*true/.test(src), 'should use numeric: true in localeCompare');
-  assert.ok(/sensitivity\s*:\s*['"]base['"]/.test(src), 'should use sensitivity: "base"');
+  assert.ok(/tags\.sort\(compareByName\)/.test(src));
+});
+
+test('ranked order without scoreKey is count desc, ties by name (unchanged)', () => {
+  const tags = [
+    { tag: 'b', count: 1, temp: 9 },
+    { tag: 'c', count: 5, temp: 0.1 },
+    { tag: 'a', count: 1, temp: 5 },
+  ];
+  assert.deepEqual(
+    tags.sort(rankedComparator()).map((t) => t.tag),
+    ['c', 'a', 'b']
+  );
+});
+
+test('ranked order with scoreKey is score desc, ties by name; alphabetical unaffected', () => {
+  const tags = [
+    { tag: 'frequent', count: 50, temp: 0.1 },
+    { tag: 'b', count: 1, temp: 0.9 },
+    { tag: 'a', count: 2, temp: 0.9 },
+    { tag: 'noscore', count: 99 },
+    { tag: 'best', count: 3, temp: 2.5 },
+  ];
+  assert.deepEqual(
+    [...tags].sort(rankedComparator('temp')).map((t) => t.tag),
+    ['best', 'a', 'b', 'frequent', 'noscore']
+  );
+  assert.deepEqual(
+    [...tags].sort(compareByName).map((t) => t.tag),
+    ['a', 'b', 'best', 'frequent', 'noscore']
+  );
+});
+
+test('score-ranked lists open in ranked order and label the toggle "Show by score"', () => {
+  const src = readSource();
+  assert.ok(/Show by score/.test(src), 'should label ranked toggle by score');
+  assert.ok(/Show by frequency/.test(src), 'should keep the frequency label without scoreKey');
+});
+
+test('passes scoreKey and scoreLabel to TagItem', () => {
+  const src = readSource();
+  assert.ok(/scoreKey=\{this\.props\.scoreKey\}/.test(src));
+  assert.ok(/scoreLabel=\{this\.props\.scoreLabel\}/.test(src));
 });
 
 test('flat view returns ol with cloud class', () => {

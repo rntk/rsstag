@@ -1,10 +1,26 @@
 'use strict';
 import React from 'react';
+import { finiteScore, formatScore } from '../libs/tag-sort.js';
 
 export default class TagItem extends React.Component {
   constructor(props) {
     super(props);
     this.state = { tag: props.tag };
+  }
+
+  renderScore() {
+    const { scoreKey, scoreLabel } = this.props;
+    const score = scoreKey ? finiteScore(this.state.tag, scoreKey) : null;
+    if (score === null) {
+      return null;
+    }
+    const text = scoreLabel ? `${scoreLabel} ${formatScore(score)}` : formatScore(score);
+    return (
+      <React.Fragment>
+        {' '}
+        <span className="cloud_item_score">{text}</span>
+      </React.Fragment>
+    );
   }
 
   render() {
@@ -66,6 +82,7 @@ export default class TagItem extends React.Component {
             {this.state.tag.tag}
           </a>{' '}
           <span className="cloud_item_count">({this.state.tag.count})</span>
+          {this.renderScore()}
         </div>
         {sub_tags.length > 0 || words ? (
           <div className="cloud_item_info">
@@ -101,12 +118,18 @@ export default class TagItem extends React.Component {
             </a>
           )}
           {hide_tag_info_link ? null : (
-            <a href={'/tag-concordance/' + encodeURIComponent(this.state.tag.tag)} className="get_tag_concordance">
+            <a
+              href={'/tag-concordance/' + encodeURIComponent(this.state.tag.tag)}
+              className="get_tag_concordance"
+            >
               context
             </a>
           )}
           {hide_tag_info_link ? null : (
-            <a href={'/tag-explorer/' + encodeURIComponent(this.state.tag.tag)} className="get_tag_explorer">
+            <a
+              href={'/tag-explorer/' + encodeURIComponent(this.state.tag.tag)}
+              className="get_tag_explorer"
+            >
               explorer
             </a>
           )}

@@ -1983,6 +1983,12 @@ body.anthology-compare-modal-open {
   font-size: 9pt;
 }
 
+.cloud_item_score {
+  color: #64748b;
+  font-size: 9pt;
+  font-variant-numeric: tabular-nums;
+}
+
 .cloud_item_info {
   display: flex;
   flex-wrap: wrap;

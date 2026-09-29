@@ -7,7 +7,7 @@ Surprise is the KL divergence between posterior and prior Dirichlet distribution
 from typing import List, Dict, Tuple
 import numpy as np
 from scipy.special import digamma, gammaln
-from collections import defaultdict
+from collections import Counter, defaultdict
 
 
 def _dirichlet_kl(alpha_posterior: np.ndarray, alpha_prior: np.ndarray) -> float:
@@ -201,95 +201,82 @@ class LeaveOneOutSurprise:
     finds tags that are genuinely unusual in the corpus.
     """
 
-    def __init__(self, smoothing: float = 1.0):
-        self.smoothing = smoothing
+    def __init__(self, smoothing: float = 1.0) -> None:
+        self.smoothing: float = smoothing
+
+    def _post_surprise(
+        self,
+        neighbors: np.ndarray,
+        background_log_sum: float,
+        background_total: int,
+        vocabulary_size: int,
+    ) -> float:
+        """Sum the dense formula analytically, visiting only this post's neighbors."""
+        smoothing: float = self.smoothing
+        neighbor_count: int = len(neighbors)
+        post_total: float = neighbor_count + smoothing * vocabulary_size
+        background_denominator: float = background_total + smoothing * vocabulary_size
+        original_logs: np.ndarray = np.log1p(neighbors / smoothing)
+        remaining_logs: np.ndarray = np.log1p((neighbors - 1.0) / smoothing)
+        # All unobserved coordinates share the smoothing value. Their log terms
+        # cancel, leaving the row's log sum and corrections for this post only.
+        numerator: float = float(
+            neighbor_count * (1.0 + smoothing) * np.log1p(1.0 / smoothing)
+            - smoothing * background_log_sum
+            + smoothing * original_logs.sum()
+            - (1.0 + smoothing) * remaining_logs.sum()
+        )
+        kl: float = float(
+            np.log(background_denominator / post_total) + numerator / post_total
+        )
+        return max(kl, 0.0)
 
     def compute(self, posts: List[List[str]], post_idx: int = -1) -> Dict[str, float]:
-        """Compute per-tag surprise scores using leave-one-out KL divergence.
+        """Return leave-one-out scores without allocating a vocabulary-square matrix.
 
-        Args:
-            posts: List of tag-lists, one per post.
-            post_idx: If >= 0, only compute surprise for this single post
-                      (0-based index into the filtered post list, i.e. posts
-                      with >=2 tags). -1 means compute for all posts.
-
-        Returns:
-            Dict mapping tag -> average surprise score.
+        post_idx selects a post after filtering out posts with fewer than two
+        unique tags. Negative or out-of-range indices score all filtered posts.
+        Memory grows with input tag occurrences and a single tag's neighbors.
         """
-        if not posts:
-            return {}
-
-        # Deduplicate tags per post
-        post_sets = [list(set(p)) for p in posts if len(set(p)) >= 2]
+        post_sets: List[List[str]] = []
+        tag_posts: Dict[str, List[int]] = defaultdict(list)
+        for tags in posts:
+            unique_tags: List[str] = list(dict.fromkeys(tags))
+            if len(unique_tags) < 2:
+                continue
+            index: int = len(post_sets)
+            post_sets.append(unique_tags)
+            for tag in unique_tags:
+                tag_posts[tag].append(index)
         if not post_sets:
             return {}
 
-        # Build vocabulary
-        tag2idx: Dict[str, int] = {}
-        for tags in post_sets:
-            for t in tags:
-                if t not in tag2idx:
-                    tag2idx[t] = len(tag2idx)
-        n = len(tag2idx)
-
-        # Global co-occurrence matrix and per-tag post counts
-        global_cooccur = np.zeros((n, n), dtype=np.float64)
-        tag_post_count = np.zeros(n, dtype=np.float64)
-
-        for tags in post_sets:
-            idxs = [tag2idx[t] for t in tags]
-            for i in idxs:
-                tag_post_count[i] += 1
-                for j in idxs:
-                    if i != j:
-                        global_cooccur[i][j] += 1
-
-        # Compute per-tag surprise via leave-one-out
-        tag_surprise: Dict[str, float] = defaultdict(float)
-        tag_count: Dict[str, int] = defaultdict(int)
-        smoothing = self.smoothing
-
-        idx2tag = {v: k for k, v in tag2idx.items()}
-
-        if 0 <= post_idx < len(post_sets):
-            iterate_posts = [post_sets[post_idx]]
-        else:
-            iterate_posts = post_sets
-
-        for tags in iterate_posts:
-            idxs = [tag2idx[t] for t in tags]
-            k = len(idxs)
-
-            for i in idxs:
-                # Background: global co-occurrence for tag i, minus this post
-                bg = global_cooccur[i].copy()
-                for j in idxs:
-                    if j != i:
-                        bg[j] -= 1.0
-                bg_total = tag_post_count[i] - 1
-                if bg_total <= 0:
-                    continue
-
-                # Background distribution (smoothed)
-                bg_dist = (bg + smoothing) / (bg_total + smoothing * n)
-
-                # Post distribution: uniform over co-occurring tags in this post
-                post_dist = np.full(n, smoothing / (k - 1 + smoothing * n))
-                for j in idxs:
-                    if j != i:
-                        post_dist[j] = (1.0 + smoothing) / (k - 1 + smoothing * n)
-
-                # KL(post || background)
-                mask = post_dist > 0
-                kl = np.sum(post_dist[mask] * np.log(post_dist[mask] / bg_dist[mask]))
-                kl = max(float(kl), 0.0)
-
-                t = idx2tag[i]
-                tag_surprise[t] += kl
-                tag_count[t] += 1
-
-        result = {}
-        for t in tag_surprise:
-            if tag_count[t] > 0:
-                result[t] = tag_surprise[t] / tag_count[t]
+        selected_post: bool = 0 <= post_idx < len(post_sets)
+        target_tags: List[str] = post_sets[post_idx] if selected_post else list(tag_posts)
+        vocabulary_size: int = len(tag_posts)
+        result: Dict[str, float] = {}
+        for tag in target_tags:
+            indices: List[int] = tag_posts[tag]
+            if len(indices) < 2:
+                continue
+            # Keep just one co-occurrence row, and skip tags without a background.
+            counts: Counter[str] = Counter()
+            for index in indices:
+                counts.update(post_sets[index])
+            del counts[tag]
+            row_counts: np.ndarray = np.fromiter(counts.values(), dtype=np.float64)
+            background_log_sum: float = float(
+                np.log1p(row_counts / self.smoothing).sum()
+            )
+            score_indices: List[int] = [post_idx] if selected_post else indices
+            total_surprise: float = 0.0
+            for index in score_indices:
+                neighbors: np.ndarray = np.fromiter(
+                    (counts[other] for other in post_sets[index] if other != tag),
+                    dtype=np.float64,
+                )
+                total_surprise += self._post_surprise(
+                    neighbors, background_log_sum, len(indices) - 1, vocabulary_size
+                )
+            result[tag] = total_surprise / len(score_indices)
         return result

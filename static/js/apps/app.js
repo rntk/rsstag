@@ -976,6 +976,45 @@ function tagWithContextInfoPage(tag) {
   );
 
   renderToRoot(
+    'load_ba_surprise',
+    <TagToolWidget
+      tag={tag.tag}
+      title="Bayesian surprise"
+      url="/tag-ba-surprise"
+      listContainerId="tag_ba_surprise"
+      is_entities={true}
+      scoreKey="temp"
+      scoreLabel="surprise"
+    />
+  );
+
+  renderToRoot(
+    'load_rake_dyn',
+    <TagToolWidget
+      tag={tag.tag}
+      title="RAKE dynamic"
+      url="/tag-rake-dyn"
+      listContainerId="tag_rake_dyn"
+      is_entities={true}
+      scoreKey="temp"
+      scoreLabel="RAKE"
+    />
+  );
+
+  renderToRoot(
+    'load_yake_dyn',
+    <TagToolWidget
+      tag={tag.tag}
+      title="YAKE dynamic"
+      url="/tag-yake-dyn"
+      listContainerId="tag_yake_dyn"
+      is_entities={true}
+      scoreKey="temp"
+      scoreLabel="YAKE"
+    />
+  );
+
+  renderToRoot(
     'load_similar_words',
     <TagToolWidget
       tag={tag.tag}

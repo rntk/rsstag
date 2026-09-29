@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 import numpy as np
 from rsstag.surprise import (
     _dirichlet_kl,
@@ -149,6 +150,67 @@ class TestLeaveOneOutSurprise(unittest.TestCase):
         self.assertIn("x", result)
         self.assertIn("y", result)
         self.assertIn("z", result)
+
+
+class TestLeaveOneOutSurpriseMemory(unittest.TestCase):
+    @staticmethod
+    def _dense_reference(
+        posts: list[list[str]], smoothing: float, post_idx: int
+    ) -> dict[str, float]:
+        """Original dense calculation, restricted to small regression fixtures."""
+        filtered: list[list[str]] = [list(set(post)) for post in posts if len(set(post)) >= 2]
+        vocabulary: list[str] = sorted({tag for post in filtered for tag in post})
+        scores: dict[str, list[float]] = {}
+        selected: list[list[str]] = [filtered[post_idx]] if 0 <= post_idx < len(filtered) else filtered
+        for post in selected:
+            for tag in post:
+                containing: list[list[str]] = [other for other in filtered if tag in other]
+                if len(containing) < 2:
+                    continue
+                counts: np.ndarray = np.array([
+                    sum(other != tag and other in tags for tags in containing)
+                    - int(other != tag and other in post)
+                    for other in vocabulary
+                ], dtype=np.float64)
+                background: np.ndarray = (counts + smoothing) / (len(containing) - 1 + smoothing * len(vocabulary))
+                distribution: np.ndarray = np.array([
+                    smoothing + int(other != tag and other in post) for other in vocabulary
+                ], dtype=np.float64)
+                distribution /= len(post) - 1 + smoothing * len(vocabulary)
+                score: float = max(float(np.sum(distribution * np.log(distribution / background))), 0.0)
+                scores.setdefault(tag, []).append(score)
+        return {tag: sum(values) / len(values) for tag, values in scores.items()}
+
+    def test_matches_dense_scores(self) -> None:
+        random: np.random.Generator = np.random.default_rng(42)
+        posts: list[list[str]] = [[], ["single"], ["duplicate", "duplicate"]]
+        posts.extend([
+            [str(value) for value in random.integers(0, 18, size=int(random.integers(2, 8)))]
+            for _ in range(40)
+        ])
+        posts.extend([["rare", "0"], ["0", "1"], ["0", "1"]])
+        for smoothing in (0.01, 0.5, 1.0, 3.0):
+            for post_idx in (-2, -1, 0, 9, 41, 100):
+                with self.subTest(smoothing=smoothing, post_idx=post_idx):
+                    expected: dict[str, float] = self._dense_reference(posts, smoothing, post_idx)
+                    actual: dict[str, float] = LeaveOneOutSurprise(smoothing).compute(posts, post_idx)
+                    self.assertEqual(actual.keys(), expected.keys())
+                    for tag in expected:
+                        self.assertAlmostEqual(actual[tag], expected[tag], places=12)
+
+    def test_large_vocabulary_without_dense_allocation(self) -> None:
+        # Match the reported vocabulary and post counts. Only the shared tag
+        # has a background; unique neighbors must not allocate pairwise rows.
+        posts: list[list[str]] = [["shared"] for _ in range(6608)]
+        for index in range(105181):
+            posts[index % len(posts)].append(f"tag-{index}")
+        with patch("rsstag.surprise.np.zeros", side_effect=AssertionError("Dense allocation")):
+            scores: dict[str, float] = LeaveOneOutSurprise().compute(posts)
+            selected: dict[str, float] = LeaveOneOutSurprise().compute(posts, post_idx=0)
+        self.assertEqual(set(scores), {"shared"})
+        self.assertEqual(set(selected), {"shared"})
+        self.assertTrue(np.isfinite(scores["shared"]))
+        self.assertTrue(np.isfinite(selected["shared"]))
 
 
 if __name__ == "__main__":

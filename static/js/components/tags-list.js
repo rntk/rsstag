@@ -1,11 +1,13 @@
 ﻿'use strict';
 import React from 'react';
 import TagItem from '../components/tag-item.js';
+import { compareByName, rankedComparator } from '../libs/tag-sort.js';
 
 export default class TagsList extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { groupByLetter: true };
+    // Score-ranked lists (scoreKey set) open in ranked order; others stay grouped by letter.
+    this.state = { groupByLetter: !props.scoreKey };
     this.updateTags = this.updateTags.bind(this);
     this.toggleGrouping = this.toggleGrouping.bind(this);
   }
@@ -19,6 +21,10 @@ export default class TagsList extends React.Component {
 
   toggleGrouping() {
     this.setState((prevState) => ({ groupByLetter: !prevState.groupByLetter }));
+  }
+
+  rankedLabel() {
+    return this.props.scoreKey ? 'Show by score' : 'Show by frequency';
   }
 
   static getDerivedStateFromProps(props) {
@@ -48,7 +54,7 @@ export default class TagsList extends React.Component {
       const toolsRow = (
         <div className="tags_tools_row">
           <button type="button" onClick={this.toggleGrouping} className="tags_grouping_toggle">
-            {this.state.groupByLetter ? 'Show by frequency' : 'Show grouped by letter'}
+            {this.state.groupByLetter ? this.rankedLabel() : 'Show grouped by letter'}
           </button>
         </div>
       );
@@ -65,25 +71,18 @@ export default class TagsList extends React.Component {
             uniq_id={tag.tag}
             is_bigram={this.props.is_bigram}
             is_entity={this.props.is_entities}
+            scoreKey={this.props.scoreKey}
+            scoreLabel={this.props.scoreLabel}
           />
         ));
 
       if (!this.state.groupByLetter) {
-        const sortedByCount = tags.sort((a, b) => {
-          const countDiff = (b.count || 0) - (a.count || 0);
-          if (countDiff !== 0) {
-            return countDiff;
-          }
-
-          const at = (a.tag || '').toString();
-          const bt = (b.tag || '').toString();
-          return at.localeCompare(bt, undefined, { numeric: true, sensitivity: 'base' });
-        });
+        const sortedFlat = tags.sort(rankedComparator(this.props.scoreKey));
 
         return (
           <div key={mode}>
             {toolsRow}
-            <ol className="cloud">{tagItems(sortedByCount, 'flat')}</ol>
+            <ol className="cloud">{tagItems(sortedFlat, 'flat')}</ol>
           </div>
         );
       }
@@ -91,11 +90,7 @@ export default class TagsList extends React.Component {
       let letterGroups = [];
 
       // Collect and sort tags alphabetically by their display text
-      const sorted = tags.sort((a, b) => {
-        const at = (a.tag || '').toString();
-        const bt = (b.tag || '').toString();
-        return at.localeCompare(bt, undefined, { numeric: true, sensitivity: 'base' });
-      });
+      const sorted = tags.sort(compareByName);
 
       // Group by first letter
       let currentLetter = null;

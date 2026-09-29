@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { rankedComparator } from '../libs/tag-sort.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const COMPONENT_PATH = path.join(__dirname, '..', 'components', 'tag-tool-widget.js');
@@ -107,7 +108,7 @@ test('fetchJSON is called with GET, credentials include and JSON content-type', 
 test('on success with data.data, tags are normalized and hidden is set false', () => {
   const src = readSource();
   assert.ok(
-    /if\s*\(\s*data\.data\s*\)\s*\{[\s\S]*?normalizedTags\(data\.data\)[\s\S]*?hidden:\s*false/.test(
+    /if\s*\(\s*data\.data\s*\)\s*\{[\s\S]*?normalizedTags\(data\.data,\s*this\.props\.scoreKey\)[\s\S]*?hidden:\s*false/.test(
       src
     ),
     'should normalize tags and set hidden false on success'
@@ -133,18 +134,50 @@ test('on fetch rejection, error is logged and inline error is set', () => {
 // normalizedTags helper
 // ============================================================
 
-test('normalizedTags sorts by count descending with localeCompare tie-break', () => {
+test('normalizedTags delegates ordering to rankedComparator(scoreKey)', () => {
   const src = readSource();
   assert.ok(
-    /const countDiff\s*=\s*\(b\.count \|\| 0\)\s*-\s*\(a\.count \|\| 0\)/.test(src),
-    'should compute descending count diff'
+    /import\s*\{\s*rankedComparator\s*\}\s*from\s*['"]\.\.\/libs\/tag-sort\.js['"]/.test(src),
+    'should import rankedComparator'
   );
   assert.ok(
-    /localeCompare\(bt,\s*undefined,\s*\{\s*numeric:\s*true,\s*sensitivity:\s*['"]base['"]\s*\}\)/.test(
-      src
-    ),
-    'should tie-break with localeCompare numeric/base'
+    /data\.sort\(rankedComparator\(scoreKey\)\)/.test(src),
+    'should sort with the ranked comparator'
   );
+});
+
+test('ordering without scoreKey sorts by count desc with name tie-break', () => {
+  const data = [
+    { tag: 'b', count: 1, temp: 9 },
+    { tag: 'c', count: 5, temp: 0.1 },
+    { tag: 'a', count: 1, temp: 5 },
+  ];
+  assert.deepEqual(
+    data.sort(rankedComparator()).map((t) => t.tag),
+    ['c', 'a', 'b'],
+    'count order, ties by tag name'
+  );
+});
+
+test('ordering with scoreKey sorts by score desc with name tie-break', () => {
+  const data = [
+    { tag: 'frequent', count: 50, temp: 0.1 },
+    { tag: 'b', count: 1, temp: 0.9 },
+    { tag: 'a', count: 2, temp: 0.9 },
+    { tag: 'noscore', count: 99 },
+    { tag: 'best', count: 3, temp: 2.5 },
+  ];
+  assert.deepEqual(
+    data.sort(rankedComparator('temp')).map((t) => t.tag),
+    ['best', 'a', 'b', 'frequent', 'noscore'],
+    'score order, ties by name, unscored last'
+  );
+});
+
+test('render passes scoreKey and scoreLabel through to TagsList', () => {
+  const src = readSource();
+  assert.ok(/scoreKey=\{this\.props\.scoreKey\}/.test(src));
+  assert.ok(/scoreLabel=\{this\.props\.scoreLabel\}/.test(src));
 });
 
 test('normalizedTags sets root:true on each tag and keys the Map by tag.tag', () => {

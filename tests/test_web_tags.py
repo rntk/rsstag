@@ -479,6 +479,107 @@ class TestWebTags(MongoWebTestCase):
         self.assertEqual(response.status_code, 200)
 
     # ------------------------------------------------------------------
+    # tag-scoped: on_tag_ba_surprise_get / rake / yake
+    # ------------------------------------------------------------------
+    ITEM_KEYS = {"tag", "url", "words", "count", "sentiment", "temp", "freq"}
+
+    def _seed_scoped_data(self) -> None:
+        for i in range(3):
+            self._seed_post_with_lemmas(
+                f"scoped-{i}",
+                ["scopedtag", f"cotag{i}", "shared"],
+                f"scopedtag machine learning model{i} shared insight",
+            )
+            self.test_db.posts.update_one(
+                {"owner": self.sid, "pid": f"scoped-{i}"}, {"$set": {"read": False}}
+            )
+            self._seed_tag(f"cotag{i}", count=5)
+        self._seed_tag("shared", count=5)
+        self._seed_tag("scopedtag", count=5)
+        # Post without the scoped tag must not influence results.
+        self._seed_post_with_lemmas(
+            "unscoped", ["other", "othertwo"], "unrelated banana content"
+        )
+        self.test_db.posts.update_one(
+            {"owner": self.sid, "pid": "unscoped"}, {"$set": {"read": False}}
+        )
+        self._seed_tag("other", count=5)
+        self._seed_tag("othertwo", count=5)
+
+    def test_on_tag_ba_surprise_get_returns_scoped_data(self) -> None:
+        self._seed_scoped_data()
+        response = self.client.get("/tag-ba-surprise/scopedtag")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.mimetype, "application/json")
+        data = response.get_json()["data"]
+        self.assertIsInstance(data, list)
+        names = {item["tag"] for item in data}
+        self.assertIn("shared", names)
+        self.assertNotIn("scopedtag", names)
+        self.assertNotIn("other", names)
+        for item in data:
+            self.assertEqual(set(item.keys()), self.ITEM_KEYS)
+
+    def test_on_tag_ba_surprise_get_unknown_tag_returns_empty(self) -> None:
+        response = self.client.get("/tag-ba-surprise/nosuchtag")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json(), {"data": []})
+
+    def test_on_tag_ba_surprise_get_blank_tag_returns_400(self) -> None:
+        response = self.client.get("/tag-ba-surprise/%20")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("error", response.get_json())
+
+    def test_on_tag_ba_surprise_get_error_returns_500(self) -> None:
+        with mock.patch.object(
+            self.app.posts, "get_by_tags", side_effect=RuntimeError("boom")
+        ):
+            response = self.client.get("/tag-ba-surprise/scopedtag")
+        self.assertEqual(response.status_code, 500)
+        self.assertIn("error", response.get_json())
+
+    def test_on_tag_keywords_dyn_get_return_scoped_data(self) -> None:
+        self._seed_scoped_data()
+        for endpoint in ("tag-rake-dyn", "tag-yake-dyn"):
+            with self.subTest(endpoint=endpoint):
+                response = self.client.get(f"/{endpoint}/scopedtag")
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.mimetype, "application/json")
+                data = response.get_json()["data"]
+                self.assertIsInstance(data, list)
+                self.assertTrue(data)
+                phrases = {item["tag"] for item in data}
+                self.assertNotIn("scopedtag", phrases)
+                self.assertFalse(any("banana" in p for p in phrases))
+                self.assertTrue(any("machine" in p for p in phrases))
+                for item in data:
+                    self.assertEqual(set(item.keys()), self.ITEM_KEYS)
+
+    def test_on_tag_keywords_dyn_get_unknown_tag_returns_empty(self) -> None:
+        for endpoint in ("tag-rake-dyn", "tag-yake-dyn"):
+            with self.subTest(endpoint=endpoint):
+                response = self.client.get(f"/{endpoint}/nosuchtag")
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.get_json(), {"data": []})
+
+    def test_on_tag_keywords_dyn_get_blank_tag_returns_400(self) -> None:
+        for endpoint in ("tag-rake-dyn", "tag-yake-dyn"):
+            with self.subTest(endpoint=endpoint):
+                response = self.client.get(f"/{endpoint}/%20")
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("error", response.get_json())
+
+    def test_on_tag_keywords_dyn_get_error_returns_500(self) -> None:
+        with mock.patch.object(
+            self.app.posts, "get_by_tags", side_effect=RuntimeError("boom")
+        ):
+            for endpoint in ("tag-rake-dyn", "tag-yake-dyn"):
+                with self.subTest(endpoint=endpoint):
+                    response = self.client.get(f"/{endpoint}/scopedtag")
+                    self.assertEqual(response.status_code, 500)
+                    self.assertIn("error", response.get_json())
+
+    # ------------------------------------------------------------------
     # on_get_chain / on_get_sunburst
     # ------------------------------------------------------------------
     def test_on_get_chain_returns_200(self) -> None:

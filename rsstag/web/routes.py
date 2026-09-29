@@ -432,6 +432,21 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/tag-ba-surprise/<string:tag>",
+                "endpoint": "on_tag_ba_surprise_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/tag-rake-dyn/<string:tag>",
+                "endpoint": "on_tag_rake_dyn_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/tag-yake-dyn/<string:tag>",
+                "endpoint": "on_tag_yake_dyn_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/tag-entities/<string:tag>",
                 "endpoint": "on_tag_entities_get",
                 "methods": ["GET"],

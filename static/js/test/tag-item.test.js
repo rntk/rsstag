@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { finiteScore, formatScore } from '../libs/tag-sort.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const COMPONENT_PATH = path.join(__dirname, '..', 'components', 'tag-item.js');
@@ -277,4 +278,39 @@ test('render conditionally shows info div', () => {
 test('source imports React', () => {
   const src = readSource();
   assert.ok(/import React from/.test(src), 'should import React');
+});
+
+// ============================================================
+// Score display (opt-in via scoreKey / scoreLabel)
+// ============================================================
+
+test('render shows the score span next to the count, keeping the count', () => {
+  const src = readSource();
+  assert.ok(/cloud_item_count">\(\{this\.state\.tag\.count\}\)/.test(src), 'count kept');
+  assert.ok(/\{this\.renderScore\(\)\}/.test(src), 'score rendered after count');
+  assert.ok(/cloud_item_score/.test(src), 'should use cloud_item_score class');
+});
+
+test('renderScore is opt-in: reads props.scoreKey/scoreLabel and skips when no finite score', () => {
+  const src = readSource();
+  assert.ok(/this\.props\.scoreKey|\{\s*scoreKey,\s*scoreLabel\s*\}\s*=\s*this\.props/.test(src));
+  assert.ok(/finiteScore\(this\.state\.tag,\s*scoreKey\)/.test(src));
+  assert.ok(/score === null[\s\S]*?return null/.test(src), 'should return null without a score');
+});
+
+test('finiteScore returns finite numbers only', () => {
+  assert.equal(finiteScore({ temp: 0.42 }, 'temp'), 0.42);
+  assert.equal(finiteScore({ temp: 0 }, 'temp'), 0);
+  assert.equal(finiteScore({ temp: NaN }, 'temp'), null);
+  assert.equal(finiteScore({ temp: Infinity }, 'temp'), null);
+  assert.equal(finiteScore({ temp: '0.4' }, 'temp'), null);
+  assert.equal(finiteScore({}, 'temp'), null);
+  assert.equal(finiteScore({ temp: null }, 'temp'), null);
+});
+
+test('formatScore rounds to at most 4 decimals', () => {
+  assert.equal(formatScore(0.421337), '0.4213');
+  assert.equal(formatScore(0.5), '0.5');
+  assert.equal(formatScore(2), '2');
+  assert.equal(formatScore(0), '0');
 });
