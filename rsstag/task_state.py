@@ -311,13 +311,23 @@ class TaskStateMachine:
             self._log.error("Can`t enqueue task %s. Info: %s", key, e)
             return False
 
-    def pause(self, user: str, task_type: Optional[int] = None) -> int:
-        """Pause matching non-dead tasks. Returns modified count."""
+    def pause(
+        self,
+        user: str,
+        task_type: Optional[int] = None,
+        provider: Optional[str] = None,
+    ) -> int:
+        """Pause matching non-dead tasks. Returns modified count.
+
+        ``provider`` limits the pause to tasks stored with that provider.
+        """
         try:
             now = time.time()
             query: Dict[str, Any] = {"user": user, "status": {"$ne": TASK_STATUS_DEAD}}
             if task_type is not None:
                 query["type"] = task_type
+            if provider is not None:
+                query["provider"] = provider
             result = self._db.tasks.update_many(
                 query,
                 {

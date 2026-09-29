@@ -304,7 +304,9 @@ def test_handle_download_x_provider_retoken_freezes_tasks(
 
     assert worker.handle_download(task) is False
 
-    mock_tasks.freeze_tasks.assert_called_once_with(task["user"], task["type"])
+    mock_tasks.freeze_tasks.assert_called_once_with(
+        task["user"], task["type"], data_providers.X
+    )
     mock_users.update_provider.assert_called_once_with(
         "123", data_providers.X, {"retoken": True}
     )

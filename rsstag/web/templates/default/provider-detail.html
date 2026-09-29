@@ -75,6 +75,23 @@
         </div>
     </section>
 
+    {% if entry %}
+    <section class="provider-panel">
+        <p class="provider-section-label">Queue status</p>
+        <p class="provider-connection-detail">
+            {% if queue_task_active %}A download or sources refresh is running.
+            {% elif queue_busy %}Marked as in progress, but no task is running (stuck).
+            {% else %}Idle.{% endif %}
+        </p>
+        {% if queue_busy %}
+        <form action="{{ login_url }}" method="POST" class="provider-action-form">
+            <input type="hidden" name="action" value="reset_queue" />
+            <button type="submit" class="provider-button provider-button-secondary">Reset queue state</button>
+        </form>
+        {% endif %}
+    </section>
+    {% endif %}
+
     <section class="provider-danger-zone" aria-labelledby="provider-data-heading">
         <div>
             <h2 id="provider-data-heading">Downloaded data</h2>

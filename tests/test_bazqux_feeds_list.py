@@ -13,7 +13,7 @@ from hashlib import md5
 from typing import Any, Dict, List
 from unittest.mock import MagicMock, patch
 
-from rsstag.providers.bazqux import BazquxProvider
+from rsstag.providers.bazqux import BazquxProvider, BazquxProviderError
 from rsstag.providers.providers import BAZQUX, supports_feeds_list
 
 _SUBSCRIPTIONS: Dict[str, Any] = {
@@ -99,7 +99,66 @@ class TestBazquxListFeeds(unittest.TestCase):
 
     def test_empty_subscriptions_list_yields_no_feeds(self) -> None:
         self.assertEqual(self._list_feeds({"subscriptions": []}), [])
-        self.assertEqual(self._list_feeds({}), [])
+
+    def test_raises_when_the_answer_has_no_subscriptions_key(self) -> None:
+        with self.assertRaises(RuntimeError):
+            self._list_feeds({"error": "rate limited"})
+
+    def test_asks_to_log_in_again_when_the_token_is_rejected(self) -> None:
+        connection: MagicMock = MagicMock()
+        response: MagicMock = connection.getresponse.return_value
+        response.status = 401
+        response.read.side_effect = [b'{"error": "unauthorized"}', b"Unauthorized"]
+        with patch(
+            "rsstag.providers.bazqux.client.HTTPSConnection", return_value=connection
+        ):
+            with self.assertRaises(BazquxProviderError) as ctx:
+                self.provider.list_feeds(self.user)
+        self.assertTrue(ctx.exception.retoken)
+
+    def test_does_not_ask_to_log_in_again_when_ping_is_indeterminate(self) -> None:
+        connection: MagicMock = MagicMock()
+        response: MagicMock = connection.getresponse.return_value
+        response.status = 503
+        response.read.side_effect = [b"{}", b"service unavailable"]
+        with patch(
+            "rsstag.providers.bazqux.client.HTTPSConnection", return_value=connection
+        ):
+            with self.assertRaises(BazquxProviderError) as ctx:
+                self.provider.list_feeds(self.user)
+        self.assertFalse(ctx.exception.retoken)
+
+    def test_ping_service_error_is_indeterminate(self) -> None:
+        connection: MagicMock = _connection_returning(b"service unavailable")
+        connection.getresponse.return_value.status = 503
+        with patch(
+            "rsstag.providers.bazqux.client.HTTPSConnection", return_value=connection
+        ):
+            self.assertIsNone(self.provider.is_valid_user(self.user))
+
+    def test_ping_200_non_ok_response_is_indeterminate(self) -> None:
+        connection: MagicMock = _connection_returning(b"not authorized")
+        connection.getresponse.return_value.status = 200
+        with patch(
+            "rsstag.providers.bazqux.client.HTTPSConnection", return_value=connection
+        ):
+            self.assertIsNone(self.provider.is_valid_user(self.user))
+
+    def test_ping_200_ok_response_validates_credentials(self) -> None:
+        connection: MagicMock = _connection_returning(b"OK\n")
+        connection.getresponse.return_value.status = 200
+        with patch(
+            "rsstag.providers.bazqux.client.HTTPSConnection", return_value=connection
+        ):
+            self.assertTrue(self.provider.is_valid_user(self.user))
+
+    def test_ping_403_response_rejects_credentials(self) -> None:
+        connection: MagicMock = _connection_returning(b"\xff")
+        connection.getresponse.return_value.status = 403
+        with patch(
+            "rsstag.providers.bazqux.client.HTTPSConnection", return_value=connection
+        ):
+            self.assertFalse(self.provider.is_valid_user(self.user))
 
     def test_raises_when_the_subscriptions_can_not_be_read(self) -> None:
         # A broken response must fail the task instead of silently reporting

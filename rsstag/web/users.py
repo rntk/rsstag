@@ -19,7 +19,8 @@ if TYPE_CHECKING:
 from rsstag.providers.bazqux import BazquxProvider
 from rsstag.providers.providers import BAZQUX, TEXT_FILE, TELEGRAM, GMAIL, X
 from rsstag.providers.x import XProvider
-from rsstag.tasks import TASK_ALL, TASK_DOWNLOAD
+from rsstag.tasks import TASK_ALL, TASK_DOWNLOAD, TASK_FEEDS_LIST
+from rsstag.task_state import TASK_STATUS_DEAD, TASK_STATUS_PAUSED
 from rsstag.users import (
     TELEGRAM_CODE_FIELD,
     TELEGRAM_PASSWORD_FIELD,
@@ -520,11 +521,9 @@ def on_refresh_get_post(
                 app.routes.get_url_by_endpoint(endpoint="on_data_sources_get")
             )
         try:
-            app.users.reset_in_queue_if_legacy(user["sid"], user)
-            in_queue = app.users.get_in_queue(user)
             any_added = False
             for prov in configured:
-                if in_queue.get(prov, False):
+                if is_provider_busy(app, user, prov):
                     continue
                 added = app.tasks.add_task(
                     {
@@ -709,6 +708,8 @@ def on_provider_detail_get(
             err=err or [],
             provider=provider,
             entry=entry,
+            queue_busy=bool(app.users.get_in_queue(user).get(provider, False)),
+            queue_task_active=app.tasks.has_active_provider_task(user["sid"], provider),
             login_url=app.routes.get_url_by_endpoint(
                 endpoint="on_provider_detail_post", params={"provider": provider}
             ),
@@ -733,13 +734,63 @@ def on_provider_detail_get(
     )
 
 
+def is_provider_busy(app: "RSSTagApplication", user: dict, provider: str) -> bool:
+    """Whether a download/refresh of the provider is really in progress.
+
+    The ``in_queue`` flag can outlive its task (a failed run, pruned tasks), and
+    would then block every later run. A flag with no runnable task behind it is
+    stale, so it is cleared here instead of rejecting the request.
+    """
+    app.users.reset_in_queue_if_legacy(user["sid"], user)
+    if app.tasks.has_active_provider_task(user["sid"], provider):
+        return True
+    if not app.users.get_in_queue(user).get(provider, False):
+        return False
+    logging.warning(
+        "Clearing stale %s queue flag for user %s: no runnable task", provider, user["sid"]
+    )
+    app.users.update_by_sid(user["sid"], {f"in_queue.{provider}": False})
+    return False
+
+
+def _reset_provider_queue(
+    app: "RSSTagApplication", user: dict, provider: str
+) -> bool:
+    """Manual reset: drop the queue flag and the dead/paused tasks behind it."""
+    if app.tasks.has_active_provider_task(user["sid"], provider):
+        app.users.update_by_sid(
+            user["sid"], {"message": "Provider task is active; queue cannot be reset"}
+        )
+        return False
+    app.db.tasks.delete_many(
+        {
+            "user": user["sid"],
+            "provider": provider,
+            "type": {"$in": [TASK_DOWNLOAD, TASK_FEEDS_LIST]},
+            "status": {"$in": [TASK_STATUS_PAUSED, TASK_STATUS_DEAD]},
+        }
+    )
+    app.users.reset_in_queue_if_legacy(user["sid"], user)
+    app.users.update_by_sid(
+        user["sid"],
+        {f"in_queue.{provider}": False, "message": f"{provider} queue was reset"},
+    )
+    return True
+
+
 def on_provider_detail_post(
     app: "RSSTagApplication", user: dict, provider: str, request: Request
 ) -> Response:
     action = request.form.get("action")
+    if action == "reset_queue":
+        _reset_provider_queue(app, user, provider)
+        return redirect(
+            app.routes.get_url_by_endpoint(
+                endpoint="on_provider_detail_get", params={"provider": provider}
+            )
+        )
     if action == "download":
-        app.users.reset_in_queue_if_legacy(user["sid"], user)
-        if not app.users.get_in_queue(user).get(provider, False):
+        if not is_provider_busy(app, user, provider):
             added = app.tasks.add_task(
                 {
                     "type": TASK_DOWNLOAD,

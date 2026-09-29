@@ -176,6 +176,26 @@ class TasksStateIntegrationTestCase(unittest.TestCase):
         self.assertTrue(self.tasks.unfreeze_tasks({"sid": "u1"}, TASK_LETTERS))
         self.assertEqual(self.tasks.get_task(self.users)["type"], TASK_LETTERS)
 
+    def test_freeze_with_provider_pauses_only_that_provider(self) -> None:
+        self._insert_user("u1")
+        now: float = time.time()
+        for provider in ("bazqux", "telegram"):
+            self.db.tasks.insert_one(
+                {
+                    "user": "u1",
+                    "type": TASK_LETTERS,
+                    "provider": provider,
+                    "status": TASK_STATUS_PENDING,
+                    "updated_at": now,
+                }
+            )
+        self.assertTrue(self.tasks.freeze_tasks({"sid": "u1"}, TASK_LETTERS, "bazqux"))
+        statuses: dict = {
+            d["provider"]: d["status"] for d in self.db.tasks.find({"user": "u1"})
+        }
+        self.assertEqual(statuses["bazqux"], TASK_STATUS_PAUSED)
+        self.assertEqual(statuses["telegram"], TASK_STATUS_PENDING)
+
     def test_fail_on_frozen_task_stays_paused(self) -> None:
         self._insert_user("u1")
         self.assertTrue(

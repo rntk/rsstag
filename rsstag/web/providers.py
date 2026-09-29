@@ -11,6 +11,7 @@ from rsstag.providers.bazqux import BazquxProvider
 from rsstag.providers.telegram import TelegramProvider
 from rsstag.providers.x import XProvider
 from rsstag.tasks import TASK_DOWNLOAD, TASK_FEEDS_LIST
+from rsstag.web.users import is_provider_busy
 
 if TYPE_CHECKING:
     from rsstag.web.app import RSSTagApplication
@@ -157,8 +158,7 @@ def on_provider_feed_download_post(
         )
 
     try:
-        app.users.reset_in_queue_if_legacy(user["sid"], user)
-        if app.users.get_in_queue(user).get(data_providers.TELEGRAM, False):
+        if is_provider_busy(app, user, data_providers.TELEGRAM):
             return _json_response(
                 {
                     "status": "error",
@@ -279,8 +279,7 @@ def on_provider_feeds_refresh_post(
         )
 
     try:
-        app.users.reset_in_queue_if_legacy(user["sid"], user)
-        if app.users.get_in_queue(user).get(provider, False):
+        if is_provider_busy(app, user, provider):
             return _json_response(
                 {
                     "status": "error",
@@ -396,8 +395,7 @@ def on_provider_feeds_get_post(
                 selection["telegram_limit"] = _telegram_limit_from_selection(
                     selection
                 )
-            app.users.reset_in_queue_if_legacy(user["sid"], user)
-            if not app.users.get_in_queue(user).get(provider, False):
+            if not is_provider_busy(app, user, provider):
                 added = app.tasks.add_task(
                     {
                         "type": TASK_DOWNLOAD,

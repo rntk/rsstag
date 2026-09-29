@@ -10,6 +10,7 @@ from pymongo.errors import BulkWriteError
 
 from rsstag.providers import providers as data_providers
 from rsstag.providers.feed_docs import dedup_feed_docs
+from rsstag.tasks import TASK_DOWNLOAD, TASK_FEEDS_LIST
 
 
 class ProviderWorker:
@@ -49,6 +50,13 @@ class ProviderWorker:
             return
         self._users.update_provider(task["user"]["sid"], provider_name, provider_updates)
 
+    def _freeze_provider_tasks(self, task: Dict[str, Any], provider_name: str) -> None:
+        """Pause the failing tasks; download/refresh ones only for this provider."""
+        if task.get("type") in (TASK_DOWNLOAD, TASK_FEEDS_LIST):
+            self._tasks.freeze_tasks(task["user"], task["type"], provider_name)
+        else:
+            self._tasks.freeze_tasks(task["user"], task["type"])
+
     def _handle_provider_error(
         self,
         task: Dict[str, Any],
@@ -59,13 +67,24 @@ class ProviderWorker:
         user_message = getattr(error, "user_message", "") or error_text
         retoken = bool(getattr(error, "retoken", False))
         if retoken:
-            self._tasks.freeze_tasks(task["user"], task["type"])
+            self._freeze_provider_tasks(task, provider_name)
             self._users.update_provider(
                 task["user"]["sid"], provider_name, {"retoken": True}
             )
         else:
             self._tasks.mark_task_failed(task.get("_id"), error_text)
-        self._users.update_by_sid(task["user"]["sid"], {"message": user_message})
+        update: Dict[str, Any] = {"message": user_message}
+        if (
+            task.get("type") in (TASK_DOWNLOAD, TASK_FEEDS_LIST)
+            and not self._tasks.has_active_provider_task(
+                task["user"]["sid"], provider_name
+            )
+        ):
+            update[f"in_queue.{provider_name}"] = False
+        self._users.update_by_sid(
+            task["user"]["sid"],
+            update,
+        )
 
     def _prepare_new_posts(
         self,
@@ -258,9 +277,6 @@ class ProviderWorker:
                 traceback.format_exc(),
             )
             self._handle_provider_error(task, provider_name, e)
-            # A failed refresh must not keep the provider queue flag raised:
-            # otherwise every later download for this provider is rejected.
-            self._users.update_by_sid(owner, {f"in_queue.{provider_name}": False})
             return False
         finally:
             self._save_refreshed_oauth_token(task, provider_user, provider_name)

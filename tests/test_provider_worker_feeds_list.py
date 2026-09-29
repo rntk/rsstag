@@ -19,6 +19,7 @@ from unittest.mock import MagicMock
 from pymongo.database import Database
 
 from rsstag.providers.feed_docs import build_feed_doc
+from rsstag.tasks import TASK_FEEDS_LIST
 from rsstag.web.browse import _build_available_sources
 from rsstag.web.routes import RSSTagRoutes
 from rsstag.workers.provider_worker import ProviderWorker
@@ -264,8 +265,10 @@ class TestHandleFeedsListErrorPaths(unittest.TestCase):
         provider.list_feeds.side_effect = Exception("boom")
         worker: ProviderWorker = self._worker({"test_provider": provider})
         self.mock_users.get_provider_user.return_value = {"token": "abc"}
+        self.mock_tasks.has_active_provider_task.return_value = False
         task: Dict[str, Any] = {
             "_id": "task-1",
+            "type": TASK_FEEDS_LIST,
             "user": {"sid": "alice"},
             "data": {"provider": "test_provider"},
         }
@@ -275,7 +278,24 @@ class TestHandleFeedsListErrorPaths(unittest.TestCase):
         self.assertFalse(result)
         self.mock_tasks.mark_task_failed.assert_called_once()
         self.mock_users.update_by_sid.assert_any_call(
-            "alice", {"in_queue.test_provider": False}
+            "alice", {"message": "boom", "in_queue.test_provider": False}
+        )
+
+    def test_provider_error_preserves_another_active_operation(self) -> None:
+        provider: MagicMock = MagicMock()
+        provider.list_feeds.side_effect = Exception("boom")
+        worker: ProviderWorker = self._worker({"test_provider": provider})
+        self.mock_users.get_provider_user.return_value = {"token": "abc"}
+        self.mock_tasks.has_active_provider_task.return_value = True
+        task: Dict[str, Any] = {
+            "_id": "task-1",
+            "type": TASK_FEEDS_LIST,
+            "user": {"sid": "alice"},
+            "data": {"provider": "test_provider"},
+        }
+        self.assertFalse(worker.handle_feeds_list(task))
+        self.mock_users.update_by_sid.assert_called_once_with(
+            "alice", {"message": "boom"}
         )
 
 

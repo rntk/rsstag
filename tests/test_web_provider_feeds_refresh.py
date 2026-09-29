@@ -42,6 +42,7 @@ class TestProviderFeedsRefreshEndpoint(unittest.TestCase):
         self.app.users.get_in_queue.return_value = {}
         self.app.users.update_by_sid.return_value = True
         self.app.tasks.add_task.return_value = True
+        self.app.tasks.has_active_provider_task.return_value = False
         self.user: Dict[str, Any] = {
             "sid": "alice",
             "providers": {"telegram": {"phone": "+10000000000"}},
@@ -118,6 +119,7 @@ class TestProviderFeedsRefreshEndpoint(unittest.TestCase):
 
     def test_rejects_when_a_refresh_is_already_in_queue(self) -> None:
         self.app.users.get_in_queue.return_value = {"telegram": True}
+        self.app.tasks.has_active_provider_task.return_value = True
 
         result: Dict[str, Any] = self._post({"provider": "telegram"})
 

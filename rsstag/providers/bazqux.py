@@ -7,7 +7,7 @@ from hashlib import md5
 import json
 from urllib.parse import quote_plus, urlencode
 from http import client
-from typing import Tuple, List, Optional, Iterator
+from typing import Any, Tuple, List, Optional, Iterator
 import logging
 
 from rsstag.tasks import POST_NOT_IN_PROCESSING
@@ -19,6 +19,17 @@ from rsstag.providers.pid import generate_post_pid
 import aiohttp
 
 NOT_CATEGORIZED = "NotCategorized"
+
+
+class BazquxProviderError(RuntimeError):
+    """Raised when bazqux problems should be surfaced to the user."""
+
+    def __init__(
+        self, message: str, user_message: Optional[str] = None, retoken: bool = False
+    ) -> None:
+        super().__init__(message)
+        self.user_message: str = user_message or message
+        self.retoken: bool = retoken
 
 
 class BazquxProvider:
@@ -101,17 +112,34 @@ class BazquxProvider:
         return subscriptions
 
     def _require_subscriptions(self, user: dict) -> dict:
-        """Same fetch, but an unreadable answer stops the caller.
+        """Same fetch, but an unusable answer stops the caller.
 
         A refresh that quietly reports "0 sources" while bazqux is down looks
         exactly like a successful one, so the paths that feed the worker raise
-        instead and let the task be marked failed.
+        instead. Bazqux has no refresh token (the ClientLogin token comes from
+        login and password), so an expired token raises with ``retoken`` set:
+        the worker then freezes the tasks and asks the user to log in again.
         """
         subscriptions = self._fetch_subscriptions(user)
-        if subscriptions is None:
-            raise RuntimeError("Can`t read the bazqux subscriptions list")
+        if self._has_subscriptions(subscriptions):
+            return subscriptions
+        logging.error(
+            "Unexpected bazqux subscriptions answer for user %s: %.500r",
+            user.get("sid"),
+            subscriptions,
+        )
+        if self.is_valid_user(user) is False:
+            raise BazquxProviderError(
+                "Bazqux token is not valid anymore",
+                user_message="Bazqux session expired, please log in again",
+                retoken=True,
+            )
+        raise BazquxProviderError("Can`t read the bazqux subscriptions list")
 
-        return subscriptions
+    def _has_subscriptions(self, subscriptions: Optional[dict]) -> bool:
+        return isinstance(subscriptions, dict) and isinstance(
+            subscriptions.get("subscriptions"), list
+        )
 
     def _feed_category(self, feed: dict) -> str:
         categories = feed.get("categories") or []
@@ -396,15 +424,32 @@ class BazquxProvider:
         return result
 
     def is_valid_user(self, user: dict) -> Optional[bool]:
+        """Return whether Bazqux accepted the credentials, if it can be known.
+
+        A failed ping is only evidence of expired credentials when Bazqux
+        explicitly returns an authentication status.  In particular, a 5xx
+        response during a provider outage must leave the result indeterminate
+        so callers do not ask the user to log in again.
+        """
         headers = self.get_headers(user)
         try:
             connection = client.HTTPSConnection(self._config[BAZQUX]["api_host"])
             connection.request("GET", "/reader/ping", None, headers)
-            if connection.getresponse().read().strip() == "OK":
+            response: Any = connection.getresponse()
+            status: int = response.status
+            response_body: bytes = response.read()
+            result: Optional[bool]
+            if status in (401, 403):
+                result = False
+                logging.error("Bazqux rejected credentials with status %s", status)
+            elif status == 200 and response_body.decode("utf-8").strip() == "OK":
                 result = True
             else:
-                result = False
-                logging.error("Unauthorized user")
+                result = None
+                logging.error(
+                    "Bazqux ping did not establish credential validity. Status: %s",
+                    status,
+                )
             connection.close()
         except Exception as e:
             result = None

@@ -35,6 +35,7 @@ class TestProviderFeedDownloadEndpoint(unittest.TestCase):
         self.app.users.get_in_queue.return_value = {}
         self.app.users.update_by_sid.return_value = True
         self.app.tasks.add_task.return_value = True
+        self.app.tasks.has_active_provider_task.return_value = False
         self.user: Dict[str, Any] = {
             "sid": "alice",
             "providers": {"telegram": {"phone": "+10000000000"}},
@@ -139,6 +140,7 @@ class TestProviderFeedDownloadEndpoint(unittest.TestCase):
 
     def test_rejects_refresh_while_telegram_download_is_running(self) -> None:
         self.app.users.get_in_queue.return_value = {"telegram": True}
+        self.app.tasks.has_active_provider_task.return_value = True
 
         result: Dict[str, Any] = self._post(
             {"feed_id": "-100123", "posts_count": 100}

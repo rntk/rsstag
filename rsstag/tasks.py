@@ -14,6 +14,7 @@ from rsstag.topic_merge import build_pending_topic_merge_query
 from rsstag.task_state import (
     TaskStateMachine,
     TASK_STATUS_PENDING,
+    TASK_STATUS_RUNNING,
     TASK_STATUS_DEAD,
     DEFAULT_LEASE_SECONDS,
 )
@@ -1287,6 +1288,25 @@ class RssTagTasks:
 
         return result
 
+    def has_active_provider_task(self, user_id: str, provider: str) -> bool:
+        """True when a download/sources-refresh of the provider can still run.
+
+        Paused and dead tasks do not count: they never progress on their own,
+        so a queue flag kept only by them is stale.
+        """
+        active: Optional[dict] = self._db.tasks.find_one(
+            {
+                "user": user_id,
+                "provider": provider,
+                "type": {"$in": [TASK_DOWNLOAD, TASK_FEEDS_LIST]},
+                "$or": [
+                    {"status": {"$in": [TASK_STATUS_PENDING, TASK_STATUS_RUNNING]}},
+                    {"status": {"$exists": False}, "processing": {"$gte": 0}},
+                ],
+            }
+        )
+        return active is not None
+
     def get_tasks_status(self, user_id: str) -> List[dict]:
         status = []
         try:
@@ -1830,14 +1850,20 @@ class RssTagTasks:
 
         return False
 
-    def freeze_tasks(self, user: dict, type: int) -> Optional[bool]:
+    def freeze_tasks(
+        self, user: dict, type: int, provider: Optional[str] = None
+    ) -> Optional[bool]:
         """Pause a user's tasks (all types when ``type == TASK_ALL``).
+
+        ``provider`` restricts the pause to that provider's tasks.
 
         Delegates to the state machine, which marks matching non-dead docs
         ``paused`` and dual-writes ``processing = TASK_FREEZED``.
         """
         try:
-            self._state.pause(user["sid"], None if type == TASK_ALL else type)
+            self._state.pause(
+                user["sid"], None if type == TASK_ALL else type, provider
+            )
             result = True
         except Exception as e:
             result = None
