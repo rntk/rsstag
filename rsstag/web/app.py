@@ -28,6 +28,7 @@ import rsstag.web.posts as posts_handlers
 import rsstag.web.users as users_handlers
 import rsstag.web.tags as tags_handlers
 import rsstag.web.tag_explorer as tag_explorer_handlers
+import rsstag.web.tag_concordance as tag_concordance_handlers
 import rsstag.web.bigrams as bigrams_handlers
 import rsstag.web.keywords as keywords_handlers
 import rsstag.web.openai as openai_handlers
@@ -64,6 +65,7 @@ from pymongo import MongoClient
 HANDLER_MODULES = (
     posts_handlers,
     tag_explorer_handlers,
+    tag_concordance_handlers,
     users_handlers,
     tags_handlers,
     bigrams_handlers,

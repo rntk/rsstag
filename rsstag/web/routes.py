@@ -728,6 +728,11 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/tag-concordance/<string:tag>",
+                "endpoint": "on_tag_concordance_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/tag-explorer/<string:tag>",
                 "endpoint": "on_tag_explorer_get",
                 "methods": ["GET"],

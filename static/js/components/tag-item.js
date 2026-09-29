@@ -101,6 +101,11 @@ export default class TagItem extends React.Component {
             </a>
           )}
           {hide_tag_info_link ? null : (
+            <a href={'/tag-concordance/' + encodeURIComponent(this.state.tag.tag)} className="get_tag_concordance">
+              context
+            </a>
+          )}
+          {hide_tag_info_link ? null : (
             <a href={'/tag-explorer/' + encodeURIComponent(this.state.tag.tag)} className="get_tag_explorer">
               explorer
             </a>

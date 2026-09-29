@@ -9475,3 +9475,39 @@ body.tag-explorer-page {
     &__sidebar { border-right: 0; border-bottom: 1px solid var(--rsst-border, #d7dfd9); }
   }
 }
+
+// Keyword-in-context reading: aligned columns keep every occurrence easy to scan.
+.tag-concordance {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 20px;
+  color: var(--rsst-on-surface, #24352b);
+  &__intro { margin-bottom: 20px; }
+  &__intro h1 { font-size: 1.5rem; overflow-wrap: anywhere; }
+  &__intro p { margin: 6px 0; }
+  &__head, &__row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, .7fr) minmax(0, 1fr); gap: 18px; }
+  &__head { padding: 10px 16px; font-size: .8rem; color: var(--rsst-on-surface-variant, #66736c); border-bottom: 1px solid var(--rsst-border, #d7dfd9); }
+  &__head span:first-child, &__before { text-align: right; }
+  &__head span:nth-child(2) { text-align: center; }
+  &__row { padding: 16px; border-bottom: 1px solid var(--rsst-border, #d7dfd9); line-height: 1.6; overflow-wrap: anywhere; }
+  &__row:nth-child(even) { background: var(--rsst-surface, #f7f8f4); }
+  &__center { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 3px; min-width: 0; font-size: .75rem; color: var(--rsst-on-surface-variant, #66736c); }
+  &__tag { font-size: 1rem; color: var(--rsst-on-surface, #24352b); background: #ffe066; padding: 0 8px; border-radius: 3px; }
+  &__title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-weight: 600; }
+  &__topics { width: 100%; }
+  &__topics summary { cursor: pointer; overflow-wrap: anywhere; }
+  &__topics:not([open]) summary { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  &__topics ul { text-align: left; padding-left: 18px; }
+  &__pagination { display: flex; justify-content: center; gap: 24px; padding: 24px; }
+  &__empty { padding: 24px; text-align: center; }
+  a:focus-visible, summary:focus-visible { outline: 2px solid var(--rsst-primary, #365e4c); outline-offset: 3px; }
+}
+
+@media (max-width: 600px) {
+  .tag-concordance {
+    padding: 8px;
+    &__head, &__row { grid-template-columns: minmax(0, 1fr) minmax(100px, .9fr) minmax(0, 1fr); gap: 8px; padding: 12px 4px; }
+    &__before, &__after { font-size: .85rem; }
+    &__center { font-size: .7rem; }
+  }
+}
