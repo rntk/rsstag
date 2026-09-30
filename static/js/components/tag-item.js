@@ -93,6 +93,9 @@ export default class TagItem extends React.Component {
           </div>
         ) : null}
         <div className="cloud_item_tools">
+          <a href={'/tag-hierarchy?tag=' + encodeURIComponent(this.state.tag.tag)}>
+            word hierarchy
+          </a>
           {hide_tag_info_link ? null : (
             <a href={'/tag-info/' + this.state.tag.tag} className="get_tag_siblings">
               ...

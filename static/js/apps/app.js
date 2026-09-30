@@ -388,7 +388,7 @@ export function resolvePageType(path) {
   if (path === '/canvas') {
     return 'canvas';
   }
-  if (path === '/hierarchy') {
+  if (['/hierarchy', '/hierarchy/', '/tag-hierarchy', '/tag-hierarchy/'].includes(path)) {
     return 'hierarchy';
   }
   if (/^\/post-compare\//.test(path)) {

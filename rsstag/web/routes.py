@@ -185,6 +185,16 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/tag-hierarchy",
+                "endpoint": "on_tag_hierarchy_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/tag-hierarchy/",
+                "endpoint": "on_tag_hierarchy_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/read/posts",
                 "endpoint": "on_read_posts_post",
                 "methods": ["POST"],

@@ -16,9 +16,9 @@ import { TopicTagsDialog } from './topic-tags.js';
  */
 
 /**
- * @typedef {{number?: number, text: string, read?: boolean}} TopicSentence
+ * @typedef {{number?: number, text: string, snippet?: string, read?: boolean}} TopicSentence
  * @typedef {{title?: string, post_id?: string, url?: string, feed_title?: string, feed_url?: string, sentences?: (TopicSentence|string)[]}} TopicSource
- * @typedef {{name: string, posts_count?: number, sentences_count?: number, sentences?: string[], sources?: TopicSource[]}} Topic
+ * @typedef {{name: string, word_chain?: boolean, posts_count?: number, sentences_count?: number, sentences?: string[], sources?: TopicSource[]}} Topic
  * @typedef {{name: string, fullPath: string, uid: string, depth: number, topic: Topic|null}} TreeNode
  * @typedef {{node: TreeNode, children: Map<string, TreeEntry>, parent: TreeEntry|null, leafCount: number}} TreeEntry
  */
@@ -308,7 +308,7 @@ function buildLeafElement(entry, rootName, onSummary, onOriginal, tagHighlightRe
   row.appendChild(leaf);
 
   const sentenceText = collectOriginalSources(entry)
-    .flatMap((source) => source.sentences.map((sentence) => sentence.text))
+    .flatMap((source) => source.sentences.map((sentence) => sentence.snippet || sentence.text))
     .join(' ');
   if (sentenceText) {
     const preview = document.createElement('div');
@@ -316,7 +316,13 @@ function buildLeafElement(entry, rootName, onSummary, onOriginal, tagHighlightRe
     preview.setAttribute('role', 'button');
     preview.tabIndex = 0;
     preview.title = 'Click to view original sentences';
-    fillHighlightedText(preview, sentenceText, tagHighlightRe);
+    fillHighlightedText(
+      preview,
+      entry.node.topic?.word_chain
+        ? sentenceText.slice(0, 480) + (sentenceText.length > 480 ? '…' : '')
+        : sentenceText,
+      tagHighlightRe
+    );
     const showOriginal = (event) => {
       event.stopPropagation();
       onOriginal(entry);
@@ -392,6 +398,12 @@ function buildBranchElement(
     const children = Array.from(entry.children.values());
     const childrenEl = document.createElement('div');
     childrenEl.className = 'fh-branch__children';
+    if (node.topic?.word_chain) {
+      const terminal = { ...entry, children: new Map() };
+      childrenEl.appendChild(
+        buildLeafElement(terminal, rootName, onSummary, onOriginal, tagHighlightRe)
+      );
+    }
     children.forEach((child) => {
       childrenEl.appendChild(
         buildTreeElement(
@@ -581,6 +593,7 @@ export function collectOriginalSources(entry) {
             return {
               number: Number.isInteger(sentence?.number) ? sentence.number : undefined,
               text: String(sentence?.text || '').trim(),
+              ...(typeof sentence?.snippet === 'string' ? { snippet: sentence.snippet } : {}),
               read: Boolean(sentence?.read),
             };
           })
@@ -591,9 +604,11 @@ export function collectOriginalSources(entry) {
     const existing = sources.get(key);
     if (existing) {
       sentences.forEach((sentence) => {
-        const alreadyIncluded =
-          sentence.number !== undefined &&
-          existing.sentences.some((item) => item.number === sentence.number);
+        const alreadyIncluded = existing.sentences.some((item) =>
+          sentence.number !== undefined
+            ? item.number === sentence.number
+            : item.number === undefined && item.text === sentence.text
+        );
         if (!alreadyIncluded) existing.sentences.push(sentence);
       });
       return;
@@ -789,6 +804,8 @@ class FeedHierarchy {
   constructor() {
     /** @type {Topic[]} */
     this.topics = Array.isArray(window.hierarchyTopics) ? window.hierarchyTopics : [];
+    this.wordHierarchy =
+      document.getElementById('feed_hierarchy')?.dataset.hierarchyKind === 'words';
     this.onlyUnread = Boolean(window.hierarchyOnlyUnread);
     this.levelsEl = document.getElementById('feed_hierarchy_levels');
     this.treeEl = document.getElementById('feed_hierarchy_tree');
@@ -814,6 +831,8 @@ class FeedHierarchy {
 
   init() {
     if (!this.treeEl) return;
+    const switchLink = document.getElementById('hierarchy_switch');
+    if (switchLink) switchLink.search = window.location.search;
     this.updatePageMeta();
     this.renderLevels();
     this.renderTree();
@@ -827,6 +846,11 @@ class FeedHierarchy {
     renderLevelButtons(this.levelsEl, this.maxLevel, this.selectedLevel, (level) =>
       this.handleSelectLevel(level)
     );
+    if (this.wordHierarchy) {
+      this.levelsEl?.querySelectorAll('button').forEach((button) => {
+        button.title = button.title.replace('topic levels', 'word levels');
+      });
+    }
   }
 
   /**
@@ -840,7 +864,7 @@ class FeedHierarchy {
   updatePageMeta() {
     const counts = countTopicsMeta(this.topics);
     this.pageMeta.render([
-      { label: 'topics', value: counts.topics },
+      { label: this.wordHierarchy ? 'word chains' : 'topics', value: counts.topics },
       { label: 'posts', value: counts.posts },
       { label: 'unread sentences', value: counts.unread, accent: true },
     ]);
@@ -856,6 +880,15 @@ class FeedHierarchy {
       (entry) => this.showOriginal(entry),
       this.tagHighlightRe
     );
+    if (this.wordHierarchy) {
+      this.treeEl.querySelectorAll('.fh-topic-menu').forEach((button) => {
+        button.title = 'View full text';
+        button.setAttribute('aria-label', 'View full text');
+      });
+    }
+    if (this.wordHierarchy && this.roots.length === 0) {
+      this.treeEl.querySelector('.fh-empty').textContent = 'No matching word chains in this scope.';
+    }
   }
 
   closeContextMenu() {
@@ -865,6 +898,10 @@ class FeedHierarchy {
 
   /** @param {TreeEntry} entry @param {HTMLElement} anchor */
   openContextMenu(entry, anchor) {
+    if (this.wordHierarchy) {
+      this.showOriginal(entry);
+      return;
+    }
     this.closeContextMenu();
     const menu = document.createElement('div');
     menu.className = 'canvas-topic-menu';

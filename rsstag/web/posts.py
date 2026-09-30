@@ -7,7 +7,7 @@ from collections import defaultdict
 from urllib.parse import unquote_plus, unquote, quote_plus
 import requests  # Add requests import
 
-from typing import TYPE_CHECKING, Any, Iterable, Iterator, Optional
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator, Optional
 from jinja2 import Template
 
 if TYPE_CHECKING:
@@ -1537,8 +1537,190 @@ def _tag_highlight_words(
     return result
 
 
-def on_hierarchy_get(
+def _tag_chain_windows(
+    text: str, tag: str, forms: list[str], radius: int = 6
+) -> list[tuple[str, str]]:
+    """Put the tag first, then up to six words before and after each occurrence."""
+    tokens: list[re.Match[str]] = list(re.finditer(r"[^\W_]+(?:[’'-][^\W_]+)*", text))
+    words: list[str] = [token.group().casefold() for token in tokens]
+    variants: list[list[str]] = [
+        re.findall(r"[^\W_]+(?:[’'-][^\W_]+)*", form.casefold()) for form in forms
+    ]
+    windows: dict[str, str] = {}
+    for index in range(len(words)):
+        sizes: list[int] = [
+            len(form)
+            for form in variants
+            if form and words[index : index + len(form)] == form
+        ]
+        if not sizes:
+            continue
+        end: int = index + max(sizes)
+        first: int = max(0, index - radius)
+        last: int = min(len(tokens), end + radius)
+        chain: str = " > ".join([tag, *words[first:index], *words[end:last]])
+        start_char: int = tokens[first].start()
+        end_char: int = tokens[last - 1].end()
+        if end_char - start_char > 240:
+            start_char = max(start_char, tokens[index].start() - 80)
+            end_char = min(end_char, start_char + 240)
+        snippet: str = text[start_char:end_char]
+        windows[chain] = (
+            ("…" if start_char else "")
+            + snippet
+            + ("…" if end_char < len(text) else "")
+        )
+    return list(windows.items())
+
+
+def _tag_hierarchy_sentences(
+    app: "RSSTagApplication",
+    owner: str,
+    post: dict[str, Any],
+    tag: str,
+    match_topic: bool,
+    match_sentences: bool,
+    only_unread: bool,
+) -> list[dict[str, Any]]:
+    """Use stored sentence identities, falling back to the full ungrouped post."""
+    grouped: Optional[dict[str, Any]] = app.post_grouping.get_grouped_posts(
+        owner, [str(post.get("pid", ""))]
+    )
+    sentences: list[dict[str, Any]] = []
+    if grouped and grouped.get("sentences"):
+        groups: dict[str, Any] = grouped.get("groups", {}) or {}
+        for sentence in grouped["sentences"]:
+            if not isinstance(sentence, dict) or (only_unread and sentence.get("read")):
+                continue
+            text: str = strip_html_markup(str(sentence.get("text", ""))).strip()
+            if not text:
+                continue
+            if match_topic or match_sentences:
+                topic_match: bool = match_topic and any(
+                    tag.casefold() in str(name).casefold()
+                    and sentence.get("number") in numbers
+                    for name, numbers in groups.items()
+                    if isinstance(numbers, list)
+                )
+                if not topic_match and not (
+                    match_sentences and tag.casefold() in text.casefold()
+                ):
+                    continue
+            sentences.append(
+                {**sentence, "text": text, "read": bool(sentence.get("read"))}
+            )
+        return sentences
+    content: dict[str, Any] = post.get("content", {}) or {}
+    payload: Any = content.get("content", "")
+    try:
+        raw: str = (
+            gzip.decompress(payload).decode("utf-8", "replace")
+            if isinstance(payload, (bytes, bytearray))
+            else str(payload)
+        )
+    except (OSError, EOFError):
+        logging.warning("Unable to decode post %s for tag hierarchy", post.get("pid"))
+        return []
+    text = strip_html_markup(raw).strip() or strip_html_markup(
+        str(content.get("title", ""))
+    )
+    if not text or (only_unread and post.get("read")):
+        return []
+    if (match_topic or match_sentences) and not (
+        match_sentences and tag.casefold() in text.casefold()
+    ):
+        return []
+    return [{"text": text, "read": bool(post.get("read"))}]
+
+
+def _build_tag_hierarchy(
+    app: "RSSTagApplication",
+    user: dict[str, Any],
+    posts: list[dict[str, Any]],
+    tag: str,
+    match_topic: bool = False,
+    match_sentences: bool = False,
+    only_unread: bool = False,
+) -> list[dict[str, Any]]:
+    """Aggregate matching word windows with full originals and bounded previews."""
+    forms: list[str] = _tag_highlight_words(app, user["sid"], tag)
+    # Ngrams must match an entire phrase rather than any individual part.
+    if len(tag.split()) > 1:
+        forms = [form for form in forms if len(form.split()) >= len(tag.split())]
+    topics: dict[str, dict[str, Any]] = {}
+    feed_ids: list[str] = list(
+        {str(post["feed_id"]) for post in posts if post.get("feed_id")}
+    )
+    feeds: dict[str, dict[str, Any]] = (
+        {
+            str(feed["feed_id"]): feed
+            for feed in app.feeds.get_by_feed_ids(
+                user["sid"],
+                feed_ids,
+                {"feed_id": True, "title": True, "local_url": True},
+            )
+        }
+        if feed_ids
+        else {}
+    )
+    for post in posts:
+        post_id: str = str(post.get("pid", ""))
+        feed: dict[str, Any] = feeds.get(str(post.get("feed_id", "")), {})
+        sentences: list[dict[str, Any]] = _tag_hierarchy_sentences(
+            app, user["sid"], post, tag, match_topic, match_sentences, only_unread
+        )
+        for sentence in sentences:
+            for chain, snippet in _tag_chain_windows(sentence["text"], tag, forms):
+                topic: dict[str, Any] = topics.setdefault(
+                    chain, {"name": chain, "sources_by_id": {}}
+                )
+                source: dict[str, Any] = topic["sources_by_id"].setdefault(
+                    post_id,
+                    {
+                        "post_id": post_id,
+                        "title": str((post.get("content") or {}).get("title", "")),
+                        "url": str(post.get("url", "")),
+                        "feed_title": str(feed.get("title", "")),
+                        "feed_url": str(feed.get("local_url", "")),
+                        "sentences": [],
+                    },
+                )
+                source["sentences"].append({**sentence, "snippet": snippet})
+    result: list[dict[str, Any]] = []
+    for chain in sorted(topics):
+        sources: list[dict[str, Any]] = list(topics[chain]["sources_by_id"].values())
+        texts: list[str] = [
+            sentence["text"] for source in sources for sentence in source["sentences"]
+        ]
+        result.append(
+            {
+                "name": chain,
+                "word_chain": True,
+                "posts_count": len(sources),
+                "sentences_count": len(texts),
+                "sentences": texts,
+                "sources": sources,
+            }
+        )
+    return result
+
+
+def on_tag_hierarchy_get(
     app: "RSSTagApplication", user: dict[str, Any], request: Request
+) -> Response:
+    """Render word chains around the selected tag in the current post scope."""
+    if not request.args.get("tag", "").strip():
+        return app.on_error(
+            user, request, BadRequest("Select a tag to view its word hierarchy.")
+        )
+    return on_hierarchy_get(app, user, request, word_hierarchy=True)
+
+
+def on_hierarchy_get(
+    app: "RSSTagApplication",
+    user: dict[str, Any],
+    request: Request,
+    word_hierarchy: bool = False,
 ) -> Response:
     """Render the aggregated topic hierarchy for posts matching the filters."""
     feed_id: str = request.args.get("feed", "").strip()
@@ -1566,15 +1748,42 @@ def on_hierarchy_get(
         "pid": True,
         "url": True,
         "content.title": True,
+        **({"content.content": True, "read": True} if word_hierarchy else {}),
         "tags": True,
         "feed_id": True,
     }
     try:
         context_tags: list[str] = _get_context_tags(user) or []
-        if tag and not text_filter_active and tag not in context_tags:
+        ngram_scope: bool = (
+            word_hierarchy and len(tag.split()) > 1 and not text_filter_active
+        )
+        if (
+            tag
+            and not text_filter_active
+            and not ngram_scope
+            and tag not in context_tags
+        ):
             context_tags.append(tag)
         posts_cursor: Iterator[dict[str, Any]]
-        if current_feed:
+        if ngram_scope:
+            query: dict[str, Any] = {
+                "owner": user["sid"],
+                "$or": [
+                    {"tags": tag},
+                    {"bi_grams": tag},
+                    {"tags": {"$all": tag.split()}},
+                ],
+            }
+            if context_tags:
+                query["tags"] = {"$all": context_tags}
+            if current_feed:
+                query["feed_id"] = current_feed["feed_id"]
+            if current_category:
+                query["category_id"] = category_id
+            if only_unread:
+                query["read"] = False
+            posts_cursor = app.posts.get_by_query(query, projection)
+        elif current_feed:
             posts_cursor = app.posts.get_by_feed_id(
                 user["sid"],
                 current_feed["feed_id"],
@@ -1600,7 +1809,10 @@ def on_hierarchy_get(
         else:
             posts_cursor = app.posts.get_all(user["sid"], only_unread, projection)
         db_posts: list[dict[str, Any]] = list(posts_cursor)
-        hierarchy_topics: list[dict[str, Any]] = _build_hierarchy_topics(
+        builder: Callable[..., list[dict[str, Any]]] = (
+            _build_tag_hierarchy if word_hierarchy else _build_hierarchy_topics
+        )
+        hierarchy_topics: list[dict[str, Any]] = builder(
             app,
             user,
             db_posts,
@@ -1631,6 +1843,7 @@ def on_hierarchy_get(
     page: Template = app.template_env.get_template("hierarchy.html")
     return Response(
         page.render(
+            word_hierarchy=word_hierarchy,
             topics=hierarchy_topics,
             topics_json=_serialize_canvas_posts(hierarchy_topics),
             feed=current_feed,
