@@ -10095,3 +10095,85 @@ body.tag-explorer-page {
   color: var(--text-primary, #334155);
   font-size: 0.875rem;
 }
+
+/* Flowing context text with a shared track for the matching tag. */
+.tag-context-wall { max-width: none; padding: 12px 16px; }
+.tag-context-wall .tag-concordance__intro { margin-bottom: 12px; }
+.tag-context-wall__scroll { overflow-x: auto; border: 1px solid var(--rsst-border, #d7dfd9); }
+.tag-context-wall__lines {
+  display: grid;
+  grid-template-columns: max-content max-content max-content;
+  min-width: 100%;
+  width: max-content;
+}
+.tag-context-wall__lines .tag-concordance__empty { grid-column: 1 / -1; }
+.tag-context-wall__line {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-bottom: 1px solid var(--rsst-border, #d7dfd9);
+  background: var(--rsst-surface, #f7f8f4);
+  color: #24352b;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.65;
+  white-space: nowrap;
+  text-align: left;
+  cursor: pointer;
+}
+.tag-context-wall__word { background: hsl(var(--position-hue) 65% 91%); }
+.tag-context-wall__word:empty { background: transparent; }
+.tag-context-wall__word.is-word-match { background: #ffb347; color: #1b1b1b; border-radius: 2px; }
+.tag-context-wall__before { text-align: right; }
+.tag-context-wall__context { padding: 1px 0; }
+.tag-context-wall__match { padding: 1px 3px; background: #ffe066; text-align: center; }
+.tag-context-wall__line:hover { outline: 1px solid var(--rsst-primary, #365e4c); outline-offset: -1px; }
+.tag-context-wall__line:hover .tag-context-wall__word { filter: brightness(0.96); }
+.tag-context-wall__line:focus-visible,
+.tag-context-wall__scroll:focus-visible { outline: 2px solid var(--rsst-primary, #365e4c); outline-offset: -2px; }
+.tag-context-wall__line.is-read { color: #5f6862; }
+.tag-context-wall__line.is-read .tag-context-wall__match { background: #eee6bf; }
+.tag-concordance__metadata { margin: 8px 0; font-size: 0.9rem; }
+.tag-context-wall__position-before-1 { --position-hue: 0; }
+.tag-context-wall__position-before-2 { --position-hue: 9; }
+.tag-context-wall__position-before-3 { --position-hue: 18; }
+.tag-context-wall__position-before-4 { --position-hue: 27; }
+.tag-context-wall__position-before-5 { --position-hue: 36; }
+.tag-context-wall__position-before-6 { --position-hue: 45; }
+.tag-context-wall__position-before-7 { --position-hue: 54; }
+.tag-context-wall__position-before-8 { --position-hue: 63; }
+.tag-context-wall__position-before-9 { --position-hue: 72; }
+.tag-context-wall__position-before-10 { --position-hue: 81; }
+.tag-context-wall__position-before-11 { --position-hue: 90; }
+.tag-context-wall__position-before-12 { --position-hue: 99; }
+.tag-context-wall__position-before-13 { --position-hue: 108; }
+.tag-context-wall__position-before-14 { --position-hue: 117; }
+.tag-context-wall__position-before-15 { --position-hue: 126; }
+.tag-context-wall__position-before-16 { --position-hue: 135; }
+.tag-context-wall__position-before-17 { --position-hue: 144; }
+.tag-context-wall__position-before-18 { --position-hue: 153; }
+.tag-context-wall__position-before-19 { --position-hue: 162; }
+.tag-context-wall__position-before-20 { --position-hue: 171; }
+.tag-context-wall__position-after-1 { --position-hue: 180; }
+.tag-context-wall__position-after-2 { --position-hue: 189; }
+.tag-context-wall__position-after-3 { --position-hue: 198; }
+.tag-context-wall__position-after-4 { --position-hue: 207; }
+.tag-context-wall__position-after-5 { --position-hue: 216; }
+.tag-context-wall__position-after-6 { --position-hue: 225; }
+.tag-context-wall__position-after-7 { --position-hue: 234; }
+.tag-context-wall__position-after-8 { --position-hue: 243; }
+.tag-context-wall__position-after-9 { --position-hue: 252; }
+.tag-context-wall__position-after-10 { --position-hue: 261; }
+.tag-context-wall__position-after-11 { --position-hue: 270; }
+.tag-context-wall__position-after-12 { --position-hue: 279; }
+.tag-context-wall__position-after-13 { --position-hue: 288; }
+.tag-context-wall__position-after-14 { --position-hue: 297; }
+.tag-context-wall__position-after-15 { --position-hue: 306; }
+.tag-context-wall__position-after-16 { --position-hue: 315; }
+.tag-context-wall__position-after-17 { --position-hue: 324; }
+.tag-context-wall__position-after-18 { --position-hue: 333; }
+.tag-context-wall__position-after-19 { --position-hue: 342; }
+.tag-context-wall__position-after-20 { --position-hue: 351; }

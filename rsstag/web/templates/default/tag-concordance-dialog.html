@@ -1,0 +1,10 @@
+    <dialog id="concordance-dialog" class="tag-concordance__dialog" aria-labelledby="concordance-dialog-title">
+        <button type="button" class="tag-concordance__close" aria-label="Close sentence dialog">Close</button>
+        <h2 id="concordance-dialog-title">Topic sentences</h2>
+        <a class="tag-concordance__article"></a>
+        <p class="tag-concordance__metadata"></p>
+        <div class="tag-concordance__sentences"></div>
+        <p class="tag-concordance__status" role="status" aria-live="polite"></p>
+    </dialog>
+    <p class="tag-concordance__status tag-concordance__page-status" role="status" aria-live="polite"></p>
+    <script id="concordance-details" type="application/json">{{ (details|default({}))|tojson }}</script>

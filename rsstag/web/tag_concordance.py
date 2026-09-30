@@ -65,6 +65,22 @@ def _sentence_documents(
     }
 
 
+def _position_words(text: str, before: bool) -> list[dict[str, Any]]:
+    """Pad context to twenty slots, numbered outward from the matching tag."""
+    tokens: list[re.Match[str]] = list(re.finditer(r"\w+", text))
+    words: list[str] = []
+    for index, token in enumerate(tokens):
+        start: int = token.start() if index else 0
+        end: int = tokens[index + 1].start() if index + 1 < len(tokens) else len(text)
+        words.append(re.sub(r"\s+", " ", text[start:end]).strip())
+    padded: list[str] = ([""] * (CONTEXT_WORDS - len(words)) + words if before
+                         else words + [""] * (CONTEXT_WORDS - len(words)))
+    if not tokens:
+        padded[-1 if before else 0] = text.strip()
+    return [{"text": word, "position": CONTEXT_WORDS - index if before else index + 1}
+            for index, word in enumerate(padded)]
+
+
 def _topics(document: dict[str, Any], number: int | None) -> list[str]:
     """Never attribute another sentence's topics to this occurrence."""
     groups: Any = document.get("groups") or {}
@@ -132,6 +148,7 @@ def _detail_data(
         sources[pid] = {
             "title": (post.get("content") or {}).get("title") or "Untitled article",
             "url": "/posts/" + quote(pid, safe=""),
+            "metadata": post.get("metadata") or {},
             "sentences": [_detail_sentence(sentence) for sentence in _sentence_source(pid, text, grouped, None)],
             "groups": document.get("groups") or {},
         }
@@ -140,6 +157,7 @@ def _detail_data(
 
 def on_tag_concordance_get(
     app: "RSSTagApplication", user: dict[str, Any], request: Request, tag: str,
+    dense: bool = False,
 ) -> Response:
     """Load only one page of article bodies and their sentence metadata."""
     try:
@@ -157,7 +175,11 @@ def on_tag_concordance_get(
         posts: list[dict[str, Any]] = _load_result_content(app, user, selected[:page_size])
         documents: dict[str, dict[str, Any]] = _sentence_documents(app, user, posts)
         rows: list[dict[str, Any]] = list(_rows(posts, documents, tag, _only_unread(user)))
-        template: Any = app.template_env.get_template("tag-concordance.html")
+        if dense:
+            for row in rows:
+                row["before_words"] = _position_words(row["before"], before=True)
+                row["after_words"] = _position_words(row["after"], before=False)
+        template: Any = app.template_env.get_template("tag-context-wall.html" if dense else "tag-concordance.html")
         details: dict[str, Any] = _detail_data(posts, documents, rows)
         return Response(template.render(
             tag=tag, rows=rows, page_number=page_number, has_more=len(selected) > page_size,
@@ -167,3 +189,9 @@ def on_tag_concordance_get(
     except Exception:
         LOG.exception("Could not load tag concordance")
         return Response("Could not load tag context. Please try again.", status=500, mimetype="text/plain")
+
+
+def on_tag_context_wall_get(
+    app: "RSSTagApplication", user: dict[str, Any], request: Request, tag: str,
+) -> Response:
+    return on_tag_concordance_get(app, user, request, tag, dense=True)

@@ -770,6 +770,11 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/tag-context-wall/<string:tag>",
+                "endpoint": "on_tag_context_wall_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/tag-explorer/<string:tag>",
                 "endpoint": "on_tag_explorer_get",
                 "methods": ["GET"],

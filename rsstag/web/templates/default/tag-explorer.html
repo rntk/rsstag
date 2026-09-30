@@ -18,6 +18,7 @@
             <section class="tag-explorer__results" aria-label="Filtered results">
                 <div class="tag-explorer__filters" aria-label="Active filters" role="region">
                     <strong>Active filters</strong>
+                    <a href="/tag-context-wall/{{ tag|url_encode|replace('+', '%20') }}">Context wall</a>
                     <a href="/tag-concordance/{{ tag|url_encode|replace('+', '%20') }}">Scan tag context</a>
                     <dl class="tag-explorer__filter-summary" aria-live="polite" aria-atomic="true">
                         <div><dt>Tag</dt><dd>{{ tag|e }}</dd></div>

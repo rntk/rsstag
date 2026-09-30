@@ -14,7 +14,7 @@ from jinja2 import ChoiceLoader, DictLoader, Environment, FileSystemLoader
 from werkzeug.wrappers import Request, Response
 
 from rsstag.web.routes import RSSTagRoutes
-from rsstag.web.tag_concordance import _contexts, _detail_data, _rows, _sentence_documents, on_tag_concordance_get
+from rsstag.web.tag_concordance import _contexts, _detail_data, _position_words, _rows, _sentence_documents, on_tag_concordance_get, on_tag_context_wall_get
 
 
 class TestTagConcordance(unittest.TestCase):
@@ -31,6 +31,15 @@ class TestTagConcordance(unittest.TestCase):
         self.assertTrue(rows[0]["before"].startswith("… "))
         self.assertTrue(rows[0]["after"].startswith(","))
         self.assertTrue(rows[0]["after"].endswith(" …"))
+
+    def test_wall_positions_count_outward_and_preserve_punctuation(self) -> None:
+        before: list[dict[str, Any]] = _position_words("… Hello, nearby", before=True)
+        after: list[dict[str, Any]] = _position_words(", next word! …", before=False)
+        self.assertEqual(len(before), 20)
+        self.assertEqual(before[-2:], [{"text": "… Hello,", "position": 2}, {"text": "nearby", "position": 1}])
+        self.assertEqual(after[:2], [{"text": ", next", "position": 1}, {"text": "word! …", "position": 2}])
+        self.assertTrue(all(not word["text"] for word in before[:-2] + after[2:]))
+        self.assertEqual(_position_words("!", before=False)[0]["text"], "!")
 
     def test_original_spelling_punctuation_stems_and_whole_phrases(self) -> None:
         cases: list[tuple[str, str, list[str]]] = [
@@ -180,6 +189,14 @@ class TestTagConcordance(unittest.TestCase):
         self.assertEqual(rendered["article_count"], 2)
         self.assertTrue(rendered["has_more"])
         self.assertEqual([row["metadata"]["source"] for row in rendered["rows"]], ["Source", "Source"])
+        posts.get_by_tags.return_value = iter([{"pid": 2}, {"pid": 3}])
+        response = on_tag_context_wall_get(app, self.user, Request.from_values(), "root")
+        self.assertEqual(response.status_code, 200)
+        environment.get_template.assert_called_with("tag-context-wall.html")
+        rendered = environment.get_template.return_value.render.call_args.kwargs
+        self.assertEqual(len(rendered["rows"][0]["before_words"]), 20)
+        self.assertEqual(rendered["rows"][0]["after_words"][0]["text"], "news.")
+        self.assertEqual(rendered["details"]["posts"]["2"]["metadata"]["source"], "Source")
 
     def test_handler_rejects_invalid_pages_and_handles_storage_failure(self) -> None:
         for page in ("0", "-1", "abc", "10001"):
@@ -200,6 +217,10 @@ class TestTagConcordance(unittest.TestCase):
         values: dict[str, str]
         endpoint, values = routes.bind_to_environ(request.environ).match()
         self.assertEqual(endpoint, "on_tag_concordance_get")
+        self.assertEqual(values, {"tag": "artificial intelligence"})
+        endpoint, values = routes.bind_to_environ(Request.from_values(
+            "/tag-context-wall/artificial%20intelligence").environ).match()
+        self.assertEqual(endpoint, "on_tag_context_wall_get")
         self.assertEqual(values, {"tag": "artificial intelligence"})
 
     def test_template_escapes_article_and_topic_text(self) -> None:
@@ -226,6 +247,26 @@ class TestTagConcordance(unittest.TestCase):
             tag="artificial intelligence", rows=[], article_count=0, user_settings={}, page_number=1, has_more=False,
         )
         self.assertIn('/tag-explorer/artificial%20intelligence', phrase_html)
+        row["before_words"] = _position_words(payload, before=True)
+        row["after_words"] = _position_words(payload, before=False)
+        wall_html: str = environment.get_template("tag-context-wall.html").render(
+            tag=payload, rows=[row], article_count=1, user_settings={}, page_number=2, has_more=True,
+        )
+        self.assertNotIn("<img", wall_html)
+        self.assertEqual(wall_html.count('class="tag-context-wall__word '), 40)
+        self.assertIn('aria-haspopup="dialog"', wall_html)
+        self.assertIn('?page=3', wall_html)
+        row["before_words"] = _position_words("Hello nearby", before=True)
+        row["after_words"] = _position_words("next words here.", before=False)
+        wall_html = environment.get_template("tag-context-wall.html").render(
+            tag="root", rows=[row], article_count=1, user_settings={}, page_number=1, has_more=False,
+        )
+        contexts: list[str] = re.findall(
+            r'<span class="tag-context-wall__context[^\"]*">(.*?)</span>\s*(?:<strong|</button>)',
+            wall_html, flags=re.DOTALL,
+        )
+        self.assertEqual([re.sub(r"<[^>]+>", "", context).strip() for context in contexts],
+                         ["Hello nearby", "next words here."])
 
 
 if __name__ == "__main__":

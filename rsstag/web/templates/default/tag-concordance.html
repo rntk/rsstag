@@ -12,6 +12,7 @@
             <h1>Context for “{{ tag|e }}”</h1>
             <p>Twenty words on either side of each occurrence. Click either side to read the full topic sentences.</p>
             <p>{{ rows|length }} occurrences in {{ article_count }} articles on this page · {{ 'Unread only' if user_settings.get('only_unread') else 'Read and unread' }}</p>
+            <a href="/tag-context-wall/{{ tag|url_encode|replace('+', '%20') }}?page={{ page_number }}">Context wall</a> ·
             <a href="/tag-explorer/{{ tag|url_encode|replace('+', '%20') }}">Explore topics and context</a>
         </header>
         <div class="tag-concordance__head" aria-hidden="true"><span>Before</span><span>Tag &amp; article</span><span>After</span></div>
@@ -48,15 +49,7 @@
             {% if has_more %}<a href="?page={{ page_number + 1 }}">Next</a>{% endif %}
         </nav>
     </main>
-    <dialog id="concordance-dialog" class="tag-concordance__dialog" aria-labelledby="concordance-dialog-title">
-        <button type="button" class="tag-concordance__close" aria-label="Close sentence dialog">Close</button>
-        <h2 id="concordance-dialog-title">Topic sentences</h2>
-        <a class="tag-concordance__article"></a>
-        <div class="tag-concordance__sentences"></div>
-        <p class="tag-concordance__status" role="status" aria-live="polite"></p>
-    </dialog>
-    <p class="tag-concordance__status tag-concordance__page-status" role="status" aria-live="polite"></p>
-    <script id="concordance-details" type="application/json">{{ (details|default({}))|tojson }}</script>
+    {% include "tag-concordance-dialog.html" %}
     <script type="module" src="/static/js/tag-concordance.js"></script>
 </body>
 </html>

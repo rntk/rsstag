@@ -1,5 +1,57 @@
+const WORD_CLASS = 'tag-context-wall__word';
+const WORD_HIGHLIGHT_CLASS = 'is-word-match';
+
+/** Normalize a context word, ignoring case and surrounding punctuation. */
+function wordKey(element) {
+  return element.textContent.match(/[\p{L}\p{N}_]+/u)?.[0].toLowerCase() ?? '';
+}
+
+/** Highlight every occurrence of the hovered word across all wall rows. */
+function initWordHighlight(viewport) {
+  const index = new Map();
+  viewport.querySelectorAll(`.${WORD_CLASS}`).forEach((element) => {
+    const key = wordKey(element);
+    if (key) index.set(key, [...(index.get(key) ?? []), element]);
+  });
+  let active = [];
+  function highlight(elements) {
+    active.forEach((element) => element.classList.remove(WORD_HIGHLIGHT_CLASS));
+    active = elements;
+    active.forEach((element) => element.classList.add(WORD_HIGHLIGHT_CLASS));
+  }
+  viewport.addEventListener('mouseover', (event) => {
+    const word = event.target.closest?.(`.${WORD_CLASS}`);
+    highlight(word ? (index.get(wordKey(word)) ?? []) : []);
+  });
+  viewport.addEventListener('mouseleave', () => highlight([]));
+}
+
+/** Open a context wall with its matching tag centered in the scroll viewport. */
+export function initContextWall(root = globalThis.document) {
+  const viewport = root.querySelector('.tag-context-wall__scroll');
+  const match = viewport?.querySelector('.tag-context-wall__match');
+  if (!match) return;
+  initWordHighlight(viewport);
+  function centerTag() {
+    const target = match.getBoundingClientRect();
+    const bounds = viewport.getBoundingClientRect();
+    const left = viewport.scrollLeft + target.left - bounds.left - viewport.clientLeft;
+    viewport.scrollLeft = Math.max(
+      0,
+      Math.min(
+        left + target.width / 2 - viewport.clientWidth / 2,
+        viewport.scrollWidth - viewport.clientWidth
+      )
+    );
+  }
+  const fonts = viewport.ownerDocument.fonts;
+  if (fonts?.status === 'loading') void fonts.ready.then(centerTag);
+  else centerTag();
+}
+
 /** Open complete topic sentences and persist their shared read state. */
 export function initConcordance(root = globalThis.document, request = globalThis.fetch) {
+  initContextWall(root);
   const data = root.querySelector('#concordance-details');
   const dialog = root.querySelector('#concordance-dialog');
   if (!data || !dialog) return;
@@ -30,6 +82,13 @@ export function initConcordance(root = globalThis.document, request = globalThis
     const link = dialog.querySelector('.tag-concordance__article');
     link.textContent = post.title;
     link.href = post.url;
+    const metadata = dialog.querySelector('.tag-concordance__metadata');
+    if (metadata) {
+      metadata.textContent = ['source', 'provider', 'category']
+        .filter((key) => post.metadata?.[key])
+        .map((key) => `${key[0].toUpperCase() + key.slice(1)}: ${post.metadata[key]}`)
+        .join(' · ');
+    }
     const body = dialog.querySelector('.tag-concordance__sentences');
     body.replaceChildren();
     const sections = detail.topics.length
@@ -79,7 +138,7 @@ export function initConcordance(root = globalThis.document, request = globalThis
     const readed = button.dataset.read !== '1';
     pending.add(key);
     matchingElements(pid, number).forEach((element) => {
-      if (element.matches('button')) element.disabled = true;
+      if (element.matches('.tag-concordance__read')) element.disabled = true;
     });
     statuses.forEach((status) => {
       status.textContent = '';
@@ -101,7 +160,7 @@ export function initConcordance(root = globalThis.document, request = globalThis
         if (sentence.number === number) sentence.read = readed;
       });
       matchingElements(pid, number).forEach((element) => {
-        if (element.matches('button')) {
+        if (element.matches('.tag-concordance__read')) {
           element.dataset.read = readed ? '1' : '0';
           element.textContent = readed ? 'Mark Unread' : 'Mark Read';
         } else element.classList.toggle('is-read', readed);
@@ -113,7 +172,7 @@ export function initConcordance(root = globalThis.document, request = globalThis
     } finally {
       pending.delete(key);
       matchingElements(pid, number).forEach((element) => {
-        if (element.matches('button')) element.disabled = false;
+        if (element.matches('.tag-concordance__read')) element.disabled = false;
       });
     }
   }

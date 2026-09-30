@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Context wall: {{ tag|e }}</title>
+    {% include "head-data.html" %}
+</head>
+<body>
+    {% from 'site-header.html' import site_header with context %}
+    {{ site_header(active='tags', show_context_filter=True) }}
+    <main class="tag-concordance tag-context-wall">
+        <header class="tag-concordance__intro">
+            <h1>Context wall for “{{ tag|e }}”</h1>
+            <p>{{ rows|length }} occurrences in {{ article_count }} articles · {{ 'Unread only' if user_settings.get('only_unread') else 'Read and unread' }}</p>
+            <p>Twenty words on each side. Colors follow word positions relative to the tag. Scroll horizontally; click a row for full sentences, metadata, and read controls.</p>
+            <a href="/tag-concordance/{{ tag|url_encode|replace('+', '%20') }}?page={{ page_number }}">Detailed concordance</a> ·
+            <a href="/tag-explorer/{{ tag|url_encode|replace('+', '%20') }}">Explore topics</a>
+        </header>
+        <section class="tag-context-wall__scroll" aria-label="Aligned tag contexts" tabindex="0">
+            <div class="tag-context-wall__lines">
+            {% for row in rows %}
+                <button type="button" class="tag-context-wall__line{% if row.read %} is-read{% endif %}" data-detail-key="{{ row.detail_key|e }}" data-post-id="{{ row.pid|e }}" data-sentence-number="{{ row.number if row.number is not none else '' }}" aria-haspopup="dialog" aria-controls="concordance-dialog" title="{{ row.title|e }}">
+                    <span class="tag-context-wall__context tag-context-wall__before">
+                    {%- for word in row.before_words -%}
+                    <span class="tag-context-wall__word tag-context-wall__position-before-{{ word.position }}">{{ word.text|e }}</span>{% if word.text and not loop.last %} {% endif %}
+                    {%- endfor -%}
+                    </span>
+                    <strong class="tag-context-wall__match">{{ row.match|e }}</strong>
+                    <span class="tag-context-wall__context tag-context-wall__after">
+                    {%- for word in row.after_words -%}
+                    <span class="tag-context-wall__word tag-context-wall__position-after-{{ word.position }}">{{ word.text|e }}</span>{% if word.text and not loop.last %} {% endif %}
+                    {%- endfor -%}
+                    </span>
+                </button>
+            {% else %}
+                <p class="tag-concordance__empty">No matching sentences on this page.{% if has_more %} Continue to the next page of articles.{% endif %}</p>
+            {% endfor %}
+            </div>
+        </section>
+        <nav class="tag-concordance__pagination" aria-label="Article pages">
+            {% if page_number > 1 %}<a href="?page={{ page_number - 1 }}">Previous</a>{% endif %}
+            <span>Page {{ page_number }}</span>
+            {% if has_more %}<a href="?page={{ page_number + 1 }}">Next</a>{% endif %}
+        </nav>
+    </main>
+    {% include "tag-concordance-dialog.html" %}
+    <script type="module" src="/static/js/tag-concordance.js"></script>
+</body>
+</html>
