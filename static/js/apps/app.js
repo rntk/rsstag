@@ -10,6 +10,7 @@ import ShowAllButton from '../components/showall-button.js';
 import SettingsStorage from '../storages/settings-storage.js';
 import TagsStorage from '../storages/tags-storage.js';
 import TagsList from '../components/tags-list.js';
+import { initTagsCanvas } from '../tags-canvas.js';
 import LettersList from '../components/letters-list.js';
 import SearchInput from '../components/search-input.js';
 import CategoriesList from '../components/categories-list.js';
@@ -411,6 +412,9 @@ export function resolvePageType(path) {
   if (path === '/group/category') {
     return 'group-category';
   }
+  if (path === '/tags/canvas') {
+    return 'tags-canvas';
+  }
   if (
     /\/group\/(tag|hottag|tags-categories)\/.*/.test(path) ||
     /\/group\/(rake-dyn|yake-dyn)\/.*/.test(path) ||
@@ -680,6 +684,8 @@ export function initApp() {
     renderToRoot('letters_list', <LettersList ES={window.EVSYS} />);
     renderToRoot('search_tools', <SearchInput ES={window.EVSYS} />);
     tags_storage.start();
+  } else if (pageType === 'tags-canvas') {
+    initTagsCanvas();
   } else if (pageType === 'bigrams-group') {
     const bi_grams_storage = new BiGramsStorage(window.EVSYS);
     renderToRoot('bigrams_tabs_page', <BiGramsTabs ES={window.EVSYS} />);

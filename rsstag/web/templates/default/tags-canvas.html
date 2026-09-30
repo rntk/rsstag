@@ -1,0 +1,52 @@
+<html>
+<head>
+    <title>Tag canvas</title>
+    {% include "head-data.html" %}
+</head>
+<body class="font-body bg-background tag-canvas-page">
+    {% from 'site-header.html' import site_header with context %}
+    {{ site_header(active='tags', show_context_filter=True) }}
+    <main class="tag-canvas-shell">
+        <div class="tag-canvas-toolbar">
+            <div class="tag-canvas-heading">
+                <h1>Tag canvas</h1>
+                <span id="tag-canvas-status" role="status" aria-live="polite">Loading tags…</span>
+            </div>
+            <div class="tag-canvas-actions">
+                <fieldset class="tag-canvas-metric">
+                    <legend>Size by</legend>
+                    <label><input type="radio" name="tag-canvas-metric" value="count" checked> Frequency</label>
+                    <label><input type="radio" name="tag-canvas-metric" value="temperature"> Temperature</label>
+                </fieldset>
+                <div class="tag-canvas-zoom" aria-label="Canvas zoom">
+                    <button id="tag-canvas-zoom-out" type="button" aria-label="Zoom out">−</button>
+                    <output id="tag-canvas-zoom-level" aria-label="Zoom level">100%</output>
+                    <button id="tag-canvas-reset" type="button" aria-label="Reset view">Reset</button>
+                    <button id="tag-canvas-zoom-in" type="button" aria-label="Zoom in">+</button>
+                </div>
+                <a href="{{ list_link }}">List view</a>
+            </div>
+        </div>
+        <div class="tag-canvas-viewport" id="tag-canvas-viewport">
+            <canvas id="tag-canvas" tabindex="0" role="img" aria-label="Tag cloud. Focus the canvas and use arrow and Page Up or Page Down keys to move, or drag, use the mouse wheel or zoom buttons to zoom, and select a tag to open its posts. Press Escape to dismiss tag actions. Use List view for keyboard access to individual tags."></canvas>
+            <div id="tag-canvas-menu" class="tag-canvas-menu" hidden>
+                <svg class="tag-canvas-menu__ring" viewBox="0 0 360 360" aria-label="Tag actions"></svg>
+                <a class="tag-canvas-menu__center" href="#"></a>
+                <div class="tag-canvas-menu__words" role="tooltip" hidden></div>
+            </div>
+            <div id="tag-canvas-error" class="tag-canvas-error" role="alert" hidden></div>
+            <div class="tag-canvas-hint">Drag or use arrow keys to explore · Page Up/Down moves one screen · Wheel or pinch to zoom · Esc closes tag actions</div>
+            <nav class="tag-canvas-navigation" aria-label="Move around tag canvas">
+                <button type="button" data-pan="page-up" aria-label="Page up" title="Page up">Page ↑</button>
+                <div class="tag-canvas-direction">
+                    <button type="button" data-pan="up" aria-label="Move up" title="Move up">↑</button>
+                    <button type="button" data-pan="left" aria-label="Move left" title="Move left">←</button>
+                    <button type="button" data-pan="down" aria-label="Move down" title="Move down">↓</button>
+                    <button type="button" data-pan="right" aria-label="Move right" title="Move right">→</button>
+                </div>
+                <button type="button" data-pan="page-down" aria-label="Page down" title="Page down">Page ↓</button>
+            </nav>
+        </div>
+    </main>
+</body>
+</html>

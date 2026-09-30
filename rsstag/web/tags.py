@@ -89,6 +89,88 @@ def _preserve_topic_filter_in_pages(pages_map: dict[str, list[dict]], enabled: b
             page_link["url"] = _append_topic_filter(page_link["url"], enabled)
 
 
+def on_tags_canvas_get(
+    app: "RSSTagApplication", user: dict, request: Request
+) -> Response:
+    page = app.template_env.get_template("tags-canvas.html")
+    return Response(
+        page.render(
+            user_settings=user["settings"],
+            provider=user.get("provider", ""),
+            topic_filter_active=_topic_filter_enabled(request),
+            list_link=_append_topic_filter(
+                app.routes.get_url_by_endpoint(
+                    "on_group_by_tags_get", params={"page_number": 1}
+                ),
+                _topic_filter_enabled(request),
+            ),
+        ),
+        mimetype="text/html",
+    )
+
+
+def on_tags_canvas_data_get(
+    app: "RSSTagApplication", user: dict, request: Request
+) -> Response:
+    try:
+        offset: int = max(0, int(request.args.get("offset", "0")))
+        limit: int = min(300, max(1, int(request.args.get("limit", "200"))))
+    except ValueError:
+        return Response(
+            json.dumps({"error": "Offset and limit must be numbers."}),
+            mimetype="application/json",
+            status=400,
+        )
+
+    only_unread: bool = bool(user["settings"].get("only_unread"))
+    topic_filter_active: bool = _topic_filter_enabled(request)
+    context_filter_active, scoped_counts = _get_scoped_tag_counts(app, user)
+    if context_filter_active:
+        topic_names: set[str] = (
+            app.tags.get_topic_backed_names(user["sid"], only_unread)
+            if topic_filter_active else set()
+        )
+        names: list[str] = [
+            name for name, count in sorted(scoped_counts.items(), key=lambda item: (-item[1], item[0]))
+            if count > 0 and (not topic_filter_active or name in topic_names)
+        ]
+        total: int = len(names)
+        tags: list[dict[str, Any]] = []
+        for name in names[offset:offset + limit]:
+            doc: dict[str, Any] = app.tags.get_by_tag(user["sid"], name) or {}
+            tags.append({
+                "tag": name,
+                "url": doc.get("local_url", f"/entity/{quote(name)}"),
+                "count": scoped_counts[name],
+                "temperature": doc.get("temperature", 0),
+                "words": doc.get("words", []),
+            })
+    else:
+        total = app.tags.count(user["sid"], only_unread, topic_backed=True if topic_filter_active else None)
+        opts: dict[str, Any] = {"offset": offset, "limit": limit}
+        if topic_filter_active:
+            opts["topic_backed"] = True
+        tags = [
+            {
+                "tag": doc["tag"],
+                "url": doc.get("local_url", f"/entity/{quote(doc['tag'])}"),
+                "count": doc.get("unread_count", 0) if only_unread else doc.get("posts_count", 0),
+                "temperature": doc.get("temperature", 0),
+                "words": doc.get("words", []),
+            }
+            for doc in app.tags.get_all(
+                user["sid"], only_unread, False, opts=opts,
+                projection={"tag": 1, "local_url": 1, "unread_count": 1,
+                            "posts_count": 1, "temperature": 1, "words": 1, "_id": 0},
+            )
+        ]
+
+    return Response(
+        json.dumps({"tags": tags, "total": total, "next_offset": offset + len(tags)}),
+        mimetype="application/json",
+    )
+
+
 def on_group_by_tags_get(
     app: "RSSTagApplication",
     user: dict,
@@ -215,6 +297,7 @@ def on_group_by_tags_get(
             letters=letters,
             user_settings=user["settings"],
             provider=user.get("provider", ""),
+            topic_filter_active=topic_filter_active,
         ),
         mimetype="text/html",
     )

@@ -1,7 +1,7 @@
 import logging
 from collections import defaultdict
 from typing import Optional, List, Iterator
-from pymongo import MongoClient, DESCENDING, UpdateOne
+from pymongo import MongoClient, ASCENDING, DESCENDING, UpdateOne
 
 
 class RssTagTags:
@@ -73,6 +73,7 @@ class RssTagTags:
             query["unread_count"] = {"$gt": 0}
         else:
             sort_data.append(("posts_count", DESCENDING))
+        sort_data.append(("tag", ASCENDING))
         params = {}
         if opts and "offset" in opts:
             params["skip"] = opts["offset"]

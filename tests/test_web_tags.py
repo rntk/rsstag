@@ -2,9 +2,53 @@ import gzip
 import json
 import re
 import unittest
+from types import SimpleNamespace
 from unittest import mock
+from werkzeug.wrappers import Request
 
+from rsstag.web.tags import on_tags_canvas_data_get
 from tests.web_test_utils import MongoWebTestCase
+
+
+class TestTagsCanvasData(unittest.TestCase):
+    def test_canvas_data_paginates_and_includes_both_metrics(self) -> None:
+        documents: list[dict[str, object]] = [
+            {"tag": "alpha", "local_url": "/entity/alpha", "posts_count": 12,
+             "unread_count": 3, "temperature": 0.5, "words": ["alpha", "alias"]},
+            {"tag": "beta", "local_url": "/entity/beta", "posts_count": 7,
+             "unread_count": 1, "temperature": 2.0},
+        ]
+        tags = mock.Mock()
+        tags.count.return_value = len(documents)
+        tags.get_all.side_effect = lambda *args, **kwargs: documents[
+            kwargs["opts"]["offset"]:kwargs["opts"]["offset"] + kwargs["opts"]["limit"]
+        ]
+        app = SimpleNamespace(tags=tags)
+        user: dict[str, object] = {"sid": "owner", "settings": {"only_unread": False}}
+        request = Request.from_values(query_string="offset=1&limit=1")
+
+        with mock.patch("rsstag.web.tags._get_scoped_tag_counts", return_value=(False, {})):
+            response = on_tags_canvas_data_get(app, user, request)
+
+        data: dict = json.loads(response.get_data(as_text=True))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(data["total"], 2)
+        self.assertEqual(data["next_offset"], 2)
+        self.assertEqual(data["tags"], [{"tag": "beta", "url": "/entity/beta",
+                                         "count": 7, "temperature": 2.0, "words": []}])
+        self.assertIn("words", tags.get_all.call_args.kwargs["projection"])
+        with mock.patch("rsstag.web.tags._get_scoped_tag_counts", return_value=(False, {})):
+            first = on_tags_canvas_data_get(
+                app, user, Request.from_values(query_string="offset=0&limit=1")
+            )
+        self.assertEqual(json.loads(first.get_data(as_text=True))["tags"][0]["words"],
+                         ["alpha", "alias"])
+
+    def test_canvas_data_rejects_invalid_offset(self) -> None:
+        response = on_tags_canvas_data_get(
+            SimpleNamespace(), {}, Request.from_values(query_string="offset=invalid")
+        )
+        self.assertEqual(response.status_code, 400)
 
 
 class TestWebTags(MongoWebTestCase):
@@ -80,6 +124,26 @@ class TestWebTags(MongoWebTestCase):
         self.assertEqual(response.status_code, 200)
         body = response.get_data(as_text=True)
         self.assertIn("testtag", body)
+
+    def test_tags_canvas_page_and_chunked_data(self) -> None:
+        self._seed_tag("canvas-second", count=2)
+        page = self.client.get("/tags/canvas")
+        self.assertEqual(page.status_code, 200)
+        self.assertIn("Tag canvas", page.get_data(as_text=True))
+
+        first = self.client.get("/api/tags/canvas?offset=0&limit=1")
+        second = self.client.get("/api/tags/canvas?offset=1&limit=1")
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        first_data: dict = json.loads(first.get_data(as_text=True))
+        second_data: dict = json.loads(second.get_data(as_text=True))
+        self.assertEqual(first_data["total"], second_data["total"])
+        self.assertEqual(first_data["next_offset"], 1)
+        self.assertNotEqual(first_data["tags"][0]["tag"], second_data["tags"][0]["tag"])
+        self.assertIn("temperature", first_data["tags"][0])
+
+        invalid = self.client.get("/api/tags/canvas?offset=invalid")
+        self.assertEqual(invalid.status_code, 400)
 
     def test_on_group_by_tags_get_respects_context_filters(self) -> None:
         user, sid = self.seed_test_user("ctx-tags-user", "password")

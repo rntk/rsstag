@@ -445,6 +445,20 @@ class RSSTagApplication(object):
             self, user, page_number=page_number, request=request
         )
 
+    def on_tags_canvas_get(self, user: dict, request: Request) -> Response:
+        return tags_handlers.on_tags_canvas_get(self, user, request)
+
+    def on_tags_canvas_data_get(self, user: dict, request: Request) -> Response:
+        try:
+            return tags_handlers.on_tags_canvas_data_get(self, user, request)
+        except Exception:
+            logging.getLogger(__name__).exception("Failed to load tag canvas data")
+            return Response(
+                json.dumps({"error": "Could not load tags. Please try again."}),
+                mimetype="application/json",
+                status=503,
+            )
+
     def on_group_by_bigrams_get(
         self, user: dict, _: Request, page_number: int = 1
     ) -> Response:
