@@ -131,6 +131,26 @@ class RssTagPosts:
             .sort(sort_data)
         )
 
+    def get_recent_by_tags(
+        self,
+        owner: str,
+        tags: List[str],
+        limit: int,
+        only_unread: Optional[bool] = None,
+        projection: Optional[dict] = None,
+        context_tags: Optional[List[str]] = None,
+    ) -> Iterator[dict]:
+        """Get the newest posts matching all tags, capped for aggregate views."""
+        all_tags: List[str] = list(dict.fromkeys(list(tags) + list(context_tags or [])))
+        query: dict = {"owner": owner, "tags": {"$all": all_tags}}
+        if only_unread is not None:
+            query["read"] = not only_unread
+        return (
+            self._db.posts.find(query, projection=projection)
+            .sort([("unix_date", DESCENDING)])
+            .limit(limit)
+        )
+
     def count_by_tags(self, owner: str, tags: List[str], only_unread: Optional[bool] = None) -> int:
         query: dict = {"owner": owner, "tags": {"$all": tags}}
         if only_unread is not None:

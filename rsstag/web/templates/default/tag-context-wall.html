@@ -11,23 +11,38 @@
         <header class="tag-concordance__intro">
             <h1>Context wall for “{{ tag|e }}”</h1>
             <p>{{ rows|length }} occurrences in {{ article_count }} articles · {{ 'Unread only' if user_settings.get('only_unread') else 'Read and unread' }}</p>
-            <p>Twenty words on each side. Colors follow word positions relative to the tag. Scroll horizontally; click a row for full sentences, metadata, and read controls.</p>
+            <p>Twenty words on each side. Choose a coloring method to compare word highlights. Scroll horizontally; click a row for full sentences, metadata, and read controls.</p>
             <a href="/tag-concordance/{{ tag|url_encode|replace('+', '%20') }}?page={{ page_number }}">Detailed concordance</a> ·
             <a href="/tag-explorer/{{ tag|url_encode|replace('+', '%20') }}">Explore topics</a>
         </header>
+        {% include "tag-insights.html" %}
+        {% if coloring_options %}
+        <section class="tag-context-wall__coloring" aria-label="Word coloring">
+            <label for="wall-coloring-mode">Word coloring</label>
+            <select id="wall-coloring-mode" aria-describedby="wall-coloring-description">
+                {% for option in coloring_options %}
+                <option value="{{ option.key|e }}" data-description="{{ option.description|e }}"{% if option.threshold is not none %} data-threshold="{{ option.threshold }}"{% endif %}>{{ option.label|e }}</option>
+                {% endfor %}
+            </select>
+            <label class="tag-context-wall__threshold" hidden>
+                Minimum score <input id="wall-coloring-threshold" type="number" min="0" max="1" step="0.05" value="0.8" aria-describedby="wall-coloring-description">
+            </label>
+            <p id="wall-coloring-description" aria-live="polite">{{ coloring_options[0].description|e }}</p>
+        </section>
+        {% endif %}
         <section class="tag-context-wall__scroll" aria-label="Aligned tag contexts" tabindex="0">
             <div class="tag-context-wall__lines">
             {% for row in rows %}
-                <button type="button" class="tag-context-wall__line{% if row.read %} is-read{% endif %}" data-detail-key="{{ row.detail_key|e }}" data-post-id="{{ row.pid|e }}" data-sentence-number="{{ row.number if row.number is not none else '' }}" aria-haspopup="dialog" aria-controls="concordance-dialog" title="{{ row.title|e }}">
+                <button type="button" class="tag-context-wall__line{% if row.read %} is-read{% endif %}{% if row.duplicate_of is not none %} is-duplicate{% endif %}" data-detail-key="{{ row.detail_key|e }}" data-post-id="{{ row.pid|e }}" data-sentence-number="{{ row.number if row.number is not none else '' }}" aria-haspopup="dialog" aria-controls="concordance-dialog" title="{{ row.title|e }}">
                     <span class="tag-context-wall__context tag-context-wall__before">
                     {%- for word in row.before_words -%}
-                    <span class="tag-context-wall__word tag-context-wall__position-before-{{ word.position }}">{{ word.text|e }}</span>{% if word.text and not loop.last %} {% endif %}
+                    <span class="tag-context-wall__word{% if word.color is not none %} tag-context-wall__color-{{ word.color }}{% endif %}"{% if word.colorings is defined %} data-colorings='{{ word.colorings|tojson }}'{% endif %}>{{ word.text|e }}</span>{% if word.text and not loop.last %} {% endif %}
                     {%- endfor -%}
                     </span>
-                    <strong class="tag-context-wall__match">{{ row.match|e }}</strong>
+                    <strong class="tag-context-wall__match">{{ row.match|e }}{% if row.duplicates %} <sup class="tag-context-wall__duplicates" title="{{ row.duplicates }} near-identical {{ 'context' if row.duplicates == 1 else 'contexts' }} folded">×{{ row.duplicates + 1 }}</sup>{% endif %}</strong>
                     <span class="tag-context-wall__context tag-context-wall__after">
                     {%- for word in row.after_words -%}
-                    <span class="tag-context-wall__word tag-context-wall__position-after-{{ word.position }}">{{ word.text|e }}</span>{% if word.text and not loop.last %} {% endif %}
+                    <span class="tag-context-wall__word{% if word.color is not none %} tag-context-wall__color-{{ word.color }}{% endif %}"{% if word.colorings is defined %} data-colorings='{{ word.colorings|tojson }}'{% endif %}>{{ word.text|e }}</span>{% if word.text and not loop.last %} {% endif %}
                     {%- endfor -%}
                     </span>
                 </button>

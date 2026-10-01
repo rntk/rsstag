@@ -11,6 +11,8 @@ from werkzeug.wrappers import Request, Response
 from rsstag.snippets import strip_html_markup
 from rsstag.tags_builder import TagsBuilder
 from rsstag.web.posts import _get_context_tags
+from rsstag.web.tag_insights import mark_duplicates, wall_insights
+from rsstag.web.word_coloring import ColoringContext, _insight_colors, apply_coloring
 from rsstag.web.tag_explorer import (
     _load_result_content, _only_unread, _parse_page, _posts_on_page,
     _post_text, _sentence_source,
@@ -65,7 +67,18 @@ def _sentence_documents(
     }
 
 
-def _position_words(text: str, before: bool) -> list[dict[str, Any]]:
+def _word_color(text: str, colors: dict[str, str]) -> str | None:
+    """Highlight only insight terms, including their inflected spellings."""
+    token: re.Match[str] | None = re.search(r"\w+", text)
+    if token is None:
+        return None
+    key: str = token.group().casefold()
+    return colors.get(key) or colors.get(BUILDER.process_word(key))
+
+
+def _position_words(
+    text: str, before: bool, colors: dict[str, str] | None = None,
+) -> list[dict[str, Any]]:
     """Pad context to twenty slots, numbered outward from the matching tag."""
     tokens: list[re.Match[str]] = list(re.finditer(r"\w+", text))
     words: list[str] = []
@@ -77,7 +90,8 @@ def _position_words(text: str, before: bool) -> list[dict[str, Any]]:
                          else words + [""] * (CONTEXT_WORDS - len(words)))
     if not tokens:
         padded[-1 if before else 0] = text.strip()
-    return [{"text": word, "position": CONTEXT_WORDS - index if before else index + 1}
+    return [{"text": word, "position": CONTEXT_WORDS - index if before else index + 1,
+             "color": _word_color(word, colors or {})}
             for index, word in enumerate(padded)]
 
 
@@ -155,6 +169,23 @@ def _detail_data(
     return {"posts": sources, "entries": entries}
 
 
+def _prepare_wall(
+    app: "RSSTagApplication", user: dict[str, Any], tag: str, rows: list[dict[str, Any]],
+    posts: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Align words, fold near-duplicates, and attach the tag-wide summary."""
+    duplicate_count: int = mark_duplicates(rows)
+    insights: dict[str, Any] | None = wall_insights(app, user, tag, rows)
+    for row in rows:
+        row["before_words"] = _position_words(row["before"], before=True)
+        row["after_words"] = _position_words(row["after"], before=False)
+    context: ColoringContext = ColoringContext(
+        tag=tag, documents={str(post["pid"]): _post_text(post) for post in posts}, insights=insights,
+    )
+    options: list[dict[str, Any]] = apply_coloring(rows, context)
+    return {"duplicate_count": duplicate_count, "insights": insights, "coloring_options": options}
+
+
 def on_tag_concordance_get(
     app: "RSSTagApplication", user: dict[str, Any], request: Request, tag: str,
     dense: bool = False,
@@ -175,15 +206,12 @@ def on_tag_concordance_get(
         posts: list[dict[str, Any]] = _load_result_content(app, user, selected[:page_size])
         documents: dict[str, dict[str, Any]] = _sentence_documents(app, user, posts)
         rows: list[dict[str, Any]] = list(_rows(posts, documents, tag, _only_unread(user)))
-        if dense:
-            for row in rows:
-                row["before_words"] = _position_words(row["before"], before=True)
-                row["after_words"] = _position_words(row["after"], before=False)
+        wall: dict[str, Any] = _prepare_wall(app, user, tag, rows, posts) if dense else {}
         template: Any = app.template_env.get_template("tag-context-wall.html" if dense else "tag-concordance.html")
         details: dict[str, Any] = _detail_data(posts, documents, rows)
         return Response(template.render(
             tag=tag, rows=rows, page_number=page_number, has_more=len(selected) > page_size,
-            details=details,
+            details=details, **wall,
             article_count=len(posts), user_settings=user["settings"], provider=user.get("provider", ""),
         ), mimetype="text/html")
     except Exception:

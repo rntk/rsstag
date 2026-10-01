@@ -1,0 +1,72 @@
+{% macro term_chips(terms, kind) -%}
+<ul class="tag-insights__terms">
+    {%- for term in terms %}
+    <li><button type="button" class="tag-insights__term tag-insights__term--{{ kind }}" data-filter-words="{{ term.words|join(' ')|e }}" data-filter-label="{{ term.label|e }}" aria-pressed="false">
+        {{ term.label|e }}
+        {%- if term.count is defined %} <span class="tag-insights__count">{{ term.count }}</span>
+        {%- else %} <span class="tag-insights__count">{{ term.earlier }} → {{ term.recent }}</span>{% endif -%}
+    </button></li>
+    {%- else %}
+    <li class="tag-insights__none">Nothing stands out</li>
+    {%- endfor %}
+</ul>
+{%- endmacro %}
+<section class="tag-insights" aria-label="Tag insights">
+    {% if insights is not defined or insights is none %}
+    <p class="tag-insights__note">Insights are unavailable right now. The contexts below are still complete.</p>
+    {% elif not insights.sampled %}
+    <p class="tag-insights__note">Not enough mentions to summarize yet.</p>
+    {% else %}
+    <p class="tag-insights__note">Based on the {{ 'latest ' if insights.limited }}{{ insights.sampled }} matching articles{% if insights.limited %} (capped){% endif %}. Click a word to show only rows that contain it.</p>
+    <div class="tag-insights__grid">
+        <div class="tag-insights__card">
+            <h2>Mentions per day</h2>
+            <div class="tag-insights__timeline" role="img" aria-label="Articles mentioning the tag per day over the last {{ insights.timeline|length }} days of data">
+                {%- for day in insights.timeline %}
+                <span class="tag-insights__bar tag-insights__level-{{ day.level }}{% if day.peak %} is-peak{% endif %}" title="{{ day.date }}: {{ day.count }}"></span>
+                {%- endfor %}
+            </div>
+            {% if insights.timeline %}<p class="tag-insights__range"><span>{{ insights.timeline[0].date }}</span><span>{{ insights.timeline[-1].date }}</span></p>{% endif %}
+        </div>
+        <div class="tag-insights__card">
+            <div class="tag-insights__block tag-context-wall__color-before">
+                <h2>Typical words before</h2>
+                {{ term_chips(insights.left, 'before') }}
+            </div>
+            <div class="tag-insights__block tag-context-wall__color-after">
+                <h2>Typical words after</h2>
+                {{ term_chips(insights.right, 'after') }}
+            </div>
+        </div>
+        <div class="tag-insights__card">
+            <div class="tag-insights__block tag-context-wall__color-rising">
+                <h2>New in the last {{ insights.recent_days }} days</h2>
+                {{ term_chips(insights.rising, 'rising') }}
+            </div>
+            <div class="tag-insights__block tag-context-wall__color-fading">
+                <h2>Fading</h2>
+                {{ term_chips(insights.fading, 'fading') }}
+            </div>
+        </div>
+        <div class="tag-insights__card">
+            <h2>Most unusual on this page</h2>
+            <ol class="tag-insights__unusual">
+                {%- for item in insights.unusual %}
+                <li><button type="button" class="tag-insights__sentence" data-detail-key="{{ item.detail_key|e }}" aria-haspopup="dialog" aria-controls="concordance-dialog" title="{{ item.title|e }}">
+                    …{{ item.before|e }} <strong>{{ item.match|e }}</strong> {{ item.after|e }}…
+                    <span class="tag-insights__rare">Rare here: {{ item.rare|join(', ')|e }}</span>
+                </button></li>
+                {%- else %}
+                <li class="tag-insights__none">Need more mentions to compare</li>
+                {%- endfor %}
+            </ol>
+        </div>
+    </div>
+    {% endif %}
+    <div class="tag-insights__controls">
+        {% if duplicate_count %}
+        <label><input type="checkbox" class="tag-insights__show-duplicates"> Show {{ duplicate_count }} near-duplicate {{ 'row' if duplicate_count == 1 else 'rows' }}</label>
+        {% endif %}
+        <p class="tag-insights__filter" role="status" aria-live="polite" hidden><span></span> <button type="button" class="tag-insights__clear">Clear filter</button></p>
+    </div>
+</section>

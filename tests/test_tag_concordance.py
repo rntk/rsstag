@@ -14,7 +14,7 @@ from jinja2 import ChoiceLoader, DictLoader, Environment, FileSystemLoader
 from werkzeug.wrappers import Request, Response
 
 from rsstag.web.routes import RSSTagRoutes
-from rsstag.web.tag_concordance import _contexts, _detail_data, _position_words, _rows, _sentence_documents, on_tag_concordance_get, on_tag_context_wall_get
+from rsstag.web.tag_concordance import _contexts, _detail_data, _insight_colors, _position_words, _rows, _sentence_documents, _word_color, on_tag_concordance_get, on_tag_context_wall_get
 
 
 class TestTagConcordance(unittest.TestCase):
@@ -36,10 +36,45 @@ class TestTagConcordance(unittest.TestCase):
         before: list[dict[str, Any]] = _position_words("… Hello, nearby", before=True)
         after: list[dict[str, Any]] = _position_words(", next word! …", before=False)
         self.assertEqual(len(before), 20)
-        self.assertEqual(before[-2:], [{"text": "… Hello,", "position": 2}, {"text": "nearby", "position": 1}])
-        self.assertEqual(after[:2], [{"text": ", next", "position": 1}, {"text": "word! …", "position": 2}])
+        self.assertEqual([(word["text"], word["position"]) for word in before[-2:]],
+                         [("… Hello,", 2), ("nearby", 1)])
+        self.assertEqual([(word["text"], word["position"]) for word in after[:2]],
+                         [(", next", 1), ("word! …", 2)])
         self.assertTrue(all(not word["text"] for word in before[:-2] + after[2:]))
         self.assertEqual(_position_words("!", before=False)[0]["text"], "!")
+
+    def test_only_important_words_receive_block_colors(self) -> None:
+        colors: dict[str, str] = {"hello": "before", "привет": "after", "strasse": "rising"}
+        before: list[dict[str, Any]] = _position_words("… Hello, nearby", before=True, colors=colors)
+        after: list[dict[str, Any]] = _position_words("other words HELLO!", before=False, colors=colors)
+        self.assertEqual(before[-2]["color"], "before")
+        self.assertEqual(after[2]["color"], "before")
+        self.assertIsNone(before[-1]["color"])
+        self.assertTrue(all(word["color"] is None for word in after[:2] + before[:-2]))
+        self.assertTrue(all(word["color"] is None for word in _position_words("Hello", before=False)))
+        for text in ("Hello", "HELLO!", "… hello,"):
+            with self.subTest(text=text):
+                self.assertEqual(_word_color(text, colors), "before")
+        self.assertEqual(_word_color("ПРИВЕТ!", colors), "after")
+        self.assertEqual(_word_color("Straße", colors), "rising")
+        self.assertEqual(_word_color("recalls,", {"recal": "fading"}), "fading")
+        self.assertIsNone(_word_color("… !", colors))
+
+    def test_colors_match_side_blocks_and_fall_back_to_trends(self) -> None:
+        insights: dict[str, Any] = {
+            "left": [{"lemma": "recal", "words": ["recall", "recalls"]}],
+            "right": [{"lemma": "market", "words": ["market"]}],
+            "rising": [{"lemma": "recal", "words": ["recall", "recalls"]}],
+            "fading": [{"lemma": "sale", "words": ["sales"]}],
+        }
+        before: dict[str, str] = _insight_colors(insights, "left")
+        after: dict[str, str] = _insight_colors(insights, "right")
+        self.assertEqual(_word_color("RECALLS!", before), "before")
+        self.assertEqual(_word_color("recalls", after), "rising")
+        self.assertEqual(_word_color("markets", after), "after")
+        self.assertIsNone(_word_color("market", before))
+        self.assertEqual(_word_color("sales", before), "fading")
+        self.assertEqual(_insight_colors(None, "left"), {})
 
     def test_original_spelling_punctuation_stems_and_whole_phrases(self) -> None:
         cases: list[tuple[str, str, list[str]]] = [
@@ -187,6 +222,7 @@ class TestTagConcordance(unittest.TestCase):
         rendered: dict[str, Any] = environment.get_template.return_value.render.call_args.kwargs
         self.assertEqual(rendered["page_number"], 2)
         self.assertEqual(rendered["article_count"], 2)
+        self.assertNotIn("coloring_options", rendered)
         self.assertTrue(rendered["has_more"])
         self.assertEqual([row["metadata"]["source"] for row in rendered["rows"]], ["Source", "Source"])
         posts.get_by_tags.return_value = iter([{"pid": 2}, {"pid": 3}])
@@ -196,6 +232,9 @@ class TestTagConcordance(unittest.TestCase):
         rendered = environment.get_template.return_value.render.call_args.kwargs
         self.assertEqual(len(rendered["rows"][0]["before_words"]), 20)
         self.assertEqual(rendered["rows"][0]["after_words"][0]["text"], "news.")
+        self.assertEqual([option["key"] for option in rendered["coloring_options"]], ["important", "tfidf", "none"])
+        self.assertEqual(rendered["rows"][0]["after_words"][0]["colorings"]["tfidf"],
+                         {"color": "tfidf", "score": 1.0})
         self.assertEqual(rendered["details"]["posts"]["2"]["metadata"]["source"], "Source")
 
     def test_handler_rejects_invalid_pages_and_handles_storage_failure(self) -> None:
@@ -253,11 +292,11 @@ class TestTagConcordance(unittest.TestCase):
             tag=payload, rows=[row], article_count=1, user_settings={}, page_number=2, has_more=True,
         )
         self.assertNotIn("<img", wall_html)
-        self.assertEqual(wall_html.count('class="tag-context-wall__word '), 40)
+        self.assertEqual(len(re.findall(r'class="tag-context-wall__word(?: |")', wall_html)), 40)
         self.assertIn('aria-haspopup="dialog"', wall_html)
         self.assertIn('?page=3', wall_html)
-        row["before_words"] = _position_words("Hello nearby", before=True)
-        row["after_words"] = _position_words("next words here.", before=False)
+        row["before_words"] = _position_words("Hello nearby", before=True, colors={"hello": "before"})
+        row["after_words"] = _position_words("next HELLO here.", before=False, colors={"hello": "before"})
         wall_html = environment.get_template("tag-context-wall.html").render(
             tag="root", rows=[row], article_count=1, user_settings={}, page_number=1, has_more=False,
         )
@@ -266,7 +305,14 @@ class TestTagConcordance(unittest.TestCase):
             wall_html, flags=re.DOTALL,
         )
         self.assertEqual([re.sub(r"<[^>]+>", "", context).strip() for context in contexts],
-                         ["Hello nearby", "next words here."])
+                         ["Hello nearby", "next HELLO here."])
+        colors: list[str] = re.findall(
+            r'class="tag-context-wall__word (tag-context-wall__color-before)">(?:Hello|HELLO)</span>',
+            wall_html,
+        )
+        self.assertEqual(len(colors), 2)
+        self.assertEqual(colors[0], colors[1])
+        self.assertNotIn("tag-context-wall__position-", wall_html)
 
 
 if __name__ == "__main__":

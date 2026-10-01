@@ -49,9 +49,96 @@ export function initContextWall(root = globalThis.document) {
   else centerTag();
 }
 
+/**
+ * Apply server-prepared strategies through the same renderer for every mode.
+ * @param {Document|HTMLElement} root
+ */
+export function initColoring(root = globalThis.document) {
+  const selector = root.querySelector('#wall-coloring-mode');
+  const threshold = root.querySelector('#wall-coloring-threshold');
+  const description = root.querySelector('#wall-coloring-description');
+  const control = root.querySelector('.tag-context-wall__threshold');
+  const wall = root.querySelector('.tag-context-wall');
+  if (!selector || !threshold || !description || !control || !wall) return;
+  const prefix = 'tag-context-wall__color-';
+  const words = [...wall.querySelectorAll(`.${WORD_CLASS}[data-colorings]`)].map((element) => {
+    try {
+      return { element, results: JSON.parse(element.dataset.colorings) };
+    } catch {
+      return { element, results: {} };
+    }
+  });
+  const cutoffs = new Map();
+  function apply() {
+    const option = selector.selectedOptions[0];
+    if (!option) return;
+    const scored = option.dataset.threshold !== undefined;
+    control.hidden = !scored;
+    const cutoff = scored ? (cutoffs.get(option.value) ?? Number(option.dataset.threshold)) : 0;
+    if (scored) threshold.value = String(cutoff);
+    description.textContent = option.dataset.description ?? '';
+    words.forEach(({ element, results }) => {
+      [...element.classList].filter((name) => name.startsWith(prefix)).forEach((name) => element.classList.remove(name));
+      const result = results[option.value];
+      if (result && result.score >= cutoff) element.classList.add(`${prefix}${result.color}`);
+      if (scored && result) element.title = `${option.label} score: ${result.score.toFixed(3)}`;
+      else element.removeAttribute('title');
+    });
+  }
+  selector.addEventListener('change', apply);
+  threshold.addEventListener('input', () => {
+    if (!threshold.value || !threshold.checkValidity()) return;
+    cutoffs.set(selector.value, Number(threshold.value));
+    apply();
+  });
+  apply();
+}
+
+/** Show only wall rows containing one of the words, or every row when empty. */
+function filterRows(wall, words) {
+  const wanted = new Set(words);
+  wall.querySelectorAll('.tag-context-wall__line').forEach((line) => {
+    const keys = [...line.querySelectorAll(`.${WORD_CLASS}`)].map(wordKey);
+    line.classList.toggle(
+      'is-filtered-out',
+      wanted.size > 0 && !keys.some((key) => wanted.has(key))
+    );
+  });
+}
+
+/** Wire insight words to row filtering and the near-duplicate toggle. */
+export function initInsights(root = globalThis.document) {
+  const panel = root.querySelector('.tag-insights');
+  const wall = root.querySelector('.tag-context-wall');
+  if (!panel || !wall) return;
+  const status = panel.querySelector('.tag-insights__filter');
+  let active = null;
+  function apply(chip) {
+    active?.setAttribute('aria-pressed', 'false');
+    active = chip;
+    chip?.setAttribute('aria-pressed', 'true');
+    const words = chip ? chip.dataset.filterWords.toLowerCase().split(' ').filter(Boolean) : [];
+    filterRows(wall, words);
+    status.hidden = !chip;
+    status.querySelector('span').textContent = chip
+      ? `Showing rows with “${chip.dataset.filterLabel}”.`
+      : '';
+  }
+  panel.addEventListener('click', (event) => {
+    const chip = event.target.closest('.tag-insights__term');
+    if (chip) apply(chip === active ? null : chip);
+    if (event.target.closest('.tag-insights__clear')) apply(null);
+  });
+  panel.querySelector('.tag-insights__show-duplicates')?.addEventListener('change', (event) => {
+    wall.classList.toggle('show-duplicates', event.target.checked);
+  });
+}
+
 /** Open complete topic sentences and persist their shared read state. */
 export function initConcordance(root = globalThis.document, request = globalThis.fetch) {
   initContextWall(root);
+  initColoring(root);
+  initInsights(root);
   const data = root.querySelector('#concordance-details');
   const dialog = root.querySelector('#concordance-dialog');
   if (!data || !dialog) return;
