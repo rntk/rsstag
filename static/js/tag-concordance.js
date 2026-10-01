@@ -81,8 +81,15 @@ export function initColoring(root = globalThis.document) {
       [...element.classList].filter((name) => name.startsWith(prefix)).forEach((name) => element.classList.remove(name));
       const result = results[option.value];
       if (result && result.score >= cutoff) element.classList.add(`${prefix}${result.color}`);
-      if (scored && result) element.title = `${option.label} score: ${result.score.toFixed(3)}`;
-      else element.removeAttribute('title');
+      if (scored && result) {
+        const evidence = Number.isInteger(result.support)
+          ? `; near the tag in ${result.support} articles`
+          : '';
+        const standardized = Number.isFinite(result.z_score)
+          ? `; z-score: ${result.z_score.toFixed(3)}`
+          : '';
+        element.title = `${option.label} score: ${result.score.toFixed(3)}${standardized}${evidence}`;
+      } else element.removeAttribute('title');
     });
   }
   selector.addEventListener('change', apply);

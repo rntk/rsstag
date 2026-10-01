@@ -265,6 +265,7 @@ class LeaveOneOutSurprise:
                 counts.update(post_sets[index])
             del counts[tag]
             row_counts: np.ndarray = np.fromiter(counts.values(), dtype=np.float64)
+            row_total: int = sum(counts.values())
             background_log_sum: float = float(
                 np.log1p(row_counts / self.smoothing).sum()
             )
@@ -276,7 +277,10 @@ class LeaveOneOutSurprise:
                     dtype=np.float64,
                 )
                 total_surprise += self._post_surprise(
-                    neighbors, background_log_sum, len(indices) - 1, vocabulary_size
+                    neighbors,
+                    background_log_sum,
+                    row_total - len(neighbors),
+                    vocabulary_size,
                 )
             result[tag] = total_surprise / len(score_indices)
         return result

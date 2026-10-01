@@ -10217,7 +10217,7 @@ body.tag-explorer-page {
 .tag-context-wall__line.is-filtered-out { display: none; }
 .tag-context-wall__duplicates { margin-left: 2px; font-size: 0.7rem; color: #5f6862; }
 
-/* Context-wall coloring controls and the shared TF-IDF highlight. */
+/* Context-wall coloring controls and scoring highlights. */
 .tag-context-wall__coloring { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 12px 0; }
 .tag-context-wall__coloring select,
 .tag-context-wall__coloring input { padding: 4px 6px; border: 1px solid var(--rsst-border, #d7dfd9); border-radius: 4px; background: #fff; color: inherit; font: inherit; }
@@ -10226,3 +10226,8 @@ body.tag-explorer-page {
 .tag-context-wall__coloring select:focus-visible,
 .tag-context-wall__coloring input:focus-visible { outline: 2px solid var(--rsst-primary, #365e4c); outline-offset: 2px; }
 .tag-context-wall__color-tfidf { --insight-color: #d9eceb; }
+.tag-context-wall__color-pmi { --insight-color: #e5dcf4; }
+.tag-context-wall__color-rake { --insight-color: #fae4c9; }
+.tag-context-wall__color-yake { --insight-color: #dcebd0; }
+.tag-context-wall__color-surprise { --insight-color: #f4d9e3; }
+.tag-context-wall__color-log_odds { --insight-color: #dce5fa; }

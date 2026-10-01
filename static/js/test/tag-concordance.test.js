@@ -230,6 +230,7 @@ describe('word coloring strategies', () => {
         <option value="tfidf" data-description="Relative article scores" data-threshold="0.8">TF-IDF</option>
         <option value="none" data-description="No word colors">No coloring</option>
         <option value="custom" data-description="New experiment" data-threshold="0.9">Custom</option>
+        <option value="log_odds" data-description="Near-tag enrichment" data-threshold="0.8">Tag-context log-odds</option>
       </select>
       <label class="tag-context-wall__threshold" hidden><input id="wall-coloring-threshold" type="number" min="0" max="1" step="0.05" value="0.8"></label>
       <p id="wall-coloring-description"></p>
@@ -247,6 +248,7 @@ describe('word coloring strategies', () => {
         important: id === 'high' ? { color: 'before', score: 1 } : null,
         tfidf: { color: 'tfidf', score }, none: null,
         custom: { color: 'after', score },
+        log_odds: { color: 'log_odds', score, support: 3, z_score: 2.125 },
       });
     }
     root.querySelector('#empty').dataset.colorings = '{}';
@@ -309,6 +311,20 @@ describe('word coloring strategies', () => {
     expect(root.querySelector('input').value).toBe('0.9');
     expect(root.querySelector('#high').classList.contains('tag-context-wall__color-after')).toBe(true);
     expect(root.querySelector('#boundary').classList.contains('tag-context-wall__color-after')).toBe(false);
+  });
+
+  it('shows log-odds evidence and clears it when switching modes', () => {
+    const { root, select } = setupColoring();
+    select('log_odds');
+    const high = root.querySelector('#high');
+    expect(high.classList.contains('tag-context-wall__color-log_odds')).toBe(true);
+    expect(high.title).toBe('Tag-context log-odds score: 1.000; z-score: 2.125; near the tag in 3 articles');
+    expect(root.querySelector('#low').classList.contains('tag-context-wall__color-log_odds')).toBe(false);
+    select('tfidf');
+    expect(high.classList.contains('tag-context-wall__color-log_odds')).toBe(false);
+    expect(high.title).toBe('TF-IDF score: 1.000');
+    select('none');
+    expect(high.title).toBe('');
   });
 
   it('handles missing and malformed per-word results', () => {

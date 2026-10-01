@@ -99,6 +99,26 @@ class TestTagBayesianSurprise(unittest.TestCase):
 
 
 class TestLeaveOneOutSurprise(unittest.TestCase):
+    def test_normalized_background_uses_neighbor_events(self) -> None:
+        posts: list[list[str]] = [
+            ["alpha", "beta", "gamma"],
+            ["alpha", "beta", "delta"],
+        ]
+        scores: dict[str, float] = LeaveOneOutSurprise().compute(posts)
+        # For alpha in the first post, p=(1,2,2,1)/6 and the background
+        # q=(1,2,1,2)/6 over alpha, beta, gamma, delta.
+        expected: float = np.log(2.0) / 6.0
+        self.assertAlmostEqual(expected, 0.1155245301, places=10)
+        self.assertAlmostEqual(scores["alpha"], expected, places=12)
+        self.assertAlmostEqual(scores["beta"], expected, places=12)
+
+    def test_identical_two_post_contexts_have_zero_surprise(self) -> None:
+        scores: dict[str, float] = LeaveOneOutSurprise().compute(
+            [["alpha", "beta"], ["alpha", "beta"]]
+        )
+        self.assertAlmostEqual(scores["alpha"], 0.0, places=12)
+        self.assertAlmostEqual(scores["beta"], 0.0, places=12)
+
     def test_empty_input(self):
         loos = LeaveOneOutSurprise()
         result = loos.compute([])
@@ -172,7 +192,7 @@ class TestLeaveOneOutSurpriseMemory(unittest.TestCase):
                     - int(other != tag and other in post)
                     for other in vocabulary
                 ], dtype=np.float64)
-                background: np.ndarray = (counts + smoothing) / (len(containing) - 1 + smoothing * len(vocabulary))
+                background: np.ndarray = (counts + smoothing) / (counts.sum() + smoothing * len(vocabulary))
                 distribution: np.ndarray = np.array([
                     smoothing + int(other != tag and other in post) for other in vocabulary
                 ], dtype=np.float64)

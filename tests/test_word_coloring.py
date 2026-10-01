@@ -3,19 +3,30 @@
 import json
 import math
 import re
+import unittest
 from html import unescape
 from pathlib import Path
+from typing import Any
+from unittest.mock import patch
 from urllib.parse import quote_plus
 
 from jinja2 import ChoiceLoader, DictLoader, Environment, FileSystemLoader
-import unittest
-from typing import Any
-from unittest.mock import patch
 
+from rsstag.surprise import LeaveOneOutSurprise
+from rsstag.web.keywords import _extract_rake_keywords, _extract_yake_keywords
 from rsstag.web.tag_concordance import _position_words
+from rsstag.web.tag_insights import STOPWORDS
 from rsstag.web.word_coloring import (
-    COLORING_STRATEGIES, ColoringContext, ColoringStrategy, Highlight, Resolver,
-    apply_coloring, tfidf_scores,
+    COLORING_STRATEGIES,
+    ColoringContext,
+    ColoringStrategy,
+    Highlight,
+    Resolver,
+    apply_coloring,
+    keyword_scores,
+    pmi_scores,
+    surprise_scores,
+    tfidf_scores,
 )
 
 
@@ -43,6 +54,123 @@ class TestWordColoring(unittest.TestCase):
         self.assertEqual(tfidf_scores({"a": "Root the 42", "b": ""}, "root"), {"a": {}, "b": {}})
         self.assertEqual(tfidf_scores({"a": "Root rare"}, "root"), {"a": {"rare": 1.0}})
 
+    def test_pmi_formula_support_and_article_boundaries(self) -> None:
+        scores: dict[str, dict[str, float]] = pmi_scores({
+            "a": "alpha beta alpha beta", "b": "gamma delta gamma delta",
+            "c": "alpha gamma", "empty": "Root the 42",
+        }, "root")
+        # Each repeated pair has four events per direction. Marginals for
+        # alpha/gamma are five; beta/delta are four, out of eighteen events.
+        self.assertEqual(scores["a"], {"alpha": 1.0, "beta": 1.0})
+        self.assertEqual(scores["b"], {"gamma": 1.0, "delta": 1.0})
+        self.assertEqual(scores["c"], {})
+        self.assertEqual(scores["empty"], {})
+        self.assertEqual(pmi_scores({"a": "alpha", "b": "beta"}, "root"), {"a": {}, "b": {}})
+        self.assertEqual(pmi_scores({}, "root"), {})
+
+    def test_pmi_uses_joint_and_marginal_event_probabilities(self) -> None:
+        scores: dict[str, dict[str, float]] = pmi_scores({
+            "a": "alpha beta alpha beta", "b": "gamma delta gamma delta",
+            "c": "alpha gamma alpha gamma",
+        }, "root")
+        # 24 directed events: alpha/gamma have eight, beta/delta four.
+        strongest: float = math.log2(4 * 24 / (8 * 4))
+        bridge: float = math.log2(4 * 24 / (8 * 8))
+        self.assertAlmostEqual(scores["c"]["alpha"], bridge / strongest)
+        self.assertAlmostEqual(scores["c"]["gamma"], bridge / strongest)
+        self.assertEqual(scores["a"]["beta"], 1.0)
+
+    def test_keywords_reuse_endpoint_phrase_scores(self) -> None:
+        for extractor in (_extract_rake_keywords, _extract_yake_keywords):
+            with self.subTest(extractor=extractor.__name__):
+                scores: dict[str, dict[str, float]] = keyword_scores(
+                    {"a": "Root alpha beta and gamma", "b": "THE 42 Root"}, "root", extractor,
+                )
+                expected: dict[str, float] = {}
+                for item in extractor(["root alpha beta and gamma"], set(STOPWORDS) | {"root"}, 15):
+                    for word in item.phrase.split():
+                        expected[word] = max(expected.get(word, 0.0), item.score)
+                maximum: float = max(expected.values())
+                self.assertEqual(scores["a"], {word: score / maximum for word, score in expected.items()})
+                self.assertEqual(scores["b"], {})
+                self.assertEqual(keyword_scores({}, "root", extractor), {})
+
+    def test_surprise_matches_endpoint_calculation_and_ignores_article_order(self) -> None:
+        documents: dict[str, str] = {
+            "a": "Root alpha beta", "b": "Root alpha beta", "c": "Root alpha gamma",
+        }
+        raw: dict[str, float] = LeaveOneOutSurprise().compute([
+            ["alpha", "beta"], ["alpha", "beta"], ["alpha", "gamma"],
+        ])
+        maximum: float = max(raw.values())
+        scores: dict[str, dict[str, float]] = surprise_scores(documents, "root")
+        self.assertEqual(scores["a"], {word: raw[word] / maximum for word in ("alpha", "beta") if raw[word] > 0})
+        self.assertNotIn("gamma", scores["c"])
+        self.assertEqual(scores, surprise_scores(dict(reversed(list(documents.items()))), "root"))
+        self.assertEqual(surprise_scores({"a": "alpha beta"}, "root"), {"a": {}})
+        self.assertEqual(surprise_scores({}, "root"), {})
+
+    def test_keyword_phrases_stop_at_punctuation_and_short_stopwords(self) -> None:
+        for boundary in (".", ",", ";", "!", "?", "\n", " a ", " и ", " 42 "):
+            with self.subTest(boundary=boundary):
+                scores: dict[str, dict[str, float]] = keyword_scores(
+                    {"a": f"alpha beta{boundary}gamma"}, "root", _extract_rake_keywords,
+                )
+                # A two-word phrase scores 4; the separate singleton scores 1.
+                self.assertEqual(scores["a"], {"alpha": 1.0, "beta": 1.0, "gamma": 0.25})
+
+    def test_keyword_extractors_never_receive_cross_sentence_phrases(self) -> None:
+        for extractor in (_extract_rake_keywords, _extract_yake_keywords):
+            with self.subTest(extractor=extractor.__name__):
+                with patch("rsstag.web.word_coloring._normalize", side_effect=lambda scores: scores):
+                    separated: dict[str, dict[str, float]] = keyword_scores(
+                        {"a": "alpha beta. gamma delta"}, "root", extractor,
+                    )
+                    stopped: dict[str, dict[str, float]] = keyword_scores(
+                        {"a": "alpha beta and gamma delta"}, "root", extractor,
+                    )
+                # A punctuation marker is treated just like a retained stopword,
+                # without turning sentences into separate YAKE-style documents.
+                self.assertEqual(separated, stopped)
+
+    def test_log_odds_coloring_carries_support_and_ignores_duplicate_rows(self) -> None:
+        rows: list[dict[str, Any]] = [
+            {"pid": "a", "before_words": _position_words("RECALLS!", True), "after_words": []}
+            for _ in range(3)
+        ]
+        context: ColoringContext = ColoringContext("root", {
+            "a": "Root recalls and the and the and ordinary ordinary ordinary",
+            "b": "Root recall and the and the and ordinary ordinary ordinary",
+        }, None)
+        options: list[dict[str, Any]] = apply_coloring(rows, context)
+        expected: dict[str, Any] = rows[0]["before_words"][-1]["colorings"]["log_odds"]
+        self.assertEqual(expected["color"], "log_odds")
+        self.assertEqual(expected["support"], 2)
+        self.assertEqual(expected["score"], 1.0)
+        self.assertGreater(expected["z_score"], 0.0)
+        for row in rows:
+            self.assertEqual(row["before_words"][-1]["colorings"]["log_odds"], expected)
+        self.assertIn("YAKE-style", [option["label"] for option in options])
+
+    def test_new_modes_handle_inflections_and_missing_insights(self) -> None:
+        rows: list[dict[str, Any]] = [{
+            "pid": "a", "before_words": _position_words("RECALLS! and 123 Root", True),
+            "after_words": [],
+        }]
+        options: list[dict[str, Any]] = apply_coloring(rows, ColoringContext("root", {
+            "a": "Root recall recalls alpha alpha", "b": "Root recall alpha", "c": "Root recall beta",
+        }, None))
+        self.assertEqual(len(options), 8)
+        word: dict[str, Any] = rows[0]["before_words"][-4]
+        for key in ("pmi", "rake", "yake", "surprise"):
+            with self.subTest(mode=key):
+                self.assertIsNotNone(word["colorings"][key])
+                self.assertGreater(word["colorings"][key]["score"], 0)
+                self.assertLessEqual(word["colorings"][key]["score"], 1)
+                self.assertEqual(word["colorings"][key]["color"], key)
+                for excluded in rows[0]["before_words"][-3:]:
+                    self.assertIsNone(excluded["colorings"][key])
+
     def test_pipeline_preserves_default_and_attaches_per_article_scores(self) -> None:
         rows: list[dict[str, Any]] = [
             {"pid": pid, "before_words": _position_words("RECALLS! ordinary", True),
@@ -52,7 +180,7 @@ class TestWordColoring(unittest.TestCase):
             "a": "Root recall recalls ordinary rare", "b": "Root ordinary ordinary rare recall",
         }, {"left": [{"lemma": "recal", "words": ["recalls"]}]})
         options: list[dict[str, Any]] = apply_coloring(rows, context)
-        self.assertEqual([option["key"] for option in options], ["important", "tfidf", "none"])
+        self.assertEqual([option["key"] for option in options], ["important", "tfidf", "pmi", "rake", "yake", "surprise", "log_odds", "none"])
         self.assertEqual(options[1]["threshold"], 0.8)
         word: dict[str, Any] = rows[0]["before_words"][-2]
         self.assertEqual(word["text"], "RECALLS!")
@@ -87,7 +215,8 @@ class TestWordColoring(unittest.TestCase):
             coloring_options=options,
         )
         self.assertIn('id="wall-coloring-mode"', html)
-        self.assertIn('value="tfidf"', html)
+        for mode in ("tfidf", "pmi", "rake", "yake", "surprise", "log_odds"):
+            self.assertIn(f'value="{mode}"', html)
         self.assertIn('data-threshold="0.8"', html)
         self.assertIn('aria-describedby="wall-coloring-description"', html)
         self.assertNotIn("<script>", html)
@@ -116,7 +245,7 @@ class TestWordColoring(unittest.TestCase):
         with patch("rsstag.web.word_coloring.COLORING_STRATEGIES", (broken, *COLORING_STRATEGIES)), \
                 self.assertLogs("rsstag.web.word_coloring", level="ERROR"):
             options: list[dict[str, Any]] = apply_coloring([], ColoringContext("root", {}, None))
-        self.assertEqual([option["key"] for option in options], ["important", "tfidf", "none"])
+        self.assertEqual([option["key"] for option in options], ["important", "tfidf", "pmi", "rake", "yake", "surprise", "log_odds", "none"])
 
 
 if __name__ == "__main__":

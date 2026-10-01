@@ -232,7 +232,7 @@ class TestTagConcordance(unittest.TestCase):
         rendered = environment.get_template.return_value.render.call_args.kwargs
         self.assertEqual(len(rendered["rows"][0]["before_words"]), 20)
         self.assertEqual(rendered["rows"][0]["after_words"][0]["text"], "news.")
-        self.assertEqual([option["key"] for option in rendered["coloring_options"]], ["important", "tfidf", "none"])
+        self.assertEqual([option["key"] for option in rendered["coloring_options"]], ["important", "tfidf", "pmi", "rake", "yake", "surprise", "log_odds", "none"])
         self.assertEqual(rendered["rows"][0]["after_words"][0]["colorings"]["tfidf"],
                          {"color": "tfidf", "score": 1.0})
         self.assertEqual(rendered["details"]["posts"]["2"]["metadata"]["source"], "Source")
