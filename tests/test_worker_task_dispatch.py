@@ -1,4 +1,5 @@
 import socket
+import time
 import unittest
 from typing import Any, Dict
 from unittest.mock import MagicMock
@@ -11,12 +12,17 @@ from rsstag.tasks import (
     TASK_POST_GROUPING,
     TASK_POST_GROUPING_CLEANUP,
     TASK_TAGS,
+    TASK_TAG_CLASSIFICATION_BATCH,
     TASK_TAGS_TOPICS,
     TASK_TOPIC_MERGE,
     TASK_W2V,
     RssTagTasks,
 )
+from rsstag.llm.batch import BatchTaskStatus
+from rsstag.task_state import DEFAULT_MAX_ATTEMPTS, TASK_STATUS_DEAD, TASK_STATUS_PENDING
 from rsstag.users import RssTagUsers
+from rsstag.workers.dispatcher import _apply_outcome
+from rsstag.workers.outcome import Deferred, PermanentFailure
 from rsstag.workers.registry import WorkerRegistry
 from rsstag.workers.llm_worker import _PostGroupingWorker
 from rsstag.workers.tag_worker import TagWorker
@@ -427,7 +433,7 @@ class TestWorkerTaskDispatch(MongoTaskDispatchTestCase):
         task: Dict[str, Any] = self.tasks.get_task(self.users)
         result = registry.handle(task)
 
-        # Dispatcher only calls finish_task when result is True; False means task stays
+        # A False handler result normalizes to RetryableFailure (see normalize_outcome) and the task stays
         self.assertFalse(bool(result))
         remaining: Dict[str, Any] | None = self.db.tasks.find_one({"_id": task_id})
         self.assertIsNotNone(remaining)
@@ -620,6 +626,79 @@ class TestWorkerTaskDispatch(MongoTaskDispatchTestCase):
         self.assertTrue(bool(stored["failed"]))
         self.assertEqual(stored["processing"], -1)
 
+
+    def _insert_tag_batch_task(self, owner: str, batch: Dict[str, Any]) -> Any:
+        return self.db.tasks.insert_one(
+            {
+                "user": owner,
+                "type": TASK_TAG_CLASSIFICATION_BATCH,
+                "status": "running",
+                "processing": 1.0,
+                "manual": True,
+                "batch": batch,
+            }
+        ).inserted_id
+
+    def test_finish_batch_task_uses_persisted_done_state(self) -> None:
+        user: Dict[str, Any] = self._create_user("batch_persisted_done_user")
+        task_id = self._insert_tag_batch_task(
+            user["sid"], {"status": BatchTaskStatus.COMPLETED.value}
+        )
+        # The claimed snapshot is stale: handlers no longer mutate it.
+        task: Dict[str, Any] = {
+            "_id": task_id,
+            "type": TASK_TAG_CLASSIFICATION_BATCH,
+            "user": user,
+            "data": [],
+            "batch": {"status": BatchTaskStatus.RAW_PENDING.value},
+        }
+
+        self.assertTrue(self.tasks.finish_task(task))
+
+        self.assertIsNone(self.db.tasks.find_one({"_id": task_id}))
+
+    def test_finish_batch_task_keeps_task_when_persisted_state_not_done(self) -> None:
+        user: Dict[str, Any] = self._create_user("batch_persisted_pending_user")
+        task_id = self._insert_tag_batch_task(
+            user["sid"], {"status": BatchTaskStatus.FAILED.value}
+        )
+        task: Dict[str, Any] = {
+            "_id": task_id,
+            "type": TASK_TAG_CLASSIFICATION_BATCH,
+            "user": user,
+            "data": [],
+            "batch": {"status": BatchTaskStatus.COMPLETED.value},
+        }
+
+        self.assertTrue(self.tasks.finish_task(task))
+
+        self.assertIsNotNone(self.db.tasks.find_one({"_id": task_id}))
+
+    def test_deferred_batch_task_never_consumes_attempts(self) -> None:
+        user: Dict[str, Any] = self._create_user("batch_deferred_user")
+        task_id = self._insert_tag_batch_task(user["sid"], {"batch_id": "b-1"})
+        task: Dict[str, Any] = {"_id": task_id, "type": TASK_TAG_CLASSIFICATION_BATCH, "user": user}
+
+        for _ in range(DEFAULT_MAX_ATTEMPTS + 2):
+            _apply_outcome(self.tasks, self.users, task, Deferred(time.time() + 60))
+
+        stored: Dict[str, Any] | None = self.db.tasks.find_one({"_id": task_id})
+        self.assertIsNotNone(stored)
+        self.assertEqual(stored["status"], TASK_STATUS_PENDING)
+        self.assertEqual(stored.get("attempts", 0), 0)
+        self.assertGreater(stored["backoff_until"], time.time())
+
+    def test_permanent_failure_dead_letters_task(self) -> None:
+        user: Dict[str, Any] = self._create_user("batch_permanent_user")
+        task_id = self._insert_tag_batch_task(user["sid"], {})
+        task: Dict[str, Any] = {"_id": task_id, "type": TASK_TAG_CLASSIFICATION_BATCH, "user": user}
+
+        _apply_outcome(self.tasks, self.users, task, PermanentFailure("no provider"))
+
+        stored: Dict[str, Any] | None = self.db.tasks.find_one({"_id": task_id})
+        self.assertIsNotNone(stored)
+        self.assertEqual(stored["status"], TASK_STATUS_DEAD)
+        self.assertEqual(stored["error"], "no provider")
 
 if __name__ == "__main__":
     unittest.main()

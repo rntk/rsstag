@@ -4,6 +4,8 @@ import logging
 import time
 from typing import Any
 
+from rsstag.workers.outcome import is_failure
+
 from rsstag.tasks import (
     TASK_ALL,
     TASK_NOOP,
@@ -227,9 +229,9 @@ def instrument_registry(registry: Any) -> None:
                 raise
             elapsed = time.perf_counter() - start
             duration_histogram.record(elapsed, {"task_type": label})
-            if result is False:
+            if is_failure(result):
                 failed_counter.add(1, {"task_type": label})
-                span.set_status(StatusCode.ERROR, "task returned False")
+                span.set_status(StatusCode.ERROR, f"task returned {result!r}")
             else:
                 span.set_status(StatusCode.OK)
             return result

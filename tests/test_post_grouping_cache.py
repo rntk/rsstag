@@ -15,6 +15,7 @@ from rsstag.grouping_cache import (
     model_identity,
 )
 from rsstag.workers.llm_worker import _PostGroupingWorker
+from rsstag.workers.outcome import Completed, TaskOutcome
 from tests.db_utils import DBHelper
 
 MONGO_PORT = 8765
@@ -530,9 +531,9 @@ class PostGroupingBatchCacheTestCase(MongoCacheTestCase):
         self.worker._llm.get_batch_provider.return_value = self.provider
 
         with patch("rsstag.post_splitter.PostSplitter", lambda *a, **kw: self.splitter):
-            done: bool = self.worker.make_post_grouping_batch(task)
+            outcome: TaskOutcome = self.worker.make_post_grouping_batch(task)
 
-        self.assertTrue(done)
+        self.assertIsInstance(outcome, Completed)
         self.assertEqual(task["data"], [])
         state: Dict[str, Any] = (
             self.worker._batch_storage.update_task_batch_state.call_args[0][1]

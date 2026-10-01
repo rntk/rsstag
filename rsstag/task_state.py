@@ -10,6 +10,8 @@ State diagram::
     pending --claim--> running --complete--> (deleted)
     running --fail(attempts < max)--> pending (with backoff)
     running --fail(attempts >= max)--> dead
+    running --defer(next_run_at)--> pending (backoff, no attempt consumed)
+    running --dead_letter--> dead
     pending/dead <--pause / resume--> paused
     running --lease expires--> reclaimable by claim
 
@@ -24,7 +26,7 @@ claimable, giving an in-place migration path.
 
 import logging
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Literal, Optional
 
 from pymongo import ReturnDocument
 from pymongo.database import Database
@@ -201,8 +203,12 @@ class TaskStateMachine:
         error: str,
         max_attempts: int = DEFAULT_MAX_ATTEMPTS,
         backoff_base_seconds: float = DEFAULT_BACKOFF_BASE_SECONDS,
+        attempt_field: Literal["attempts", "poll_attempts"] = "attempts",
     ) -> bool:
         """Record a failure, retrying with backoff until attempts hit max.
+
+        Polling errors use ``poll_attempts`` so recovery can clear their streak
+        without erasing failures that require resubmitting a remote batch.
 
         The update is guarded on ``_id`` plus ``status`` not in
         ``{paused, dead}`` so it still works if the lease expired mid-run, but
@@ -217,21 +223,13 @@ class TaskStateMachine:
 
         try:
             now = time.time()
-            attempts = int(task.get("attempts", 0)) + 1
+            attempts: int = int(task.get(attempt_field, 0)) + 1
             limit = int(task.get("max_attempts", max_attempts))
             message = error[:MAX_ERROR_LENGTH]
 
             if attempts >= limit:
                 update: Dict[str, Any] = {
-                    "$set": {
-                        "status": TASK_STATUS_DEAD,
-                        "processing": LEGACY_PROCESSING_FROZEN,
-                        "failed": True,
-                        "failed_at": now,
-                        "error": message,
-                        "attempts": attempts,
-                        "updated_at": now,
-                    }
+                    "$set": {**self._dead_fields(now, message), attempt_field: attempts}
                 }
             else:
                 backoff = min(
@@ -241,7 +239,7 @@ class TaskStateMachine:
                     "$set": {
                         "status": TASK_STATUS_PENDING,
                         "processing": LEGACY_PROCESSING_IDLE,
-                        "attempts": attempts,
+                        attempt_field: attempts,
                         "last_error": message,
                         "backoff_until": now + backoff,
                         "updated_at": now,
@@ -249,17 +247,99 @@ class TaskStateMachine:
                     "$unset": {"worker_id": "", "lease_until": ""},
                 }
 
-            self._db.tasks.update_one(
-                {
-                    "_id": task_id,
-                    "status": {"$nin": [TASK_STATUS_PAUSED, TASK_STATUS_DEAD]},
-                },
-                update,
-            )
+            self._db.tasks.update_one(self._not_stopped_filter(task_id), update)
             return True
         except Exception as e:
             self._log.error("Can`t fail task %s. Info: %s", task_id, e)
             return False
+
+    def defer(
+        self, task: dict, next_run_at: float, reset_poll_attempts: bool = False
+    ) -> bool:
+        """Return a task to pending, claimable again only after ``next_run_at``.
+
+        Used when a handler is healthy but has nothing to do yet (e.g. a remote
+        batch is still running). Unlike ``fail`` it consumes no attempt and
+        leaves ``attempts`` / ``last_error`` untouched. Guarded like ``fail``
+        so a paused or dead task is never resurrected; legacy status-less docs
+        are migrated to ``pending`` as ``fail`` does, except legacy frozen
+        docs (``processing == -1``), which stay frozen.
+
+        A successful remote poll can atomically clear ``poll_attempts`` with
+        ``reset_poll_attempts``. Submissions and throttled polls leave it alone.
+
+        Returns True when a task doc was updated.
+        """
+        task_id: Any = task.get("_id")
+        if not task_id:
+            self._log.error("Can`t defer task without _id: %s", task)
+            return False
+
+        try:
+            update: Dict[str, Any] = {
+                "$set": {
+                    "status": TASK_STATUS_PENDING,
+                    "processing": LEGACY_PROCESSING_IDLE,
+                    "backoff_until": float(next_run_at),
+                    "updated_at": time.time(),
+                },
+                "$unset": {"worker_id": "", "lease_until": ""},
+            }
+            query: Dict[str, Any] = {
+                **self._not_stopped_filter(task_id),
+                "processing": {"$ne": LEGACY_PROCESSING_FROZEN},
+            }
+            if reset_poll_attempts:
+                update["$set"]["poll_attempts"] = 0
+            result = self._db.tasks.update_one(query, update)
+            return result.matched_count > 0
+        except Exception as e:
+            self._log.error("Can`t defer task %s. Info: %s", task_id, e)
+            return False
+
+    def dead_letter(self, task: dict, error: str) -> bool:
+        """Move a task straight to ``dead`` for failures retries cannot fix.
+
+        Same guard as ``fail``: a paused task stays paused (the user's pause
+        wins) and an already-dead task is not rewritten. ``attempts`` is left
+        as is. Returns True when a task doc was updated.
+        """
+        task_id: Any = task.get("_id")
+        if not task_id:
+            self._log.error("Can`t dead-letter task without _id: %s", task)
+            return False
+
+        try:
+            message: str = error[:MAX_ERROR_LENGTH]
+            update: Dict[str, Any] = {
+                "$set": self._dead_fields(time.time(), message),
+                "$unset": {"worker_id": "", "lease_until": ""},
+            }
+            result = self._db.tasks.update_one(self._not_stopped_filter(task_id), update)
+            return result.matched_count > 0
+        except Exception as e:
+            self._log.error("Can`t dead-letter task %s. Info: %s", task_id, e)
+            return False
+
+    @staticmethod
+    def _not_stopped_filter(task_id: Any) -> Dict[str, Any]:
+        """Match ``task_id`` unless paused/dead (also matches legacy docs)."""
+        return {
+            "_id": task_id,
+            "status": {"$nin": [TASK_STATUS_PAUSED, TASK_STATUS_DEAD]},
+        }
+
+    @staticmethod
+    def _dead_fields(now: float, message: str) -> Dict[str, Any]:
+        """Fields written when a task enters the dead-letter state."""
+        return {
+            "status": TASK_STATUS_DEAD,
+            "processing": LEGACY_PROCESSING_FROZEN,
+            "failed": True,
+            "failed_at": now,
+            "error": message,
+            "updated_at": now,
+        }
 
     def enqueue(self, key: Dict[str, Any], fields: Dict[str, Any]) -> bool:
         """Idempotently enqueue a task identified by ``key``.
@@ -292,6 +372,7 @@ class TaskStateMachine:
                         "status": TASK_STATUS_PENDING,
                         "processing": LEGACY_PROCESSING_IDLE,
                         "attempts": 0,
+                        "poll_attempts": 0,
                         "backoff_until": 0.0,
                         "updated_at": now,
                     },
@@ -364,6 +445,7 @@ class TaskStateMachine:
                         "status": TASK_STATUS_PENDING,
                         "processing": LEGACY_PROCESSING_IDLE,
                         "attempts": 0,
+                        "poll_attempts": 0,
                         "backoff_until": 0.0,
                         "updated_at": now,
                     },

@@ -55,6 +55,17 @@ from rsstag.tasks import RssTagTasks
 from rsstag.users import RssTagUsers
 from rsstag.utils import load_config
 from rsstag.workers.llm_worker import LLMWorker
+from rsstag.workers.outcome import (
+    CONTINUE_DELAY_SECONDS,
+    Completed,
+    Continue,
+    Deferred,
+    HandlerResult,
+    PermanentFailure,
+    RetryableFailure,
+    TaskOutcome,
+    normalize_outcome,
+)
 from rsstag.workers.registry import WorkerRegistry
 from rsstag.workers.tag_worker import TagWorker
 from rsstag.workers.provider_worker import ProviderWorker
@@ -199,6 +210,106 @@ def _build_registry(tag_worker: TagWorker, llm_worker: LLMWorker, provider_worke
     return registry
 
 
+def _run_handler(registry: WorkerRegistry, task: Dict[str, Any]) -> TaskOutcome:
+    """Run the task's handler and normalize its result to a ``TaskOutcome``."""
+    result: HandlerResult = registry.handle(task)
+    if result is None:
+        logging.warning("Unknown task type %s", task["type"])
+        return RetryableFailure(f"Unknown task type {task['type']}")
+    return normalize_outcome(
+        result, f"Handler returned false for type {task['type']}"
+    )
+
+
+def _release_queue_flags(users: RssTagUsers, task: Dict[str, Any]) -> None:
+    """Clear per-user queue flags held by a finished task."""
+    if task["type"] in (TASK_DOWNLOAD, TASK_FEEDS_LIST):
+        # Both tasks talk to the provider under the same per-provider queue
+        # flag, so both must release it or every later download for that
+        # provider is rejected.
+        provider = task.get("provider", "")
+        if provider:
+            users.update_by_sid(
+                task["user"]["sid"],
+                {f"in_queue.{provider}": False},
+            )
+    elif task["type"] == TASK_CLUSTERING:
+        users.update_by_sid(task["user"]["sid"], {"in_queue": {}})
+
+
+def _finish_completed(
+    tasks: RssTagTasks, users: RssTagUsers, task: Dict[str, Any]
+) -> None:
+    """Run the finish path for a completed handler step."""
+    finished = tasks.finish_task(task)
+    # Uniform failure path: if finish_task itself fails, run the task through
+    # the state machine's fail/backoff/dead-letter logic so no claim sits
+    # stuck with idle workers.
+    if not finished:
+        tasks.release_failed_task(
+            task,
+            f"finish_task returned false for type {task['type']}",
+        )
+    _release_queue_flags(users, task)
+
+
+def _defer_task(
+    tasks: RssTagTasks,
+    task: Dict[str, Any],
+    next_run_at: float,
+    reset_poll_attempts: bool = False,
+) -> None:
+    """Re-queue a healthy task for ``next_run_at`` without consuming an attempt."""
+    if not tasks.defer_task(task, next_run_at, reset_poll_attempts=reset_poll_attempts):
+        logging.info(
+            "Task %s (type %s) was not deferred: removed, paused or dead",
+            task.get("_id"),
+            task.get("type"),
+        )
+
+
+def _apply_outcome(
+    tasks: RssTagTasks,
+    users: RssTagUsers,
+    task: Dict[str, Any],
+    outcome: TaskOutcome,
+) -> bool:
+    """Route ``outcome`` to the matching queue transition.
+
+    Returns True for failure outcomes so the caller can back off.
+    """
+    if isinstance(outcome, Completed):
+        _finish_completed(tasks, users, task)
+        return False
+    if isinstance(outcome, Continue):
+        _defer_task(
+            tasks,
+            task,
+            time.time() + CONTINUE_DELAY_SECONDS,
+            reset_poll_attempts=outcome.reset_poll_attempts,
+        )
+        return False
+    if isinstance(outcome, Deferred):
+        _defer_task(
+            tasks,
+            task,
+            outcome.next_run_at,
+            reset_poll_attempts=outcome.reset_poll_attempts,
+        )
+        return False
+    if isinstance(outcome, PermanentFailure):
+        logging.error(
+            "Task %s (type %s) failed permanently: %s",
+            task.get("_id"),
+            task.get("type"),
+            outcome.error,
+        )
+        tasks.dead_letter_task(task, outcome.error)
+        return True
+    tasks.release_failed_task(task, outcome.error, attempt_field=outcome.attempt_field)
+    return True
+
+
 def worker(config: Dict[str, Any]) -> None:
     import os
 
@@ -293,7 +404,6 @@ def worker(config: Dict[str, Any]) -> None:
                     last_stale_reclaim = time.time()
 
                 task = tasks.get_task(users)
-                task_done = False
                 if task["type"] == TASK_NOOP:
                     time.sleep(randint(3, 8))
                     continue
@@ -309,42 +419,11 @@ def worker(config: Dict[str, Any]) -> None:
                         scope_error,
                     )
                     tasks.mark_task_failed(task.get("_id"), scope_error)
-                    task_done = True
+                    outcome: TaskOutcome = Completed()
                 else:
-                    task_done = registry.handle(task)
-                    if task_done is None:
-                        logging.warning("Unknown task type %s", task["type"])
-                        task_done = False
+                    outcome = _run_handler(registry, task)
 
-                if task_done:
-                    finished = tasks.finish_task(task)
-                    # Uniform failure path: if finish_task itself fails, run the
-                    # task through the state machine's fail/backoff/dead-letter
-                    # logic so no claim sits stuck with idle workers.
-                    if not finished:
-                        tasks.release_failed_task(
-                            task,
-                            f"finish_task returned false for type {task['type']}",
-                        )
-                    if task["type"] in (TASK_DOWNLOAD, TASK_FEEDS_LIST):
-                        # Both tasks talk to the provider under the same
-                        # per-provider queue flag, so both must release it or
-                        # every later download for that provider is rejected.
-                        provider = task.get("provider", "")
-                        if provider:
-                            users.update_by_sid(
-                                task["user"]["sid"],
-                                {f"in_queue.{provider}": False},
-                            )
-                    elif task["type"] == TASK_CLUSTERING:
-                        users.update_by_sid(task["user"]["sid"], {"in_queue": {}})
-                else:
-                    # Uniform failure path for every task type: the handler
-                    # returned false, so run it through fail/backoff/dead-letter.
-                    tasks.release_failed_task(
-                        task,
-                        f"Handler returned false for type {task['type']}",
-                    )
+                if _apply_outcome(tasks, users, task, outcome):
                     time.sleep(randint(3, 8))
             except Exception as e:
                 logging.error(

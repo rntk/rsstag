@@ -1,7 +1,7 @@
 import logging
 import time
 import gzip
-from typing import Optional, List, Dict, Any, Set, Tuple, Callable
+from typing import Optional, List, Dict, Any, Set, Tuple, Callable, Literal
 from rsstag.users import RssTagUsers
 from pymongo import MongoClient, UpdateOne, ReturnDocument
 from bson.objectid import ObjectId
@@ -997,7 +997,12 @@ class RssTagTasks:
 
         return result
 
-    def release_failed_task(self, task: dict, error: str = "") -> bool:
+    def release_failed_task(
+        self,
+        task: dict,
+        error: str = "",
+        attempt_field: Literal["attempts", "poll_attempts"] = "attempts",
+    ) -> bool:
         """Unlock a failed task for retry, freezing it after too many attempts.
 
         Generic over task type: the retry budget is read from the task's own
@@ -1005,6 +1010,9 @@ class RssTagTasks:
         ``MAX_TOPIC_MERGE_FAILED_ATTEMPTS`` only because topic-merge is the sole
         caller today. Other task types adopting this should set
         ``max_failed_attempts`` on the task doc rather than rely on that default.
+
+        ``poll_attempts`` counts consecutive polling errors independently of
+        the default retry budget for submissions and remote execution failures.
         """
         task_id: Any = task.get("_id")
         if not task_id:
@@ -1016,7 +1024,25 @@ class RssTagTasks:
             max_attempts=int(
                 task.get("max_failed_attempts", MAX_TOPIC_MERGE_FAILED_ATTEMPTS)
             ),
+            attempt_field=attempt_field,
         )
+
+    def defer_task(
+        self, task: dict, next_run_at: float, reset_poll_attempts: bool = False
+    ) -> bool:
+        """Re-queue a healthy task to run after ``next_run_at``.
+
+        No attempt is consumed; see ``TaskStateMachine.defer``.
+        """
+        return self._state.defer(task, next_run_at, reset_poll_attempts=reset_poll_attempts)
+
+    def dead_letter_task(self, task: dict, error: str) -> bool:
+        """Dead-letter a task immediately for a non-retryable failure.
+
+        Unlike ``mark_task_failed`` this is guarded (never overrides a paused
+        task), truncates the error and never raises.
+        """
+        return self._state.dead_letter(task, error)
 
     def release_stale_tasks(self, max_age_seconds: float) -> int:
         """Reclaim LEGACY tasks whose ``processing`` lock is a stale timestamp.
@@ -1154,7 +1180,7 @@ class RssTagTasks:
                     )
                 self._db.tags.bulk_write(updates, ordered=False)
             elif task["type"] == TASK_POST_GROUPING_BATCH:
-                batch_state = task.get("batch", {}) or {}
+                batch_state = self._persisted_batch_state(task)
                 batch_status = batch_state.get("status", "")
                 if batch_status == BatchTaskStatus.COMPLETED.value:
                     remove_task = True
@@ -1185,7 +1211,7 @@ class RssTagTasks:
                 if updates:
                     self._db.posts.bulk_write(updates, ordered=False)
             elif task["type"] == TASK_TAG_CLASSIFICATION_BATCH:
-                batch_state = task.get("batch", {}) or {}
+                batch_state = self._persisted_batch_state(task)
                 batch_status = batch_state.get("status", "")
                 if batch_status == BatchTaskStatus.COMPLETED.value:
                     remove_task = True
@@ -1234,6 +1260,20 @@ class RssTagTasks:
 
         return result
 
+    def _persisted_batch_state(self, task: dict) -> Dict[str, Any]:
+        """Return the batch checkpoint as persisted by the handler.
+
+        Batch handlers persist checkpoints explicitly and work on a copy of
+        ``task["batch"]``, so the in-memory value is the state at claim time.
+        Falls back to it only when the task doc no longer exists.
+        """
+        doc: Optional[dict] = self._db.tasks.find_one(
+            {"_id": task["_id"]}, projection={"batch": True}
+        )
+        if doc is None:
+            return dict(task.get("batch") or {})
+        return dict(doc.get("batch") or {})
+
     def _clear_failure_budget(self, task_id: Any) -> None:
         """Clear accumulated failure bookkeeping on a task doc."""
         try:
@@ -1242,6 +1282,7 @@ class RssTagTasks:
                 {
                     "$unset": {
                         "attempts": "",
+                        "poll_attempts": "",
                         "last_error": "",
                         "backoff_until": "",
                     }
