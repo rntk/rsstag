@@ -8,6 +8,7 @@ from typing import Optional, Dict, Any, List, Protocol, Tuple
 
 # Import txt_splitt components
 from txt_splitt import Tracer, TracingLLMCallable
+from txt_splitt.errors import SplitterError
 from txt_splitt.html_cleaners import HTMLParserTagStripCleaner
 from txt_splitt.protocols import LLMResponse
 from txt_splitt.sentences import (
@@ -86,6 +87,16 @@ def _has_grouping_content(text: str) -> bool:
         _has_normalized_content(sentence.text)
         for sentence in splitter.split(cleaned_text)
     )
+
+
+def _provider_failure(error: BaseException) -> Optional[LLMGenerationError]:
+    """Return the provider failure that txt_splitt wrapped into ``error``, if any."""
+    current: Optional[BaseException] = error
+    while current is not None:
+        if isinstance(current, LLMGenerationError):
+            return current
+        current = current.__cause__
+    return None
 
 
 def build_grouping_text(content: str, title: str = "") -> str:
@@ -179,9 +190,16 @@ class LLMHandlerAdapter:
         # Previous usage: self._llm_handler.call([prompt], temperature=temperature)
         # Note: rsstag handler apparently expects a list of prompts?
         try:
-            return self._handler.call([prompt], temperature=temperature)
+            response: str = self._handler.call([prompt], temperature=temperature)
         except Exception as e:
             raise LLMGenerationError(f"LLM call failed: {e}") from e
+        # Legacy provider wrappers return failures as strings rather than raise.
+        # Do not let those become parse errors charged against the post.
+        if not response or response.startswith(
+            ("Cerebras error ", "OpenAI error ", "Anthropic error ", "GroqCom error ", "LLamaCPP error ")
+        ) or re.match(r"^[45]\d{2} - ", response):
+            raise LLMGenerationError("LLM call failed or returned an empty response")
+        return response
 
 
 class PostSplitter:
@@ -227,7 +245,6 @@ class PostSplitter:
         )
         base_tracer = tracer
         last_error: Optional[Exception] = None
-        saw_validation_error = False
 
         for attempt in range(1, self.MAX_PIPELINE_RETRIES + 1):
             attempt_tracer = base_tracer if attempt == 1 and base_tracer is not None else Tracer()
@@ -284,10 +301,14 @@ class PostSplitter:
             except EmptyGroupingContentError:
                 self._log.warning("Skipping post grouping: prepared request has no content")
                 return None
+            except LLMGenerationError:
+                # Infrastructure failures use the queue's delayed retry path.
+                raise
             except Exception as e:
+                provider_error: Optional[LLMGenerationError] = _provider_failure(e)
+                if provider_error is not None:
+                    raise provider_error
                 last_error = e
-                if isinstance(e, ParsingError):
-                    saw_validation_error = True
                 self._log.warning(
                     "Pipeline attempt %s/%s failed: %s",
                     attempt,
@@ -301,7 +322,9 @@ class PostSplitter:
                         attempt_tracer.format(),
                     )
 
-        if saw_validation_error and isinstance(last_error, ParsingError):
+        # txt_splitt errors mean this post's text or LLM output is unusable;
+        # report them as ParsingError so the worker charges the post, not the scan.
+        if isinstance(last_error, (ParsingError, SplitterError)):
             raise ParsingError(
                 f"Invalid LLM output after {self.MAX_PIPELINE_RETRIES} attempts: {last_error}"
             ) from last_error

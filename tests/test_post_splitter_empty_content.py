@@ -8,15 +8,64 @@ from unittest.mock import Mock, patch
 from rsstag.post_splitter import (
     EmptyGroupingContentError,
     LLMHandlerAdapter,
+    LLMGenerationError,
+    ParsingError,
     PostSplitter,
+    PostSplitterError,
     build_grouping_text,
 )
 from txt_splitt.sentences import PreparedDocument
 from txt_splitt.sentences.gap_handlers import _build_gap_prompt
+from txt_splitt.errors import GapError
 from txt_splitt.sentences.types import PreparedChunk
 
 
 class TestPostSplitterEmptyContent(unittest.TestCase):
+    def test_provider_failure_uses_delayed_queue_retry_without_pipeline_retries(self) -> None:
+        handler: Mock = Mock()
+        handler.call.side_effect = ConnectionError("provider unavailable")
+        with self.assertRaises(LLMGenerationError):
+            PostSplitter(handler).generate_grouped_data("Useful body text.")
+        handler.call.assert_called_once()
+
+    def test_legacy_provider_error_strings_are_infrastructure_failures(self) -> None:
+        for response in (
+            "Cerebras error unavailable", "OpenAI error rate limited", "Anthropic error timeout",
+            "429 - Too Many Requests - rate limited", "503 - Service Unavailable - outage", "",
+        ):
+            with self.subTest(response=response):
+                handler: Mock = Mock()
+                handler.call.return_value = response
+                with self.assertRaises(LLMGenerationError):
+                    PostSplitter(handler).generate_grouped_data("Useful body text.")
+                handler.call.assert_called_once()
+
+    def test_unparseable_llm_output_is_a_post_failure(self) -> None:
+        handler: Mock = Mock()
+        handler.call.return_value = "garbage not ranges"
+        with self.assertRaises(ParsingError):
+            PostSplitter(handler).generate_grouped_data("Useful body text. Another sentence.")
+        self.assertEqual(handler.call.call_count, PostSplitter.MAX_PIPELINE_RETRIES)
+
+    def test_provider_failure_wrapped_by_txt_splitt_stays_infrastructure(self) -> None:
+        def wrapped_failure(*args: Any) -> None:
+            try:
+                raise LLMGenerationError("LLM call failed: provider unavailable")
+            except LLMGenerationError as exc:
+                raise GapError("LLM call failed during gap repair") from exc
+
+        with patch.object(PostSplitter, "_run_pipeline_session", side_effect=wrapped_failure):
+            with self.assertRaises(LLMGenerationError):
+                PostSplitter(Mock()).generate_grouped_data("Useful body text.")
+
+    def test_unexpected_pipeline_error_is_not_a_post_failure(self) -> None:
+        with patch.object(
+            PostSplitter, "_run_pipeline_session", side_effect=RuntimeError("bug")
+        ):
+            with self.assertRaises(PostSplitterError) as ctx:
+                PostSplitter(Mock()).generate_grouped_data("Useful body text.")
+        self.assertNotIsInstance(ctx.exception, ParsingError)
+
     def test_empty_documents_are_skipped_in_regular_and_batch_paths(self) -> None:
         contents: List[str] = [
             "",

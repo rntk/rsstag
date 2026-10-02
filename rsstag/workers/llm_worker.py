@@ -6,6 +6,7 @@ import logging
 import re
 import time
 import uuid
+import zlib
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -45,6 +46,7 @@ from rsstag.workers.outcome import (
 # Minimum delay between two status polls of one remote batch.
 BATCH_POLL_INTERVAL_SECONDS: float = 60.0
 BATCH_TERMINAL_FAILED_STATUSES: Set[str] = {"failed", "expired", "cancelled"}
+MAX_POST_GROUPING_ATTEMPTS: int = 3
 
 
 def _next_poll(last_check: float, reset_poll_attempts: bool = False) -> Deferred:
@@ -353,14 +355,28 @@ class _PostGroupingWorker:
             )
         return remaining
 
+    def _grouping_failure_update(
+        self, post: Dict[str, Any], reason: str, skip: bool = False
+    ) -> UpdateOne:
+        """Bound retries for post-specific errors, excluding infrastructure failures."""
+        attempts: int = int(post.get("grouping_attempts", 0)) + 1
+        changes: Dict[str, Any] = {
+            "processing": POST_NOT_IN_PROCESSING,
+            "grouping_attempts": attempts,
+            "grouping_error": reason,
+        }
+        if skip or attempts >= MAX_POST_GROUPING_ATTEMPTS:
+            changes["grouping"] = 1
+            logging.warning("Skipping post grouping for %s: %s", post.get("pid"), reason)
+        return UpdateOne({"_id": post["_id"]}, {"$set": changes})
+
     def make_post_grouping(self, task: Dict[str, Any]) -> bool:
         try:
             from rsstag.post_grouping import RssTagPostGrouping
-            from rsstag.post_splitter import PostSplitter
+            from rsstag.post_splitter import LLMGenerationError, ParsingError, PostSplitter
 
             owner: str = task["user"]["sid"]
             posts: List[Dict[str, Any]] = task["data"]
-            had_errors: bool = False
 
             posts = self._exclude_posts_with_existing_groupings(owner, posts)
             task["data"] = posts
@@ -370,18 +386,33 @@ class _PostGroupingWorker:
             llm_handler: Any = self._llm.get_handler(
                 task["user"]["settings"], provider_key="worker_llm"
             )
+            if llm_handler is None:
+                raise LLMGenerationError("LLM handler not configured")
             model_id: str = model_identity(llm_handler)
             post_grouping = RssTagPostGrouping(self._db)
             chunk_cache: Optional[Any] = self._cache.chunk_cache(owner, model_id)
             post_splitter = PostSplitter(llm_handler, chunk_cache=chunk_cache)
 
-            updates: List[UpdateOne] = []
+            # Default to releasing every claim, including posts left untouched
+            # when a provider failure stops this step early.
+            updates: Dict[Any, UpdateOne] = {
+                post["_id"]: UpdateOne(
+                    {"_id": post["_id"]}, {"$set": {"processing": POST_NOT_IN_PROCESSING}}
+                )
+                for post in posts
+            }
+            provider_failed: bool = False
             for post in posts:
                 try:
                     content: str
                     title: str
                     text: str
                     content, title, text = self._post_text(post)
+                except (OSError, EOFError, zlib.error, ValueError, TypeError, KeyError) as exc:
+                    logging.error("Invalid content for post %s: %s", post.get("pid"), exc)
+                    updates[post["_id"]] = self._grouping_failure_update(post, "Invalid post content")
+                    continue
+                try:
                     # An identical text -- a repost, a re-download or a duplicate
                     # inside this very batch -- is already grouped.
                     cached: Optional[Dict[str, Any]] = self._cache.get_document(
@@ -393,11 +424,9 @@ class _PostGroupingWorker:
                             chunk_cache.bind_document(text)
                         result = post_splitter.generate_grouped_data(content, title)
                     if result is None:
-                        logging.warning(
-                            "Skipping grouped data save for post %s due to LLM failure",
-                            post.get("pid"),
+                        updates[post["_id"]] = self._grouping_failure_update(
+                            post, "No content after cleaning and splitting", skip=True
                         )
-                        had_errors = True
                         continue
 
                     save_success: bool = post_grouping.save_grouped_posts(
@@ -409,34 +438,50 @@ class _PostGroupingWorker:
                     if save_success:
                         if cached is None:
                             self._cache.set_document(owner, model_id, text, result)
-                        updates.append(
-                            UpdateOne(
-                                {"_id": post["_id"]},
-                                {
-                                    "$set": {
-                                        "processing": POST_NOT_IN_PROCESSING,
-                                        "grouping": 1,
-                                    }
+                        updates[post["_id"]] = UpdateOne(
+                            {"_id": post["_id"]},
+                            {
+                                "$set": {
+                                    "processing": POST_NOT_IN_PROCESSING,
+                                    "grouping": 1,
                                 },
-                            )
+                                "$unset": {"grouping_attempts": "", "grouping_error": ""},
+                            },
                         )
                     else:
                         logging.error("Failed to save grouped data for post %s", post["pid"])
-                        had_errors = True
-                except Exception as exc:
+                        updates[post["_id"]] = self._grouping_failure_update(
+                            post, "Failed to save grouped data"
+                        )
+                except ParsingError as exc:
                     logging.error("Error processing post %s: %s", post.get("pid"), exc)
-                    had_errors = True
+                    updates[post["_id"]] = self._grouping_failure_update(
+                        post, "Invalid grouping response"
+                    )
+                except Exception as exc:
+                    # Unknown failures are conservatively retryable. They may
+                    # come from the provider, cache or storage, not this post.
+                    logging.error("Post grouping step failed for %s: %s", post.get("pid"), exc)
+                    provider_failed = True
+                    break
 
             if updates:
                 try:
-                    self._db.posts.bulk_write(updates, ordered=False)
+                    self._db.posts.bulk_write(list(updates.values()), ordered=False)
                 except Exception as exc:
                     logging.error("Failed to update post grouping flags: %s", exc)
                     return False
 
-            return not had_errors
+            return not provider_failed
         except Exception as exc:
             logging.error("Can't make post grouping. Info: %s", exc)
+            try:
+                self._db.posts.update_many(
+                    {"_id": {"$in": [post["_id"] for post in task.get("data", [])]}},
+                    {"$set": {"processing": POST_NOT_IN_PROCESSING}},
+                )
+            except Exception as release_error:
+                logging.error("Can't release post grouping claims: %s", release_error)
             return False
 
     def _invalidate_cache_for_cleanup(
@@ -516,7 +561,7 @@ class _PostGroupingWorker:
             self._db.posts.update_many(
                 query,
                 {
-                    "$unset": {"grouping": ""},
+                    "$unset": {"grouping": "", "grouping_attempts": "", "grouping_error": ""},
                     "$set": {"processing": POST_NOT_IN_PROCESSING},
                 },
             )

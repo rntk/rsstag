@@ -1138,6 +1138,8 @@ class RssTagTasks:
                     )
                 self._db.posts.bulk_write(updates, ordered=False)
             elif task["type"] == TASK_POST_GROUPING:
+                # The handler owns success/skip markers and per-post retries.
+                # Finishing a scan step must not mark retryable posts grouped.
                 remove_task = False
                 updates = []
                 for post in task["data"]:
@@ -1147,7 +1149,6 @@ class RssTagTasks:
                             {
                                 "$set": {
                                     "processing": POST_NOT_IN_PROCESSING,
-                                    "grouping": 1,
                                 }
                             },
                         )
