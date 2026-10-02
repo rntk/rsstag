@@ -3175,6 +3175,7 @@ def _build_grouped_posts_page_context(
     user: dict,
     request: Request,
     pids: Optional[str],
+    plain_sentences: bool = False,
 ) -> Optional[dict[str, Any]]:
     """Build shared page context for grouped-post based pages."""
     topic_filter: Optional[dict[str, Any]] = _parse_topic_filter_from_request(request)
@@ -3254,10 +3255,18 @@ def _build_grouped_posts_page_context(
                         p_info_ctx["raw_content"]
                     )
 
+            source_post: dict = next(
+                (post for post in posts_info if post["post_id"] == post_id), {}
+            ) if plain_sentences else {}
             for sentence in post_grouped_data["sentences"]:
+                sentence_text: Any = sentence.get("text")
+                if plain_sentences:
+                    sentence_text = snippet_text_from_sentence(
+                        source_post.get("raw_content", ""), sentence
+                    )
                 all_sentences_data.append(
                     {
-                        "text": sentence.get("text"),
+                        "text": sentence_text,
                         "start": sentence.get("start"),
                         "end": sentence.get("end"),
                         "number": sentence_offset + sentence["number"],
@@ -3463,6 +3472,37 @@ def _build_grouped_posts_page_context(
         "current_topic_query": _topic_filter_query_string(topic_filter),
         "topic_only_view": topic_only_view,
     }
+
+
+def on_post_canvas_get(
+    app: "RSSTagApplication", user: dict, request: Request, pids: Optional[str] = None
+) -> Response:
+    """Read saved post topics as chronological cards on a movable canvas."""
+    try:
+        context: Optional[dict[str, Any]] = _build_grouped_posts_page_context(
+            app, user, request, pids, plain_sentences=True
+        )
+        if context is None or not context["posts"]:
+            return app.on_error(user, request, NotFound())
+        # Article HTML is rendered by the template; the script only needs ids.
+        canvas_posts: list[dict[str, Any]] = [
+            {
+                "post_id": post["post_id"],
+                "feed_title": post["feed_title"],
+                "url": post["url"],
+            }
+            for post in context["posts"]
+        ]
+        page: Template = app.template_env.get_template("post-canvas.html")
+        return Response(
+            page.render(
+                **context, canvas_posts=canvas_posts, user_settings=user["settings"]
+            ),
+            mimetype="text/html",
+        )
+    except Exception:
+        logging.exception("Unable to load post canvas")
+        return Response("The post canvas could not be loaded. Please try again.", status=500)
 
 
 def on_post_compare_get(

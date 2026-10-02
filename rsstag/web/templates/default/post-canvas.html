@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Post Canvas | {{ feed_title }}</title>
+    {% include "head-data.html" %}
+</head>
+<body class="post-canvas-body" data-global-chat="off">
+    <main class="post-canvas" id="post-canvas">
+        <div id="post-canvas-area" class="post-canvas__area" tabindex="0" aria-label="Topic reading canvas">
+            <div id="post-canvas-viewport" class="post-canvas__viewport">
+                <div id="post-canvas-stage" class="post-canvas__stage has-rail">
+                    <aside id="post-canvas-current-summary" class="post-canvas__current-summary" aria-label="Current topic summary" aria-live="polite" hidden></aside>
+                    <div id="post-canvas-column" class="post-canvas__column">
+                        <div id="post-canvas-articles" class="post-canvas__articles">
+                            {% for post in posts %}
+                            <article class="post-canvas__sheet" data-post-id="{{ post.post_id }}">
+                                <header class="post-canvas__sheet-header">
+                                    <span class="post-canvas__sheet-feed">{{ post.feed_title }}</span>
+                                    <span class="post-canvas__sheet-links">
+                                        <a href="/post-grouped/{{ post.post_id }}">Grouped</a>
+                                        {% if post.url %}<a href="{{ post.url }}" target="_blank" rel="noopener noreferrer">Original</a>{% endif %}
+                                    </span>
+                                </header>
+                                <div class="post-canvas__article-html">{{ post.content|safe }}</div>
+                            </article>
+                            {% endfor %}
+                        </div>
+                        <div id="post-canvas-summaries" class="post-canvas__summaries" hidden></div>
+                    </div>
+                    <aside id="post-canvas-rail" class="post-canvas__rail" aria-label="Topic rail">
+                        <div id="post-canvas-rail-body" class="post-canvas__rail-body"></div>
+                    </aside>
+                </div>
+            </div>
+        </div>
+
+        <nav class="post-canvas__controls" aria-label="Canvas controls">
+            <a class="post-canvas__btn post-canvas__btn--wide" href="/post-grouped{% if post_id %}/{{ post_id }}{% endif %}{{ current_topic_query }}" title="Back to grouped posts">← Posts</a>
+            <button type="button" class="post-canvas__btn post-canvas__btn--wide" data-action="return" title="Back to your previous view (Backspace)" hidden>↩ Back</button>
+            <div class="post-canvas__nav-grid">
+                <button type="button" class="post-canvas__btn" data-action="first-topic" title="First topic">⇞</button>
+                <button type="button" class="post-canvas__btn" data-action="top" title="Scroll to top (Home)">⇈</button>
+                <button type="button" class="post-canvas__btn" data-action="prev-topic" title="Previous topic (↑)">▲</button>
+                <button type="button" class="post-canvas__btn" data-action="prev-page" title="Previous page (PageUp)">↑</button>
+                <button type="button" class="post-canvas__btn" data-action="next-topic" title="Next topic (↓)">▼</button>
+                <button type="button" class="post-canvas__btn" data-action="next-page" title="Next page (PageDown)">↓</button>
+                <button type="button" class="post-canvas__btn" data-action="last-topic" title="Last topic">⇟</button>
+                <button type="button" class="post-canvas__btn" data-action="bottom" title="Scroll to bottom (End)">⇊</button>
+            </div>
+            <div class="post-canvas__control-row">
+                <button type="button" class="post-canvas__btn" data-action="zoom-in" title="Zoom in" aria-label="Zoom in">+</button>
+                <button type="button" class="post-canvas__btn" data-action="zoom-out" title="Zoom out" aria-label="Zoom out">−</button>
+                <button type="button" class="post-canvas__btn" data-action="fit" title="Fit width">⤢</button>
+                <button type="button" class="post-canvas__btn" data-action="reset" title="Reset zoom">1:1</button>
+            </div>
+            <output id="post-canvas-zoom" class="post-canvas__zoom">100%</output>
+            <div id="post-canvas-levels" class="post-canvas__control-row" role="group" aria-label="Topic level"></div>
+            <div class="post-canvas__control-row">
+                <button type="button" class="post-canvas__btn post-canvas__btn--toggle" data-action="summary-mode" aria-pressed="false" title="Show summary view">Σ</button>
+                <button type="button" class="post-canvas__btn post-canvas__btn--toggle is-active" data-action="rail" aria-pressed="true" title="Hide topic rail">☰</button>
+            </div>
+        </nav>
+        <p id="post-canvas-status" class="post-canvas__status" role="status" aria-live="polite"></p>
+    </main>
+    <script id="post-canvas-data" type="application/json">{{ {"posts": canvas_posts, "sentences": sentences, "groups": groups if has_grouped_data else {}} | tojson }}</script>
+    <script type="module" src="/static/js/post-canvas.js"></script>
+</body>
+</html>

@@ -62,12 +62,10 @@ class _Pipeline:
 def _patch_pipeline(transform_result: Any):
     return patch.multiple(
         "rsstag.post_splitter",
-        SparseRegexSentenceSplitter=lambda *args, **kwargs: object(),
         OverlapChunker=lambda *args, **kwargs: object(),
         # Pass the caching callable through so the session drives it directly.
         TracingLLMCallable=lambda inner, tracer: inner,
         TopicRangeLLM=lambda *args, **kwargs: object(),
-        HTMLParserTagStripCleaner=lambda *args, **kwargs: object(),
         MappingOffsetRestorer=lambda *args, **kwargs: object(),
         BracketMarker=lambda *args, **kwargs: object(),
         OptimizingMarker=lambda *args, **kwargs: object(),

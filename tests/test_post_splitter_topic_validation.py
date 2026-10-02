@@ -75,11 +75,9 @@ class TestPostSplitterTopicValidation(unittest.TestCase):
     def _patch_pipeline_dependencies(self):
         return patch.multiple(
             "rsstag.post_splitter",
-            SparseRegexSentenceSplitter=lambda *args, **kwargs: object(),
             OverlapChunker=lambda *args, **kwargs: object(),
             TracingLLMCallable=lambda *args, **kwargs: object(),
             TopicRangeLLM=lambda *args, **kwargs: object(),
-            HTMLParserTagStripCleaner=lambda *args, **kwargs: object(),
             MappingOffsetRestorer=lambda *args, **kwargs: object(),
             BracketMarker=lambda *args, **kwargs: object(),
             OptimizingMarker=lambda *args, **kwargs: object(),

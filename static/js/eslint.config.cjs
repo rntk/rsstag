@@ -107,7 +107,13 @@ module.exports = [
     },
   },
   {
-    files: ['topics-list.js', 'topics-hierarchy.js'],
+    files: [
+      'topics-list.js',
+      'topics-hierarchy.js',
+      'post-canvas.js',
+      'libs/post-canvas-viewport.js',
+      'libs/post-canvas-summaries.js',
+    ],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',

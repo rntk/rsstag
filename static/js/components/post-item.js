@@ -191,6 +191,7 @@ export default class PostsItem extends React.Component {
             <a href={post.links.f_url}>{post.links.f_title}</a>&nbsp;| &nbsp;
             <a href={post.links.p_url}>To site</a>&nbsp;| &nbsp;
             <a href={post.links.ctx_url}>With context</a>
+            &nbsp;| &nbsp;<a href={'/post-canvas/' + encodeURIComponent(post.post.pid)}>Canvas</a>
             {clst_link ? <span>&nbsp;| &nbsp;</span> : <br />}
             {clst_link}
             {topics}

@@ -1,6 +1,9 @@
 """Post splitting and LLM interaction logic"""
 
 import logging
+import re
+import unicodedata
+from dataclasses import replace
 from typing import Optional, Dict, Any, List, Protocol, Tuple
 
 # Import txt_splitt components
@@ -23,6 +26,8 @@ from txt_splitt.sentences import (
     build_pipeline,
 )
 from txt_splitt.sentences.llm import _build_topic_ranges_prompt
+from txt_splitt.sentences.types import PreparedChunk
+from txt_splitt.sentences.text_optimizers import normalize_for_llm
 
 
 class PostSplitterError(Exception):
@@ -43,13 +48,53 @@ class ParsingError(PostSplitterError):
     pass
 
 
+class EmptyGroupingContentError(PostSplitterError):
+    """Raised when a prepared request contains no text to classify."""
+
+
+def _create_html_cleaner() -> HTMLParserTagStripCleaner:
+    return HTMLParserTagStripCleaner(strip_tags={"style", "script"})
+
+
+def _create_sentence_splitter() -> SparseRegexSentenceSplitter:
+    return SparseRegexSentenceSplitter(anchor_every_words=5, html_aware=True)
+
+
+def _has_normalized_content(text: str) -> bool:
+    """Ignore punctuation and invisible characters, preserving words and symbols."""
+    return any(
+        unicodedata.category(char)[0] in {"L", "N", "S"}
+        for char in normalize_for_llm(text)
+    )
+
+
+def _has_tagged_content(tagged_text: str) -> bool:
+    """Check normalized text without counting sentence markers as content."""
+    text: str = re.sub(r"\{\d+\}", "", tagged_text)
+    return _has_normalized_content(text)
+
+
+def _has_grouping_content(text: str) -> bool:
+    """Check the same cleaned sentences that the pipeline will mark.
+
+    Keep the original text intact so stored sentence offsets stay valid.
+    """
+    cleaner: HTMLParserTagStripCleaner = _create_html_cleaner()
+    cleaned_text: str = cleaner.clean(text)[0]
+    splitter: SparseRegexSentenceSplitter = _create_sentence_splitter()
+    return any(
+        _has_normalized_content(sentence.text)
+        for sentence in splitter.split(cleaned_text)
+    )
+
+
 def build_grouping_text(content: str, title: str = "") -> str:
     """Build the exact text the pipeline consumes.
 
     Cache keys hash this string, so every caller that needs the key must use
     this helper instead of re-implementing the concatenation.
     """
-    if title:
+    if title and _has_grouping_content(title):
         return title + ". " + content
     return content
 
@@ -113,6 +158,22 @@ class LLMHandlerAdapter:
 
     def call(self, prompt: str, temperature: float) -> str:
         """Call the underlying LLM handler."""
+        content_match: Optional[re.Match[str]] = re.search(
+            r"<content>(.*?)</content>", prompt, flags=re.DOTALL
+        )
+        if content_match is not None and not _has_tagged_content(content_match.group(1)):
+            raise EmptyGroupingContentError("Grouping request has no content")
+        gap_match: Optional[re.Match[str]] = re.search(
+            r"<GAP>(.*?)</GAP>", prompt, flags=re.DOTALL
+        )
+        if (
+            content_match is None
+            and gap_match is not None
+            and not _has_tagged_content(gap_match.group(1))
+        ):
+            # Gap repair offers two neighboring topics. Attach filler to the
+            # previous topic without spending a provider call or dropping the post.
+            return "PREVIOUS"
         # rsstag handlers might not support temperature or have different signature
         # We assume .call(prompt, temperature=...) compatibility based on previous usage
         # Previous usage: self._llm_handler.call([prompt], temperature=temperature)
@@ -150,9 +211,10 @@ class PostSplitter:
         Raises:
             PostSplitterError: If splitting or grouping fails
         """
-        text = build_grouping_text(content, title)
+        text: str = build_grouping_text(content, title)
 
-        if not text.strip():
+        if not _has_grouping_content(text):
+            self._log.info("Skipping post grouping: no content after cleaning and splitting")
             return None
 
         if not self._llm_handler:
@@ -176,9 +238,7 @@ class PostSplitter:
             try:
                 # Initialize the pipeline components
                 # We use settings similar to the reference split_text.py
-                splitter = SparseRegexSentenceSplitter(
-                    anchor_every_words=5, html_aware=True
-                )
+                splitter: SparseRegexSentenceSplitter = _create_sentence_splitter()
 
                 # Using OverlapChunker as in example
                 chunker = OverlapChunker(max_chars=84000)
@@ -192,7 +252,7 @@ class PostSplitter:
                     chunker=chunker,
                 )
 
-                html_cleaner = HTMLParserTagStripCleaner(strip_tags={"style", "script"})
+                html_cleaner: HTMLParserTagStripCleaner = _create_html_cleaner()
                 offset_restorer = MappingOffsetRestorer()
 
                 # Create the pipeline
@@ -221,6 +281,9 @@ class PostSplitter:
                 )
                 return transformed
 
+            except EmptyGroupingContentError:
+                self._log.warning("Skipping post grouping: prepared request has no content")
+                return None
             except Exception as e:
                 last_error = e
                 if isinstance(e, ParsingError):
@@ -275,10 +338,10 @@ class PostSplitter:
 
     def _create_batch_pipeline(self) -> BatchPipeline:
         """Create a BatchPipeline configured the same as the regular pipeline."""
-        html_cleaner = HTMLParserTagStripCleaner(strip_tags={"style", "script"})
+        html_cleaner: HTMLParserTagStripCleaner = _create_html_cleaner()
         offset_restorer = MappingOffsetRestorer()
         return BatchPipeline(
-            splitter=SparseRegexSentenceSplitter(anchor_every_words=5, html_aware=True),
+            splitter=_create_sentence_splitter(),
             marker=OptimizingMarker(BracketMarker()),
             parser=TopicRangeParser(),
             gap_handler=RepairingGapHandler(),
@@ -294,18 +357,29 @@ class PostSplitter:
         """Prepare text for external batch LLM processing.
 
         Returns a PreparedDocument whose .chunks contain tagged_text for LLM prompts,
-        or None if the text is empty.
+        omitting content-free chunks, or None if no usable content remains.
         """
-        text = build_grouping_text(content, title)
+        text: str = build_grouping_text(content, title)
 
         if not text.strip():
             return None
 
-        batch_pipeline = self._create_batch_pipeline()
-        return batch_pipeline.prepare(text)
+        batch_pipeline: BatchPipeline = self._create_batch_pipeline()
+        prepared: PreparedDocument = batch_pipeline.prepare(text)
+        chunks: Tuple[PreparedChunk, ...] = tuple(
+            chunk for chunk in prepared.chunks if _has_tagged_content(chunk.tagged_text)
+        )
+        if not prepared.sentences or not chunks:
+            self._log.info("Skipping batch grouping: no content after cleaning and splitting")
+            return None
+        # Preserve sentence indices and offsets for finalization and chunk IDs
+        # for matching provider responses. Only omit content-free requests.
+        return replace(prepared, chunks=chunks)
 
     def build_batch_prompt(self, tagged_text: str) -> str:
         """Build the LLM prompt for a single prepared chunk's tagged text."""
+        if not _has_tagged_content(tagged_text):
+            raise EmptyGroupingContentError("Batch grouping request has no content")
         return _build_topic_ranges_prompt(tagged_text)
 
     def finalize_batch(

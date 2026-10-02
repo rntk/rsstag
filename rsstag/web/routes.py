@@ -240,6 +240,16 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/post-canvas/<string:pids>",
+                "endpoint": "on_post_canvas_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/post-canvas",
+                "endpoint": "on_post_canvas_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/post-compare/<string:pids>",
                 "endpoint": "on_post_compare_get",
                 "methods": ["GET"],

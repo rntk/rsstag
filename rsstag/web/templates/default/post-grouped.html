@@ -21,6 +21,7 @@
     </div>
     <div class="page post-grouped-page">
         <h2>Posts</h2>
+        <a href="/post-canvas{% if post_id %}/{{ post_id }}{% endif %}{{ current_topic_query }}" class="topic-btn">Read in Canvas</a>
 
         {% if not topic_only_view %}
         <div class="graph-link">

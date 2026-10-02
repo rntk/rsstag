@@ -10231,3 +10231,608 @@ body.tag-explorer-page {
 .tag-context-wall__color-yake { --insight-color: #dcebd0; }
 .tag-context-wall__color-surprise { --insight-color: #f4d9e3; }
 .tag-context-wall__color-log_odds { --insight-color: #dce5fa; }
+
+/* ── Post canvas ───────────────────────────────────────────────────────────
+   Pan/zoom reader for saved topic runs, ported from the extension canvas
+   (extension-canvas/src/canvas/modal.css): article sheets in the center, a
+   right-hand rail whose cards sit beside the sentences they cover (one column
+   per topic level), and a floating summary for the active card on the left.
+
+   Transform variables live on .post-canvas__viewport (set from JS):
+     --canvas-translate-x/y, --canvas-scale, --canvas-area-height
+   Zoom-adjusted sizes live on .post-canvas__stage:
+     --card-w, --rail-w, --summary-w, --card-title-size */
+.post-canvas-body {
+  overflow: hidden;
+}
+
+.post-canvas {
+  position: relative;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--rsst-surface-sunken);
+  color: var(--rsst-ink);
+  font-family: var(--rsst-font-body);
+
+  --post-canvas-gap: 18px;
+  --post-canvas-rail-pad: 24px;
+  --post-canvas-column-w: 680px;
+}
+
+.post-canvas__area {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  background: var(--rsst-surface-sunken)
+    radial-gradient(circle, rgb(0 0 0 / 6%) 1px, transparent 1px) 0 0 / 28px
+    28px;
+}
+
+.post-canvas__area:focus,
+.post-canvas__area:focus-visible {
+  outline: none;
+}
+
+.post-canvas__area.is-dragging {
+  cursor: grabbing;
+}
+
+.post-canvas__viewport {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform: translate(
+      var(--canvas-translate-x, 40px),
+      var(--canvas-translate-y, 40px)
+    )
+    scale(var(--canvas-scale, 1));
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.post-canvas__viewport.is-animating {
+  transition: transform 320ms ease;
+}
+
+.post-canvas__stage {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  padding-bottom: 80px;
+}
+
+.post-canvas__stage.has-rail {
+  padding-left: calc(var(--summary-w, 418px) + 40px);
+  padding-right: calc(var(--rail-w, 336px) + 70px);
+}
+
+.post-canvas__stage.has-rail.is-summary-mode {
+  padding-left: 0;
+}
+
+.post-canvas__column {
+  width: var(--post-canvas-column-w);
+  flex-shrink: 0;
+}
+
+.post-canvas__articles,
+.post-canvas__summaries {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+.post-canvas__articles[hidden],
+.post-canvas__summaries[hidden],
+.post-canvas__current-summary[hidden] {
+  display: none;
+}
+
+/* The article: a sheet of paper on the canvas. */
+.post-canvas__sheet {
+  background: var(--rsst-surface-canvas);
+  border: 2px solid var(--rsst-ink);
+  padding: 32px 44px 40px;
+  font-size: 16px;
+  line-height: 1.75;
+  cursor: auto;
+}
+
+.post-canvas__sheet-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--rsst-border);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--rsst-ink-tertiary);
+}
+
+.post-canvas__sheet-links {
+  display: flex;
+  gap: 12px;
+}
+
+.post-canvas a {
+  color: var(--rsst-ink-secondary);
+}
+
+.post-canvas__article-html {
+  overflow-wrap: break-word;
+}
+
+.post-canvas__article-html p,
+.post-canvas__article-html ul,
+.post-canvas__article-html ol,
+.post-canvas__article-html blockquote,
+.post-canvas__article-html pre {
+  margin: 0 0 1em;
+}
+
+.post-canvas__article-html ul,
+.post-canvas__article-html ol {
+  padding-left: 1.5em;
+}
+
+.post-canvas__article-html h1,
+.post-canvas__article-html h2,
+.post-canvas__article-html h3,
+.post-canvas__article-html h4 {
+  margin: 1em 0 0.5em;
+  font-family: var(--rsst-font-head);
+  line-height: 1.3;
+}
+
+.post-canvas__article-html img,
+.post-canvas__article-html video,
+.post-canvas__article-html iframe,
+.post-canvas__article-html svg,
+.post-canvas__article-html table {
+  max-width: 100%;
+  height: auto;
+}
+
+.post-canvas__article-html pre {
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
+.post-canvas__article-html blockquote {
+  padding-left: 1em;
+  border-left: 3px solid var(--rsst-border);
+  color: var(--rsst-ink-secondary);
+}
+
+/* The grouped page tints every sentence inline; the canvas tints only the
+   hovered and selected topic runs. */
+.post-canvas .sentence-group {
+  background-color: transparent !important;
+  transition: background-color 0.15s ease;
+}
+
+.post-canvas .sentence-group.is-selected {
+  background-color: var(--highlight-selected, #dde5ff) !important;
+}
+
+.post-canvas .sentence-group.is-hovered {
+  background-color: var(--highlight-hovered, #e8eefc) !important;
+}
+
+/* ── Rail ── */
+.post-canvas__rail {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: var(--rail-w, 336px);
+  user-select: text;
+}
+
+.post-canvas__stage:not(.has-rail) .post-canvas__rail {
+  display: none;
+}
+
+.post-canvas__rail-body {
+  position: relative;
+}
+
+.post-canvas__rail-empty {
+  margin: 24px 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--rsst-border);
+  color: var(--rsst-ink-tertiary);
+  background: var(--rsst-surface-canvas);
+  font-size: 12px;
+}
+
+/* Level 0 is the outermost column; deeper levels sit closer to the text. */
+.post-canvas__card {
+  position: absolute;
+  top: var(--topic-card-top, 0);
+  height: var(--topic-card-height, 72px);
+  right: calc(
+    var(--post-canvas-rail-pad) + var(--card-level, 0) *
+      (var(--card-w, 240px) + var(--post-canvas-gap))
+  );
+  z-index: var(--card-z, 10);
+  width: var(--card-w, 240px);
+  display: flex;
+  overflow: hidden;
+  padding: 8px 10px 8px 12px;
+  border: 1px solid rgb(0 0 0 / 20%);
+  border-left: 4px solid var(--topic-accent-color, var(--rsst-ink-tertiary));
+  background: var(--rsst-surface-canvas);
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease;
+}
+
+.post-canvas__card.is-compact {
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.post-canvas__card:hover,
+.post-canvas__card.is-active,
+.post-canvas__card.is-selected {
+  border-color: var(--rsst-ink);
+  border-left-color: var(--topic-accent-color, var(--rsst-ink));
+  background: var(--selected-color);
+}
+
+.post-canvas__card.is-active,
+.post-canvas__card.is-selected {
+  z-index: 1000;
+}
+
+.post-canvas__card-main {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.post-canvas__card-main:focus-visible {
+  outline: 2px solid var(--rsst-ink);
+  outline-offset: -3px;
+}
+
+/* Keep tall-card labels visible while the canvas pans (it moves by
+   transform, so position: sticky cannot track it). */
+.post-canvas__card-content {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+
+  --_lh: calc(
+    min(var(--card-title-size, 14px), var(--card-title-max-size, 100px)) * 2.4 +
+      18px
+  );
+  --_p: 6px;
+  --_vis-top: max(
+    0px,
+    calc(
+      -1 * var(--canvas-translate-y, 0px) / var(--canvas-scale, 1) -
+        var(--topic-card-top, 0px)
+    )
+  );
+  --_vis-bot: min(
+    var(--topic-card-height),
+    calc(
+      (var(--canvas-area-height, 100dvh) - var(--canvas-translate-y, 0px)) /
+        var(--canvas-scale, 1) - var(--topic-card-top, 0px)
+    )
+  );
+  --_vis-center: calc((var(--_vis-top) + var(--_vis-bot)) / 2);
+  --_offset: clamp(
+    calc(var(--_lh) / 2 + var(--_p) - var(--topic-card-height) / 2),
+    calc(var(--_vis-center) - var(--topic-card-height) / 2),
+    calc(var(--topic-card-height) / 2 - var(--_lh) / 2 - var(--_p))
+  );
+
+  transform: translateY(var(--_offset));
+}
+
+.post-canvas__viewport.is-animating .post-canvas__card-content {
+  transition: transform 320ms ease;
+}
+
+.post-canvas__card-name {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: min(
+    var(--card-title-size, 14px),
+    var(--card-title-max-size, 100px)
+  );
+  font-weight: 700;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--card-title-lines, 2);
+}
+
+.post-canvas__stage.is-zoomed-out .post-canvas__card-name {
+  line-clamp: 1;
+  -webkit-line-clamp: 1;
+}
+
+.post-canvas__card-meta {
+  font-size: min(calc(var(--card-title-size, 14px) * 0.8), 40px);
+  color: var(--rsst-ink-tertiary);
+}
+
+/* ── Summary cards (floating and summary mode) ── */
+.post-canvas__summary-card {
+  padding: 16px 18px;
+  border: 1px solid rgb(0 0 0 / 20%);
+  border-left: 4px solid var(--topic-accent-color, var(--rsst-ink-tertiary));
+  background: var(--rsst-surface-canvas);
+  cursor: pointer;
+  user-select: text;
+}
+
+.post-canvas__summary-card.is-active,
+.post-canvas__summary-card.is-selected {
+  border-color: var(--rsst-ink);
+  border-left-color: var(--topic-accent-color, var(--rsst-ink));
+  background: var(--selected-color);
+}
+
+.post-canvas__summary-card:focus-visible {
+  outline: 2px solid var(--rsst-ink);
+  outline-offset: 2px;
+}
+
+.post-canvas__summary-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin-bottom: 8px;
+}
+
+.post-canvas__summary-kicker {
+  flex-basis: 100%;
+  font-size: var(--summary-kicker-size, 11px);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rsst-ink-tertiary);
+}
+
+.post-canvas__summary-path {
+  flex: 1;
+  font-family: var(--rsst-font-head);
+  font-size: var(--summary-title-size, 17px);
+  font-weight: 700;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.post-canvas__summary-meta {
+  font-size: var(--summary-kicker-size, 11px);
+  color: var(--rsst-ink-tertiary);
+}
+
+.post-canvas__summary-text,
+.post-canvas__summary-preview,
+.post-canvas__summary-pending,
+.post-canvas__summary-error {
+  font-size: var(--summary-text-size, 15px);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.post-canvas__summary-preview,
+.post-canvas__summary-pending {
+  color: var(--rsst-ink-secondary);
+}
+
+.post-canvas__summary-error {
+  color: var(--negative);
+}
+
+.post-canvas__text-btn {
+  margin-top: 8px;
+  padding: 3px 10px;
+  border: 1px solid var(--rsst-ink);
+  background: var(--rsst-surface-canvas);
+  color: var(--rsst-ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.post-canvas__text-btn:hover,
+.post-canvas__text-btn:focus-visible {
+  background: var(--rsst-ink);
+  color: var(--rsst-surface-canvas);
+}
+
+.post-canvas__summary-header .post-canvas__text-btn {
+  margin-top: 0;
+}
+
+.post-canvas__summary-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 28px 32px;
+  border: 2px solid var(--rsst-ink);
+  background: var(--rsst-surface-canvas);
+}
+
+.post-canvas__summary-post {
+  margin: 0 0 4px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--rsst-ink-tertiary);
+}
+
+/* Floating summary beside the article, aligned with the active rail card and
+   clamped into the visible part of the canvas while panning. Its type grows
+   with zoom-out like the rail titles. */
+.post-canvas__current-summary {
+  position: absolute;
+  top: var(--current-summary-top, 0);
+  left: 0;
+  width: var(--summary-w, 418px);
+
+  --summary-kicker-size: calc(var(--card-title-size, 14px) * 0.8);
+  --summary-title-size: calc(var(--card-title-size, 14px) * 1.25);
+  --summary-text-size: calc(var(--card-title-size, 14px) * 1.1);
+  --_pad: 20px;
+  --_vis-top: calc(
+    -1 * var(--canvas-translate-y, 0px) / var(--canvas-scale, 1)
+  );
+  --_vis-bot: calc(
+    (var(--canvas-area-height, 100dvh) - var(--canvas-translate-y, 0px)) /
+      var(--canvas-scale, 1)
+  );
+  --_stick-top: calc(
+    var(--_vis-top) + var(--_pad) - var(--current-summary-top, 0px)
+  );
+  --_stick-bot: calc(
+    var(--_vis-bot) - var(--_pad) - var(--current-summary-height, 220px) -
+      var(--current-summary-top, 0px)
+  );
+
+  transform: translateY(clamp(var(--_stick-top), 0px, var(--_stick-bot)));
+  transition: top 0.28s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.post-canvas__summary-card.is-floating {
+  cursor: auto;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 14%);
+  animation: post-canvas-summary-appear 0.32s cubic-bezier(0.25, 1, 0.5, 1) both;
+}
+
+@keyframes post-canvas-summary-appear {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Floating controls (frosted) ── */
+.post-canvas__controls {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.post-canvas__nav-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 32px);
+  gap: 4px;
+}
+
+.post-canvas__control-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  max-width: 220px;
+}
+
+.post-canvas__control-row[hidden],
+.post-canvas__btn[hidden] {
+  display: none;
+}
+
+.post-canvas__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 6px;
+  border: 1px solid var(--rsst-ink);
+  background: rgb(255 255 255 / 82%);
+  backdrop-filter: blur(14px);
+  color: var(--rsst-ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+.post-canvas a.post-canvas__btn {
+  color: var(--rsst-ink);
+}
+
+.post-canvas__btn--wide {
+  padding: 0 12px;
+}
+
+.post-canvas__btn:hover,
+.post-canvas__btn:focus-visible,
+.post-canvas__btn.is-active {
+  background: var(--rsst-ink);
+  color: var(--rsst-surface-canvas);
+}
+
+.post-canvas a.post-canvas__btn:hover,
+.post-canvas a.post-canvas__btn:focus-visible {
+  color: var(--rsst-surface-canvas);
+}
+
+.post-canvas__btn:disabled {
+  cursor: default;
+  opacity: 0.4;
+  background: rgb(255 255 255 / 82%);
+  color: var(--rsst-ink);
+}
+
+.post-canvas__zoom {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--rsst-ink-tertiary);
+}
+
+.post-canvas__status {
+  position: absolute;
+  left: 20px;
+  bottom: 20px;
+  z-index: 20;
+  max-width: min(480px, calc(100% - 300px));
+  font-size: 13px;
+}
+
+.post-canvas__status:not(:empty) {
+  padding: 10px 14px;
+  border: 1px solid var(--rsst-ink);
+  background: var(--rsst-surface-canvas);
+}

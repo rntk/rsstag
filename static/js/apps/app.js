@@ -576,16 +576,19 @@ export function initApp() {
   // Measure fixed toolbar after context filter mounts so content is not covered.
   setupGlobalToolsOffset();
 
-  // Initialize global chat panel
-  let chatDiv = document.getElementById('global_chat_panel');
-  if (!chatDiv) {
-    chatDiv = document.createElement('div');
-    chatDiv.id = 'global_chat_panel';
-    document.body.appendChild(chatDiv);
+  // Initialize global chat panel; full-screen pages such as the post canvas
+  // opt out with <body data-global-chat="off"> to keep their own controls clear.
+  if (document.body.dataset.globalChat !== 'off') {
+    let chatDiv = document.getElementById('global_chat_panel');
+    if (!chatDiv) {
+      chatDiv = document.createElement('div');
+      chatDiv.id = 'global_chat_panel';
+      document.body.appendChild(chatDiv);
+    }
+    createRoot(chatDiv).render(<GlobalChatPanel ES={window.EVSYS} />);
+    const chat_storage = new ChatStorage(window.EVSYS);
+    chat_storage.start();
   }
-  createRoot(chatDiv).render(<GlobalChatPanel ES={window.EVSYS} />);
-  const chat_storage = new ChatStorage(window.EVSYS);
-  chat_storage.start();
 
   let path = document.location.pathname;
 
