@@ -241,6 +241,7 @@ class TaskStateMachine:
                         "processing": LEGACY_PROCESSING_IDLE,
                         attempt_field: attempts,
                         "last_error": message,
+                        "last_error_at": now,
                         "backoff_until": now + backoff,
                         "updated_at": now,
                     },
@@ -254,7 +255,11 @@ class TaskStateMachine:
             return False
 
     def defer(
-        self, task: dict, next_run_at: float, reset_poll_attempts: bool = False
+        self,
+        task: dict,
+        next_run_at: float,
+        reset_poll_attempts: bool = False,
+        reason: str = "",
     ) -> bool:
         """Return a task to pending, claimable again only after ``next_run_at``.
 
@@ -267,6 +272,9 @@ class TaskStateMachine:
 
         A successful remote poll can atomically clear ``poll_attempts`` with
         ``reset_poll_attempts``. Submissions and throttled polls leave it alone.
+
+        A non-empty ``reason`` is stored as ``last_error``/``last_error_at`` so
+        the user can see why the task is waiting.
 
         Returns True when a task doc was updated.
         """
@@ -291,6 +299,9 @@ class TaskStateMachine:
             }
             if reset_poll_attempts:
                 update["$set"]["poll_attempts"] = 0
+            if reason:
+                update["$set"]["last_error"] = reason[:MAX_ERROR_LENGTH]
+                update["$set"]["last_error_at"] = update["$set"]["updated_at"]
             result = self._db.tasks.update_one(query, update)
             return result.matched_count > 0
         except Exception as e:
@@ -383,6 +394,7 @@ class TaskStateMachine:
                         "failed_at": "",
                         "error": "",
                         "last_error": "",
+                        "last_error_at": "",
                     },
                 },
                 upsert=True,
@@ -438,28 +450,55 @@ class TaskStateMachine:
             }
             if task_type is not None:
                 query["type"] = task_type
-            result = self._db.tasks.update_many(
-                query,
-                {
-                    "$set": {
-                        "status": TASK_STATUS_PENDING,
-                        "processing": LEGACY_PROCESSING_IDLE,
-                        "attempts": 0,
-                        "poll_attempts": 0,
-                        "backoff_until": 0.0,
-                        "updated_at": now,
-                    },
-                    "$unset": {
-                        "failed": "",
-                        "failed_at": "",
-                        "error": "",
-                        "last_error": "",
-                        "worker_id": "",
-                        "lease_until": "",
-                    },
-                },
-            )
+            result = self._db.tasks.update_many(query, self._resume_update(now))
             return int(result.modified_count)
         except Exception as e:
             self._log.error("Can`t resume tasks for user %s. Info: %s", user, e)
             return 0
+
+    def resume_task(self, user: str, task_id: Any) -> bool:
+        """Resume one paused/dead task of ``user``. Returns True when resumed.
+
+        Legacy status-less docs frozen via ``processing == -1`` are resumable
+        too, matching how the tasks page labels them.
+        """
+        try:
+            query: Dict[str, Any] = {
+                "_id": task_id,
+                "user": user,
+                "$or": [
+                    {"status": {"$in": [TASK_STATUS_PAUSED, TASK_STATUS_DEAD]}},
+                    {
+                        "status": {"$exists": False},
+                        "processing": LEGACY_PROCESSING_FROZEN,
+                    },
+                ],
+            }
+            result = self._db.tasks.update_one(query, self._resume_update(time.time()))
+            return result.modified_count > 0
+        except Exception as e:
+            self._log.error("Can`t resume task %s. Info: %s", task_id, e)
+            return False
+
+    @staticmethod
+    def _resume_update(now: float) -> Dict[str, Any]:
+        """Update returning a paused/dead task to a fresh pending state."""
+        return {
+            "$set": {
+                "status": TASK_STATUS_PENDING,
+                "processing": LEGACY_PROCESSING_IDLE,
+                "attempts": 0,
+                "poll_attempts": 0,
+                "backoff_until": 0.0,
+                "updated_at": now,
+            },
+            "$unset": {
+                "failed": "",
+                "failed_at": "",
+                "error": "",
+                "last_error": "",
+                "last_error_at": "",
+                "worker_id": "",
+                "lease_until": "",
+            },
+        }

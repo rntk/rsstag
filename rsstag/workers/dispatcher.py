@@ -258,9 +258,12 @@ def _defer_task(
     task: Dict[str, Any],
     next_run_at: float,
     reset_poll_attempts: bool = False,
+    reason: str = "",
 ) -> None:
     """Re-queue a healthy task for ``next_run_at`` without consuming an attempt."""
-    if not tasks.defer_task(task, next_run_at, reset_poll_attempts=reset_poll_attempts):
+    if not tasks.defer_task(
+        task, next_run_at, reset_poll_attempts=reset_poll_attempts, reason=reason
+    ):
         logging.info(
             "Task %s (type %s) was not deferred: removed, paused or dead",
             task.get("_id"),
@@ -295,6 +298,7 @@ def _apply_outcome(
             task,
             outcome.next_run_at,
             reset_poll_attempts=outcome.reset_poll_attempts,
+            reason=outcome.reason,
         )
         return False
     if isinstance(outcome, PermanentFailure):

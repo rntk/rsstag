@@ -16,6 +16,7 @@ from rsstag.task_state import (
     TASK_STATUS_PENDING,
     TASK_STATUS_RUNNING,
     TASK_STATUS_DEAD,
+    TASK_STATUS_PAUSED,
     DEFAULT_LEASE_SECONDS,
 )
 
@@ -199,6 +200,46 @@ def claimable_item_processing() -> Dict[str, Any]:
     workers without a separate sweep.
     """
     return {"$lt": time.time() - ITEM_LOCK_MAX_AGE_SECONDS}
+
+
+def _format_ts(value: Any) -> str:
+    """Human-readable local time for an epoch timestamp, or ``""``."""
+    if not isinstance(value, (int, float)) or value <= 0:
+        return ""
+    return time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(value))
+
+
+def _task_state(task: Dict[str, Any], now: float) -> str:
+    """Classify a task doc into a user-facing state."""
+    status: Any = task.get("status")
+    processing: Any = task.get("processing", TASK_NOT_IN_PROCESSING)
+    if status == TASK_STATUS_DEAD or task.get("failed"):
+        return "failed"
+    if status == TASK_STATUS_PAUSED or processing == TASK_FREEZED:
+        return "paused"
+    if status == TASK_STATUS_RUNNING:
+        return "processing"
+    backoff_until: Any = task.get("backoff_until")
+    if isinstance(backoff_until, (int, float)) and backoff_until > now:
+        return "retrying" if task.get("attempts") else "waiting"
+    return "queued"
+
+
+def describe_task_health(task: Dict[str, Any], now: float) -> Dict[str, Any]:
+    """Summarize a task doc's state and latest problem for the tasks page."""
+    state: str = _task_state(task, now)
+    error: str = str(task.get("error") or "") if state == "failed" else ""
+    error = error or str(task.get("last_error") or "")
+    return {
+        "state": state,
+        "error": error,
+        "error_at": _format_ts(task.get("failed_at") or task.get("last_error_at")),
+        "attempts": int(task.get("attempts") or 0),
+        "retry_at": _format_ts(task.get("backoff_until"))
+        if state in ("retrying", "waiting")
+        else "",
+        "can_retry": state in ("failed", "paused"),
+    }
 
 
 class RssTagTasks:
@@ -1028,13 +1069,29 @@ class RssTagTasks:
         )
 
     def defer_task(
-        self, task: dict, next_run_at: float, reset_poll_attempts: bool = False
+        self,
+        task: dict,
+        next_run_at: float,
+        reset_poll_attempts: bool = False,
+        reason: str = "",
     ) -> bool:
         """Re-queue a healthy task to run after ``next_run_at``.
 
         No attempt is consumed; see ``TaskStateMachine.defer``.
         """
-        return self._state.defer(task, next_run_at, reset_poll_attempts=reset_poll_attempts)
+        return self._state.defer(
+            task, next_run_at, reset_poll_attempts=reset_poll_attempts, reason=reason
+        )
+
+    def retry_task(self, user_id: str, task_id: Any) -> bool:
+        """Return a user's failed or paused task to the queue."""
+        try:
+            if isinstance(task_id, str):
+                task_id = ObjectId(task_id)
+        except Exception as e:
+            self._log.warning("Can`t retry task %s. Bad id: %s", task_id, e)
+            return False
+        return self._state.resume_task(user_id, task_id)
 
     def dead_letter_task(self, task: dict, error: str) -> bool:
         """Dead-letter a task immediately for a non-retryable failure.
@@ -1285,6 +1342,7 @@ class RssTagTasks:
                         "attempts": "",
                         "poll_attempts": "",
                         "last_error": "",
+                        "last_error_at": "",
                         "backoff_until": "",
                     }
                 },
@@ -1299,14 +1357,14 @@ class RssTagTasks:
             curr = self._db.tasks.find({"user": user_id})
             result = []
             for task in curr:
-                result.append(
-                    {
-                        "id": str(task["_id"]),
-                        "type": task["type"],
-                        "title": self.get_task_title(task["type"]),
-                        "processing": task.get("processing", 0),
-                    }
-                )
+                info: Dict[str, Any] = {
+                    "id": str(task["_id"]),
+                    "type": task["type"],
+                    "title": self.get_task_title(task["type"]),
+                    "processing": task.get("processing", 0),
+                }
+                info.update(describe_task_health(task, time.time()))
+                result.append(info)
 
         except Exception as e:
             result = []

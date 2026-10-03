@@ -19,11 +19,37 @@
             {% if current_tasks %}
                 <ul class="tasks-list">
                 {% for task in current_tasks %}
-                    <li>
-                        <span class="task-title">{{ task.title }}</span>
+                    <li class="task-item{% if task.state %} task-state-{{ task.state }}{% endif %}">
+                        <div class="task-info">
+                            <span class="task-title">{{ task.title }}</span>
+                            {% if task.state == 'failed' %}
+                                <span class="task-status-note">Stopped after {{ task.attempts }} failed attempt(s){% if task.error_at %} at {{ task.error_at }}{% endif %}. Workers will not pick it up until it is retried.</span>
+                            {% elif task.state == 'paused' %}
+                                <span class="task-status-note">Paused. Workers will not pick it up until it is resumed.</span>
+                            {% elif task.state in ('retrying', 'waiting') and task.retry_at %}
+                                <span class="task-status-note">{% if task.state == 'retrying' %}Failed {{ task.attempts }} time(s); retrying{% else %}Waiting; next run{% endif %} at {{ task.retry_at }}.</span>
+                            {% endif %}
+                            {# The env has autoescape off and errors carry provider/remote text. #}
+                            {% if task.error %}
+                                <span class="task-error">{% if task.state not in ('failed', 'paused') %}Last problem{% if task.error_at %} ({{ task.error_at }}){% endif %}: {% endif %}{{ task.error|e }}</span>
+                            {% endif %}
+                        </div>
                         <div class="task-actions">
-                            {% if task.processing > 0 %}
+                            {% if task.state == 'failed' %}
+                                <span class="task-badge task-badge-failed">Failed</span>
+                            {% elif task.state == 'paused' %}
+                                <span class="task-badge task-badge-paused">Paused</span>
+                            {% elif task.state == 'retrying' %}
+                                <span class="task-badge task-badge-retrying">Retrying</span>
+                            {% elif task.state == 'waiting' %}
+                                <span class="task-badge task-badge-waiting">Waiting</span>
+                            {% elif task.processing > 0 %}
                                 <span class="task-processing-badge">Processing…</span>
+                            {% endif %}
+                            {% if task.can_retry %}
+                            <form action="/tasks/retry/{{ task.id }}" method="post" class="inline-form">
+                                <input type="submit" value="{{ 'Resume' if task.state == 'paused' else 'Retry' }}" class="btn-retry">
+                            </form>
                             {% endif %}
                             <form action="/tasks/remove/{{ task.id }}" method="post" class="inline-form">
                                 <input type="submit" value="Remove" class="btn-remove" onclick="return confirm('Are you sure?')">

@@ -39,6 +39,8 @@ class Deferred:
 
     next_run_at: float
     reset_poll_attempts: bool = False
+    # Why the task waits; surfaced to the user as ``last_error`` when set.
+    reason: str = ""
 
 
 @dataclass(frozen=True)

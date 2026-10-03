@@ -610,6 +610,11 @@ class RSSTagRoutes:
                 "methods": ["POST"],
             },
             {
+                "url": "/tasks/retry/<string:task_id>",
+                "endpoint": "on_tasks_retry_post",
+                "methods": ["POST"],
+            },
+            {
                 "url": "/metadata",
                 "endpoint": "on_metadata_get",
                 "methods": ["GET"],

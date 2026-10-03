@@ -18,7 +18,13 @@ from rsstag.tasks import RssTagTasks, TASK_NOOP, TASK_POST_GROUPING
 from rsstag.post_splitter import LLMGenerationError, ParsingError
 from rsstag.workers.dispatcher import _apply_outcome
 from rsstag.workers.llm_worker import MAX_POST_GROUPING_ATTEMPTS, _PostGroupingWorker
-from rsstag.workers.outcome import Completed, TaskOutcome, normalize_outcome
+from rsstag.workers.outcome import (
+    Completed,
+    Deferred,
+    RetryableFailure,
+    TaskOutcome,
+    normalize_outcome,
+)
 from tests.db_utils import DBHelper
 
 MONGO_PORT = 8765
@@ -262,7 +268,7 @@ class PostGroupingWorkerCacheTestCase(MongoCacheTestCase):
         ]
 
         with patch("rsstag.post_splitter.PostSplitter", _FakeSplitter):
-            self.assertTrue(self.worker.make_post_grouping(self._task(posts)))
+            self.assertEqual(Completed(), self.worker.make_post_grouping(self._task(posts)))
 
         self.assertEqual(len(_FakeSplitter.calls), 1)
         self.assertEqual(self.db.post_grouping.count_documents({}), 2)
@@ -275,7 +281,7 @@ class PostGroupingWorkerCacheTestCase(MongoCacheTestCase):
         task: Dict[str, Any] = self._task([empty])
         task["type"] = TASK_POST_GROUPING
         task["_id"] = self.db.tasks.insert_one({"type": TASK_POST_GROUPING}).inserted_id
-        self.assertTrue(self.worker.make_post_grouping(task))
+        self.assertEqual(Completed(), self.worker.make_post_grouping(task))
         self.assertTrue(RssTagTasks(self.db).finish_task(task))
         stored: Dict[str, Any] = self.db.posts.find_one({"_id": empty["_id"]})
         self.assertEqual(stored["processing"], 0)
@@ -285,7 +291,7 @@ class PostGroupingWorkerCacheTestCase(MongoCacheTestCase):
         self.assertEqual(self.db.post_grouping.count_documents({}), 0)
 
         with patch("rsstag.post_splitter.PostSplitter", _FakeSplitter):
-            self.assertTrue(self.worker.make_post_grouping(self._task([self._post(2, "Useful text.")])))
+            self.assertEqual(Completed(), self.worker.make_post_grouping(self._task([self._post(2, "Useful text.")])))
         self.assertEqual(self.db.post_grouping.count_documents({}), 1)
 
     def test_post_errors_do_not_fail_scan_and_retries_are_bounded(self) -> None:
@@ -296,7 +302,7 @@ class PostGroupingWorkerCacheTestCase(MongoCacheTestCase):
                 task: Dict[str, Any] = self._task([bad])
                 task["type"] = TASK_POST_GROUPING
                 task["_id"] = self.db.tasks.insert_one({"type": TASK_POST_GROUPING}).inserted_id
-                self.assertTrue(self.worker.make_post_grouping(task))
+                self.assertEqual(Completed(), self.worker.make_post_grouping(task))
                 self.assertTrue(RssTagTasks(self.db).finish_task(task))
                 bad = self.db.posts.find_one({"_id": bad["_id"]})
                 self.assertEqual(bad["processing"], 0)
@@ -304,7 +310,7 @@ class PostGroupingWorkerCacheTestCase(MongoCacheTestCase):
                 self.assertEqual("grouping" in bad, attempt == MAX_POST_GROUPING_ATTEMPTS)
 
         with patch("rsstag.post_splitter.PostSplitter", _FakeSplitter):
-            self.assertTrue(self.worker.make_post_grouping(self._task([self._post(2, "Useful text.")])))
+            self.assertEqual(Completed(), self.worker.make_post_grouping(self._task([self._post(2, "Useful text.")])))
         self.assertEqual(self.db.post_grouping.count_documents({}), 1)
 
     def test_corrupt_post_does_not_block_other_posts_in_step(self) -> None:
@@ -312,7 +318,7 @@ class PostGroupingWorkerCacheTestCase(MongoCacheTestCase):
         bad["content"]["content"] = b"invalid gzip"
         good: Dict[str, Any] = self._post(2, "Useful text.")
         with patch("rsstag.post_splitter.PostSplitter", _FakeSplitter):
-            self.assertTrue(self.worker.make_post_grouping(self._task([bad, good])))
+            self.assertEqual(Completed(), self.worker.make_post_grouping(self._task([bad, good])))
         stored: Dict[str, Any] = self.db.posts.find_one({"_id": bad["_id"]})
         self.assertEqual(stored["processing"], 0)
         self.assertNotIn("grouping", stored)
@@ -325,7 +331,7 @@ class PostGroupingWorkerCacheTestCase(MongoCacheTestCase):
         with patch("rsstag.post_splitter.PostSplitter", _FakeSplitter), patch(
             "rsstag.post_grouping.RssTagPostGrouping.save_grouped_posts", return_value=False
         ):
-            self.assertTrue(self.worker.make_post_grouping(task))
+            self.assertEqual(Completed(), self.worker.make_post_grouping(task))
         self.assertTrue(RssTagTasks(self.db).finish_task(task))
         stored: Dict[str, Any] = self.db.posts.find_one({"_id": post["_id"]})
         self.assertEqual(stored["processing"], 0)
@@ -336,7 +342,9 @@ class PostGroupingWorkerCacheTestCase(MongoCacheTestCase):
         with patch("rsstag.post_splitter.PostSplitter", _FakeSplitter), patch.object(
             type(self.db.posts), "bulk_write", side_effect=RuntimeError("storage unavailable")
         ):
-            self.assertFalse(self.worker.make_post_grouping(self._task([post])))
+            self.assertIsInstance(
+                self.worker.make_post_grouping(self._task([post])), RetryableFailure
+            )
 
     def test_queue_scan_reaches_end_after_empty_and_failing_posts(self) -> None:
         posts: List[Dict[str, Any]] = [
@@ -384,7 +392,9 @@ class PostGroupingWorkerCacheTestCase(MongoCacheTestCase):
         with patch("rsstag.post_splitter.PostSplitter") as splitter_class:
             splitter_class.return_value.generate_grouped_data.side_effect = LLMGenerationError("rate limited")
             for _ in range(MAX_POST_GROUPING_ATTEMPTS + 1):
-                self.assertFalse(self.worker.make_post_grouping(self._task(posts)))
+                self.assertIsInstance(
+                    self.worker.make_post_grouping(self._task(posts)), Deferred
+                )
             self.assertEqual(splitter_class.return_value.generate_grouped_data.call_count, MAX_POST_GROUPING_ATTEMPTS + 1)
         for post in self.db.posts.find({}):
             self.assertEqual(post["processing"], 0)
@@ -401,7 +411,7 @@ class PostGroupingWorkerCacheTestCase(MongoCacheTestCase):
         good: Dict[str, Any] = self._post(2, "Useful text.")
         # Real splitter: txt_splitt parse errors must be charged to the post.
         self.llm.get_handler.return_value.call.return_value = "garbage not ranges"
-        self.assertTrue(self.worker.make_post_grouping(self._task([bad, good])))
+        self.assertEqual(Completed(), self.worker.make_post_grouping(self._task([bad, good])))
         stored: Dict[str, Any] = self.db.posts.find_one({"_id": bad["_id"]})
         self.assertEqual(stored["processing"], 0)
         self.assertEqual(stored["grouping_attempts"], 1)
@@ -411,7 +421,9 @@ class PostGroupingWorkerCacheTestCase(MongoCacheTestCase):
     def test_missing_handler_releases_claims_without_charging_posts(self) -> None:
         posts: List[Dict[str, Any]] = [self._post(1, "Useful text.")]
         self.llm.get_handler.return_value = None
-        self.assertFalse(self.worker.make_post_grouping(self._task(posts)))
+        outcome: TaskOutcome = self.worker.make_post_grouping(self._task(posts))
+        self.assertIsInstance(outcome, RetryableFailure)
+        self.assertIn("LLM handler not configured", outcome.error)
         stored: Dict[str, Any] = self.db.posts.find_one({"_id": posts[0]["_id"]})
         self.assertEqual(stored["processing"], 0)
         self.assertNotIn("grouping", stored)
@@ -430,11 +442,13 @@ class PostGroupingWorkerCacheTestCase(MongoCacheTestCase):
         # Use the actual splitter to verify provider exceptions are not wrapped
         # into post-specific parse/pipeline failures.
         self.llm.get_handler.return_value.call.side_effect = ConnectionError("provider unavailable")
-        self.assertTrue(_apply_outcome(
+        self.assertFalse(_apply_outcome(
             tasks, users, task, normalize_outcome(self.worker.make_post_grouping(task))
         ))
         stored_task: Dict[str, Any] = self.db.tasks.find_one({"_id": task_id})
-        self.assertEqual(stored_task["attempts"], 1)
+        self.assertFalse(stored_task.get("attempts"))
+        self.assertEqual(stored_task["status"], "pending")
+        self.assertIn("provider unavailable", stored_task["last_error"])
         self.assertGreater(stored_task["backoff_until"], time.time())
         self.assertEqual(tasks.get_task(users)["type"], TASK_NOOP)
         self.assertEqual(self.db.posts.count_documents({"grouping": {"$exists": False}}), len(posts))
@@ -452,13 +466,43 @@ class PostGroupingWorkerCacheTestCase(MongoCacheTestCase):
         self.assertIsNone(self.db.tasks.find_one({"_id": task_id}))
         self.assertEqual(self.db.post_grouping.count_documents({}), len(posts))
 
+    def test_repeated_provider_timeouts_never_dead_letter_task(self) -> None:
+        self._post(1, "First text.")
+        self.db.posts.update_many({}, {"$set": {"processing": 0}})
+        task_id: Any = self.db.tasks.insert_one(
+            {"user": "owner", "type": TASK_POST_GROUPING, "processing": 0, "manual": True}
+        ).inserted_id
+        tasks: RssTagTasks = RssTagTasks(self.db)
+        users: MagicMock = MagicMock()
+        users.get_by_sid.return_value = {"sid": "owner", "settings": {}}
+
+        with patch("rsstag.post_splitter.PostSplitter") as splitter_class:
+            splitter_class.return_value.generate_grouped_data.side_effect = (
+                LLMGenerationError("LLM call failed: timed out")
+            )
+            for _ in range(MAX_POST_GROUPING_ATTEMPTS * 3):
+                self.db.tasks.update_one({"_id": task_id}, {"$unset": {"backoff_until": ""}})
+                task: Dict[str, Any] = tasks.get_task(users)
+                self.assertEqual(task["type"], TASK_POST_GROUPING)
+                _apply_outcome(
+                    tasks, users, task, normalize_outcome(self.worker.make_post_grouping(task))
+                )
+
+        stored_task: Dict[str, Any] = self.db.tasks.find_one({"_id": task_id})
+        self.assertEqual(stored_task["status"], "pending")
+        self.assertNotIn("failed", stored_task)
+        self.assertIn("timed out", stored_task["last_error"])
+        self.assertEqual(tasks.get_current_tasks("owner")[0]["state"], "waiting")
+
     def test_mixed_success_and_provider_failure_preserves_success_and_backs_off(self) -> None:
         posts: List[Dict[str, Any]] = [self._post(i, f"Text {i}.") for i in range(3)]
         with patch("rsstag.post_splitter.PostSplitter") as splitter_class:
             splitter_class.return_value.generate_grouped_data.side_effect = [
                 _result("Text 0."), LLMGenerationError("provider unavailable")
             ]
-            self.assertFalse(self.worker.make_post_grouping(self._task(posts)))
+            self.assertIsInstance(
+                self.worker.make_post_grouping(self._task(posts)), Deferred
+            )
             self.assertEqual(splitter_class.return_value.generate_grouped_data.call_count, 2)
         self.assertEqual(self.db.posts.find_one({"_id": posts[0]["_id"]})["grouping"], 1)
         for post in posts[1:]:

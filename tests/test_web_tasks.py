@@ -29,6 +29,41 @@ class TestWebTasksGet(MongoWebTestCase):
             self.assertIn("Fake Task", body)
             self.assertIn("task-1", body)
 
+    def test_renders_failed_task_with_error_and_retry(self) -> None:
+        fake_task = {
+            "id": "task-9",
+            "title": "Post grouping",
+            "processing": -1,
+            "state": "failed",
+            "error": "LLM call failed: timed out",
+            "error_at": "2026-10-03 06:00:00",
+            "attempts": 3,
+            "retry_at": "",
+            "can_retry": True,
+        }
+        with patch.object(self.app.tasks, "get_current_tasks", return_value=[fake_task]):
+            body = self.client.get("/tasks").get_data(as_text=True)
+            self.assertIn("LLM call failed: timed out", body)
+            self.assertIn("/tasks/retry/task-9", body)
+            self.assertIn("task-badge-failed", body)
+
+    def test_escapes_task_error_html(self) -> None:
+        fake_task = {
+            "id": "task-x",
+            "title": "Post grouping",
+            "processing": 0,
+            "state": "waiting",
+            "error": "<script>alert(1)</script>",
+            "error_at": "",
+            "attempts": 0,
+            "retry_at": "",
+            "can_retry": False,
+        }
+        with patch.object(self.app.tasks, "get_current_tasks", return_value=[fake_task]):
+            body = self.client.get("/tasks").get_data(as_text=True)
+            self.assertNotIn("<script>alert(1)</script>", body)
+            self.assertIn("&lt;script&gt;alert(1)&lt;/script&gt;", body)
+
     def test_includes_scope_hints(self) -> None:
         with patch.object(self.app.tasks, "get_current_tasks", return_value=[]):
             response = self.client.get("/tasks")
@@ -91,6 +126,21 @@ class TestWebTasksRemovePost(MongoWebTestCase):
             self.assertIn(response.status_code, [301, 302, 307, 308])
             self.assertIn("/tasks", response.headers.get("Location", ""))
             mock_remove.assert_called_once_with("task-123")
+
+
+class TestWebTasksRetryPost(MongoWebTestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        self.owner = "testuser"
+        self.user_data, self.sid = self.seed_test_user(self.owner, "password")
+        self.client = self.get_authenticated_client(self.sid)
+
+    def test_calls_retry_for_current_user_and_redirects(self) -> None:
+        with patch.object(self.app.tasks, "retry_task", return_value=True) as mock_retry:
+            response = self.client.post("/tasks/retry/task-123")
+            self.assertIn(response.status_code, [301, 302, 307, 308])
+            self.assertIn("/tasks", response.headers.get("Location", ""))
+            mock_retry.assert_called_once_with(self.sid, "task-123")
 
 
 class TestWebTasksUnit(unittest.TestCase):

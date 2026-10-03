@@ -122,7 +122,7 @@ class ApplyOutcomeTestCase(unittest.TestCase):
         self.assertGreaterEqual(next_run_at, before + CONTINUE_DELAY_SECONDS)
         self.assertLess(next_run_at, time.time() + CONTINUE_DELAY_SECONDS + 1)
         self.tasks.defer_task.assert_called_once_with(
-            _task(), next_run_at, reset_poll_attempts=False
+            _task(), next_run_at, reset_poll_attempts=False, reason=""
         )
         self.tasks.release_failed_task.assert_not_called()
         self.tasks.finish_task.assert_not_called()
@@ -134,7 +134,7 @@ class ApplyOutcomeTestCase(unittest.TestCase):
 
         self.assertFalse(backoff)
         self.tasks.defer_task.assert_called_once_with(
-            task, 1234.5, reset_poll_attempts=False
+            task, 1234.5, reset_poll_attempts=False, reason=""
         )
         self.tasks.release_failed_task.assert_not_called()
         self.tasks.finish_task.assert_not_called()
@@ -185,7 +185,18 @@ class ApplyOutcomeTestCase(unittest.TestCase):
         )
 
         self.tasks.defer_task.assert_called_once_with(
-            task, 1234.5, reset_poll_attempts=True
+            task, 1234.5, reset_poll_attempts=True, reason=""
+        )
+
+    def test_deferred_forwards_reason(self) -> None:
+        task: Dict[str, Any] = _task()
+
+        _apply_outcome(
+            self.tasks, self.users, task, Deferred(1234.5, reason="LLM timed out")
+        )
+
+        self.tasks.defer_task.assert_called_once_with(
+            task, 1234.5, reset_poll_attempts=False, reason="LLM timed out"
         )
 
 

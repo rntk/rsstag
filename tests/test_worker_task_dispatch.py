@@ -22,7 +22,7 @@ from rsstag.llm.batch import BatchTaskStatus
 from rsstag.task_state import DEFAULT_MAX_ATTEMPTS, TASK_STATUS_DEAD, TASK_STATUS_PENDING
 from rsstag.users import RssTagUsers
 from rsstag.workers.dispatcher import _apply_outcome
-from rsstag.workers.outcome import Deferred, PermanentFailure
+from rsstag.workers.outcome import Completed, Deferred, PermanentFailure, TaskOutcome
 from rsstag.workers.registry import WorkerRegistry
 from rsstag.workers.llm_worker import _PostGroupingWorker
 from rsstag.workers.tag_worker import TagWorker
@@ -153,9 +153,9 @@ class TestWorkerTaskDispatch(MongoTaskDispatchTestCase):
             ],
         }
 
-        result: bool = worker.make_post_grouping(task)
+        result: TaskOutcome = worker.make_post_grouping(task)
 
-        self.assertTrue(result)
+        self.assertEqual(result, Completed())
         llm.get_handler.assert_not_called()
         self.assertEqual(task["data"], [])
         stored_post: Dict[str, Any] | None = self.db.posts.find_one({"_id": post_id})

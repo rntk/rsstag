@@ -116,3 +116,10 @@ def on_tasks_remove_post(app, user: dict, request: Request, task_id: str) -> Res
         app.tasks.remove_task(task_id)
 
     return redirect("/tasks")
+
+
+def on_tasks_retry_post(app, user: dict, request: Request, task_id: str) -> Response:
+    if task_id and not app.tasks.retry_task(user["sid"], task_id):
+        logging.warning("Task %s was not retried for user %s", task_id, user["sid"])
+
+    return redirect("/tasks")

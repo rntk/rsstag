@@ -423,6 +423,50 @@ class TaskStateMachineTestCase(unittest.TestCase):
         self.assertIsNone(self._get(tid))
         self.assertFalse(self.sm.complete(tid))
 
+    def test_resume_task_revives_only_own_dead_task(self) -> None:
+        dead = self._insert(
+            user="u1", type=19, status=TASK_STATUS_DEAD, attempts=3,
+            failed=True, error="timed out", processing=LEGACY_PROCESSING_FROZEN,
+        )
+        running = self._insert(
+            user="u1", type=1, status=TASK_STATUS_RUNNING, lease_until=time.time() + 500
+        )
+
+        self.assertFalse(self.sm.resume_task("u2", dead))
+        self.assertFalse(self.sm.resume_task("u1", running))
+        self.assertTrue(self.sm.resume_task("u1", dead))
+
+        doc = self._get(dead)
+        self.assertEqual(doc["status"], TASK_STATUS_PENDING)
+        self.assertEqual(doc["processing"], LEGACY_PROCESSING_IDLE)
+        self.assertEqual(doc["attempts"], 0)
+        self.assertNotIn("failed", doc)
+        self.assertNotIn("error", doc)
+        self.assertEqual(self._get(running)["status"], TASK_STATUS_RUNNING)
+
+    def test_resume_task_revives_legacy_frozen_doc(self) -> None:
+        frozen = self._insert(user="u1", type=19, processing=LEGACY_PROCESSING_FROZEN)
+        idle = self._insert(user="u1", type=1, processing=LEGACY_PROCESSING_IDLE)
+
+        self.assertFalse(self.sm.resume_task("u2", frozen))
+        self.assertFalse(self.sm.resume_task("u1", idle))
+        self.assertTrue(self.sm.resume_task("u1", frozen))
+
+        doc = self._get(frozen)
+        self.assertEqual(doc["status"], TASK_STATUS_PENDING)
+        self.assertEqual(doc["processing"], LEGACY_PROCESSING_IDLE)
+
+    def test_defer_with_reason_records_last_error(self) -> None:
+        tid = self._insert(user="u1", type=19, status=TASK_STATUS_RUNNING)
+
+        self.assertTrue(self.sm.defer(self._get(tid), time.time() + 60, reason="timed out"))
+
+        doc = self._get(tid)
+        self.assertEqual(doc["status"], TASK_STATUS_PENDING)
+        self.assertEqual(doc["last_error"], "timed out")
+        self.assertIn("last_error_at", doc)
+        self.assertNotIn("attempts", doc)
+
     def test_pause_and_resume(self) -> None:
         pending = self._insert(user="u1", type=1, status=TASK_STATUS_PENDING)
         # Pause makes it unclaimable.

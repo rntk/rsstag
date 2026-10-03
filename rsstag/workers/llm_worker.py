@@ -47,6 +47,9 @@ from rsstag.workers.outcome import (
 BATCH_POLL_INTERVAL_SECONDS: float = 60.0
 BATCH_TERMINAL_FAILED_STATUSES: Set[str] = {"failed", "expired", "cancelled"}
 MAX_POST_GROUPING_ATTEMPTS: int = 3
+# Pause before the next post grouping step after an LLM provider failure. The
+# outage is not charged to the task, so it can never be dead-lettered by it.
+POST_GROUPING_PROVIDER_RETRY_SECONDS: float = 60.0
 
 
 def _next_poll(last_check: float, reset_poll_attempts: bool = False) -> Deferred:
@@ -236,11 +239,11 @@ class _PostGroupingWorker:
             return raw_value
         return str(raw_value).strip().lower() not in {"0", "false", "no", "off", ""}
 
-    def handle_post_grouping(self, task: Dict[str, Any]) -> bool:
+    def handle_post_grouping(self, task: Dict[str, Any]) -> TaskOutcome:
         if task["data"]:
             return self.make_post_grouping(task)
         logging.warning("Error while make post grouping: %s", task)
-        return True
+        return Completed()
 
     def handle_post_grouping_cleanup(self, task: Dict[str, Any]) -> bool:
         return self.make_post_grouping_cleanup(task)
@@ -370,7 +373,7 @@ class _PostGroupingWorker:
             logging.warning("Skipping post grouping for %s: %s", post.get("pid"), reason)
         return UpdateOne({"_id": post["_id"]}, {"$set": changes})
 
-    def make_post_grouping(self, task: Dict[str, Any]) -> bool:
+    def make_post_grouping(self, task: Dict[str, Any]) -> TaskOutcome:
         try:
             from rsstag.post_grouping import RssTagPostGrouping
             from rsstag.post_splitter import LLMGenerationError, ParsingError, PostSplitter
@@ -381,7 +384,7 @@ class _PostGroupingWorker:
             posts = self._exclude_posts_with_existing_groupings(owner, posts)
             task["data"] = posts
             if not posts:
-                return True
+                return Completed()
 
             llm_handler: Any = self._llm.get_handler(
                 task["user"]["settings"], provider_key="worker_llm"
@@ -401,7 +404,7 @@ class _PostGroupingWorker:
                 )
                 for post in posts
             }
-            provider_failed: bool = False
+            provider_error: Optional[Exception] = None
             for post in posts:
                 try:
                     content: str
@@ -462,7 +465,7 @@ class _PostGroupingWorker:
                     # Unknown failures are conservatively retryable. They may
                     # come from the provider, cache or storage, not this post.
                     logging.error("Post grouping step failed for %s: %s", post.get("pid"), exc)
-                    provider_failed = True
+                    provider_error = exc
                     break
 
             if updates:
@@ -470,9 +473,11 @@ class _PostGroupingWorker:
                     self._db.posts.bulk_write(list(updates.values()), ordered=False)
                 except Exception as exc:
                     logging.error("Failed to update post grouping flags: %s", exc)
-                    return False
+                    return RetryableFailure(f"Failed to update post grouping flags: {exc}")
 
-            return not provider_failed
+            if provider_error is not None:
+                return self._provider_retry(provider_error)
+            return Completed()
         except Exception as exc:
             logging.error("Can't make post grouping. Info: %s", exc)
             try:
@@ -482,7 +487,15 @@ class _PostGroupingWorker:
                 )
             except Exception as release_error:
                 logging.error("Can't release post grouping claims: %s", release_error)
-            return False
+            return RetryableFailure(f"Can't make post grouping: {exc}")
+
+    @staticmethod
+    def _provider_retry(error: Exception) -> Deferred:
+        """Pause the task after an LLM provider failure without charging it."""
+        return Deferred(
+            next_run_at=time.time() + POST_GROUPING_PROVIDER_RETRY_SECONDS,
+            reason=f"LLM provider failed, retrying shortly: {error}",
+        )
 
     def _invalidate_cache_for_cleanup(
         self, owner: str, scope_mode: str, posts: List[Dict[str, Any]]
@@ -1989,7 +2002,7 @@ class LLMWorker(BaseWorker):
     def handle_source_quality(self, task: Dict[str, Any]) -> bool:
         return self._post_quality_worker.handle_source_quality(task)
 
-    def handle_post_grouping(self, task: Dict[str, Any]) -> bool:
+    def handle_post_grouping(self, task: Dict[str, Any]) -> TaskOutcome:
         return self._post_grouping_worker.handle_post_grouping(task)
 
     def handle_anthology(self, task: Dict[str, Any]) -> bool:
@@ -2001,7 +2014,7 @@ class LLMWorker(BaseWorker):
     def handle_tags_classification(self, task: Dict[str, Any]) -> bool:
         return self._tag_classification_worker.handle_tags_classification(task)
 
-    def make_post_grouping(self, task: Dict[str, Any]) -> bool:
+    def make_post_grouping(self, task: Dict[str, Any]) -> TaskOutcome:
         return self._post_grouping_worker.make_post_grouping(task)
 
     def make_post_grouping_cleanup(self, task: Dict[str, Any]) -> bool:
