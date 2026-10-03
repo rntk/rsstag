@@ -21,6 +21,13 @@
                                         {% if post.url %}<a href="{{ post.url }}" target="_blank" rel="noopener noreferrer">Original</a>{% endif %}
                                     </span>
                                 </header>
+                                {% if not post.get('has_topics', has_grouped_data) %}
+                                <section class="post-canvas__grouping" data-topics-url="/post-canvas/{{ post.post_id|urlencode }}/topics" aria-label="Post topics">
+                                    <p class="post-canvas__grouping-message" role="status" aria-live="polite">This post does not have topics yet.</p>
+                                    <button type="button" class="post-canvas__text-btn" data-split-topics>Split into topics</button>
+                                    <progress aria-label="Splitting post into topics" hidden></progress>
+                                </section>
+                                {% endif %}
                                 <div class="post-canvas__article-html">{{ post.content|safe }}</div>
                             </article>
                             {% endfor %}

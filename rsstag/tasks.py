@@ -1,7 +1,7 @@
 import logging
 import time
 import gzip
-from typing import Optional, List, Dict, Any, Set, Tuple, Callable, Literal
+from typing import Optional, List, Dict, Any, Set, Tuple, Callable, Literal, Iterator
 from rsstag.users import RssTagUsers
 from pymongo import MongoClient, UpdateOne, ReturnDocument
 from bson.objectid import ObjectId
@@ -97,9 +97,13 @@ TASK_SCOPE_REGISTRY: Dict[int, Dict[str, Any]] = {
 }
 
 # Task types whose queue identity includes their scope, so that scoring one
-# category and then another queues two independent runs instead of the second
-# silently replacing the first's scope.
-SCOPE_KEYED_TASK_TYPES: Set[int] = {TASK_POST_QUALITY, TASK_SOURCE_QUALITY}
+# category or grouping one post and then another queues independent runs
+# instead of silently replacing the first scope.
+SCOPE_KEYED_TASK_TYPES: Set[int] = {
+    TASK_POST_QUALITY,
+    TASK_SOURCE_QUALITY,
+    TASK_POST_GROUPING,
+}
 
 # Task types that carry their scope onto the task doc even when the caller
 # passed no explicit scope.
@@ -1387,6 +1391,31 @@ class RssTagTasks:
             self._log.error("Can`t get user tasks state %s. Info: %s", user_id, e)
 
         return result
+
+    def get_post_grouping_status(self, owner: str, post_id: str) -> str:
+        """Find a grouping task covering this post, including broader scopes."""
+        stopped: bool = False
+        tasks: Iterator[dict] = self._db.tasks.find(
+            {
+                "user": owner,
+                "type": {"$in": [TASK_POST_GROUPING, TASK_POST_GROUPING_BATCH]},
+            }
+        )
+        for task in tasks:
+            query: Dict[str, Any] = self._build_post_scope_predicate(owner, task)
+            if not self._db.posts.find_one(
+                {"$and": [query, {"pid": post_id}]}, projection={"_id": True}
+            ):
+                continue
+            if (
+                task.get("failed")
+                or task.get("status") in (TASK_STATUS_DEAD, TASK_STATUS_PAUSED)
+                or task.get("processing") == TASK_FREEZED
+            ):
+                stopped = True
+                continue
+            return "queued"
+        return "error" if stopped else "missing"
 
     def has_active_provider_task(self, user_id: str, provider: str) -> bool:
         """True when a download/sources-refresh of the provider can still run.

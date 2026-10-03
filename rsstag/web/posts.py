@@ -20,6 +20,8 @@ from rsstag.snippets import (
 )
 from rsstag.tasks import (
     TASK_MARK,
+    TASK_POST_GROUPING,
+    SCOPE_MODE_POSTS,
     TASK_MARK_TELEGRAM,
     TASK_GMAIL_SORT,
     TASK_NOT_IN_PROCESSING,
@@ -2287,9 +2289,7 @@ def _topic_scope_sentences(
     Read state lives in the grouping document rather than in what the page
     sent, so a partially read post is narrowed correctly.
     """
-    grouped: Optional[dict[str, Any]] = app.post_grouping.get_grouped_posts(
-        owner, [post_id]
-    )
+    grouped: Optional[dict[str, Any]] = app.post_grouping.get_grouped_posts(owner, [post_id])
     if not grouped:
         return []
     numbers: set[int] = _topic_scope_numbers(grouped.get("groups", {}) or {}, topic)
@@ -3235,9 +3235,16 @@ def _build_grouped_posts_page_context(
     sentence_offset = 0
     has_grouped_data = False
     plain_text_cache: dict[str, str] = {}
+    topic_post_ids: set[str] = set()
 
     for post_id in post_ids:
         post_grouped_data = app.post_grouping.get_grouped_posts(user["sid"], [post_id])
+        if (
+            post_grouped_data
+            and post_grouped_data.get("groups")
+            and post_grouped_data.get("sentences")
+        ):
+            topic_post_ids.add(post_id)
         if post_grouped_data and post_grouped_data.get("sentences"):
             has_grouped_data = True
             sentences_map_ctx = {
@@ -3447,6 +3454,10 @@ def _build_grouped_posts_page_context(
             }
         )
 
+    final_post: dict[str, Any]
+    for final_post in final_posts:
+        final_post["has_topics"] = final_post["post_id"] in topic_post_ids
+
     # Helper map for template
     post_to_index_map = {post["post_id"]: idx for idx, post in enumerate(final_posts)}
 
@@ -3503,6 +3514,84 @@ def on_post_canvas_get(
     except Exception:
         logging.exception("Unable to load post canvas")
         return Response("The post canvas could not be loaded. Please try again.", status=500)
+
+
+def _post_canvas_topics_status(
+    app: "RSSTagApplication", owner: str, post_id: str, post: dict[str, Any]
+) -> dict[str, Any]:
+    grouped: Optional[dict[str, Any]] = app.post_grouping.get_grouped_posts(owner, [post_id])
+    if grouped and grouped.get("groups") and grouped.get("sentences"):
+        return {"status": "ready"}
+    if post.get("grouping"):
+        return {
+            "status": "error",
+            "message": "This post could not be split into topics. Please try again.",
+        }
+    status: str = app.tasks.get_post_grouping_status(owner, post_id)
+    if status == "error":
+        return {
+            "status": "error",
+            "message": "Topic processing has stopped. Please try again.",
+        }
+    if post.get("processing", 0) > 0 and status == "queued":
+        status = "processing"
+    return {"status": status}
+
+
+def on_post_canvas_topics(
+    app: "RSSTagApplication", user: dict, request: Request, pid: str
+) -> Response:
+    """Start a post-scoped grouping task or report its current progress."""
+    try:
+        post: Optional[dict[str, Any]] = app.posts.get_by_pid(
+            user["sid"], pid, {"grouping": True, "processing": True}
+        )
+        if post is None:
+            return Response(
+                json.dumps({"message": "Post not found."}),
+                status=404,
+                mimetype="application/json",
+            )
+        result: dict[str, Any] = _post_canvas_topics_status(app, user["sid"], pid, post)
+        if request.method == "POST" and result["status"] in ("missing", "error"):
+            # A skipped/failed post must become eligible for the incremental worker again.
+            if post.get("grouping"):
+                app.db.posts.update_one(
+                    {"owner": user["sid"], "pid": pid},
+                    {
+                        "$unset": {
+                            "grouping": "",
+                            "grouping_attempts": "",
+                            "grouping_error": "",
+                        }
+                    },
+                )
+            added: Optional[bool] = app.tasks.add_task(
+                {
+                    "user": user["sid"],
+                    "type": TASK_POST_GROUPING,
+                    "host": app.config["settings"]["host_name"],
+                    "provider": user.get("provider", ""),
+                    "data": [],
+                    "scope": {"mode": SCOPE_MODE_POSTS, "post_ids": [pid]},
+                }
+            )
+            if not added:
+                raise RuntimeError("Unable to enqueue post grouping")
+            result = {"status": "queued"}
+        return Response(json.dumps(result), mimetype="application/json")
+    except Exception:
+        logging.exception("Unable to process post canvas topics")
+        return Response(
+            json.dumps(
+                {
+                    "status": "error",
+                    "message": "Could not process topics. Please try again.",
+                }
+            ),
+            status=500,
+            mimetype="application/json",
+        )
 
 
 def on_post_compare_get(

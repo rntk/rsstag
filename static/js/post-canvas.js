@@ -17,6 +17,7 @@ import {
 } from './libs/post-canvas.js';
 import { createViewport } from './libs/post-canvas-viewport.js';
 import { createSummaryStore } from './libs/post-canvas-summaries.js';
+import { initTopicGrouping } from './libs/post-canvas-grouping.js';
 
 const TOP_MARGIN = 40;
 const SIDE_MARGIN = 20;
@@ -736,6 +737,7 @@ export function initPostCanvas(data) {
   bindKeyboard(ctx);
   bindRemeasure(ctx);
   showEmptyState(ctx);
+  initTopicGrouping(document);
   fitWidth(ctx);
   layout(ctx);
   dom.area.focus({ preventScroll: true });

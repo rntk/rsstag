@@ -113,6 +113,7 @@ module.exports = [
       'post-canvas.js',
       'libs/post-canvas-viewport.js',
       'libs/post-canvas-summaries.js',
+      'libs/post-canvas-grouping.js',
     ],
     languageOptions: {
       ecmaVersion: 'latest',

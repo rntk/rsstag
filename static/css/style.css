@@ -10915,3 +10915,23 @@ body.tag-explorer-page {
   border: 1px solid var(--rsst-ink);
   background: var(--rsst-surface-canvas);
 }
+
+.post-canvas__grouping {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border-color, #ddd);
+}
+
+.post-canvas__grouping-message {
+  margin: 0 0 12px;
+}
+
+.post-canvas__grouping progress {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+}
+
+.post-canvas__grouping progress[hidden],
+.post-canvas__grouping button[hidden] {
+  display: none;
+}
