@@ -10,142 +10,39 @@
     {% from 'site-header.html' import site_header with context %}
     {{ site_header(active='') }}
 
-    <div class="page anthologies-page">
-        <h1>Anthologies</h1>
-        <p class="anthologies-intro">Create an evidence-backed report for a tag and optional feed scope.</p>
+    <main class="page anth-list-page">
+        <header class="anth-list-page__head">
+            <h1>Anthologies</h1>
+            <p class="anth-muted">Group the snippets about a tag into themes and subtopics, then read them cluster by cluster.</p>
+        </header>
 
-        <form id="anthology-create-form" class="anthology-create-form">
+        <form id="anthology-create-form" class="anth-create-form">
             <input type="hidden" name="seed_type" value="tag" />
-            <label for="anthology-seed-value">Tag</label>
-            <input
-                id="anthology-seed-value"
-                name="seed_value"
-                type="text"
-                value="{{ initial_seed_value }}"
-                placeholder="playstation 5"
-                required
-            />
-            <label for="anthology-feed-id">Corpus</label>
-            <select id="anthology-feed-id" name="feed_id">
-                <option value="">All feeds</option>
-                {% for feed in feeds %}
-                <option
-                    value="{{ feed['feed_id'] }}"
-                    {% if feed['feed_id'] == selected_feed_id %}selected{% endif %}
-                >
-                    {{ feed['title'] }}
-                </option>
-                {% endfor %}
-            </select>
-            <button type="submit">Start report</button>
-            <span id="anthology-create-status" class="anthology-create-status"></span>
+            <label class="anth-create-form__field">
+                <span>Tag</span>
+                <input id="anthology-seed-value" name="seed_value" type="text"
+                    value="{{ initial_seed_value|e }}" placeholder="playstation 5" required />
+            </label>
+            <label class="anth-create-form__field">
+                <span>Corpus</span>
+                <select id="anthology-feed-id" name="feed_id">
+                    <option value="">All feeds</option>
+                    {% for feed in feeds %}
+                    <option value="{{ feed['feed_id']|e }}" {% if feed['feed_id'] == selected_feed_id %}selected{% endif %}>{{ feed['title']|e }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <button type="submit" class="anth-btn anth-btn--primary">Build anthology</button>
+            <span id="anthology-create-status" class="anth-muted" role="status"></span>
         </form>
 
-        <div class="anthology-list">
-            {% if anthologies %}
-            {% for anthology in anthologies %}
-            <div class="anthology-card anthology-status-{{ anthology['status'] }}">
-                <div class="anthology-card-header">
-                    <div>
-                        <h3><a class="anthology-title-link" href="/anthologies/{{ anthology['id'] }}">{{ anthology['title'] }}</a></h3>
-                        <div class="anthology-meta">
-                            <span class="anthology-status-badge">{{ anthology['status'] }}</span>
-                            <span>seed: {{ anthology['seed_value'] }}</span>
-                            {% if anthology['stale'] %}
-                            <span>stale</span>
-                            {% endif %}
-                        </div>
-                    </div>
-                    <button
-                        type="button"
-                        class="anthology-delete-btn"
-                        data-anthology-id="{{ anthology['id'] }}"
-                    >
-                        Delete
-                    </button>
-                </div>
-                {% if anthology['result'] and anthology['result']['summary'] %}
-                <p class="anthology-summary">{{ anthology['result']['summary'] }}</p>
-                {% endif %}
-                <div class="anthology-links">
-                    <a href="/anthologies/{{ anthology['id'] }}">Open detail</a>
-                    <a href="/api/anthologies/{{ anthology['id'] }}">API detail</a>
-                    {% if anthology['latest_run'] %}
-                    <span>run {{ anthology['latest_run']['status'] }}</span>
-                    {% endif %}
-                </div>
-            </div>
-            {% endfor %}
-            {% else %}
-            <p class="anthology-empty">No anthologies yet.</p>
-            {% endif %}
-        </div>
-    </div>
+        <section id="anthology-list" class="anth-list" aria-live="polite"></section>
+    </main>
 
-    <script type="text/javascript">
-        (function () {
-            const form = document.getElementById("anthology-create-form");
-            const statusEl = document.getElementById("anthology-create-status");
-
-            if (form) {
-                form.addEventListener("submit", async function (event) {
-                    event.preventDefault();
-                    const formData = new FormData(form);
-                    const feedId = String(formData.get("feed_id") || "").trim();
-                    const payload = {
-                        seed_type: formData.get("seed_type"),
-                        seed_value: formData.get("seed_value"),
-                        scope: feedId
-                            ? { mode: "feeds", feed_ids: [feedId] }
-                            : { mode: "all" }
-                    };
-
-                    statusEl.textContent = "Creating...";
-                    try {
-                        const response = await fetch("/api/anthologies", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify(payload)
-                        });
-                        const data = await response.json();
-                        if (!response.ok || data.error) {
-                            statusEl.textContent = data.error || "Failed to create anthology";
-                            return;
-                        }
-                        const anthologyId = data.data && data.data.anthology_id;
-                        if (anthologyId) {
-                            window.location.href = "/anthologies/" + anthologyId;
-                            return;
-                        }
-                        window.location.reload();
-                    } catch (error) {
-                        statusEl.textContent = "Failed to create anthology";
-                    }
-                });
-            }
-
-            document.querySelectorAll(".anthology-delete-btn").forEach(function (button) {
-                button.addEventListener("click", async function () {
-                    const anthologyId = button.getAttribute("data-anthology-id");
-                    if (!anthologyId) {
-                        return;
-                    }
-
-                    try {
-                        const response = await fetch("/api/anthologies/" + anthologyId, {
-                            method: "DELETE"
-                        });
-                        const data = await response.json();
-                        if (!response.ok || data.error) {
-                            return;
-                        }
-                        window.location.reload();
-                    } catch (error) {
-                        // Keep the UI unchanged on failure.
-                    }
-                });
-            });
-        })();
+    <script id="anthologies-data" type="application/json">{{ anthologies_json }}</script>
+    <script type="module">
+        import { initAnthologiesList } from '/static/js/anthologies-list.js';
+        initAnthologiesList();
     </script>
 </body>
 

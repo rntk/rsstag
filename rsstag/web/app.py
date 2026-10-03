@@ -11,7 +11,7 @@ from rsstag.tasks import RssTagTasks
 from rsstag.web.routes import RSSTagRoutes
 from rsstag.utils import load_config
 from rsstag.posts import RssTagPosts
-from rsstag.anthologies import RssTagAnthologies, RssTagAnthologyRuns
+from rsstag.anthologies import RssTagAnthologies
 from rsstag.chats import RssTagChats
 from rsstag.paths import RssTagPaths
 from rsstag.quality import RssTagQuality
@@ -172,8 +172,6 @@ class RSSTagApplication(object):
         self.chats.prepare()
         self.anthologies = RssTagAnthologies(self.db)
         self.anthologies.prepare()
-        self.anthology_runs = RssTagAnthologyRuns(self.db)
-        self.anthology_runs.prepare()
         self.paths = RssTagPaths(self.db)
         self.paths.prepare()
         self.quality = RssTagQuality(self.db)

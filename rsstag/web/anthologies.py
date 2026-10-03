@@ -1,9 +1,17 @@
-"""Anthology web handlers."""
+"""Anthology web handlers.
+
+An anthology groups sentence-range snippets of posts into clusters, and
+clusters into themes. These handlers expose the stored result to the
+explorer UI and enrich it with sentence-level read state that lives in the
+``post_grouping`` collection.
+"""
 
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any, Dict, Iterable, Optional
+import logging
+from collections import defaultdict
+from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Set, Tuple
 
 from werkzeug.wrappers import Request, Response
 
@@ -13,355 +21,408 @@ from rsstag.tasks import TASK_ANTHOLOGY
 if TYPE_CHECKING:
     from rsstag.web.app import RSSTagApplication
 
+log: logging.Logger = logging.getLogger("web.anthologies")
+
+UNSORTED_ID: str = "unsorted"
+READ_TARGET_KINDS: Tuple[str, ...] = ("theme", "cluster", "snippet", UNSORTED_ID)
+
+SentenceMap = Dict[str, Dict[int, Dict[str, Any]]]
+SentenceKey = Tuple[str, int]
+
+
+# ---------------------------------------------------------------------------
+# Payload parsing and serialization
+# ---------------------------------------------------------------------------
+
+
+def _scope_from_form(rqst: Request) -> Dict[str, Any]:
+    feed_id: str = str(rqst.form.get("feed_id", "")).strip()
+    if feed_id:
+        return {"mode": "feeds", "feed_ids": [feed_id]}
+    return {"mode": "all"}
+
 
 def _parse_create_payload(rqst: Request) -> Dict[str, Any]:
-    payload: Dict[str, Any] = rqst.get_json(silent=True) or {}
-    if payload:
+    payload: Any = rqst.get_json(silent=True)
+    if isinstance(payload, dict) and payload:
         return payload
-
-    scope_mode = str(rqst.form.get("scope_mode", "all")).strip() or "all"
     return {
         "seed_type": rqst.form.get("seed_type", "tag"),
         "seed_value": rqst.form.get("seed_value", ""),
-        "scope": {"mode": scope_mode},
+        "scope": _scope_from_form(rqst),
     }
 
 
-def _serialize_anthology(item: Dict[str, Any]) -> Dict[str, Any]:
-    title: str = ""
-    result = item.get("result")
-    if isinstance(result, dict):
-        title = str(result.get("title", "")).strip()
-    if not title:
-        title = str(item.get("seed_value", "")).strip()
+def _as_dict(value: Any) -> Dict[str, Any]:
+    return value if isinstance(value, dict) else {}
 
+
+def _as_list(value: Any) -> List[Any]:
+    return value if isinstance(value, list) else []
+
+
+def _serialize_summary(doc: Dict[str, Any]) -> Dict[str, Any]:
+    """Light-weight anthology view for the list page."""
+    result: Dict[str, Any] = _as_dict(doc.get("result"))
     return {
-        "id": item.get("_id", ""),
-        "seed_type": item.get("seed_type", ""),
-        "seed_value": item.get("seed_value", ""),
-        "scope": item.get("scope", {"mode": "all"}),
-        "status": item.get("status", "pending"),
-        "stale": bool(item.get("stale", False)),
-        "created_at": item.get("created_at", 0),
-        "updated_at": item.get("updated_at", 0),
-        "current_run_id": item.get("current_run_id"),
-        "title": title,
-        "result": item.get("result"),
-        "source_snapshot": item.get("source_snapshot"),
+        "id": str(doc.get("_id", "")),
+        "seed_type": doc.get("seed_type", ""),
+        "seed_value": doc.get("seed_value", ""),
+        "scope": doc.get("scope") or {"mode": "all"},
+        "status": doc.get("status", "pending"),
+        "stage": doc.get("stage"),
+        "error": doc.get("error"),
+        "stale": bool(doc.get("stale", False)),
+        "created_at": doc.get("created_at", 0),
+        "updated_at": doc.get("updated_at", 0),
+        "themes_count": len(_as_list(result.get("themes"))),
+        "metrics": _as_dict(result.get("metrics")),
+        "has_result": bool(result),
     }
 
 
-def _get_grouping_for_post(
-    app: "RSSTagApplication",
-    owner: str,
-    post_id: str,
-    cache: dict[str, Optional[dict[str, Any]]],
-) -> Optional[dict[str, Any]]:
-    if post_id not in cache:
-        cache[post_id] = app.db.post_grouping.find_one({"owner": owner, "post_ids": post_id})
-    return cache[post_id]
+# ---------------------------------------------------------------------------
+# Sentence / read-state lookups
+# ---------------------------------------------------------------------------
 
 
-def _derive_source_refs_state(
-    app: "RSSTagApplication",
-    owner: str,
-    source_refs: Iterable[dict[str, Any]],
-    cache: dict[str, Optional[dict[str, Any]]],
-    sentence_map_cache: dict[str, dict[int, dict]],
-) -> dict[str, Any]:
-    total = 0
-    unread = 0
-    for source_ref in source_refs:
-        post_id = str(source_ref.get("post_id", "")).strip()
-        sentence_indices = {
-            int(index)
-            for index in source_ref.get("sentence_indices", [])
-            if isinstance(index, int)
-        }
-        if not post_id or not sentence_indices:
-            continue
-        grouping = _get_grouping_for_post(app, owner, post_id, cache)
-        if not grouping:
-            continue
-        if post_id not in sentence_map_cache:
-            sentence_map_cache[post_id] = {
-                int(sentence["number"]): sentence
-                for sentence in grouping.get("sentences", [])
-                if isinstance(sentence, dict) and "number" in sentence
-            }
-        sentence_map = sentence_map_cache[post_id]
-        for sentence_index in sentence_indices:
-            sentence = sentence_map.get(sentence_index)
-            if not sentence:
-                continue
-            total += 1
-            if not sentence.get("read", False):
-                unread += 1
+def _snippet_post_ids(snippets: Iterable[Dict[str, Any]]) -> List[str]:
+    post_ids: Set[str] = {str(s.get("post_id", "")).strip() for s in snippets}
+    post_ids.discard("")
+    return sorted(post_ids)
+
+
+def _sentence_index(grouping: Dict[str, Any]) -> Dict[int, Dict[str, Any]]:
     return {
-        "total_sentences": total,
-        "unread_sentences": unread,
-        "read_sentences": max(total - unread, 0),
-        "all_read": total > 0 and unread == 0,
+        int(sentence["number"]): sentence
+        for sentence in _as_list(grouping.get("sentences"))
+        if isinstance(sentence, dict) and isinstance(sentence.get("number"), int)
     }
 
 
-def _annotate_result_with_read_state(
-    app: "RSSTagApplication",
-    owner: str,
-    node: dict[str, Any],
-    cache: dict[str, Optional[dict[str, Any]]],
-    sentence_map_cache: dict[str, dict[int, dict]],
-) -> dict[str, Any]:
-    annotated = dict(node)
-    source_refs = annotated.get("source_refs", [])
-    if not isinstance(source_refs, list):
-        source_refs = []
-    annotated["source_refs"] = [
-        {
-            **source_ref,
-            "read_state": _derive_source_refs_state(app, owner, [source_ref], cache, sentence_map_cache),
-        }
-        for source_ref in source_refs
-        if isinstance(source_ref, dict)
-    ]
-    for collection_name in ("sub_anthologies", "findings", "claims", "timeline"):
-        if collection_name not in annotated:
+def _load_sentence_maps(
+    app: "RSSTagApplication", owner: str, post_ids: List[str]
+) -> SentenceMap:
+    """Fetch post_grouping sentences for all posts with a single query."""
+    if not post_ids:
+        return {}
+    wanted: Set[str] = set(post_ids)
+    maps: SentenceMap = {}
+    try:
+        cursor = app.db.post_grouping.find(
+            {"owner": owner, "post_ids": {"$in": post_ids}},
+            projection={"_id": False, "post_ids": True, "sentences": True},
+        )
+        for grouping in cursor:
+            index: Dict[int, Dict[str, Any]] = _sentence_index(grouping)
+            for post_id in _as_list(grouping.get("post_ids")):
+                if post_id in wanted and post_id not in maps:
+                    maps[post_id] = index
+    except Exception as exc:
+        log.error("Can't load post grouping sentences for %s: %s", owner, exc)
+    return maps
+
+
+def _snippet_indices(snippet: Dict[str, Any]) -> List[int]:
+    return [i for i in _as_list(snippet.get("sentence_indices")) if isinstance(i, int)]
+
+
+def _sentence_keys(snippet_ids: Iterable[str], snippets: Dict[str, Any]) -> Set[SentenceKey]:
+    keys: Set[SentenceKey] = set()
+    for snippet_id in snippet_ids:
+        snippet: Dict[str, Any] = _as_dict(snippets.get(snippet_id))
+        post_id: str = str(snippet.get("post_id", "")).strip()
+        if post_id:
+            keys.update((post_id, index) for index in _snippet_indices(snippet))
+    return keys
+
+
+def _count_read(keys: Iterable[SentenceKey], sentence_maps: SentenceMap) -> Dict[str, int]:
+    total: int = 0
+    unread: int = 0
+    for post_id, index in keys:
+        sentence: Optional[Dict[str, Any]] = sentence_maps.get(post_id, {}).get(index)
+        if sentence is None:
             continue
-        children = annotated.get(collection_name, [])
-        if not isinstance(children, list):
-            children = []
-        annotated[collection_name] = [
-            _annotate_result_with_read_state(
-                app, owner, child, cache, sentence_map_cache
-            )
-            for child in children
-            if isinstance(child, dict)
-        ]
-    annotated["read_state"] = _derive_source_refs_state(app, owner, annotated["source_refs"], cache, sentence_map_cache)
-    return annotated
+        total += 1
+        if not sentence.get("read", False):
+            unread += 1
+    return {"unread": unread, "total": total}
 
 
-def _collect_source_refs(node: dict[str, Any]) -> list[dict[str, Any]]:
-    refs: list[dict[str, Any]] = []
-    source_refs = node.get("source_refs", [])
-    if isinstance(source_refs, list):
-        refs.extend(ref for ref in source_refs if isinstance(ref, dict))
-    for collection_name in ("sub_anthologies", "findings", "claims", "timeline"):
-        collection = node.get(collection_name, [])
-        if not isinstance(collection, list):
-            continue
-        for child in collection:
-            if isinstance(child, dict):
-                refs.extend(_collect_source_refs(child))
-    return refs
+# ---------------------------------------------------------------------------
+# Result traversal
+# ---------------------------------------------------------------------------
 
 
-def _find_node_by_id(node: dict[str, Any], node_id: str) -> Optional[dict[str, Any]]:
-    if str(node.get("node_id", "")).strip() == node_id:
-        return node
-    for child in node.get("sub_anthologies", []):
-        if isinstance(child, dict):
-            found = _find_node_by_id(child, node_id)
-            if found:
-                return found
+def _cluster_snippet_ids(result: Dict[str, Any], cluster_id: str) -> List[str]:
+    cluster: Dict[str, Any] = _as_dict(_as_dict(result.get("clusters")).get(cluster_id))
+    return [str(s) for s in _as_list(cluster.get("snippet_ids"))]
+
+
+def _theme_snippet_ids(result: Dict[str, Any], theme: Dict[str, Any]) -> List[str]:
+    ids: List[str] = []
+    for cluster_id in _as_list(theme.get("cluster_ids")):
+        ids.extend(_cluster_snippet_ids(result, str(cluster_id)))
+    return ids
+
+
+def _find_theme(result: Dict[str, Any], theme_id: str) -> Optional[Dict[str, Any]]:
+    for theme in _as_list(result.get("themes")):
+        if isinstance(theme, dict) and str(theme.get("id", "")) == theme_id:
+            return theme
     return None
 
 
-def _resolve_sentences_target(result: dict[str, Any], target: dict[str, Any]) -> list[dict[str, Any]]:
-    post_id = str(target.get("post_id", "")).strip()
-    requested = {
-        int(index)
-        for index in target.get("sentence_indices", [])
-        if isinstance(index, int)
-    }
-    if not post_id or not requested:
-        return []
-    resolved: list[dict[str, Any]] = []
-    for source_ref in _collect_source_refs(result):
-        if str(source_ref.get("post_id", "")).strip() != post_id:
-            continue
-        overlap = requested & {
-            int(index)
-            for index in source_ref.get("sentence_indices", [])
-            if isinstance(index, int)
-        }
-        if overlap:
-            resolved.append(
-                {
-                    "post_id": post_id,
-                    "sentence_indices": sorted(overlap),
-                    "topic_path": source_ref.get("topic_path", ""),
-                    "tag": source_ref.get("tag", ""),
-                }
-            )
-    return resolved
+def _unsorted_ids(result: Dict[str, Any]) -> List[str]:
+    return [str(s) for s in _as_list(result.get("unsorted"))]
 
 
-_RESOLVERS: dict[str, Any] = {
-    "anthology": lambda result, target: _collect_source_refs(result),
-    "node": lambda result, target: _collect_source_refs(
-        _find_node_by_id(result, str(target.get("node_id", "")).strip())
-    ) if str(target.get("node_id", "")).strip() else [],
-    "topic": lambda result, target: [
-        ref
-        for ref in _collect_source_refs(result)
-        if str(ref.get("topic_path", "")).strip() == str(target.get("topic_path", "")).strip()
-    ],
-    "snippet": lambda result, target: [
-        ref
-        for ref in _collect_source_refs(result)
-        if str(ref.get("post_id", "")).strip() == str(target.get("post_id", "")).strip()
-    ],
-    "sentences": _resolve_sentences_target,
-}
+def _resolve_target_snippet_ids(result: Dict[str, Any], target: Dict[str, Any]) -> List[str]:
+    kind: str = str(target.get("kind", "")).strip()
+    target_id: str = str(target.get("id", "")).strip()
+    if kind == UNSORTED_ID:
+        return _unsorted_ids(result)
+    if kind == "cluster":
+        return _cluster_snippet_ids(result, target_id)
+    if kind == "theme":
+        theme: Optional[Dict[str, Any]] = _find_theme(result, target_id)
+        return _theme_snippet_ids(result, theme) if theme else []
+    if kind == "snippet" and target_id in _as_dict(result.get("snippets")):
+        return [target_id]
+    return []
 
 
-def _resolve_read_target(result: dict[str, Any], target: dict[str, Any]) -> list[dict[str, Any]]:
-    kind = str(target.get("kind", "")).strip()
-    resolver = _RESOLVERS.get(kind)
-    if resolver is None:
-        return []
-    return resolver(result, target)
-
-
-def _render_markdown(node: dict[str, Any], level: int = 1) -> str:
-    heading = "#" * max(1, min(level, 6))
-    lines = [
-        f"{heading} {node.get('title', 'Anthology')}",
-        "",
-        str(node.get("summary", "")).strip(),
-        "",
+def _source_refs(snippet_ids: Iterable[str], snippets: Dict[str, Any]) -> List[Dict[str, Any]]:
+    by_post: Dict[str, Set[int]] = defaultdict(set)
+    for post_id, index in _sentence_keys(snippet_ids, snippets):
+        by_post[post_id].add(index)
+    return [
+        {"post_id": post_id, "sentence_indices": sorted(indices)}
+        for post_id, indices in sorted(by_post.items())
     ]
-    findings: Any = node.get("findings", [])
-    if isinstance(findings, list) and findings:
-        lines.extend([f"{'#' * min(level + 1, 6)} Findings", ""])
-        for finding in findings:
-            if not isinstance(finding, dict):
-                continue
-            status: str = str(finding.get("status", "single_source")).replace(
-                "_", " "
-            )
-            lines.extend(
-                [
-                    f"{'#' * min(level + 2, 6)} {finding.get('title', 'Finding')}",
-                    "",
-                    f"Status: {status}",
-                    "",
-                    str(finding.get("summary", "")).strip(),
-                    "",
-                ]
-            )
-            for claim in finding.get("claims", []):
-                if not isinstance(claim, dict):
-                    continue
-                citations: str = _render_markdown_citations(
-                    claim.get("source_refs", [])
-                )
-                suffix: str = f" — {citations}" if citations else ""
-                lines.append(f"- {claim.get('text', '')}{suffix}")
-            lines.append("")
-
-    timeline: Any = node.get("timeline", [])
-    if isinstance(timeline, list) and timeline:
-        lines.extend([f"{'#' * min(level + 1, 6)} Timeline", ""])
-        for event in timeline:
-            if not isinstance(event, dict):
-                continue
-            citations: str = _render_markdown_citations(
-                event.get("source_refs", [])
-            )
-            suffix: str = f" — {citations}" if citations else ""
-            lines.append(
-                f"- {event.get('date', 'Date not stated')}: "
-                f"{event.get('title', 'Event')}{suffix}"
-            )
-        lines.append("")
-
-    limitations: Any = node.get("limitations", [])
-    if isinstance(limitations, list) and limitations:
-        lines.extend([f"{'#' * min(level + 1, 6)} Limitations", ""])
-        lines.extend(f"- {limitation}" for limitation in limitations)
-        lines.append("")
-    for child in node.get("sub_anthologies", []):
-        if isinstance(child, dict):
-            lines.append(_render_markdown(child, level + 1))
-    return "\n".join(lines).strip()
 
 
-def _render_markdown_citations(source_refs: Any) -> str:
-    if not isinstance(source_refs, list):
-        return ""
-    citations: list[str] = []
-    for source_ref in source_refs:
-        if not isinstance(source_ref, dict):
-            continue
-        post_id: str = str(source_ref.get("post_id", "")).strip()
-        sentence_indices: list[str] = [
-            str(index) for index in source_ref.get("sentence_indices", [])
-        ]
-        if not post_id:
-            continue
-        sentence_label: str = (
-            f", sentences {', '.join(sentence_indices)}" if sentence_indices else ""
-        )
-        citations.append(f"[post {post_id}{sentence_label}]")
-    return " ".join(citations)
+# ---------------------------------------------------------------------------
+# Detail payload
+# ---------------------------------------------------------------------------
 
 
-def _get_anthology_detail_payload(
-    app: "RSSTagApplication", user: dict, anthology_id: str
-) -> Optional[Dict[str, Any]]:
-    anthology = app.anthologies.get_by_id(user["sid"], anthology_id)
-    if not anthology:
-        return None
-
-    payload: Dict[str, Any] = _serialize_anthology(anthology)
-    if isinstance(payload.get("result"), dict):
-        payload["result"] = _annotate_result_with_read_state(
-            app, user["sid"], payload["result"], {}, {}
-        )
-    latest_run: Optional[Dict[str, Any]] = app.anthology_runs.get_latest_for_anthology(
-        user["sid"], anthology_id
+def _annotate_read_counts(result: Dict[str, Any], sentence_maps: SentenceMap) -> Dict[str, Any]:
+    """Return a copy of result without snippets, enriched with read counts."""
+    snippets: Dict[str, Any] = _as_dict(result.get("snippets"))
+    clusters: Dict[str, Any] = {}
+    for cluster_id, cluster in _as_dict(result.get("clusters")).items():
+        keys = _sentence_keys(_cluster_snippet_ids(result, cluster_id), snippets)
+        clusters[cluster_id] = {**_as_dict(cluster), "read": _count_read(keys, sentence_maps)}
+    themes: List[Dict[str, Any]] = []
+    for theme in _as_list(result.get("themes")):
+        if isinstance(theme, dict):
+            keys = _sentence_keys(_theme_snippet_ids(result, theme), snippets)
+            themes.append({**theme, "read": _count_read(keys, sentence_maps)})
+    unsorted_keys = _sentence_keys(_unsorted_ids(result), snippets)
+    annotated: Dict[str, Any] = {k: v for k, v in result.items() if k != "snippets"}
+    annotated.update(
+        {
+            "themes": themes,
+            "clusters": clusters,
+            "unsorted": _unsorted_ids(result),
+            "unsorted_read": _count_read(unsorted_keys, sentence_maps),
+            "total_read": _count_read(_sentence_keys(snippets.keys(), snippets), sentence_maps),
+        }
     )
-    if latest_run:
-        payload["latest_run"] = latest_run
+    return annotated
 
+
+def _feed_titles(app: "RSSTagApplication", owner: str, result: Dict[str, Any]) -> Dict[str, str]:
+    wanted: Set[str] = set()
+    for cluster in _as_dict(result.get("clusters")).values():
+        wanted.update(str(f) for f in _as_list(_as_dict(cluster).get("feed_ids")))
+    if not wanted:
+        return {}
+    try:
+        feeds = app.feeds.get_all(owner, projection={"_id": False, "feed_id": True, "title": True})
+        return {
+            str(f.get("feed_id")): str(f.get("title") or f.get("feed_id"))
+            for f in feeds
+            if str(f.get("feed_id", "")) in wanted
+        }
+    except Exception as exc:
+        log.warning("Can't load feed titles for %s: %s", owner, exc)
+        return {}
+
+
+def _build_detail_payload(
+    app: "RSSTagApplication", owner: str, doc: Dict[str, Any]
+) -> Dict[str, Any]:
+    payload: Dict[str, Any] = _serialize_summary(doc)
+    result: Dict[str, Any] = _as_dict(doc.get("result"))
+    payload["result"] = None
+    payload["feed_titles"] = {}
+    if result:
+        snippets: Dict[str, Any] = _as_dict(result.get("snippets"))
+        post_ids: List[str] = _snippet_post_ids(_as_dict(s) for s in snippets.values())
+        sentence_maps: SentenceMap = _load_sentence_maps(app, owner, post_ids)
+        payload["result"] = _annotate_read_counts(result, sentence_maps)
+        payload["feed_titles"] = _feed_titles(app, owner, result)
     return payload
+
+
+def _get_detail_payload(
+    app: "RSSTagApplication", owner: str, anthology_id: str
+) -> Optional[Dict[str, Any]]:
+    doc: Optional[Dict[str, Any]] = app.anthologies.get_by_id(owner, anthology_id)
+    if not doc:
+        return None
+    return _build_detail_payload(app, owner, doc)
+
+
+# ---------------------------------------------------------------------------
+# Cluster snippets
+# ---------------------------------------------------------------------------
+
+
+def _snippet_with_sentences(
+    snippet: Dict[str, Any], sentence_maps: SentenceMap
+) -> Dict[str, Any]:
+    post_map: Dict[int, Dict[str, Any]] = sentence_maps.get(str(snippet.get("post_id", "")), {})
+    sentences: List[Dict[str, Any]] = [
+        {
+            "number": index,
+            "text": str(post_map[index].get("text", "")),
+            "read": bool(post_map[index].get("read", False)),
+        }
+        for index in _snippet_indices(snippet)
+        if index in post_map
+    ]
+    return {
+        **snippet,
+        "sentences": sentences,
+        "read": bool(sentences) and all(s["read"] for s in sentences),
+    }
+
+
+def _resolve_cluster(
+    result: Dict[str, Any], cluster_id: str
+) -> Tuple[bool, Optional[Dict[str, Any]], List[str]]:
+    """Return (found, cluster, snippet_ids); the unsorted bucket has no cluster."""
+    if cluster_id == UNSORTED_ID:
+        return True, None, _unsorted_ids(result)
+    cluster: Any = _as_dict(result.get("clusters")).get(cluster_id)
+    if not isinstance(cluster, dict):
+        return False, None, []
+    return True, cluster, _cluster_snippet_ids(result, cluster_id)
+
+
+def _build_cluster_payload(
+    app: "RSSTagApplication", owner: str, result: Dict[str, Any], cluster_id: str
+) -> Optional[Dict[str, Any]]:
+    found, cluster, snippet_ids = _resolve_cluster(result, cluster_id)
+    if not found:
+        return None
+    all_snippets: Dict[str, Any] = _as_dict(result.get("snippets"))
+    snippets: List[Dict[str, Any]] = [
+        all_snippets[sid] for sid in snippet_ids if isinstance(all_snippets.get(sid), dict)
+    ]
+    sentence_maps: SentenceMap = _load_sentence_maps(app, owner, _snippet_post_ids(snippets))
+    return {
+        "cluster": cluster,
+        "snippets": [_snippet_with_sentences(s, sentence_maps) for s in snippets],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Helpers shared by handlers
+# ---------------------------------------------------------------------------
+
+
+def _not_found(app: "RSSTagApplication") -> Response:
+    return app._json_response({"error": "Anthology not found"}, 404)
+
+
+def _enqueue(app: "RSSTagApplication", owner: str, scope: Any) -> None:
+    try:
+        app.tasks.add_task({"user": owner, "type": TASK_ANTHOLOGY, "scope": scope or {"mode": "all"}})
+    except Exception as exc:
+        log.error("Can't enqueue anthology task for %s: %s", owner, exc)
+
+
+def _ready_result(doc: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    result: Any = doc.get("result")
+    return result if isinstance(result, dict) and result else None
+
+
+def _script_json(value: Any) -> str:
+    """JSON safe to embed in a <script> block (the app's tojson filter is not)."""
+    text: str = json.dumps(value, default=str)
+    for char, escaped in (("&", "\\u0026"), ("<", "\\u003c"), (">", "\\u003e"), ("'", "\\u0027")):
+        text = text.replace(char, escaped)
+    return text
+
+
+def _page_context(app: "RSSTagApplication", user: dict) -> Dict[str, Any]:
+    return {
+        "user_settings": user["settings"],
+        "provider": user.get("provider", ""),
+        "support": app.config["settings"]["support"],
+        "version": app.config["settings"]["version"],
+    }
+
+
+def _list_feeds(app: "RSSTagApplication", owner: str) -> List[Dict[str, str]]:
+    feeds: List[Dict[str, str]] = []
+    try:
+        for feed in app.feeds.get_all(owner, projection={"_id": False, "feed_id": True, "title": True}):
+            feed_id: str = str(feed.get("feed_id", "")).strip()
+            if feed_id:
+                feeds.append({"feed_id": feed_id, "title": str(feed.get("title") or feed_id).strip()})
+    except Exception as exc:
+        log.warning("Can't list feeds for %s: %s", owner, exc)
+    return sorted(feeds, key=lambda feed: feed["title"].casefold())
+
+
+def _list_summaries(app: "RSSTagApplication", owner: str, status: str) -> List[Dict[str, Any]]:
+    docs: List[Dict[str, Any]] = app.anthologies.list_by_owner(owner, status=status or None)
+    return [_serialize_summary(doc) for doc in docs]
+
+
+def _parse_read_request(rqst: Request) -> Tuple[Optional[Dict[str, Any]], bool]:
+    payload: Dict[str, Any] = _as_dict(rqst.get_json(silent=True))
+    target: Dict[str, Any] = _as_dict(payload.get("target"))
+    if str(target.get("kind", "")).strip() not in READ_TARGET_KINDS:
+        return None, False
+    return target, bool(payload.get("readed", True))
+
+
+def _mark_read(
+    app: "RSSTagApplication", user: dict, source_refs: List[Dict[str, Any]], readed: bool
+) -> Dict[str, Any]:
+    service: ReadStateService = ReadStateService(
+        app.posts, app.tags, app.bi_grams, app.letters, app.tasks, app.post_grouping
+    )
+    try:
+        return service.mark_sentences(user["sid"], user.get("provider", ""), source_refs, readed)
+    except Exception as exc:
+        log.exception("Can't mark anthology sentences for %s: %s", user["sid"], exc)
+        return {"ok": False, "error": "Database error"}
+
+
+# ---------------------------------------------------------------------------
+# Page handlers
+# ---------------------------------------------------------------------------
 
 
 def on_anthologies_get(app: "RSSTagApplication", user: dict, rqst: Request) -> Response:
     status_filter: str = str(rqst.args.get("status", "")).strip()
-    seed_value: str = str(rqst.args.get("seed_value", "")).strip()
-    selected_feed_id: str = str(rqst.args.get("feed", "")).strip()
-    anthologies: list[Dict[str, Any]] = [
-        _serialize_anthology(item)
-        for item in app.anthologies.list_by_owner(user["sid"], status=status_filter or None)
-    ]
-    feeds: list[dict[str, str]] = sorted(
-        [
-            {
-                "feed_id": str(feed.get("feed_id", "")).strip(),
-                "title": str(feed.get("title", "")).strip()
-                or str(feed.get("feed_id", "")).strip(),
-            }
-            for feed in app.feeds.get_all(
-                user["sid"], projection={"_id": False, "feed_id": True, "title": True}
-            )
-            if str(feed.get("feed_id", "")).strip()
-        ],
-        key=lambda feed: feed["title"].casefold(),
-    )
     page = app.template_env.get_template("anthologies-list.html")
     return Response(
         page.render(
-            anthologies=anthologies,
-            feeds=feeds,
-            selected_feed_id=selected_feed_id,
-            initial_seed_value=seed_value,
-            user_settings=user["settings"],
-            provider=user.get("provider", ""),
-            support=app.config["settings"]["support"],
-            version=app.config["settings"]["version"],
+            anthologies_json=_script_json(_list_summaries(app, user["sid"], status_filter)),
+            status_filter=status_filter,
+            feeds=_list_feeds(app, user["sid"]),
+            selected_feed_id=str(rqst.args.get("feed", "")).strip(),
+            initial_seed_value=str(rqst.args.get("seed_value", "")).strip(),
+            **_page_context(app, user),
         ),
         mimetype="text/html",
     )
@@ -370,192 +431,117 @@ def on_anthologies_get(app: "RSSTagApplication", user: dict, rqst: Request) -> R
 def on_anthologies_detail_get(
     app: "RSSTagApplication", user: dict, rqst: Request, anthology_id: str
 ) -> Response:
-    anthology_payload = _get_anthology_detail_payload(app, user, anthology_id)
-    if not anthology_payload:
+    payload: Optional[Dict[str, Any]] = _get_detail_payload(app, user["sid"], anthology_id)
+    if not payload:
         return Response("Anthology not found", status=404)
-
     page = app.template_env.get_template("anthology-detail.html")
     return Response(
-        page.render(
-            anthology=anthology_payload,
-            detail_api_url=f"/api/anthologies/{anthology_id}",
-            retry_api_url=f"/api/anthologies/{anthology_id}/retry",
-            export_api_url=f"/api/anthologies/{anthology_id}/export",
-            user_settings=user["settings"],
-            provider=user.get("provider", ""),
-            support=app.config["settings"]["support"],
-            version=app.config["settings"]["version"],
-        ),
+        page.render(anthology=payload, anthology_json=_script_json(payload), **_page_context(app, user)),
         mimetype="text/html",
     )
 
 
-def on_anthologies_api_list_get(
-    app: "RSSTagApplication", user: dict, rqst: Request
-) -> Response:
+# ---------------------------------------------------------------------------
+# API handlers
+# ---------------------------------------------------------------------------
+
+
+def on_anthologies_api_list_get(app: "RSSTagApplication", user: dict, rqst: Request) -> Response:
     status_filter: str = str(rqst.args.get("status", "")).strip()
-    data = [
-        _serialize_anthology(item)
-        for item in app.anthologies.list_by_owner(user["sid"], status=status_filter or None)
-    ]
-    return app._json_response({"data": data})
+    return app._json_response({"data": _list_summaries(app, user["sid"], status_filter)})
 
 
-def on_anthologies_api_create_post(
-    app: "RSSTagApplication", user: dict, rqst: Request
-) -> Response:
-    payload = _parse_create_payload(rqst)
+def on_anthologies_api_create_post(app: "RSSTagApplication", user: dict, rqst: Request) -> Response:
+    payload: Dict[str, Any] = _parse_create_payload(rqst)
     seed_type: str = str(payload.get("seed_type", "tag")).strip() or "tag"
     seed_value: str = str(payload.get("seed_value", "")).strip()
-    scope: Dict[str, Any] = payload.get("scope") if isinstance(payload.get("scope"), dict) else {"mode": "all"}
-
+    scope: Dict[str, Any] = _as_dict(payload.get("scope")) or {"mode": "all"}
     if seed_type != "tag":
-        return app._json_response({"error": "Only tag anthologies are supported for now"}, 400)
+        return app._json_response({"error": "Only tag anthologies are supported"}, 400)
     if not seed_value:
         return app._json_response({"error": "seed_value is required"}, 400)
 
-    anthology_id = app.anthologies.create(user["sid"], seed_type, seed_value, scope)
-    if not anthology_id:
+    anthology_id: Optional[str] = app.anthologies.create(user["sid"], seed_type, seed_value, scope)
+    doc: Optional[Dict[str, Any]] = (
+        app.anthologies.get_by_id(user["sid"], anthology_id) if anthology_id else None
+    )
+    if not doc:
+        log.error("Anthology creation failed for %s (%s)", user["sid"], seed_value)
         return app._json_response({"error": "Failed to create anthology"}, 500)
 
-    anthology = app.anthologies.get_by_id(user["sid"], anthology_id)
-    if not anthology:
-        return app._json_response({"error": "Anthology was created but could not be loaded"}, 500)
-
-    status = str(anthology.get("status", "pending"))
+    status: str = str(doc.get("status", "pending"))
     if status == "pending":
-        app.tasks.add_task({"user": user["sid"], "type": TASK_ANTHOLOGY, "scope": scope})
-
+        _enqueue(app, user["sid"], doc.get("scope") or scope)
     return app._json_response(
-        {
-            "data": {
-                "anthology_id": anthology_id,
-                "status": status,
-                "anthology": _serialize_anthology(anthology),
-            }
-        }
+        {"data": {"anthology_id": anthology_id, "status": status, "anthology": _serialize_summary(doc)}}
     )
 
 
 def on_anthologies_api_detail_get(
     app: "RSSTagApplication", user: dict, rqst: Request, anthology_id: str
 ) -> Response:
-    payload = _get_anthology_detail_payload(app, user, anthology_id)
+    payload: Optional[Dict[str, Any]] = _get_detail_payload(app, user["sid"], anthology_id)
     if not payload:
-        return app._json_response({"error": "Anthology not found"}, 404)
-
+        return _not_found(app)
     return app._json_response({"data": payload})
 
 
-def on_anthologies_api_run_get(
-    app: "RSSTagApplication", user: dict, rqst: Request, anthology_id: str
+def on_anthologies_api_cluster_get(
+    app: "RSSTagApplication", user: dict, rqst: Request, anthology_id: str, cluster_id: str
 ) -> Response:
-    latest_run: Optional[Dict[str, Any]] = app.anthology_runs.get_latest_for_anthology(
-        user["sid"], anthology_id
-    )
-    if not latest_run:
-        return app._json_response({"error": "Run not found"}, 404)
-    return app._json_response({"data": latest_run})
-
-
-def on_anthologies_api_retry_post(
-    app: "RSSTagApplication", user: dict, rqst: Request, anthology_id: str
-) -> Response:
-    anthology = app.anthologies.get_by_id(user["sid"], anthology_id)
-    if not anthology:
-        return app._json_response({"error": "Anthology not found"}, 404)
-
-    if str(anthology.get("status", "")).strip() == "processing":
-        return app._json_response({"error": "Anthology is already processing"}, 400)
-
-    if not app.anthologies.reset_for_retry(user["sid"], anthology_id):
-        return app._json_response({"error": "Failed to reset anthology"}, 500)
-    app.tasks.add_task(
-        {
-            "user": user["sid"],
-            "type": TASK_ANTHOLOGY,
-            "scope": anthology.get("scope", {"mode": "all"}),
-        }
-    )
-    payload = _get_anthology_detail_payload(app, user, anthology_id)
+    doc: Optional[Dict[str, Any]] = app.anthologies.get_by_id(user["sid"], anthology_id)
+    if not doc:
+        return _not_found(app)
+    result: Optional[Dict[str, Any]] = _ready_result(doc)
+    if result is None:
+        return app._json_response({"error": "Anthology result not ready"}, 409)
+    payload: Optional[Dict[str, Any]] = _build_cluster_payload(app, user["sid"], result, cluster_id)
+    if payload is None:
+        return app._json_response({"error": "Cluster not found"}, 404)
     return app._json_response({"data": payload})
 
 
 def on_anthologies_api_read_post(
     app: "RSSTagApplication", user: dict, rqst: Request, anthology_id: str
 ) -> Response:
-    anthology = app.anthologies.get_by_id(user["sid"], anthology_id)
-    if not anthology:
-        return app._json_response({"error": "Anthology not found"}, 404)
-    result = anthology.get("result")
-    if not isinstance(result, dict):
-        return app._json_response({"error": "Anthology result not ready"}, 400)
+    doc: Optional[Dict[str, Any]] = app.anthologies.get_by_id(user["sid"], anthology_id)
+    if not doc:
+        return _not_found(app)
+    result: Optional[Dict[str, Any]] = _ready_result(doc)
+    if result is None:
+        return app._json_response({"error": "Anthology result not ready"}, 409)
+    target, readed = _parse_read_request(rqst)
+    if target is None:
+        return app._json_response({"error": "A valid target is required"}, 400)
 
-    payload = rqst.get_json(silent=True) or {}
-    target = payload.get("target")
-    if not isinstance(target, dict):
-        return app._json_response({"error": "target is required"}, 400)
-
-    source_refs = _resolve_read_target(result, target)
+    snippet_ids: List[str] = _resolve_target_snippet_ids(result, target)
+    source_refs: List[Dict[str, Any]] = _source_refs(snippet_ids, _as_dict(result.get("snippets")))
     if not source_refs:
-        return app._json_response({"error": "No source refs resolved for target"}, 400)
-
-    service = ReadStateService(
-        app.posts,
-        app.tags,
-        app.bi_grams,
-        app.letters,
-        app.tasks,
-        app.post_grouping,
-    )
-    service_result = service.mark_sentences(
-        user["sid"],
-        user.get("provider", ""),
-        source_refs,
-        bool(payload.get("readed", False)),
-    )
-    if not service_result.get("ok"):
-        return app._json_response({"error": service_result.get("error", "Database error")}, 500)
-    return on_anthologies_api_detail_get(app, user, rqst, anthology_id)
+        return app._json_response({"error": "Nothing to mark for this target"}, 400)
+    outcome: Dict[str, Any] = _mark_read(app, user, source_refs, readed)
+    if not outcome.get("ok"):
+        return app._json_response({"error": outcome.get("error", "Database error")}, 500)
+    return app._json_response({"data": _build_detail_payload(app, user["sid"], doc)})
 
 
-def on_anthologies_api_export_get(
+def on_anthologies_api_retry_post(
     app: "RSSTagApplication", user: dict, rqst: Request, anthology_id: str
 ) -> Response:
-    anthology = app.anthologies.get_by_id(user["sid"], anthology_id)
-    if not anthology:
-        return app._json_response({"error": "Anthology not found"}, 404)
-    result = anthology.get("result")
-    if not isinstance(result, dict):
-        return app._json_response({"error": "Anthology result not ready"}, 400)
-
-    export_format = str(rqst.args.get("format", "json")).strip().lower() or "json"
-    title = str(result.get("title", anthology.get("seed_value", "anthology"))).strip() or "anthology"
-    safe_title = title[:50].encode("ascii", "ignore").decode("ascii") or "anthology"
-    if export_format == "markdown":
-        content = _render_markdown(result) + "\n"
-        mimetype = "text/markdown"
-        suffix = "md"
-    elif export_format == "json":
-        content = json.dumps(result, indent=2, ensure_ascii=True) + "\n"
-        mimetype = "application/json"
-        suffix = "json"
-    else:
-        return app._json_response({"error": "Unsupported export format"}, 400)
-
-    return Response(
-        content,
-        mimetype=mimetype,
-        headers={"Content-Disposition": f'attachment; filename="{anthology_id}_{safe_title}.{suffix}"'},
-    )
+    doc: Optional[Dict[str, Any]] = app.anthologies.get_by_id(user["sid"], anthology_id)
+    if not doc:
+        return _not_found(app)
+    if str(doc.get("status", "")) == "processing":
+        return app._json_response({"error": "Anthology is already processing"}, 400)
+    if not app.anthologies.reset_for_retry(user["sid"], anthology_id):
+        return app._json_response({"error": "Failed to reset anthology"}, 500)
+    _enqueue(app, user["sid"], doc.get("scope"))
+    payload: Optional[Dict[str, Any]] = _get_detail_payload(app, user["sid"], anthology_id)
+    return app._json_response({"data": payload})
 
 
 def on_anthologies_api_delete(
     app: "RSSTagApplication", user: dict, rqst: Request, anthology_id: str
 ) -> Response:
-    deleted = app.anthologies.delete(user["sid"], anthology_id)
-    if not deleted:
-        return app._json_response({"error": "Anthology not found"}, 404)
-
-    app.anthology_runs.delete_for_anthology(user["sid"], anthology_id)
+    if not app.anthologies.delete(user["sid"], anthology_id):
+        return _not_found(app)
     return app._json_response({"data": "ok"})

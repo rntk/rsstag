@@ -844,7 +844,14 @@ class RssTagTasks:
             elif user_task["type"] == TASK_ANTHOLOGY:
                 data = self._db.anthologies.find_one_and_update(
                     {"owner": task["user"]["sid"], "status": "pending"},
-                    {"$set": {"status": "processing", "updated_at": time.time()}},
+                    {
+                        "$set": {
+                            "status": "processing",
+                            "stage": None,
+                            "error": None,
+                            "updated_at": time.time(),
+                        }
+                    },
                     sort=[("created_at", 1)],
                 )
                 unlock_task = True

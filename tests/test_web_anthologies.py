@@ -1,20 +1,78 @@
+"""Web tests for the snippet-cluster anthology explorer."""
+
+import copy
 import json
+import time
 import unittest
-from unittest.mock import MagicMock
+from typing import Any, Dict, List, Optional
 
 from bson import ObjectId
 
 from rsstag.tasks import TASK_ANTHOLOGY
 from rsstag.web.anthologies import (
-    _collect_source_refs,
-    _find_node_by_id,
+    _annotate_read_counts,
     _parse_create_payload,
-    _render_markdown,
-    _resolve_read_target,
-    _resolve_sentences_target,
-    _serialize_anthology,
+    _resolve_target_snippet_ids,
+    _serialize_summary,
+    _source_refs,
 )
 from tests.web_test_utils import MongoWebTestCase
+
+
+def build_result() -> Dict[str, Any]:
+    """Two themes, two clusters, one unsorted snippet over two posts."""
+
+    def snippet(sid: str, post_id: str, indices: List[int], date: float) -> Dict[str, Any]:
+        return {
+            "id": sid,
+            "post_id": post_id,
+            "sentence_indices": indices,
+            "topic_path": "Consoles > Hardware",
+            "title": f"Title {post_id}",
+            "feed_id": "test-feed-1",
+            "date": date,
+            "preview": "preview",
+        }
+
+    def cluster(cid: str, label: str, snippet_ids: List[str]) -> Dict[str, Any]:
+        return {
+            "id": cid,
+            "label": label,
+            "kind": "release",
+            "score": 4,
+            "intruder_ok": True,
+            "keywords": ["console"],
+            "cohesion": 0.42,
+            "snippet_ids": snippet_ids,
+            "start_snippet_id": snippet_ids[0],
+            "date_min": 1700000000.0,
+            "date_max": 1700000001.0,
+            "feed_ids": ["test-feed-1"],
+        }
+
+    return {
+        "themes": [
+            {"id": "t0", "label": "Launch", "keywords": ["launch"], "size": 2, "cluster_ids": ["c1"]},
+            {"id": "t1", "label": "Prices", "keywords": ["price"], "size": 1, "cluster_ids": ["c2"]},
+        ],
+        "clusters": {
+            "c1": cluster("c1", "Launch date", ["s1", "s2"]),
+            "c2": cluster("c2", "Price cut", ["s3"]),
+        },
+        "unsorted": ["s4"],
+        "snippets": {
+            "s1": snippet("s1", "test-post-1", [0, 1], 1700000000.0),
+            "s2": snippet("s2", "test-post-1", [2], 1700000000.0),
+            "s3": snippet("s3", "test-post-2", [0, 1], 1700000001.0),
+            "s4": snippet("s4", "test-post-2", [2], 1700000001.0),
+        },
+        "metrics": {"snippets_total": 4, "coverage": 0.75, "llm_calls": 3},
+    }
+
+
+def sentences(read: Optional[set] = None) -> List[Dict[str, Any]]:
+    read = read or set()
+    return [{"number": i, "text": f"Console sentence {i}", "read": i in read} for i in range(3)]
 
 
 class TestWebAnthologies(MongoWebTestCase):
@@ -22,704 +80,263 @@ class TestWebAnthologies(MongoWebTestCase):
         super().setUp()
         self.owner = "anthologywebuser"
         _user_data, self.sid = self.seed_test_user(self.owner, "pass")
-        self.minimal_data = self.seed_minimal_data(self.sid)
+        self.seed_minimal_data(self.sid)
         self.client = self.get_authenticated_client(self.sid)
-
-        # Replace simple letters doc with structured one for read-state rollups.
         self.test_db.letters.delete_many({"owner": self.sid})
         self.test_db.letters.insert_one(
             {
                 "owner": self.sid,
-                "letters": {
-                    "t": {
-                        "letter": "t",
-                        "local_url": "/group/tag/startwith/t/1",
-                        "unread_count": 2,
-                    }
-                },
+                "letters": {"t": {"letter": "t", "local_url": "/group/tag/startwith/t/1", "unread_count": 2}},
             }
         )
-        self.test_db.posts.update_many(
-            {"owner": self.sid},
-            {"$set": {"bi_grams": ["test phrase"], "read": False}},
-        )
-        self.test_db.bi_grams.update_one(
-            {"owner": self.sid, "tag": "test phrase"},
-            {"$set": {"unread_count": 2}},
-        )
-        self.app.post_grouping.save_grouped_posts(
-            self.sid,
-            ["test-post-1"],
-            sentences=[
-                {"number": 0, "text": "Muse article opening", "read": False},
-                {"number": 1, "text": "Anthology source detail", "read": False},
-            ],
-            groups={"Muse > Albums": [0, 1]},
-        )
+        for pid in ("test-post-1", "test-post-2"):
+            self.test_db.posts.update_one({"owner": self.sid, "pid": pid}, {"$set": {"read": False, "id": pid}})
+        self.app.post_grouping.save_grouped_posts(self.sid, ["test-post-1"], sentences(), {})
+        self.app.post_grouping.save_grouped_posts(self.sid, ["test-post-2"], sentences({0}), {})
 
-    def _seed_anthology(
+    def _seed(
         self,
         seed_value: str = "testtag",
-        status: str = "pending",
-        result: dict | None = None,
+        status: str = "done",
+        result: Optional[Dict[str, Any]] = None,
+        **extra: Any,
     ) -> str:
-        """Create an anthology via the app layer and return its id."""
-        anthology_id = self.app.anthologies.create(
-            self.sid, "tag", seed_value, {"mode": "all"}
-        )
-        assert anthology_id is not None
-        if status != "pending" or result is not None:
-            update: dict = {"$set": {"status": status}}
-            if result is not None:
-                update["$set"]["result"] = result
-            self.test_db.anthologies.update_one(
-                {"_id": self.app.anthologies._to_object_id(anthology_id)},
-                update,
-            )
-        return anthology_id
+        now: float = time.time()
+        doc: Dict[str, Any] = {
+            "owner": self.sid,
+            "seed_type": "tag",
+            "seed_value": seed_value,
+            "scope": {"mode": "all"},
+            "scope_hash": seed_value,
+            "status": status,
+            "stage": "done" if status == "done" else None,
+            "error": None,
+            "stale": False,
+            "created_at": now,
+            "updated_at": now,
+            "result": result,
+        }
+        doc.update(extra)
+        return str(self.test_db.anthologies.insert_one(doc).inserted_id)
 
-    def _seed_run(self, anthology_id: str, status: str = "done") -> str:
-        run_id = self.app.anthology_runs.create(anthology_id, self.sid)
-        assert run_id is not None
-        if status != "processing":
-            self.app.anthology_runs.finish(run_id, status)
-        return run_id
+    def _seed_done(self) -> str:
+        return self._seed(result=build_result())
 
-    # ------------------------------------------------------------------
-    # on_anthologies_get
-    # ------------------------------------------------------------------
-    def test_on_anthologies_get_returns_200(self) -> None:
+    def _get_json(self, url: str) -> tuple[int, Dict[str, Any]]:
+        response = self.client.get(url)
+        return response.status_code, json.loads(response.get_data(as_text=True))
+
+    def _post_json(self, url: str, payload: Dict[str, Any]) -> tuple[int, Dict[str, Any]]:
+        response = self.client.post(url, data=json.dumps(payload), content_type="application/json")
+        return response.status_code, json.loads(response.get_data(as_text=True))
+
+    # -- pages ---------------------------------------------------------------
+    def test_list_page_renders_items_and_feeds(self) -> None:
+        self._seed(seed_value="python", status="processing", stage="merge")
         response = self.client.get("/anthologies")
-        self.assertEqual(response.status_code, 200)
         body = response.get_data(as_text=True)
-        self.assertIn("Anthologies", body)
-
-    def test_on_anthologies_get_lists_user_anthologies(self) -> None:
-        self._seed_anthology(seed_value="python")
-        response = self.client.get("/anthologies")
         self.assertEqual(response.status_code, 200)
-        body = response.get_data(as_text=True)
         self.assertIn("python", body)
+        self.assertIn("test-feed-1", body)
+        self.assertIn("/static/js/anthologies-list.js", body)
 
-    def test_on_anthologies_get_respects_status_filter(self) -> None:
-        self._seed_anthology(seed_value="done-tag", status="done")
-        self._seed_anthology(seed_value="pending-tag", status="pending")
-        response = self.client.get("/anthologies?status=done")
-        self.assertEqual(response.status_code, 200)
-        body = response.get_data(as_text=True)
+    def test_list_page_status_filter(self) -> None:
+        self._seed(seed_value="done-tag", status="done")
+        self._seed(seed_value="pending-tag", status="pending")
+        body = self.client.get("/anthologies?status=done").get_data(as_text=True)
         self.assertIn("done-tag", body)
         self.assertNotIn("pending-tag", body)
 
-    def test_on_anthologies_get_offers_feed_scope(self) -> None:
-        feed: dict | None = self.test_db.feeds.find_one({"owner": self.sid})
-        self.assertIsNotNone(feed)
-
-        response = self.client.get("/anthologies")
-        body = response.get_data(as_text=True)
-
-        self.assertEqual(response.status_code, 200)
-        self.assertIn(str(feed["feed_id"]), body)
-        self.assertIn("All feeds", body)
-
-    # ------------------------------------------------------------------
-    # on_anthologies_detail_get
-    # ------------------------------------------------------------------
-    def test_on_anthologies_detail_get_returns_200(self) -> None:
-        anthology_id = self._seed_anthology(seed_value="rust")
+    def test_detail_page_renders_and_escapes(self) -> None:
+        anthology_id = self._seed(seed_value="<script>x</script>", result=build_result())
         response = self.client.get(f"/anthologies/{anthology_id}")
-        self.assertEqual(response.status_code, 200)
         body = response.get_data(as_text=True)
-        self.assertIn("rust", body)
-
-    def test_on_anthologies_detail_get_missing_returns_404(self) -> None:
-        response = self.client.get("/anthologies/nonexistent-id")
-        self.assertEqual(response.status_code, 404)
-        self.assertIn(b"Anthology not found", response.data)
-
-    def test_on_anthologies_detail_get_renders_hierarchy_and_run(self) -> None:
-        anthology_id = self._seed_anthology(seed_value="testtag", status="done")
-        run_id = self._seed_run(anthology_id, status="done")
-        self.app.anthologies.update_result(
-            anthology_id,
-            {
-                "title": "testtag anthology",
-                "summary": "Anthology summary",
-                "source_refs": [{"post_id": "test-post-1", "title": "Test Post 1"}],
-                "sub_anthologies": [
-                    {
-                        "title": "Child chapter",
-                        "summary": "Nested summary",
-                        "source_refs": [],
-                        "sub_anthologies": [],
-                    }
-                ],
-            },
-            run_id,
-            {"post_grouping_updated_at": 1700000000, "post_grouping_doc_ids": ["test-post-1"]},
-        )
-        response = self.client.get(f"/anthologies/{anthology_id}")
         self.assertEqual(response.status_code, 200)
-        self.assertIn(b"Hierarchy", response.data)
-        self.assertIn(b"Agent run", response.data)
-        self.assertIn(b"Child chapter", response.data)
-        self.assertIn(f"/api/anthologies/{anthology_id}".encode("utf-8"), response.data)
-        self.assertIn(b"Retry", response.data)
-        self.assertIn(b"Export", response.data)
+        self.assertNotIn("<script>x</script>", body)
+        self.assertIn("&lt;script&gt;x&lt;/script&gt;", body)
+        self.assertIn("anthology-detail-data", body)
+        self.assertIn("/static/js/anthology-detail.js", body)
 
-    # ------------------------------------------------------------------
-    # on_anthologies_api_list_get
-    # ------------------------------------------------------------------
-    def test_on_anthologies_api_list_get_returns_200(self) -> None:
-        self._seed_anthology(seed_value="golang")
-        response = self.client.get("/api/anthologies")
-        self.assertEqual(response.status_code, 200)
-        data = response.get_json()
-        self.assertIn("data", data)
-        self.assertEqual(len(data["data"]), 1)
-        self.assertEqual(data["data"][0]["seed_value"], "golang")
+    def test_detail_page_404(self) -> None:
+        self.assertEqual(self.client.get("/anthologies/not-an-id").status_code, 404)
+        self.assertEqual(self.client.get(f"/anthologies/{ObjectId()}").status_code, 404)
 
-    def test_on_anthologies_api_list_get_empty_list(self) -> None:
-        response = self.client.get("/api/anthologies")
-        self.assertEqual(response.status_code, 200)
-        data = response.get_json()
-        self.assertEqual(data["data"], [])
+    # -- list / create -------------------------------------------------------
+    def test_api_list(self) -> None:
+        anthology_id = self._seed_done()
+        status, payload = self._get_json("/api/anthologies")
+        self.assertEqual(status, 200)
+        item = payload["data"][0]
+        self.assertEqual(item["id"], anthology_id)
+        self.assertEqual(item["themes_count"], 2)
+        self.assertEqual(item["metrics"]["snippets_total"], 4)
+        self.assertNotIn("result", item)
 
-    def test_on_anthologies_api_list_get_status_filter(self) -> None:
-        self._seed_anthology(seed_value="done-tag", status="done")
-        self._seed_anthology(seed_value="pending-tag", status="pending")
-        response = self.client.get("/api/anthologies?status=done")
-        self.assertEqual(response.status_code, 200)
-        data = response.get_json()
-        self.assertEqual(len(data["data"]), 1)
-        self.assertEqual(data["data"][0]["seed_value"], "done-tag")
-
-    # ------------------------------------------------------------------
-    # on_anthologies_api_create_post
-    # ------------------------------------------------------------------
-    def test_on_anthologies_api_create_post_creates_anthology(self) -> None:
-        response = self.client.post(
+    def test_api_create_enqueues_task(self) -> None:
+        status, payload = self._post_json(
             "/api/anthologies",
-            data={"seed_type": "tag", "seed_value": "nodejs", "scope_mode": "all"},
+            {"seed_type": "tag", "seed_value": "newtag", "scope": {"mode": "posts", "post_ids": ["test-post-1"]}},
         )
-        self.assertEqual(response.status_code, 200)
-        data = response.get_json()
-        self.assertIn("anthology_id", data["data"])
-        self.assertEqual(data["data"]["status"], "pending")
-        self.assertEqual(data["data"]["anthology"]["seed_value"], "nodejs")
-
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["data"]["anthology_id"])
+        self.assertEqual(payload["data"]["status"], "pending")
         task = self.test_db.tasks.find_one({"user": self.sid, "type": TASK_ANTHOLOGY})
         self.assertIsNotNone(task)
 
-    def test_on_anthologies_api_create_post_json_payload(self) -> None:
-        response = self.client.post(
-            "/api/anthologies",
-            data=json.dumps(
-                {"seed_type": "tag", "seed_value": "docker", "scope": {"mode": "all"}}
-            ),
-            content_type="application/json",
+    def test_api_create_validation(self) -> None:
+        status, payload = self._post_json("/api/anthologies", {"seed_type": "tag", "seed_value": " "})
+        self.assertEqual(status, 400)
+        self.assertIn("seed_value", payload["error"])
+        status, _ = self._post_json("/api/anthologies", {"seed_type": "feed", "seed_value": "x"})
+        self.assertEqual(status, 400)
+
+    # -- detail / clusters ---------------------------------------------------
+    def test_api_detail_read_counts_without_snippets(self) -> None:
+        anthology_id = self._seed_done()
+        status, payload = self._get_json(f"/api/anthologies/{anthology_id}")
+        self.assertEqual(status, 200)
+        result = payload["data"]["result"]
+        self.assertNotIn("snippets", result)
+        self.assertEqual(result["clusters"]["c1"]["read"], {"unread": 3, "total": 3})
+        self.assertEqual(result["clusters"]["c2"]["read"], {"unread": 1, "total": 2})
+        self.assertEqual(result["themes"][1]["read"], {"unread": 1, "total": 2})
+        self.assertEqual(result["unsorted_read"], {"unread": 1, "total": 1})
+        self.assertEqual(result["total_read"], {"unread": 5, "total": 6})
+        self.assertIn("test-feed-1", payload["data"]["feed_titles"])
+
+    def test_api_detail_pending_has_no_result(self) -> None:
+        anthology_id = self._seed(status="pending")
+        status, payload = self._get_json(f"/api/anthologies/{anthology_id}")
+        self.assertEqual(status, 200)
+        self.assertIsNone(payload["data"]["result"])
+        self.assertEqual(payload["data"]["status"], "pending")
+
+    def test_api_detail_404_and_other_owner(self) -> None:
+        other_id = str(
+            self.test_db.anthologies.insert_one({"owner": "someone-else", "seed_value": "x", "status": "done"}).inserted_id
         )
-        self.assertEqual(response.status_code, 200)
-        data = response.get_json()
-        self.assertEqual(data["data"]["anthology"]["seed_value"], "docker")
+        self.assertEqual(self.client.get(f"/api/anthologies/{other_id}").status_code, 404)
+        self.assertEqual(self.client.get("/api/anthologies/bad-id").status_code, 404)
 
-    def test_on_anthologies_api_create_post_preserves_feed_scope(self) -> None:
-        feed: dict | None = self.test_db.feeds.find_one({"owner": self.sid})
-        self.assertIsNotNone(feed)
-        feed_id: str = str(feed["feed_id"])
+    def test_api_cluster_returns_snippets_with_sentences(self) -> None:
+        anthology_id = self._seed_done()
+        status, payload = self._get_json(f"/api/anthologies/{anthology_id}/clusters/c2")
+        self.assertEqual(status, 200)
+        data = payload["data"]
+        self.assertEqual(data["cluster"]["id"], "c2")
+        snippet = data["snippets"][0]
+        self.assertEqual(snippet["id"], "s3")
+        self.assertEqual([s["number"] for s in snippet["sentences"]], [0, 1])
+        self.assertEqual([s["read"] for s in snippet["sentences"]], [True, False])
+        self.assertFalse(snippet["read"])
 
-        response = self.client.post(
-            "/api/anthologies",
-            data=json.dumps(
-                {
-                    "seed_type": "tag",
-                    "seed_value": "scoped-report",
-                    "scope": {"mode": "feeds", "feed_ids": [feed_id]},
-                }
-            ),
-            content_type="application/json",
+    def test_api_cluster_order_and_unsorted(self) -> None:
+        anthology_id = self._seed_done()
+        _, payload = self._get_json(f"/api/anthologies/{anthology_id}/clusters/c1")
+        self.assertEqual([s["id"] for s in payload["data"]["snippets"]], ["s1", "s2"])
+        status, payload = self._get_json(f"/api/anthologies/{anthology_id}/clusters/unsorted")
+        self.assertEqual(status, 200)
+        self.assertIsNone(payload["data"]["cluster"])
+        self.assertEqual([s["id"] for s in payload["data"]["snippets"]], ["s4"])
+
+    def test_api_cluster_errors(self) -> None:
+        anthology_id = self._seed_done()
+        self.assertEqual(self.client.get(f"/api/anthologies/{anthology_id}/clusters/nope").status_code, 404)
+        self.assertEqual(self.client.get(f"/api/anthologies/{ObjectId()}/clusters/c1").status_code, 404)
+        pending_id = self._seed(seed_value="pending", status="pending")
+        self.assertEqual(self.client.get(f"/api/anthologies/{pending_id}/clusters/c1").status_code, 409)
+
+    # -- read state ----------------------------------------------------------
+    def test_api_read_cluster_marks_sentences(self) -> None:
+        anthology_id = self._seed_done()
+        status, payload = self._post_json(
+            f"/api/anthologies/{anthology_id}/read", {"target": {"kind": "cluster", "id": "c2"}, "readed": True}
         )
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["data"]["result"]["clusters"]["c2"]["read"], {"unread": 0, "total": 2})
+        doc = self.test_db.post_grouping.find_one({"owner": self.sid, "post_ids": "test-post-2"})
+        self.assertEqual([s["read"] for s in doc["sentences"]], [True, True, False])
 
-        self.assertEqual(response.status_code, 200)
-        data: dict = response.get_json()
+    def test_api_read_snippet_unread_and_theme_and_unsorted(self) -> None:
+        anthology_id = self._seed_done()
+        url = f"/api/anthologies/{anthology_id}/read"
+        _, payload = self._post_json(url, {"target": {"kind": "theme", "id": "t0"}, "readed": True})
+        self.assertEqual(payload["data"]["result"]["themes"][0]["read"]["unread"], 0)
+        _, payload = self._post_json(url, {"target": {"kind": "snippet", "id": "s2"}, "readed": False})
+        self.assertEqual(payload["data"]["result"]["clusters"]["c1"]["read"], {"unread": 1, "total": 3})
+        _, payload = self._post_json(url, {"target": {"kind": "unsorted", "id": "unsorted"}, "readed": True})
+        self.assertEqual(payload["data"]["result"]["unsorted_read"]["unread"], 0)
+
+    def test_api_read_errors(self) -> None:
+        anthology_id = self._seed_done()
+        url = f"/api/anthologies/{anthology_id}/read"
+        self.assertEqual(self._post_json(url, {"target": {"kind": "bogus"}})[0], 400)
+        self.assertEqual(self._post_json(url, {"target": {"kind": "cluster", "id": "zz"}})[0], 400)
+        self.assertEqual(self._post_json(f"/api/anthologies/{ObjectId()}/read", {"target": {"kind": "cluster", "id": "c1"}})[0], 404)
+        pending_id = self._seed(seed_value="pending", status="pending")
+        self.assertEqual(self._post_json(f"/api/anthologies/{pending_id}/read", {"target": {"kind": "cluster", "id": "c1"}})[0], 409)
+
+    # -- retry / delete ------------------------------------------------------
+    def test_api_retry_failed(self) -> None:
+        anthology_id = self._seed(status="failed", error="boom")
+        status, payload = self._post_json(f"/api/anthologies/{anthology_id}/retry", {})
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["data"]["status"], "pending")
+        self.assertIsNotNone(self.test_db.tasks.find_one({"user": self.sid, "type": TASK_ANTHOLOGY}))
+
+    def test_api_retry_rejects_processing_and_missing(self) -> None:
+        anthology_id = self._seed(status="processing")
+        self.assertEqual(self._post_json(f"/api/anthologies/{anthology_id}/retry", {})[0], 400)
+        self.assertEqual(self._post_json(f"/api/anthologies/{ObjectId()}/retry", {})[0], 404)
+
+    def test_api_delete(self) -> None:
+        anthology_id = self._seed_done()
+        self.assertEqual(self.client.delete(f"/api/anthologies/{anthology_id}").status_code, 200)
+        self.assertIsNone(self.test_db.anthologies.find_one({"_id": ObjectId(anthology_id)}))
+        self.assertEqual(self.client.delete(f"/api/anthologies/{anthology_id}").status_code, 404)
+
+
+class TestAnthologyHelpers(unittest.TestCase):
+    def test_resolve_target_snippet_ids(self) -> None:
+        result = build_result()
+        self.assertEqual(_resolve_target_snippet_ids(result, {"kind": "theme", "id": "t0"}), ["s1", "s2"])
+        self.assertEqual(_resolve_target_snippet_ids(result, {"kind": "cluster", "id": "c2"}), ["s3"])
+        self.assertEqual(_resolve_target_snippet_ids(result, {"kind": "unsorted"}), ["s4"])
+        self.assertEqual(_resolve_target_snippet_ids(result, {"kind": "snippet", "id": "s9"}), [])
+        self.assertEqual(_resolve_target_snippet_ids(result, {"kind": "theme", "id": "t9"}), [])
+
+    def test_source_refs_merge_by_post(self) -> None:
+        result = build_result()
+        refs = _source_refs(["s1", "s2", "s3"], result["snippets"])
         self.assertEqual(
-            data["data"]["anthology"]["scope"],
-            {"mode": "feeds", "feed_ids": [feed_id]},
-        )
-
-    def test_on_anthologies_api_create_post_deduplicates_existing(self) -> None:
-        first = self.client.post(
-            "/api/anthologies",
-            data={"seed_type": "tag", "seed_value": "duplicate", "scope_mode": "all"},
-        )
-        self.assertEqual(first.status_code, 200)
-        first_id = first.get_json()["data"]["anthology_id"]
-
-        second = self.client.post(
-            "/api/anthologies",
-            data={"seed_type": "tag", "seed_value": "duplicate", "scope_mode": "all"},
-        )
-        self.assertEqual(second.status_code, 200)
-        second_id = second.get_json()["data"]["anthology_id"]
-        self.assertEqual(first_id, second_id)
-
-    def test_on_anthologies_api_create_post_rejects_non_tag_seed_type(self) -> None:
-        response = self.client.post(
-            "/api/anthologies",
-            data={"seed_type": "feed", "seed_value": "feed-1"},
-        )
-        self.assertEqual(response.status_code, 400)
-        data = response.get_json()
-        self.assertIn("error", data)
-        self.assertIn("Only tag anthologies are supported", data["error"])
-
-    def test_on_anthologies_api_create_post_rejects_empty_seed_value(self) -> None:
-        response = self.client.post(
-            "/api/anthologies",
-            data={"seed_type": "tag", "seed_value": ""},
-        )
-        self.assertEqual(response.status_code, 400)
-        data = response.get_json()
-        self.assertIn("seed_value is required", data["error"])
-
-    # ------------------------------------------------------------------
-    # on_anthologies_api_detail_get
-    # ------------------------------------------------------------------
-    def test_on_anthologies_api_detail_get_returns_200(self) -> None:
-        anthology_id = self._seed_anthology(
-            seed_value="elixir",
-            status="done",
-            result={
-                "title": "Elixir",
-                "summary": "Elixir language coverage.",
-                "source_refs": [],
-                "sub_anthologies": [],
-            },
-        )
-        response = self.client.get(f"/api/anthologies/{anthology_id}")
-        self.assertEqual(response.status_code, 200)
-        data = response.get_json()
-        self.assertEqual(data["data"]["seed_value"], "elixir")
-        self.assertEqual(data["data"]["result"]["title"], "Elixir")
-
-    def test_on_anthologies_api_detail_get_missing_returns_404(self) -> None:
-        response = self.client.get("/api/anthologies/nonexistent-id")
-        self.assertEqual(response.status_code, 404)
-        data = response.get_json()
-        self.assertIn("Anthology not found", data["error"])
-
-    def test_on_anthologies_api_detail_get_includes_latest_run(self) -> None:
-        anthology_id = self._seed_anthology(seed_value="kotlin", status="done")
-        run_id = self._seed_run(anthology_id, status="done")
-        self.app.anthologies.update_result(
-            anthology_id,
-            {"title": "Kotlin", "summary": "s", "source_refs": [], "sub_anthologies": []},
-            run_id,
-        )
-        response = self.client.get(f"/api/anthologies/{anthology_id}")
-        self.assertEqual(response.status_code, 200)
-        data = response.get_json()
-        self.assertEqual(data["data"]["latest_run"]["_id"], run_id)
-
-    # ------------------------------------------------------------------
-    # on_anthologies_api_run_get
-    # ------------------------------------------------------------------
-    def test_on_anthologies_api_run_get_returns_404_when_no_run(self) -> None:
-        anthology_id = self._seed_anthology(seed_value="haskell")
-        response = self.client.get(f"/api/anthologies/{anthology_id}/run")
-        self.assertEqual(response.status_code, 404)
-        data = response.get_json()
-        self.assertIn("Run not found", data["error"])
-
-    def test_on_anthologies_api_run_get_returns_run_when_exists(self) -> None:
-        anthology_id = self._seed_anthology(seed_value="kotlin")
-        self._seed_run(anthology_id, status="done")
-        response = self.client.get(f"/api/anthologies/{anthology_id}/run")
-        self.assertEqual(response.status_code, 200)
-        data = response.get_json()
-        self.assertEqual(data["data"]["status"], "done")
-
-    # ------------------------------------------------------------------
-    # on_anthologies_api_retry_post
-    # ------------------------------------------------------------------
-    def test_on_anthologies_api_retry_post_triggers_retry(self) -> None:
-        anthology_id = self._seed_anthology(
-            seed_value="clojure",
-            status="done",
-            result={
-                "title": "Clojure",
-                "summary": "s",
-                "source_refs": [],
-                "sub_anthologies": [],
-            },
-        )
-        self._seed_run(anthology_id, status="done")
-        response = self.client.post(f"/api/anthologies/{anthology_id}/retry")
-        self.assertEqual(response.status_code, 200)
-        data = response.get_json()
-        self.assertEqual(data["data"]["status"], "pending")
-
-        task = self.test_db.tasks.find_one({"user": self.sid, "type": TASK_ANTHOLOGY})
-        self.assertIsNotNone(task)
-
-    def test_on_anthologies_api_retry_post_missing_anthology_returns_404(self) -> None:
-        response = self.client.post("/api/anthologies/nonexistent-id/retry")
-        self.assertEqual(response.status_code, 404)
-        data = response.get_json()
-        self.assertIn("Anthology not found", data["error"])
-
-    def test_on_anthologies_api_retry_post_already_processing_returns_400(self) -> None:
-        anthology_id = self._seed_anthology(seed_value="scala", status="processing")
-        response = self.client.post(f"/api/anthologies/{anthology_id}/retry")
-        self.assertEqual(response.status_code, 400)
-        data = response.get_json()
-        self.assertIn("already processing", data["error"])
-
-    # ------------------------------------------------------------------
-    # on_anthologies_api_read_post
-    # ------------------------------------------------------------------
-    def test_on_anthologies_api_read_post_marks_sentences_read(self) -> None:
-        anthology_id = self._seed_anthology(
-            seed_value="muse",
-            status="done",
-            result={
-                "title": "Muse",
-                "summary": "s",
-                "source_refs": [
-                    {
-                        "post_id": "test-post-1",
-                        "sentence_indices": [0, 1],
-                        "topic_path": "Muse > Albums",
-                        "tag": "muse",
-                    }
-                ],
-                "sub_anthologies": [
-                    {
-                        "node_id": "albums",
-                        "title": "Albums",
-                        "summary": "s",
-                        "source_refs": [
-                            {
-                                "post_id": "test-post-1",
-                                "sentence_indices": [0],
-                                "topic_path": "Muse > Albums",
-                                "tag": "muse",
-                            }
-                        ],
-                        "sub_anthologies": [],
-                    }
-                ],
-            },
-        )
-        response = self.client.post(
-            f"/api/anthologies/{anthology_id}/read",
-            data=json.dumps(
-                {
-                    "readed": True,
-                    "target": {"kind": "node", "node_id": "albums"},
-                }
-            ),
-            content_type="application/json",
-        )
-        self.assertEqual(response.status_code, 200)
-        grouping = self.test_db.post_grouping.find_one(
-            {"owner": self.sid, "post_ids": "test-post-1"}
-        )
-        self.assertTrue(grouping["sentences"][0]["read"])
-
-    def test_on_anthologies_api_read_post_no_target_returns_400(self) -> None:
-        anthology_id = self._seed_anthology(
-            seed_value="dart",
-            status="done",
-            result={
-                "title": "Dart",
-                "summary": "s",
-                "source_refs": [],
-                "sub_anthologies": [],
-            },
-        )
-        response = self.client.post(
-            f"/api/anthologies/{anthology_id}/read",
-            data=json.dumps({}),
-            content_type="application/json",
-        )
-        self.assertEqual(response.status_code, 400)
-        data = response.get_json()
-        self.assertIn("target is required", data["error"])
-
-    def test_on_anthologies_api_read_post_anthology_not_found_returns_404(self) -> None:
-        response = self.client.post(
-            "/api/anthologies/nonexistent-id/read",
-            data=json.dumps({"target": {"kind": "anthology"}}),
-            content_type="application/json",
-        )
-        self.assertEqual(response.status_code, 404)
-        data = response.get_json()
-        self.assertIn("Anthology not found", data["error"])
-
-    def test_on_anthologies_api_read_post_no_result_returns_400(self) -> None:
-        anthology_id = self._seed_anthology(seed_value="swift", status="pending")
-        response = self.client.post(
-            f"/api/anthologies/{anthology_id}/read",
-            data=json.dumps({"target": {"kind": "anthology"}}),
-            content_type="application/json",
-        )
-        self.assertEqual(response.status_code, 400)
-        data = response.get_json()
-        self.assertIn("Anthology result not ready", data["error"])
-
-    def test_on_anthologies_api_read_post_unresolved_target_returns_400(self) -> None:
-        anthology_id = self._seed_anthology(
-            seed_value="lua",
-            status="done",
-            result={
-                "title": "Lua",
-                "summary": "s",
-                "source_refs": [],
-                "sub_anthologies": [],
-            },
-        )
-        response = self.client.post(
-            f"/api/anthologies/{anthology_id}/read",
-            data=json.dumps({"target": {"kind": "node", "node_id": "missing"}}),
-            content_type="application/json",
-        )
-        self.assertEqual(response.status_code, 400)
-        data = response.get_json()
-        self.assertIn("No source refs resolved for target", data["error"])
-
-    # ------------------------------------------------------------------
-    # on_anthologies_api_export_get
-    # ------------------------------------------------------------------
-    def test_on_anthologies_api_export_get_json(self) -> None:
-        anthology_id = self._seed_anthology(
-            seed_value="ruby",
-            status="done",
-            result={
-                "title": "Ruby",
-                "summary": "Ruby language.",
-                "source_refs": [],
-                "sub_anthologies": [],
-            },
-        )
-        response = self.client.get(f"/api/anthologies/{anthology_id}/export?format=json")
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.content_type, "application/json")
-        disposition = response.headers.get("Content-Disposition", "")
-        self.assertIn("attachment", disposition)
-        data = json.loads(response.data)
-        self.assertEqual(data["title"], "Ruby")
-
-    def test_on_anthologies_api_export_get_markdown(self) -> None:
-        anthology_id = self._seed_anthology(
-            seed_value="csharp",
-            status="done",
-            result={
-                "title": "C#",
-                "summary": "C# language.",
-                "source_refs": [],
-                "sub_anthologies": [],
-            },
-        )
-        response = self.client.get(
-            f"/api/anthologies/{anthology_id}/export?format=markdown"
-        )
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.content_type, "text/markdown")
-        body = response.get_data(as_text=True)
-        self.assertIn("C#", body)
-        self.assertIn("# C#", body)
-
-    def test_on_anthologies_api_export_get_unsupported_format(self) -> None:
-        anthology_id = self._seed_anthology(
-            seed_value="php",
-            status="done",
-            result={
-                "title": "PHP",
-                "summary": "s",
-                "source_refs": [],
-                "sub_anthologies": [],
-            },
-        )
-        response = self.client.get(f"/api/anthologies/{anthology_id}/export?format=xml")
-        self.assertEqual(response.status_code, 400)
-        data = response.get_json()
-        self.assertIn("Unsupported export format", data["error"])
-
-    def test_on_anthologies_api_export_get_no_result_returns_400(self) -> None:
-        anthology_id = self._seed_anthology(seed_value="swift", status="pending")
-        response = self.client.get(f"/api/anthologies/{anthology_id}/export")
-        self.assertEqual(response.status_code, 400)
-        data = response.get_json()
-        self.assertIn("Anthology result not ready", data["error"])
-
-    def test_on_anthologies_api_export_get_missing_anthology_returns_404(self) -> None:
-        response = self.client.get("/api/anthologies/nonexistent-id/export")
-        self.assertEqual(response.status_code, 404)
-        data = response.get_json()
-        self.assertIn("Anthology not found", data["error"])
-
-    # ------------------------------------------------------------------
-    # on_anthologies_api_delete
-    # ------------------------------------------------------------------
-    def test_on_anthologies_api_delete_removes_anthology(self) -> None:
-        anthology_id = self._seed_anthology(seed_value="perl")
-        response = self.client.delete(f"/api/anthologies/{anthology_id}")
-        self.assertEqual(response.status_code, 200)
-        data = response.get_json()
-        self.assertEqual(data["data"], "ok")
-        doc = self.test_db.anthologies.find_one(
-            {"_id": self.app.anthologies._to_object_id(anthology_id)}
-        )
-        self.assertIsNone(doc)
-
-    def test_on_anthologies_api_delete_missing_returns_404(self) -> None:
-        response = self.client.delete("/api/anthologies/nonexistent-id")
-        self.assertEqual(response.status_code, 404)
-        data = response.get_json()
-        self.assertIn("Anthology not found", data["error"])
-
-    def test_on_anthologies_api_delete_removes_runs(self) -> None:
-        anthology_id = self._seed_anthology(seed_value="perl")
-        self._seed_run(anthology_id, status="done")
-        response = self.client.delete(f"/api/anthologies/{anthology_id}")
-        self.assertEqual(response.status_code, 200)
-        runs = list(
-            self.test_db.anthology_runs.find(
-                {"anthology_id": self.app.anthologies._to_object_id(anthology_id)}
-            )
-        )
-        self.assertEqual(len(runs), 0)
-
-
-class TestWebAnthologiesUnit(unittest.TestCase):
-    """Pure unit tests for helper functions in rsstag/web/anthologies.py."""
-
-    def test_serialize_anthology_with_result_title(self) -> None:
-        item: dict = {
-            "_id": "id1",
-            "seed_type": "tag",
-            "seed_value": "python",
-            "scope": {"mode": "all"},
-            "status": "done",
-            "stale": False,
-            "created_at": 1,
-            "updated_at": 2,
-            "current_run_id": None,
-            "result": {"title": "Python Language"},
-        }
-        serialized = _serialize_anthology(item)
-        self.assertEqual(serialized["title"], "Python Language")
-        self.assertEqual(serialized["seed_value"], "python")
-
-    def test_serialize_anthology_fallback_to_seed_value(self) -> None:
-        item: dict = {
-            "_id": "id1",
-            "seed_type": "tag",
-            "seed_value": "rust",
-            "scope": {"mode": "all"},
-            "status": "pending",
-            "stale": False,
-            "created_at": 1,
-            "updated_at": 2,
-            "current_run_id": None,
-            "result": None,
-        }
-        serialized = _serialize_anthology(item)
-        self.assertEqual(serialized["title"], "rust")
-
-    def test_parse_create_payload_from_json(self) -> None:
-        request = MagicMock()
-        request.get_json.return_value = {
-            "seed_type": "tag",
-            "seed_value": "go",
-            "scope": {"mode": "all"},
-        }
-        request.form = {}
-        payload = _parse_create_payload(request)
-        self.assertEqual(payload["seed_type"], "tag")
-        self.assertEqual(payload["seed_value"], "go")
-
-    def test_parse_create_payload_from_form(self) -> None:
-        request = MagicMock()
-        request.get_json.return_value = None
-        request.form = {
-            "seed_type": "tag",
-            "seed_value": "java",
-            "scope_mode": "unread",
-        }
-        payload = _parse_create_payload(request)
-        self.assertEqual(payload["seed_type"], "tag")
-        self.assertEqual(payload["seed_value"], "java")
-        self.assertEqual(payload["scope"]["mode"], "unread")
-
-    def test_render_markdown(self) -> None:
-        node: dict = {
-            "title": "Root",
-            "summary": "Root summary.",
-            "sub_anthologies": [
-                {
-                    "title": "Child",
-                    "summary": "Child summary.",
-                    "sub_anthologies": [],
-                }
+            refs,
+            [
+                {"post_id": "test-post-1", "sentence_indices": [0, 1, 2]},
+                {"post_id": "test-post-2", "sentence_indices": [0, 1]},
             ],
-        }
-        md = _render_markdown(node)
-        self.assertIn("# Root", md)
-        self.assertIn("## Child", md)
-        self.assertIn("Root summary.", md)
+        )
 
-    def test_collect_source_refs(self) -> None:
-        node: dict = {
-            "source_refs": [{"post_id": "p1"}],
-            "sub_anthologies": [
-                {"source_refs": [{"post_id": "p2"}], "sub_anthologies": []}
-            ],
-        }
-        refs = _collect_source_refs(node)
-        self.assertEqual(len(refs), 2)
-        self.assertEqual(refs[0]["post_id"], "p1")
-        self.assertEqual(refs[1]["post_id"], "p2")
+    def test_annotate_read_counts_ignores_missing_sentences(self) -> None:
+        result = build_result()
+        maps = {"test-post-1": {0: {"number": 0, "read": True}}}
+        annotated = _annotate_read_counts(copy.deepcopy(result), maps)
+        self.assertEqual(annotated["clusters"]["c1"]["read"], {"unread": 0, "total": 1})
+        self.assertEqual(annotated["clusters"]["c2"]["read"], {"unread": 0, "total": 0})
+        self.assertNotIn("snippets", annotated)
 
-    def test_find_node_by_id(self) -> None:
-        node: dict = {
-            "node_id": "root",
-            "sub_anthologies": [
-                {"node_id": "child1", "sub_anthologies": []},
-                {"node_id": "child2", "sub_anthologies": []},
-            ],
-        }
-        self.assertIsNone(_find_node_by_id(node, "missing"))
-        self.assertEqual(_find_node_by_id(node, "root")["node_id"], "root")
-        self.assertEqual(_find_node_by_id(node, "child2")["node_id"], "child2")
+    def test_serialize_summary(self) -> None:
+        summary = _serialize_summary({"_id": "x", "seed_value": "v", "status": "done", "result": build_result()})
+        self.assertEqual(summary["themes_count"], 2)
+        self.assertTrue(summary["has_result"])
+        self.assertFalse(_serialize_summary({"_id": "y"})["has_result"])
 
-    def test_resolve_read_target_unknown_kind(self) -> None:
-        result: dict = {"source_refs": [{"post_id": "p1"}], "sub_anthologies": []}
-        target = {"kind": "unknown"}
-        self.assertEqual(_resolve_read_target(result, target), [])
+    def test_parse_create_payload_form_scope(self) -> None:
+        from werkzeug.test import EnvironBuilder
+        from werkzeug.wrappers import Request
 
-    def test_resolve_read_target_anthology_kind(self) -> None:
-        result: dict = {"source_refs": [{"post_id": "p1"}], "sub_anthologies": []}
-        target = {"kind": "anthology"}
-        refs = _resolve_read_target(result, target)
-        self.assertEqual(len(refs), 1)
-
-    def test_resolve_sentences_target(self) -> None:
-        result: dict = {
-            "source_refs": [
-                {
-                    "post_id": "p1",
-                    "sentence_indices": [0, 1, 2],
-                    "topic_path": "A > B",
-                    "tag": "t1",
-                }
-            ],
-            "sub_anthologies": [],
-        }
-        target = {"post_id": "p1", "sentence_indices": [1, 2]}
-        refs = _resolve_sentences_target(result, target)
-        self.assertEqual(len(refs), 1)
-        self.assertEqual(refs[0]["sentence_indices"], [1, 2])
+        builder = EnvironBuilder(method="POST", data={"seed_value": "tag", "feed_id": "f1"})
+        payload = _parse_create_payload(Request(builder.get_environ()))
+        self.assertEqual(payload["scope"], {"mode": "feeds", "feed_ids": ["f1"]})
 
 
 if __name__ == "__main__":

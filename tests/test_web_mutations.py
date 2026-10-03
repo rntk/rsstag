@@ -220,7 +220,7 @@ class TestPruneDownloadedData(MongoWebTestCase):
             "snippet_clusters",
             "topic_aliases",
             "anthologies",
-            "anthology_runs",
+            "anthology_judgments",
             "llm_batch_results",
         ]
         for collection_name in derived_collections:

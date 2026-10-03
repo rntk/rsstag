@@ -41,7 +41,7 @@ def _prune_owner_data(app: "RSSTagApplication", owner: str) -> Dict[str, int]:
         "snippet_clusters",
         "topic_aliases",
         "anthologies",
-        "anthology_runs",
+        "anthology_judgments",
         "llm_batch_results",
         "llm_cache",
         "post_grouping_cache",
