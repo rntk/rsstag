@@ -363,3 +363,21 @@ test('renders read/unread stats for feeds and categories', () => {
   assert.ok(/categoryReadStats\(/.test(src), 'should compute category read stats');
   assert.ok(/className="read-stats"/.test(src), 'should render read-stats element');
 });
+
+// ============================================================
+// Read / unread all buttons
+// ============================================================
+
+test('renders separate "read all" and "unread all" buttons', () => {
+  const src = readSource();
+  assert.ok(/>\s*read all\s*</.test(src), 'should render a read all button');
+  assert.ok(/>\s*unread all\s*</.test(src), 'should render an unread all button');
+  assert.ok(/onSet\(true, event\)/.test(src), 'read all should send readed=true');
+  assert.ok(/onSet\(false, event\)/.test(src), 'unread all should send readed=false');
+});
+
+test('category and feed rows both use the read/unread buttons', () => {
+  const src = readSource();
+  assert.ok(/this\.setCategoryRead\.bind\(this, cat\)/.test(src), 'category row wires buttons');
+  assert.ok(/this\.setFeedRead\.bind\(this, feed\)/.test(src), 'feed row wires buttons');
+});

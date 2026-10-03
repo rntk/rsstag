@@ -83,10 +83,6 @@ export default class CategoriesList extends React.Component {
       });
   }
 
-  isCategoryRead(cat) {
-    return Boolean(this.state.readCategories[cat.category_id]);
-  }
-
   // A feed follows its category until it is toggled on its own.
   feedOverride(feed, cat) {
     const flag = this.state.readFeeds[feed.feed_id];
@@ -180,10 +176,9 @@ export default class CategoriesList extends React.Component {
       });
   }
 
-  toggleCategoryRead(cat, event) {
+  setCategoryRead(cat, readed, event) {
     event.stopPropagation();
     const busyKey = 'category::' + cat.category_id;
-    const readed = !this.isCategoryRead(cat);
 
     if (this.state.busy[busyKey]) {
       return;
@@ -206,10 +201,9 @@ export default class CategoriesList extends React.Component {
     );
   }
 
-  toggleFeedRead(feed, cat, event) {
+  setFeedRead(feed, readed, event) {
     event.stopPropagation();
     const busyKey = 'feed::' + feed.feed_id;
-    const readed = !this.isFeedRead(feed, cat);
 
     if (this.state.busy[busyKey]) {
       return;
@@ -217,6 +211,31 @@ export default class CategoriesList extends React.Component {
     this.postReadStatus('/read/feed', { feed_id: feed.feed_id, readed: readed }, busyKey, () =>
       this.setFlag('readFeeds', feed.feed_id, readed)
     );
+  }
+
+  renderReadButtons(className, busyKey, onSet) {
+    const busy = Boolean(this.state.busy[busyKey]);
+
+    return [
+      <button
+        key="read"
+        className={className + ' category-read-btn'}
+        disabled={busy}
+        title="Mark all posts as read"
+        onClick={(event) => onSet(true, event)}
+      >
+        read all
+      </button>,
+      <button
+        key="unread"
+        className={className + ' category-read-btn'}
+        disabled={busy}
+        title="Mark all posts as unread"
+        onClick={(event) => onSet(false, event)}
+      >
+        unread all
+      </button>,
+    ];
   }
 
   refreshFeed(feed, event) {
@@ -491,13 +510,11 @@ export default class CategoriesList extends React.Component {
           >
             Score
           </button>
-          <button
-            className="feed-action-link category-read-btn"
-            disabled={Boolean(this.state.busy['feed::' + feed.feed_id])}
-            onClick={this.toggleFeedRead.bind(this, feed, cat)}
-          >
-            {this.isFeedRead(feed, cat) ? 'unread all' : 'read all'}
-          </button>
+          {this.renderReadButtons(
+            'feed-action-link',
+            'feed::' + feed.feed_id,
+            this.setFeedRead.bind(this, feed)
+          )}
           {feed.provider === 'telegram' ? (
             <button
               className="feed-action-link feed-refresh-btn"
@@ -547,7 +564,9 @@ export default class CategoriesList extends React.Component {
             {cat.title}
           </a>
           {this.renderQuality(cat.quality)}
-          <span className="category-count">{this.categoryCount(cat, feeds, options.unread_count)}</span>
+          <span className="category-count">
+            {this.categoryCount(cat, feeds, options.unread_count)}
+          </span>
           {this.renderReadStats(this.categoryReadStats(cat, feeds))}
           <div className="category-actions" aria-label={`${cat.title} views`}>
             <a className="category-action-link" href={cat.hierarchy_url}>
@@ -568,17 +587,13 @@ export default class CategoriesList extends React.Component {
             ) : (
               ''
             )}
-            {cat.category_id ? (
-              <button
-                className="category-action-link category-read-btn"
-                disabled={Boolean(this.state.busy['category::' + cat.category_id])}
-                onClick={this.toggleCategoryRead.bind(this, cat)}
-              >
-                {this.isCategoryRead(cat) ? 'unread all' : 'read all'}
-              </button>
-            ) : (
-              ''
-            )}
+            {cat.category_id
+              ? this.renderReadButtons(
+                  'category-action-link',
+                  'category::' + cat.category_id,
+                  this.setCategoryRead.bind(this, cat)
+                )
+              : ''}
           </div>
         </div>
         <ul className={'feeds ' + (expanded ? 'not_hidden' : 'hidden')}>
