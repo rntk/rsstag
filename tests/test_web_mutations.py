@@ -220,6 +220,7 @@ class TestPruneDownloadedData(MongoWebTestCase):
             "snippet_clusters",
             "topic_aliases",
             "anthologies",
+            "anthology_runs",
             "anthology_judgments",
             "llm_batch_results",
         ]
@@ -227,6 +228,9 @@ class TestPruneDownloadedData(MongoWebTestCase):
             self.test_db[collection_name].insert_one(
                 {"owner": owner, "value": collection_name}
             )
+        other_run_id: Any = self.test_db.anthology_runs.insert_one(
+            {"owner": "another-user", "value": "legacy turn history"}
+        ).inserted_id
         self.test_db.words.insert_one({"owner": owner, "word": "testtag", "numbers": [2]})
         self.test_db.tasks.insert_one(
             {"user": owner, "type": TASK_LETTERS, "processing": 0}
@@ -249,6 +253,7 @@ class TestPruneDownloadedData(MongoWebTestCase):
                     self.test_db[collection_name].count_documents({"owner": owner}),
                 )
         self.assertEqual(0, self.test_db.tasks.count_documents({"user": owner}))
+        self.assertIsNotNone(self.test_db.anthology_runs.find_one({"_id": other_run_id}))
         self.assertEqual(1, self.test_db.feeds.count_documents({"owner": owner}))
 
         user: Optional[dict] = self.app.users.get_by_sid(owner)

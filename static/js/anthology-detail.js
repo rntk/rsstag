@@ -573,6 +573,8 @@ function createState(payload) {
     expanded: new Set(),
     view: { unreadOnly: false, sort: 'relevance', skim: false },
     clusters: new Map(),
+    loadingClusters: new Set(),
+    payloadGeneration: 0,
     expandedSnippets: new Set(),
     timer: null,
   };
@@ -610,12 +612,19 @@ function createController(root, initialPayload) {
   }
 
   async function loadCluster(id) {
+    if (state.loadingClusters.has(id)) return;
+    const generation = state.payloadGeneration;
+    state.loadingClusters.add(id);
     try {
       const data = await fetchJson(`${apiBase}/clusters/${encodeURIComponent(id)}`);
+      if (generation !== state.payloadGeneration) return;
       state.clusters.set(id, data);
     } catch (error) {
+      if (generation !== state.payloadGeneration) return;
       console.error('Unable to load cluster', id, error);
       state.clusters.set(id, { error: error.message });
+    } finally {
+      if (generation === state.payloadGeneration) state.loadingClusters.delete(id);
     }
     if (state.selection && state.selection.id === id) renderMain();
   }
@@ -662,8 +671,10 @@ function createController(root, initialPayload) {
   }
 
   function applyPayload(payload) {
+    state.payloadGeneration += 1;
     state.payload = payload;
     state.clusters.clear();
+    state.loadingClusters.clear();
     const result = payload.result;
     const keep = state.selection && resolveSelection(state.selection.id, result);
     select(
