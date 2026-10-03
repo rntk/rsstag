@@ -3544,7 +3544,7 @@ def on_post_canvas_topics(
     """Start a post-scoped grouping task or report its current progress."""
     try:
         post: Optional[dict[str, Any]] = app.posts.get_by_pid(
-            user["sid"], pid, {"grouping": True, "processing": True}
+            user["sid"], pid, {"grouping": True, "processing": True, "content": True}
         )
         if post is None:
             return Response(
@@ -3554,18 +3554,7 @@ def on_post_canvas_topics(
             )
         result: dict[str, Any] = _post_canvas_topics_status(app, user["sid"], pid, post)
         if request.method == "POST" and result["status"] in ("missing", "error"):
-            # A skipped/failed post must become eligible for the incremental worker again.
-            if post.get("grouping"):
-                app.db.posts.update_one(
-                    {"owner": user["sid"], "pid": pid},
-                    {
-                        "$unset": {
-                            "grouping": "",
-                            "grouping_attempts": "",
-                            "grouping_error": "",
-                        }
-                    },
-                )
+            _clear_post_canvas_topics(app, user["sid"], pid, post)
             added: Optional[bool] = app.tasks.add_task(
                 {
                     "user": user["sid"],
@@ -3592,6 +3581,28 @@ def on_post_canvas_topics(
             status=500,
             mimetype="application/json",
         )
+
+
+def _clear_post_canvas_topics(
+    app: "RSSTagApplication", owner: str, pid: str, post: dict[str, Any]
+) -> None:
+    """Clear scoped grouping data before the worker checks retry eligibility."""
+    from rsstag.post_splitter import build_grouping_text
+
+    content: dict[str, Any] = post["content"]
+    text: str = build_grouping_text(
+        gzip.decompress(content["content"]).decode("utf-8", "replace"),
+        content.get("title", ""),
+    )
+    app.post_grouping_cache.invalidate_documents(owner, [text])
+    app.post_grouping.delete_grouped_posts_by_post_ids(owner, [pid])
+    app.db.posts.update_one(
+        {"owner": owner, "pid": pid},
+        {
+            "$unset": {"grouping": "", "grouping_attempts": "", "grouping_error": ""},
+            "$set": {"processing": 0},
+        },
+    )
 
 
 def on_post_compare_get(
