@@ -9,8 +9,8 @@
  * filled in here, because read state changes without a reload.
  *
  * The strip lives inside `.site-header__inner`, whose height is fixed in
- * style.css: writing counts into it must never change the height that
- * syncGlobalToolsOffset measures into `--global-tools-height`.
+ * static/css/chrome.css: writing counts into it must never change the height
+ * that syncGlobalToolsOffset measures into `--global-tools-height`.
  */
 
 /** @typedef {{label: string, value: number|string, accent?: boolean}} MetaStat */

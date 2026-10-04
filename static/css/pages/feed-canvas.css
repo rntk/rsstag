@@ -1,0 +1,762 @@
+/* Feed canvas */
+.canvas-page {
+  margin: 0;
+  overflow: hidden;
+  background: #eef0eb;
+  color: #20231f;
+}
+
+.canvas-page__header {
+  position: relative;
+  z-index: 20;
+  height: 76px;
+  padding: 0 28px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  border-bottom: 1px solid #d4d8d0;
+  background: rgb(250 251 247 / 92%);
+  backdrop-filter: blur(12px);
+
+  h1,
+  p {
+    margin: 0;
+    text-align: center;
+  }
+  h1 {
+    font:
+      700 18px/1.2 Manrope,
+      sans-serif;
+  }
+}
+
+.canvas-page__brand {
+  justify-self: start;
+  color: #20231f;
+  font:
+    800 20px/1 Manrope,
+    sans-serif;
+  text-decoration: none;
+}
+
+.canvas-page__eyebrow {
+  color: #777d73;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.canvas-page__feed-link {
+  justify-self: end;
+  color: #4e584b;
+  font-size: 13px;
+}
+
+.feed-canvas {
+  position: fixed;
+  inset: 76px 0 0;
+  overflow: hidden;
+  cursor: grab;
+  outline: none;
+  touch-action: none;
+  &.is-dragging {
+    cursor: grabbing;
+  }
+}
+
+.feed-canvas__viewport {
+  position: absolute;
+  transform: translate(var(--canvas-x, 40px), var(--canvas-y, 30px))
+    scale(var(--canvas-zoom, 1));
+  transform-origin: 0 0;
+}
+
+.feed-canvas__document {
+  display: flex;
+  align-items: flex-start;
+  gap: 32px;
+  width: max-content;
+}
+
+.canvas-posts {
+  width: min(680px, calc(100vw - 120px));
+}
+
+.canvas-post {
+  padding: 24px 28px 26px;
+  border: 1px solid #cdd2c9;
+  border-bottom-width: 3px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgb(36 42 33 / 5%);
+  & + & {
+    margin-top: 12px;
+  }
+  &.is-read {
+    background: #f7f8f4;
+    color: #747a70;
+  }
+  &.is-read .canvas-post__text {
+    color: #747a70;
+  }
+}
+
+.canvas-post__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  > div {
+    min-width: 0;
+  }
+  h2 {
+    margin: 3px 0 0;
+    font:
+      700 22px/1.25 Manrope,
+      sans-serif;
+  }
+  a {
+    color: inherit;
+    text-decoration-color: #aeb5a9;
+    text-underline-offset: 3px;
+  }
+}
+
+.canvas-post__header .canvas-post__original-link {
+  display: inline-block;
+  margin-top: 8px;
+  color: #5f695b;
+  font:
+    600 11px/1.3 Inter,
+    sans-serif;
+  text-decoration-color: #aeb5a9;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.canvas-post__feed {
+  margin: 4px 0 0;
+  color: #5f695b;
+  font:
+    600 12px/1.4 Inter,
+    sans-serif;
+  a {
+    color: inherit;
+    text-decoration: none;
+    &:hover,
+    &:focus-visible {
+      text-decoration: underline;
+    }
+  }
+}
+
+.canvas-post__read-toggle {
+  flex: 0 0 auto;
+  padding: 6px 9px;
+  border: 1px solid #cdd2c9;
+  background: #fff;
+  color: #4e584b;
+  font:
+    700 10px/1.2 Inter,
+    sans-serif;
+  cursor: pointer;
+  &:hover,
+  &:focus-visible {
+    border-color: #20231f;
+    color: #20231f;
+  }
+  &:disabled {
+    cursor: wait;
+    opacity: 0.55;
+  }
+}
+
+.canvas-post__number {
+  margin: 0;
+  color: #7a8177;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.canvas-post__text {
+  color: #30342e;
+  font:
+    16px/1.72 Inter,
+    sans-serif;
+}
+.canvas-post__empty {
+  color: #777d73;
+  font-style: italic;
+}
+
+.canvas-sentence {
+  border-radius: 0;
+  transition: background-color 120ms ease;
+  &::after {
+    content: " ";
+  }
+  &.is-topic-active {
+    background: #fff1a8;
+    box-shadow: 0 0 0 2px #fff1a8;
+  }
+}
+
+/* Topic rail geometry.
+   Cards keep a constant on-screen size while the canvas zooms out, so their
+   width, offset and font size all depend on the zoom level. The two scalars
+   come from `--topic-inv-zoom` / `--topic-font-zoom`, which FeedCanvas sets
+   once per frame on the viewport; the per-card arithmetic happens here so a
+   zoom step costs a couple of style writes instead of three per card.
+   Keep in sync with COMPACT_TOPIC_CARD_HEIGHT / TOPIC_CARD_CHROME_HEIGHT in
+   static/js/components/feed-canvas.js, which derive `--topic-font-cap`. */
+:root {
+  --topic-card-width: 220px;
+  --topic-card-gap: 14px;
+  --topic-rail-padding: 20px;
+  --topic-font-base: 13px;
+  --topic-font-min: 8px;
+}
+
+.canvas-topic-rail {
+  position: relative;
+  min-height: 100%;
+  flex: none;
+  width: calc(
+    var(--rail-columns, 1) *
+      (var(--topic-card-width) * var(--topic-inv-zoom, 1)) +
+      var(--rail-gaps, 0) * var(--topic-card-gap) + var(--topic-rail-padding) *
+      2
+  );
+}
+.canvas-topic-rail__body {
+  position: relative;
+  min-height: 100%;
+}
+
+.canvas-topic-card {
+  --topic-font-size: max(
+    var(--topic-font-min),
+    min(
+      var(--topic-font-base) * var(--topic-font-zoom, 1),
+      var(--topic-font-cap, var(--topic-font-base))
+    )
+  );
+
+  position: absolute;
+  width: calc(var(--topic-card-width) * var(--topic-inv-zoom, 1));
+  right: calc(
+    var(--topic-rail-padding) + var(--topic-depth, 0) *
+      (
+        var(--topic-card-width) * var(--topic-inv-zoom, 1) +
+          var(--topic-card-gap)
+      )
+  );
+  padding: 9px 12px 9px 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid #cdd2c9;
+  border-left: 4px solid var(--topic-color);
+  border-radius: 0;
+  background: #fff;
+  color: #20231f;
+  cursor: pointer;
+  text-align: left;
+
+  &:hover,
+  &.is-active,
+  &.is-selected {
+    border-color: #20231f;
+    border-left-color: var(--topic-color);
+    background: #fff9d8;
+  }
+
+  /* Pooled cards park here when scrolled out of view. `display: flex` above
+     would otherwise beat the UA stylesheet's `[hidden] { display: none }`. */
+  &[hidden] {
+    display: none;
+  }
+}
+
+.canvas-topic-card__menu {
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  padding: 0 5px;
+  border: 0;
+  background: transparent;
+  color: #777d73;
+  font: 700 17px/1 sans-serif;
+  cursor: pointer;
+}
+
+.canvas-topic-card.is-summary-loading::after {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  content: "Summarizing…";
+  color: #777d73;
+  font-size: 9px;
+}
+
+.canvas-topic-menu {
+  position: fixed;
+  z-index: 100;
+  min-width: 140px;
+  padding: 5px;
+  border: 1px solid #cdd2c9;
+  background: #fff;
+  font-size: 13px;
+  box-shadow: 0 6px 22px rgb(36 42 33 / 18%);
+  button,
+  a {
+    display: block;
+    width: 100%;
+    padding: 8px 12px;
+    border: 0;
+    background: #fff;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  button:hover,
+  button:focus,
+  a:hover,
+  a:focus {
+    background: #fff9d8;
+  }
+}
+
+.canvas-summary-dialog {
+  /* Global * { margin: 0 } reset breaks UA dialog centering (margin: auto). */
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(560px, calc(100vw - 40px));
+  height: fit-content;
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  padding: 28px;
+  border: 1px solid #cdd2c9;
+  background: #fff;
+  color: #20231f;
+  box-shadow: 0 18px 60px rgb(20 25 18 / 28%);
+  &::backdrop {
+    background: rgb(20 25 18 / 42%);
+  }
+  h2 {
+    margin: 2px 30px 18px 0;
+    font:
+      700 20px/1.3 Manrope,
+      sans-serif;
+  }
+}
+
+.canvas-summary-dialog__close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  border: 0;
+  background: transparent;
+  font-size: 24px;
+  cursor: pointer;
+}
+.canvas-summary-dialog__kicker {
+  margin: 0;
+  color: #777d73;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.canvas-summary-dialog__text {
+  white-space: pre-wrap;
+  font:
+    15px/1.6 Inter,
+    sans-serif;
+  &.is-error {
+    color: #a22920;
+  }
+}
+
+.canvas-original-dialog {
+  /* Keep each source in a full-width card so long sentences remain readable. */
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(1280px, calc(100vw - 32px));
+  height: min(860px, calc(100vh - 32px));
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 28px;
+  border: 1px solid #cdd2c9;
+  background: #f7f8f4;
+  color: #20231f;
+  box-shadow: 0 18px 60px rgb(20 25 18 / 28%);
+  &::backdrop {
+    background: rgb(20 25 18 / 42%);
+  }
+  h2 {
+    margin: 2px 30px 22px 0;
+    font:
+      700 20px/1.3 Manrope,
+      sans-serif;
+  }
+}
+
+.canvas-original-dialog__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-right: 30px;
+}
+
+.canvas-original-dialog__read-toggle {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border: 1px solid #cdd2c9;
+  background: #fff;
+  color: #555d51;
+  font:
+    700 11px/1.3 Inter,
+    sans-serif;
+  cursor: pointer;
+  &:hover,
+  &:focus-visible {
+    border-color: #20231f;
+    color: #20231f;
+  }
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+}
+
+.canvas-original-dialog__sources {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: start;
+  gap: 16px;
+}
+
+.canvas-original-source {
+  min-width: 0;
+  padding: 18px 20px 20px;
+  border: 1px solid #d7dbd2;
+  border-left: 5px solid #7e9a73;
+  background: #fff;
+  box-shadow: 0 5px 18px rgb(36 42 33 / 8%);
+  &:nth-child(3n + 2) {
+    border-left-color: #a58460;
+  }
+  &:nth-child(3n + 3) {
+    border-left-color: #718aa2;
+  }
+}
+
+.canvas-original-source__header {
+  margin-bottom: 14px;
+}
+.canvas-original-source__label {
+  margin: 0 0 5px;
+  color: #777d73;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.canvas-original-source__title {
+  display: block;
+  overflow-wrap: anywhere;
+  color: #20231f;
+  font:
+    700 16px/1.35 Manrope,
+    sans-serif;
+  text-decoration: none;
+  &:hover,
+  &:focus-visible {
+    text-decoration: underline;
+  }
+}
+.canvas-original-source__feed {
+  display: block;
+  margin-top: 4px;
+  color: #5f695b;
+  font:
+    600 12px/1.4 Inter,
+    sans-serif;
+  text-decoration: none;
+  &:hover,
+  &:focus-visible {
+    text-decoration: underline;
+  }
+}
+.canvas-original-source__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 10px;
+}
+.canvas-original-source__action {
+  color: #5f695b;
+  font:
+    700 10px/1.3 Inter,
+    sans-serif;
+  letter-spacing: 0.06em;
+  text-decoration-color: #aeb5a9;
+  text-transform: uppercase;
+  &:hover,
+  &:focus-visible {
+    color: #20231f;
+  }
+}
+.canvas-original-source__sentences {
+  margin: 0;
+  padding-left: 24px;
+  color: #343930;
+  font:
+    14px/1.6 Inter,
+    sans-serif;
+  li {
+    padding-left: 5px;
+    white-space: pre-wrap;
+  }
+  li + li {
+    margin-top: 10px;
+  }
+}
+.canvas-original-sentence {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  &.is-read .canvas-original-sentence__text {
+    color: #8a9086;
+    text-decoration: line-through;
+  }
+}
+.canvas-original-sentence__text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.canvas-original-sentence__tag {
+  background-color: #ffe066;
+  color: inherit;
+  border-radius: 0;
+  padding: 0 2px;
+}
+.canvas-original-sentence__toggle {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border: 1px solid #cdd2c9;
+  background: #fff;
+  color: #555d51;
+  font:
+    700 10px/1.3 Inter,
+    sans-serif;
+  cursor: pointer;
+  &:hover,
+  &:focus-visible {
+    border-color: #20231f;
+    color: #20231f;
+  }
+  &:disabled {
+    cursor: wait;
+    opacity: 0.55;
+  }
+}
+.canvas-original-dialog__empty {
+  color: #777d73;
+  font-style: italic;
+}
+
+.canvas-tags-dialog {
+  /* Global * { margin: 0 } reset breaks UA dialog centering (margin: auto). */
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(520px, calc(100vw - 40px));
+  height: fit-content;
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  padding: 28px;
+  border: 1px solid #cdd2c9;
+  background: #fff;
+  color: #20231f;
+  box-shadow: 0 18px 60px rgb(20 25 18 / 28%);
+  &::backdrop {
+    background: rgb(20 25 18 / 42%);
+  }
+  h2 {
+    margin: 2px 30px 14px 0;
+    font:
+      700 20px/1.3 Manrope,
+      sans-serif;
+  }
+}
+.canvas-tags-dialog__toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.canvas-tags-dialog__search {
+  flex: 1 1 140px;
+  min-width: 120px;
+  padding: 4px 8px;
+  border: 1px solid #cdd2c9;
+  background: #fff;
+  font:
+    12px/1.4 Inter,
+    sans-serif;
+}
+.canvas-tags-dialog__status {
+  margin-bottom: 10px;
+  color: #777d73;
+  font:
+    12px/1.5 Inter,
+    sans-serif;
+  &.is-error {
+    color: #a22920;
+  }
+}
+.canvas-tags-dialog__list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  list-style: none;
+  padding: 0;
+}
+.canvas-tags-dialog__item {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 5px 0;
+  border-bottom: 1px solid #eceee8;
+}
+.canvas-tags-dialog__link {
+  color: #20231f;
+  font:
+    600 14px/1.4 Inter,
+    sans-serif;
+  text-decoration: none;
+  &:hover,
+  &:focus-visible {
+    text-decoration: underline;
+  }
+}
+.canvas-tags-dialog__meta {
+  flex: 0 0 auto;
+  color: #777d73;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.canvas-topic-card__name {
+  display: -webkit-box;
+  overflow: hidden;
+  font:
+    700 var(--topic-font-base) / 1.25 Inter,
+    sans-serif;
+  /* Set apart from the shorthand: the value is a max()/min() expression, and
+     the unitless line-height above scales with whatever it resolves to. */
+  font-size: var(--topic-font-size, var(--topic-font-base));
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--topic-title-lines, 2);
+}
+
+.canvas-topic-card__meta {
+  margin-top: 4px;
+  color: #777d73;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.feed-canvas__controls {
+  position: fixed;
+  z-index: 30;
+  /* Sit above global_chat_panel FAB (bottom-6 + h-14 ≈ 80px) with a small gap. */
+  right: 22px;
+  bottom: 96px;
+  display: flex;
+  gap: 5px;
+  padding: 6px;
+  border: 1px solid #bcc2b8;
+  background: rgb(255 255 255 / 92%);
+  box-shadow: 0 8px 24px rgb(36 42 33 / 14%);
+
+  button {
+    min-width: 34px;
+    height: 34px;
+    padding: 0 10px;
+    border: 1px solid #cdd2c9;
+    background: #fff;
+    color: #20231f;
+    cursor: pointer;
+    &:hover,
+    &.is-active {
+      border-color: #20231f;
+      background: #20231f;
+      color: #fff;
+    }
+    &:disabled {
+      cursor: wait;
+      opacity: 0.55;
+    }
+  }
+}
+
+.feed-canvas__levels,
+.feed-canvas__read-controls {
+  display: flex;
+  gap: 4px;
+  padding-right: 5px;
+  border-right: 1px solid #d4d8d0;
+}
+
+.feed-canvas__status {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 7px);
+  width: max-content;
+  max-width: min(360px, calc(100vw - 44px));
+  padding: 5px 8px;
+  background: #20231f;
+  color: #fff;
+  font-size: 11px;
+  &:empty {
+    display: none;
+  }
+  &.is-error {
+    background: #a22920;
+  }
+}
+
+@media (max-width: 720px) {
+  .canvas-page__header {
+    grid-template-columns: auto 1fr;
+    > div {
+      justify-self: end;
+    }
+  }
+  .canvas-page__feed-link {
+    display: none;
+  }
+  .canvas-posts {
+    width: calc(100vw - 48px);
+  }
+}
+

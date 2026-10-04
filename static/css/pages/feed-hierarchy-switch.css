@@ -1,0 +1,8 @@
+/* Switch between topic and tag word hierarchies in the same scope. */
+.feed-hierarchy__switch {
+  display: block;
+  padding: 0.5rem 1rem;
+  color: var(--text-primary, #334155);
+  font-size: 0.875rem;
+}
+

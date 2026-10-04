@@ -5,7 +5,7 @@
 The rsstag frontend is built using:
 - **React 18** - UI component library
 - **Vite 8** - Bundler (library-mode IIFE build, output `bundle.js`)
-- **Native CSS** - plain modern CSS (nesting, custom properties) in `static/css/style.css`, served as-is with no build step
+- **Native CSS** - plain modern CSS (nesting, custom properties), served as-is with no build step. See [Stylesheets](#stylesheets).
 - **D3.js** - Data visualization
 
 ## Project Structure
@@ -24,6 +24,19 @@ static/js/
 ├── build.sh               # Docker build script
 └── .nvmrc                 # Node.js version specification
 ```
+
+## Stylesheets
+
+CSS is not part of the Vite build. Templates load one file, `/static/css/style.css`, and that file is only an `@import` manifest. The rules live in the partials it lists, in that order:
+
+- `tokens.css` — palette, type, spacing
+- `legacy.css` and `pages/legacy-pages.css` — unscoped names that have no page owner yet
+- `pages/*.css` — one file per page or feature banner
+- `utilities.css` — the local utility layer, including the sharp-corner overrides
+- `chrome.css` — site header, page meta, footer
+- the canvas and tag-explorer partials, which come last so they can override the utilities
+
+Do not add rules to `style.css` and do not reorder the imports. Later files win by source order, the same way they did when this was one file. A new token goes in `tokens.css`; a scoped page rule goes in that page's partial; an unscoped class with no owner yet goes in `legacy.css`.
 
 ## Build System Features
 

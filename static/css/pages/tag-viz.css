@@ -1,0 +1,212 @@
+/* ============================================================================
+   Tag Feeds Page Styles (tag-feeds.html)
+   ============================================================================ */
+
+.tag-feeds-page {
+  .table-container {
+    overflow: auto;
+    max-height: 80vh;
+  }
+
+  .table-bordered {
+    border-collapse: collapse;
+    width: 100%;
+
+    th,
+    td {
+      border: 1px solid #ddd;
+      padding: 8px;
+    }
+
+    td {
+      cursor: help;
+
+      a {
+        color: #337ab7;
+        text-decoration: none;
+
+        &:hover {
+          color: #23527c;
+          text-decoration: underline;
+        }
+      }
+    }
+
+    thead th {
+      position: sticky;
+      top: 0;
+      background-color: #f2f2f2;
+      z-index: 1;
+
+      &:first-child {
+        left: 0;
+        z-index: 2;
+      }
+    }
+
+    tbody {
+      td:first-child {
+        position: sticky;
+        left: 0;
+        background-color: #f2f2f2;
+      }
+
+      tr:hover td {
+        background-color: #f5f5f5;
+      }
+    }
+
+    .hover-column {
+      background-color: #e8e8e8;
+    }
+  }
+}
+
+/* ============================================================================
+   Post Graph Page Styles (post-graph.html)
+   ============================================================================ */
+
+.post-graph-page {
+  .graph-container {
+    width: 100%;
+    min-height: 800px;
+    overflow: auto;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 0;
+  }
+
+  .tabs-container {
+    margin-top: 10px;
+  }
+
+  .tab-buttons {
+    display: flex;
+    border-bottom: 1px solid #ddd;
+    margin-bottom: 10px;
+  }
+
+  .tab-button {
+    padding: 8px 16px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    border-bottom: none;
+    background: #f0f0f0;
+    margin-right: 4px;
+    border-radius: 0;
+
+    &.active {
+      background: #fff;
+      border-color: #ddd;
+      border-bottom: 1px solid #fff;
+      margin-bottom: -1px;
+      font-weight: bold;
+    }
+  }
+}
+
+/* ============================================================================
+   Tag Sunburst Page Styles (tag-sunburst.html)
+   ============================================================================ */
+
+.tag-sunburst-page {
+  .node circle {
+    fill: #999;
+  }
+
+  .node text {
+    font: 10px sans-serif;
+  }
+
+  .node--internal circle {
+    fill: #555;
+  }
+
+  .node--internal text {
+    text-shadow:
+      0 1px 0 #fff,
+      0 -1px 0 #fff,
+      1px 0 0 #fff,
+      -1px 0 0 #fff;
+  }
+
+  .link {
+    fill: none;
+    stroke: #555;
+    stroke-opacity: 0.4;
+    stroke-width: 1.5px;
+  }
+
+  form {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    position: absolute;
+    left: 10px;
+    top: 10px;
+  }
+
+  label {
+    display: block;
+  }
+}
+
+#delete_controls {
+  padding: 10px;
+  background: #f8f8f8;
+  border-bottom: 1px solid #ddd;
+  position: sticky;
+  top: 40px;
+  z-index: 10;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+
+  #delete_btn {
+    background: #ff4444;
+    color: white;
+    border: none;
+    padding: 5px 15px;
+    border-radius: 0;
+    cursor: pointer;
+
+    &:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+  }
+
+  .select-all-btn {
+    padding: 5px 15px;
+    border-radius: 0;
+    border: 1px solid #ccc;
+    background: white;
+    cursor: pointer;
+  }
+}
+
+#text-context-menu {
+  position: absolute;
+  z-index: 10000;
+  background: #ffffff;
+  border: 1px solid #d0d0d0;
+  border-radius: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  padding: 8px 10px;
+  font-size: 13px;
+  color: #222222;
+  max-width: 240px;
+
+  .menu-title {
+    margin-bottom: 8px;
+  }
+
+  .menu-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+
+    button {
+      padding: 4px 8px;
+    }
+  }
+}
+

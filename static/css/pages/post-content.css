@@ -1,0 +1,243 @@
+/* Post content presentation. These rules do not scope embedded stylesheets. */
+.post-content-isolated {
+  /* Create a stacking context for post content. */
+  isolation: isolate;
+
+  /* Scope CSS counters; selector matching is unaffected. */
+  contain: style;
+
+  /* Reset to default display behavior */
+  display: block;
+
+  /* Basic spacing and layout */
+  margin: 0;
+  padding: 0;
+
+  /* Ensure content is readable */
+  font-family: Arial, sans-serif;
+  font-size: 12pt;
+  line-height: 1.5;
+  color: #000;
+
+  /* Prevent overflow issues */
+  overflow: auto;
+  overflow-wrap: break-word;
+
+  /* Reset any inherited text properties */
+  text-align: left;
+  text-decoration: none;
+
+  /* Ensure images don't break layout */
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+
+  & > * {
+    /* Restore browser defaults for direct children. */
+    all: revert;
+  }
+
+  /* Hide style elements visually; their CSS can still apply to the document. */
+  style {
+    display: none !important;
+  }
+
+  /* Style links within post content. */
+  a {
+    color: #0066cc;
+    text-decoration: underline;
+
+    &:hover {
+      color: #0052a3;
+    }
+  }
+
+  /* Reset common elements that might have problematic styles */
+  /* Use & to properly scope these to children of .post-content-isolated */
+  & body,
+  & table,
+  & p,
+  & div,
+  & span,
+  & h1,
+  & h2,
+  & h3,
+  & h4,
+  & h5,
+  & h6,
+  & td,
+  & tr {
+    margin: revert !important;
+    padding: revert !important;
+    background: revert !important;
+    background-color: transparent !important;
+    color: inherit !important;
+  }
+
+  /* Ensure tables from content don't break layout */
+  table {
+    max-width: 100%;
+    border-collapse: collapse;
+  }
+
+  /* Handle code blocks safely */
+  pre,
+  code {
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    overflow-x: auto;
+  }
+}
+
+.filter-form {
+  margin: 20px 0;
+  display: flex;
+  gap: 10px;
+
+  input {
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 0;
+  }
+
+  button,
+  a {
+    padding: 8px 16px;
+    background: #0066cc;
+    color: white;
+    border: none;
+    border-radius: 0;
+    cursor: pointer;
+    text-decoration: none;
+
+    &:hover {
+      background: #0052a3;
+    }
+  }
+}
+
+.posts-list {
+  margin: 20px 0;
+
+  .post-item {
+    display: flex;
+    gap: 15px;
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+    align-items: center;
+
+    .post-id {
+      font-weight: bold;
+      min-width: 60px;
+    }
+
+    .post-title {
+      flex: 1;
+    }
+
+    .post-date {
+      color: #666;
+      min-width: 150px;
+    }
+
+    .download-btn {
+      padding: 5px 10px;
+      background: #28a745;
+      color: white;
+      text-decoration: none;
+      border-radius: 0;
+
+      &:hover {
+        background: #218838;
+      }
+    }
+  }
+}
+
+.pagination {
+  margin: 20px 0;
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  align-items: center;
+
+  a {
+    padding: 8px 16px;
+    background: #0066cc;
+    color: white;
+    text-decoration: none;
+    border-radius: 0;
+
+    &:hover {
+      background: #0052a3;
+    }
+  }
+}
+
+.download_button,
+.download-button {
+  padding: 5px 10px;
+  background: #28a745;
+  color: white !important;
+  text-decoration: none;
+  border-radius: 0;
+  display: inline-block;
+  margin-left: 10px;
+
+  &:hover {
+    background: #218838;
+  }
+}
+
+.sentence-cluster-page {
+  .sentence-cluster-card {
+    border-left: 4px solid #2f6f8f;
+  }
+
+  .snippet-secondary-meta {
+    margin: 6px 0 10px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .snippet-primary-meta .snippet-source-info:first-child {
+    margin-right: 4px;
+  }
+}
+
+/* Global Chat Panel */
+.custom-scrollbar {
+  &::-webkit-scrollbar {
+    width: 5px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #e2e8f0;
+    border-radius: 0;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: #cbd5e1;
+  }
+}
+
+.animate-in {
+  animation: animate-in 0.3s ease-out;
+}
+
+@keyframes animate-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Global Chat Styles end */
+

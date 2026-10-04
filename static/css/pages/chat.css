@@ -1,0 +1,153 @@
+/* Chat component styles */
+.post-chat-container {
+  padding: 1em;
+  margin: 1em 0;
+}
+
+.chat-form {
+  margin-bottom: 1em;
+}
+
+.chat-input {
+  width: 100%;
+  padding: 0.5em;
+  margin-bottom: 0.5em;
+  border: 1px solid #c6c6c6;
+  border-radius: 0;
+  font-size: 12pt;
+}
+
+.chat-submit {
+  padding: 0.5em 1em;
+  background-color: #008ec9;
+  color: white;
+  border: none;
+  border-radius: 0;
+  cursor: pointer;
+  font-size: 12pt;
+}
+
+.chat-submit:hover {
+  background-color: #0077a8;
+}
+
+.chat-submit:disabled {
+  background-color: #c6c6c6;
+  cursor: not-allowed;
+}
+
+.loading-indicator {
+  margin: 1em 0;
+  font-style: italic;
+  color: #666;
+}
+
+.chat-response {
+  margin-top: 1em;
+  padding: 1em;
+  background-color: #f5f5f5;
+  border-radius: 0;
+  border: 1px solid #c6c6c6;
+}
+
+.chat-response h4 {
+  margin-top: 0;
+  color: #008ec9;
+}
+
+.response-content {
+  white-space: pre-line;
+  line-height: 1.4;
+}
+
+.s-tree-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.s-tree-table th,
+.s-tree-table td {
+  border: 1px solid #ddd;
+  padding: 4px;
+  word-break: break-word;
+  white-space: normal;
+  max-width: 520px; /* increased for more space */
+  overflow: hidden;
+}
+
+.s-tree-table .left {
+  text-align: right;
+  width: 44%; /* increased width for left */
+  min-width: 180px;
+  max-width: 520px;
+}
+
+.s-tree-table .mid {
+  text-align: center;
+  font-weight: bold;
+  width: 10%; /* reduced width for mid */
+  min-width: 40px;
+  max-width: 80px;
+}
+
+.s-tree-table .right {
+  text-align: left;
+  width: 44%; /* increased width for right */
+  min-width: 180px;
+  max-width: 520px;
+}
+
+.sentence-row .sentence-cell {
+  padding: 0;
+  vertical-align: middle;
+  position: relative;
+}
+
+.sentence-cell-inner {
+  display: flex;
+  align-items: center;
+  min-height: 2.2em;
+  height: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  /* Prevents shrinking for short content */
+  min-width: 0;
+  justify-content: flex-end; /* default for left */
+}
+
+.s-tree-table .mid .sentence-cell-inner {
+  justify-content: center;
+}
+
+.s-tree-table .right .sentence-cell-inner {
+  justify-content: flex-start;
+}
+
+/* --- Add styles for show-more/less block --- */
+.show-more-less-block {
+  margin-top: 0.2em;
+  text-align: center;
+  width: 100%;
+}
+
+.show-more-btn {
+  font-size: 12px;
+  padding: 2px 8px;
+  margin: 0 auto;
+  display: inline-block;
+  cursor: pointer;
+  border: 1px solid #bbb;
+  border-radius: 0;
+  background: #f8f8f8;
+  transition: background 0.2s;
+}
+
+.show-more-btn:hover {
+  background: #e0e0e0;
+}
+
+.highlite_tag {
+  background-color: yellow;
+}
+

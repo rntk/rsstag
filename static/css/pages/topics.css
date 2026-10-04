@@ -1,0 +1,345 @@
+/* ============================================================================
+   Sentence Cluster Detail Page Styles
+   ============================================================================ */
+
+.sentence-cluster-page {
+  .sentence-cluster-tabs {
+    margin-top: 20px;
+  }
+
+  .sentence-cluster-tab-header {
+    display: flex;
+    gap: 8px;
+    border-bottom: 1px solid #ddd;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+  }
+
+  .sentence-cluster-tab-btn {
+    padding: 10px 16px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    border-bottom: none;
+    background: #f0f0f0;
+    border-radius: 0;
+    color: #555;
+
+    &.active {
+      background: #fff;
+      border-color: #ddd;
+      margin-bottom: -1px;
+      color: #222;
+      font-weight: bold;
+    }
+  }
+
+  .sentence-cluster-tab-content {
+    display: none;
+
+    &.active {
+      display: block;
+    }
+  }
+}
+
+/* ============================================================================
+   Topics List Page Styles (topics-list.html)
+   ============================================================================ */
+
+.topics-list-page {
+  .topics-tabs {
+    margin-top: 10px;
+  }
+
+  .tab-header {
+    display: flex;
+    border-bottom: 2px solid #e0e0e0;
+    margin-bottom: 20px;
+  }
+
+  .tab-btn {
+    padding: 10px 20px;
+    cursor: pointer;
+    font-weight: bold;
+    color: #666;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+
+    &.active {
+      color: #4285f4;
+      border-bottom: 3px solid #4285f4;
+    }
+
+    &:hover:not(.active) {
+      background-color: #f5f5f5;
+    }
+  }
+
+  .tab-content {
+    display: none;
+
+    &.active {
+      display: block;
+    }
+  }
+
+  .topics-tree {
+    margin-top: 10px;
+  }
+
+  .topics-tree-controls {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .topics-tree-btn {
+    border: 1px solid #d0d7de;
+    background: #fff;
+    color: #2c3e50;
+    border-radius: 0;
+    padding: 5px 10px;
+    font-size: 12px;
+    cursor: pointer;
+
+    &:hover {
+      background: #f5f7f9;
+    }
+  }
+
+  .topic-tree-node {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 0;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    font-size: 14px;
+    box-sizing: border-box;
+
+    &:hover {
+      background-color: #f1f3f5;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+  }
+
+  .topic-tree-node .topic-tree-node {
+    margin-top: 6px;
+    margin-bottom: 0;
+  }
+
+  .topic-tree-node.level-1 {
+    margin-left: 14px;
+  }
+
+  .topic-tree-node.level-2 {
+    margin-left: 28px;
+  }
+
+  .topic-tree-node.level-3,
+  .topic-tree-node.level-4,
+  .topic-tree-node.level-5 {
+    margin-left: 42px;
+  }
+
+  .topic-tree-details {
+    summary {
+      list-style: none;
+      cursor: pointer;
+    }
+
+    summary::-webkit-details-marker {
+      display: none;
+    }
+  }
+
+  .topic-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .topic-link {
+    color: #2c3e50;
+    font-weight: 500;
+    flex: 1;
+    min-width: 150px;
+  }
+
+  .topic-count {
+    color: #666;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .snippet-link {
+    display: inline-block;
+    padding: 2px 6px;
+    background: #e3f2fd;
+    color: #1976d2;
+    border-radius: 0;
+    text-decoration: none;
+    font-size: 11px;
+    margin-right: 6px;
+    font-weight: bold;
+
+    &:hover {
+      background: #bbdefb;
+    }
+  }
+
+  .topic-children {
+    margin-top: 6px;
+  }
+
+  .topics-chart-wrapper {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .topics-sunburst-chart {
+    position: relative;
+    width: 100%;
+    min-height: 400px;
+    border: 1px solid #e9ecef;
+    border-radius: 0;
+    background: #fff;
+    padding: 10px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .topics-sunburst-groups {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .sunburst-navigation {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 15px;
+    position: relative;
+    z-index: 5;
+  }
+
+  .topics-sunburst-chart-container {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .topics-sunburst-group {
+    border: 1px solid #e9ecef;
+    border-radius: 0;
+    background: #fff;
+    padding: 10px;
+    box-sizing: border-box;
+  }
+
+  .topics-sunburst-group-title {
+    margin: 0 0 10px;
+    font-size: 16px;
+    line-height: 1.2;
+    color: #333;
+  }
+
+  .topics-sunburst-group .topics-sunburst-chart {
+    min-height: 460px;
+    border: 0;
+    padding: 0;
+  }
+
+  .topics-marimekko-groups {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .topics-marimekko-group {
+    border: 1px solid #e9ecef;
+    border-radius: 0;
+    background: #fff;
+    padding: 16px;
+  }
+
+  .topics-marimekko-group-title {
+    margin: 0 0 10px;
+    font-size: 16px;
+    line-height: 1.2;
+    color: #333;
+  }
+
+  .topics-marimekko-chart-host {
+    width: 100%;
+    overflow-x: auto;
+    min-width: 1000px;
+  }
+
+  .topics-marimekko-chart-host svg {
+    width: 100%;
+    height: auto;
+  }
+
+  .topics-chart-wrapper {
+    width: 95vw;
+    margin-left: calc(-95vw / 2 + 50%);
+    max-width: none;
+  }
+
+  .marimekko-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding: 8px 12px;
+    background: #f5f5f5;
+    border-radius: 0;
+  }
+
+  .marimekko-nav-btn {
+    padding: 6px 14px;
+    border: 1px solid #d0d7de;
+    background: #fff;
+    color: #2c3e50;
+    border-radius: 0;
+    cursor: pointer;
+    font-size: 13px;
+
+    &:hover:not(:disabled) {
+      background: #f0f3f6;
+    }
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+  }
+
+  .marimekko-nav-info {
+    font-weight: 600;
+    font-size: 13px;
+    color: #444;
+  }
+
+  @media (max-width: 768px) {
+    .topics-sunburst-chart {
+      flex: 1 1 100%;
+      max-height: none;
+    }
+
+    .topics-sunburst-groups {
+      gap: 16px;
+    }
+  }
+}
+

@@ -1,0 +1,320 @@
+/* Feed hierarchy page (/hierarchy) */
+.feed-hierarchy-page {
+  margin: 0;
+  background: #eef0eb;
+  color: #20231f;
+}
+
+.feed-hierarchy-page__header {
+  position: relative;
+  z-index: 20;
+  min-height: 76px;
+  padding: 0 28px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  border-bottom: 1px solid #d4d8d0;
+  background: rgb(250 251 247 / 92%);
+  backdrop-filter: blur(12px);
+
+  h1,
+  p {
+    margin: 0;
+    text-align: center;
+  }
+  h1 {
+    font:
+      700 18px/1.2 Manrope,
+      sans-serif;
+  }
+}
+
+.feed-hierarchy-page__brand {
+  justify-self: start;
+  color: #20231f;
+  font:
+    800 20px/1 Manrope,
+    sans-serif;
+  text-decoration: none;
+}
+
+.feed-hierarchy-page__eyebrow {
+  color: #777d73;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.feed-hierarchy-page__feed-link {
+  justify-self: end;
+  color: #4e584b;
+  font-size: 13px;
+}
+
+.feed-hierarchy {
+  position: fixed;
+  inset: 76px 0 0;
+  overflow: auto;
+  outline: none;
+  padding: 20px 24px;
+  box-sizing: border-box;
+}
+
+/* Level buttons ("1".."maxLevel+1"), same look as .feed-canvas__controls. */
+.feed-hierarchy__levels {
+  position: fixed;
+  z-index: 30;
+  /* Sit above global_chat_panel FAB (bottom-6 + h-14 ≈ 80px) with a small gap. */
+  right: 22px;
+  bottom: 96px;
+  display: flex;
+  gap: 5px;
+  padding: 6px;
+  border: 1px solid #bcc2b8;
+  background: rgb(255 255 255 / 92%);
+  box-shadow: 0 8px 24px rgb(36 42 33 / 14%);
+
+  &:empty {
+    display: none;
+  }
+
+  button {
+    min-width: 34px;
+    height: 34px;
+    padding: 0 10px;
+    border: 1px solid #cdd2c9;
+    background: #fff;
+    color: #20231f;
+    cursor: pointer;
+    &:hover,
+    &.is-active {
+      border-color: #20231f;
+      background: #20231f;
+      color: #fff;
+    }
+  }
+}
+
+.feed-hierarchy__tree {
+  width: max-content;
+  min-width: 100%;
+}
+
+/* Swim-lane tree: label column on the left, children stacked to the right
+   (adapted from ext/src/hierarchy/hierarchy.css th-* rows, "fh-" prefix). */
+.fh-root {
+  --fh-row-gap: 8px;
+  --fh-row-height: 44px;
+  --fh-label-width: 300px;
+  display: flex;
+  flex-direction: column;
+  width: max-content;
+  min-width: 100%;
+  gap: var(--fh-row-gap);
+}
+
+.fh-branch {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: row;
+  gap: var(--fh-row-gap);
+}
+
+.fh-branch__label {
+  flex: 0 0 var(--fh-label-width);
+  display: flex;
+  align-items: flex-start;
+  box-sizing: border-box;
+  font-size: 15px;
+  font-weight: 600;
+  color: #20231f;
+  background-color: var(--fh-card-bg, #fff);
+  border: 1px solid #cdd2c9;
+  border-left: 3px solid var(--fh-accent-color, #cdd2c9);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.fh-branch__label:hover {
+  border-color: #20231f;
+  border-left-color: var(--fh-accent-color, #20231f);
+}
+
+.fh-branch__label-text {
+  position: sticky;
+  top: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 10px 12px 10px 8px;
+}
+
+.fh-topic-menu {
+  flex: 0 0 30px;
+  align-self: stretch;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #777d73;
+  font: 700 17px/1 sans-serif;
+  cursor: pointer;
+  &:hover,
+  &:focus-visible {
+    color: #20231f;
+    background: rgb(255 255 255 / 45%);
+  }
+}
+
+.fh-leaf.is-summary-loading,
+.fh-branch__label.is-summary-loading {
+  opacity: 0.65;
+}
+
+/* Collapsed branch renders as a single row. */
+.fh-branch--collapsed {
+  min-height: var(--fh-row-height);
+}
+.fh-branch--collapsed .fh-branch__label {
+  align-items: center;
+}
+.fh-branch--collapsed .fh-branch__label-text {
+  position: static;
+  top: auto;
+}
+
+/* Fold/collapse toggle: a flat segment flush against the card's left edge. */
+.fh-toggle {
+  flex: 0 0 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  padding: 0;
+  border: 0;
+  border-right: 1px solid #cdd2c9;
+  background: transparent;
+  color: inherit;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0.7;
+  cursor: pointer;
+
+  &:hover {
+    opacity: 1;
+  }
+  &:focus-visible {
+    outline: 2px solid var(--fh-accent-color, #20231f);
+    outline-offset: -2px;
+  }
+}
+
+.fh-branch__children {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: var(--fh-row-gap);
+}
+
+/* Leaf rows keep their source-sentence preview aligned beside the topic card. */
+.fh-leaf-row {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--fh-row-gap);
+  min-height: var(--fh-row-height, 44px);
+  width: max-content;
+}
+
+/* Leaf topic card: the same fixed width as branch cards plus its action menu. */
+.fh-leaf {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  padding: 8px 16px;
+  min-height: var(--fh-row-height, 44px);
+  width: var(--fh-label-width);
+  font-size: 14px;
+  color: #20231f;
+  background-color: var(--fh-card-bg, #fff);
+  border: 1px solid #cdd2c9;
+  border-left: 3px solid var(--fh-accent-color, #cdd2c9);
+  overflow: visible;
+  user-select: none;
+}
+
+.fh-leaf:hover {
+  border-color: #20231f;
+  border-left-color: var(--fh-accent-color, #20231f);
+}
+
+.fh-leaf__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* Leaves cannot fold, but reserve the branch toggle's footprint so every
+   topic title begins at the same horizontal position. */
+.fh-leaf__spacer {
+  flex: 0 0 32px;
+  margin-left: -16px;
+}
+
+.fh-leaf-sentences {
+  flex: 0 0 auto;
+  color: #596257;
+  font-size: 18px;
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: text;
+
+  .canvas-original-sentence__tag {
+    background-color: #ffe066;
+    color: inherit;
+    border-radius: 0;
+    padding: 0 2px;
+  }
+
+  &:hover,
+  &:focus-visible {
+    color: var(--fh-accent-color, #20231f);
+    text-decoration: underline;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--fh-accent-color, #20231f);
+    outline-offset: 3px;
+  }
+}
+
+.fh-empty {
+  padding: 20px;
+  color: #777d73;
+  font-style: italic;
+}
+
+@media (max-width: 720px) {
+  .feed-hierarchy-page__header {
+    grid-template-columns: auto 1fr;
+    > div {
+      justify-self: end;
+    }
+  }
+  .feed-hierarchy-page__feed-link {
+    display: none;
+  }
+  .fh-root {
+    --fh-label-width: 160px;
+  }
+}
+

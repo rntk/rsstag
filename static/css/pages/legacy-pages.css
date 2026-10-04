@@ -1,0 +1,286 @@
+/* Post grouping cache management page */
+.cache-hint {
+  max-width: 60em;
+  color: #555;
+  font-size: 10pt;
+}
+
+.cache-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.2em;
+  margin: 1em 0;
+  padding: 0.6em;
+  background-color: #f4f4f4;
+  border: 1px solid #ddd;
+}
+
+.cache-filter-form,
+.cache-purge-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.8em;
+  margin: 0.8em 0;
+}
+
+.cache-purge-form input[type="number"] {
+  width: 5em;
+}
+
+.cache-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.2em 0;
+}
+
+.cache-table th,
+.cache-table td {
+  padding: 0.4em 0.6em;
+  border: 1px solid #ddd;
+  text-align: left;
+}
+
+.cache-table th {
+  background-color: #f4f4f4;
+}
+
+.cache-row--unused {
+  background-color: #fff6f6;
+}
+
+.cache-hash {
+  font-family: monospace;
+}
+
+.cache-pages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+}
+
+.cache-pages__current {
+  font-weight: bold;
+}
+
+.clusters-topics-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1em;
+}
+
+.clusters-read-btn {
+  border: 1px solid var(--my-gray);
+  background: #f5f5f5;
+  padding: 0.2em 0.6em;
+  font-size: 10pt;
+  cursor: pointer;
+  border-radius: 0;
+}
+
+.clusters-read-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.clusters-topic-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+  margin-bottom: 0.6em;
+  flex-wrap: wrap;
+}
+
+.clusters-topics-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6em;
+}
+
+.clusters-topic-item {
+  border: 1px solid var(--my-gray);
+  background: #ffffff;
+  padding: 0.4em 0.7em;
+  cursor: pointer;
+  font-size: 11pt;
+  text-align: left;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+  border-radius: 0;
+}
+
+.clusters-topic-item.is-active {
+  background: #fff6d6;
+  border-color: #e0c57e;
+}
+
+.clusters-topic-title {
+  font-weight: bold;
+}
+
+.clusters-topic-count {
+  color: var(--meta-color);
+  font-size: 10pt;
+}
+
+.clusters-topic-sentences {
+  background: #ffffff;
+  border: 1px solid var(--my-gray);
+  padding: 0.8em;
+  border-radius: 0;
+}
+
+.clusters-topic-sentences.is-loading {
+  opacity: 0.7;
+}
+
+.clusters-topic-header {
+  font-size: 13pt;
+  margin-bottom: 0.6em;
+  color: #6b6b6b;
+}
+
+.clusters-topic-sentences-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7em;
+}
+
+.clusters-topic-sentence {
+  border-bottom: 1px solid var(--my-gray);
+  padding-bottom: 0.6em;
+}
+
+.clusters-topic-sentence.is-read {
+  opacity: 0.7;
+}
+
+.clusters-topic-sentence:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.clusters-topic-sentence-meta {
+  font-size: 9pt;
+  color: var(--meta-color);
+  margin-bottom: 0.3em;
+}
+
+.clusters-topic-sentence-text {
+  font-size: 11pt;
+  line-height: 1.4;
+}
+
+.clusters-topic-sentence-actions {
+  margin-top: 0.4em;
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  flex-wrap: wrap;
+}
+
+.clusters-topic-toggle-read {
+  border: 1px solid #c1c1c1;
+  background: #c8e6c9;
+  color: #2e7d32;
+  font-size: 9pt;
+  padding: 0.2em 0.5em;
+  cursor: pointer;
+  border-radius: 0;
+}
+
+.clusters-topic-sentence.is-read .clusters-topic-toggle-read {
+  background: #eee;
+  color: #666;
+}
+
+.clusters-topic-placeholder {
+  font-size: 11pt;
+  color: var(--meta-color);
+}
+
+.telegram-auth-label {
+  font-size: 12pt;
+  color: #333333;
+}
+
+.telegram-auth-input {
+  font-size: 12pt;
+  padding: 0.4em 0.6em;
+  border: 1px solid #bcbcbc;
+  border-radius: 0;
+}
+
+.telegram-auth-submit {
+  align-self: flex-end;
+  padding: 0.4em 1em;
+  font-size: 11pt;
+  border-radius: 0;
+  border: 1px solid #8a8a8a;
+  background: #f3f3f3;
+  cursor: pointer;
+}
+
+.telegram-auth-submit:hover {
+  background: #e7e7e7;
+}
+
+#global_tools_button a,
+#global_tools_button span {
+  font-size: 14pt;
+}
+
+/* Minimal flat footer consistent with the shared header. Shared with legacy
+   pages (e.g. tag-info's #paginator bar) and toggled by app.js on scroll, so
+   keep position:fixed and the centered layout. */
+#global_tools_bottom {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  font-size: 13px;
+  text-align: center;
+  background: var(--rsst-header-bg);
+  backdrop-filter: blur(12px);
+  color: var(--rsst-ink-secondary);
+  box-shadow: none;
+  border-top: 1px solid var(--rsst-border-strong);
+  padding: var(--rsst-space-2) var(--rsst-space-5);
+}
+
+#paginator {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.post_tools {
+  width: 100%;
+  padding: 0.1em 0 0 0;
+}
+
+.read_button {
+  float: right;
+  padding: 0 0.3em;
+  border-radius: 0;
+  cursor: pointer;
+}
+
+#read_all span {
+  display: inline-block;
+  border-bottom: 1px solid red;
+}
+
+#show_all span {
+  display: inline-block;
+  border-bottom: 1px solid var(--my-green);
+}
+
+.tag_info_block {
+  border: 1px solid var(--my-gray);
+  border-radius: 0;
+  margin: 1em 0;
+  padding: 0.5em;
+}
+

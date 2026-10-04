@@ -1,0 +1,237 @@
+/* ------------------------------------------------------------------ */
+/* Canonical shared site header (site-header.html macro).              */
+/* Modeled on .canvas-page__header. Keeps the #global_tools id so      */
+/* app.js can measure height + hide-on-scroll. Layout lives on the     */
+/* inner wrapper because app.js sets style.display=block on the header */
+/* element itself during hide-on-scroll.                               */
+/* ------------------------------------------------------------------ */
+
+/* Cancel the fixed-bar reserve (body:has(#global_tools) padding-top).
+   The site-header is sticky/in-flow, so it needs no reserved space.
+   #global_tools.site-header (1-1-0) beats body:has(#global_tools) (1-0-0). */
+body:has(#global_tools.site-header) {
+  padding-top: 0;
+}
+
+/* Compound selector beats the legacy `#global_tools { position: fixed }`. */
+#global_tools.site-header {
+  position: sticky;
+  top: 0;
+  left: auto;
+  width: 100%;
+  display: block;
+  z-index: 40;
+  padding: 0;
+  text-align: left;
+  background: var(--rsst-header-bg);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--rsst-border-strong);
+  box-shadow: none;
+}
+
+.site-header__inner {
+  height: var(--rsst-header-height);
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.site-header__left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.site-header__left--has-context-filter {
+  flex: 1 1 auto;
+}
+
+.site-header__brand {
+  color: var(--rsst-ink);
+  font: 800 20px/1 var(--rsst-font-head);
+  text-decoration: none;
+  letter-spacing: -0.01em;
+}
+
+/* The filter is the useful content of the header's left side. Keep it on one
+   line so its chips do not push the header into a second row. */
+.site-header__left #context_filter_bar {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.site-header__left .context-filter-bar {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  scrollbar-width: none;
+  white-space: nowrap;
+
+  > * {
+    flex: 0 0 auto;
+  }
+
+  .context-filter-group {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--rsst-space-1);
+  }
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Page meta strip: names the scope the page is showing and carries the counts
+   written by static/js/components/page-meta.js. It sits inside
+   .site-header__inner, whose height is fixed, and never wraps -- filling in
+   counts must not change the height syncGlobalToolsOffset measures into
+   --global-tools-height. Deliberately quiet: it reads as a continuation of the
+   header rather than a banner. */
+.site-header__page {
+  display: flex;
+  align-items: baseline;
+  gap: var(--rsst-space-2);
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-left: 16px;
+  border-left: 1px solid var(--rsst-border);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.site-header__page-scope {
+  flex: none;
+  color: var(--rsst-ink-tertiary);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.site-header__page-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--rsst-ink);
+  font: 700 14px/1.2 var(--rsst-font-head);
+  text-overflow: ellipsis;
+}
+
+.site-header__page-stats {
+  display: flex;
+  align-items: baseline;
+  flex: none;
+  gap: var(--rsst-space-2);
+  color: var(--rsst-ink-tertiary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+
+  &:empty {
+    display: none;
+  }
+}
+
+.site-header__page-stat + .site-header__page-stat::before {
+  content: "·";
+  margin-right: var(--rsst-space-2);
+  color: var(--rsst-border-strong);
+}
+
+/* Unread is the count users act on, so it gets the one step of contrast. */
+.site-header__page-stat--accent {
+  color: var(--rsst-ink-secondary);
+
+  b {
+    font-weight: 700;
+  }
+}
+
+.site-header__right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.site-header__tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  &:empty {
+    display: none;
+  }
+}
+
+/* Neutralize legacy inline-block spacing/font-size from .global_tools_button
+   for every mount point inside the shared header. */
+#global_tools.site-header .global_tools_button {
+  margin: 0;
+  font-size: 13px;
+  vertical-align: middle;
+}
+
+.site-header__logout {
+  display: inline-flex;
+  align-items: center;
+  color: var(--rsst-ink-secondary);
+  text-decoration: none;
+
+  &:hover,
+  &:focus-visible {
+    color: var(--rsst-ink);
+  }
+}
+
+@media (max-width: 767px) {
+  /* Keep the title and the counts; the kicker is the most redundant part. */
+  .site-header__page {
+    padding-left: var(--rsst-space-3);
+  }
+
+  .site-header__page-scope {
+    display: none;
+  }
+}
+
+/* Flat dashboard cards (root-logged.html). Overrides the rounded/shadow
+   utilities the markup still carries so cards read as flat panels. */
+.dashboard-card {
+  padding: var(--rsst-space-5);
+  background: var(--rsst-surface-canvas);
+  border: 1px solid var(--rsst-border);
+  border-bottom-width: 3px;
+  box-shadow: none;
+}
+
+.dashboard-card__title {
+  display: flex;
+  align-items: center;
+  gap: var(--rsst-space-2);
+  margin-bottom: var(--rsst-space-3);
+  color: var(--rsst-ink-tertiary);
+  font: 700 11px/1.2 var(--rsst-font-body);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.dashboard-card__link {
+  display: block;
+  padding: var(--rsst-space-1) var(--rsst-space-2);
+  color: var(--rsst-ink);
+  font-size: 14px;
+  text-decoration: none;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--rsst-surface-sunken);
+  }
+}
+

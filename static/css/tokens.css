@@ -1,0 +1,94 @@
+:root {
+  --windows-background-color: #ffffff;
+  --meta-color: #bcbcbc;
+  --my-gray: #c6c6c6;
+  --my-green: #7be15f;
+  --selected-color: #dde5ff;
+  --max-z-index: 999;
+  --progressbar-color: #008ec9;
+  --positive: green;
+  --negative: red;
+  --neutral: grey;
+  --positive-negative: orange;
+}
+
+/* Canonical design tokens (sage-gray palette from the /canvas + /hierarchy pages).
+   These are the single source of truth for the app-wide look. New token names
+   live here; the utility-layer :root (further down) references these so the
+   whole app shares one palette. */
+:root {
+  /* Ink / text */
+  --rsst-ink: #20231f;
+  --rsst-ink-secondary: #4e584b;
+  --rsst-ink-tertiary: #777d73;
+
+  /* Surfaces */
+  --rsst-page-bg: #eef0eb;
+  --rsst-surface-canvas: #ffffff;
+  --rsst-surface-sunken: #f7f8f4;
+
+  /* Borders */
+  --rsst-border: #cdd2c9;
+  --rsst-border-strong: #d4d8d0;
+
+  /* Header / chrome */
+  --rsst-header-height: 46px;
+  --rsst-header-bg: rgb(250 251 247 / 92%);
+
+  /* Typography */
+  --rsst-font-head: "Manrope", sans-serif;
+  --rsst-font-body: "Inter", sans-serif;
+
+  /* Spacing scale */
+  --rsst-space-1: 4px;
+  --rsst-space-2: 8px;
+  --rsst-space-3: 12px;
+  --rsst-space-4: 16px;
+  --rsst-space-5: 24px;
+  --rsst-space-6: 32px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+body,
+html {
+  width: 100%;
+  min-height: 100%;
+}
+
+.material-symbols-outlined {
+  font-variation-settings:
+    "FILL" 0,
+    "wght" 400,
+    "GRAD" 0,
+    "opsz" 24;
+  vertical-align: middle;
+}
+
+body {
+  font-family: var(--rsst-font-body);
+  background-color: var(--rsst-page-bg);
+  color: var(--rsst-ink);
+  padding-top: 0;
+  min-height: 100vh;
+}
+
+/* Reserve space for the fixed #global_tools bar so page content is not covered.
+   Height is measured in JS and written to --global-tools-height; the fallback
+   covers first paint before measurement. */
+body:has(#global_tools) {
+  padding-top: calc(
+    var(--global-tools-height, 3.5em) + var(--global-tools-gap, 0.5em)
+  );
+}
+
+img {
+  max-width: 100%;
+}
+

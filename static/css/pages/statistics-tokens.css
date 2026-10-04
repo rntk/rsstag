@@ -1,0 +1,65 @@
+/* ------------------------------------------------------------------ */
+/* Page-scoped styles moved out of inline <style> blocks (statistics,  */
+/* tokens) during the unified-header migration.                        */
+/* ------------------------------------------------------------------ */
+
+/* statistics.html: was an inline <style> block, now scoped under
+   .statistics-page so it can't leak. Replace ad-hoc colors with tokens. */
+.statistics-page {
+  .stats-table {
+    width: 100%;
+    max-width: 600px;
+    border-collapse: collapse;
+    margin: var(--rsst-space-5) 0;
+
+    td {
+      padding: var(--rsst-space-3);
+      border: 1px solid var(--rsst-border);
+    }
+
+    td:first-child {
+      font-weight: 700;
+      background-color: var(--rsst-surface-sunken);
+      width: 40%;
+    }
+  }
+}
+
+/* tokens.html: was an inline <style> block, now scoped under
+   .tokens-page. */
+.tokens-page {
+  .tokens-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: var(--rsst-space-5) 0;
+
+    th,
+    td {
+      padding: var(--rsst-space-3);
+      border: 1px solid var(--rsst-border);
+      text-align: left;
+    }
+
+    th {
+      background-color: var(--rsst-surface-sunken);
+    }
+  }
+
+  .token-value {
+    font-family: monospace;
+    word-break: break-all;
+  }
+
+  .expired {
+    color: var(--rsst-error, #b3261e);
+  }
+
+  .create-form {
+    margin: var(--rsst-space-5) 0;
+
+    input[type="number"] {
+      width: 80px;
+    }
+  }
+}
+
