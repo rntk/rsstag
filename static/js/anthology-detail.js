@@ -468,9 +468,24 @@ function renderSentences(snippet, options) {
   return `<p class="anth-snippet__text">${body}${more}</p>`;
 }
 
+/** Resolve the display feed name for a snippet. */
+export function snippetFeedTitle(snippet, feedTitles) {
+  if (snippet.feed_title) return String(snippet.feed_title);
+  const byId = feedTitles && snippet.feed_id ? feedTitles[snippet.feed_id] : '';
+  return String(byId || snippet.feed_id || '');
+}
+
+/** Sentence numbers covered by a snippet, e.g. "0, 1". */
+export function snippetSentenceLabel(snippet) {
+  const indices = (snippet.sentence_indices || []).filter((i) => Number.isInteger(i));
+  if (indices.length) return indices.join(', ');
+  const numbers = (snippet.sentences || []).map((s) => s.number).filter((n) => Number.isInteger(n));
+  return numbers.join(', ');
+}
+
 /**
  * @param {Record<string, any>} snippet
- * @param {{isStart?: boolean, skim?: boolean, expanded?: boolean, re?: RegExp|null}} options
+ * @param {{isStart?: boolean, skim?: boolean, expanded?: boolean, re?: RegExp|null, feedTitles?: Record<string, string>|null}} options
  */
 export function renderSnippetCard(snippet, options = {}) {
   const read = snippet.read ? { unread: 0, total: 1 } : { unread: 1, total: 1 };
@@ -484,6 +499,20 @@ export function renderSnippetCard(snippet, options = {}) {
   ]
     .filter(Boolean)
     .join(' ');
+  const feed = snippetFeedTitle(snippet, options.feedTitles);
+  const feedHtml = feed ? `<span class="anth-snippet__feed">${escapeHtml(feed)}</span>` : '';
+  const label = snippetSentenceLabel(snippet);
+  const sentencesHtml = label
+    ? `<span title="Sentence numbers in the source post">sentences ${escapeHtml(label)}</span>`
+    : '';
+  const postId = snippet.post_id ? String(snippet.post_id) : '';
+  const postHtml = postId
+    ? `<a class="anth-snippet__link" href="/posts/${encodeURIComponent(postId)}" target="_blank" rel="noopener" title="Post ID: ${escapeHtml(postId)}">Full post</a>`
+    : '';
+  const originalHtml = snippet.post_url
+    ? `<a class="anth-snippet__link" href="${escapeHtml(snippet.post_url)}" target="_blank" rel="noopener">Original ↗</a>`
+    : '';
+  const metaItems = [feedHtml, sentencesHtml, postHtml, originalHtml].filter(Boolean).join('');
   return (
     `<article class="${classes}" data-snippet-id="${escapeHtml(snippet.id)}">` +
     `<header class="anth-snippet__head">${start}` +
@@ -491,6 +520,7 @@ export function renderSnippetCard(snippet, options = {}) {
     `<span class="anth-muted">${escapeHtml(formatDate(snippet.date))}</span>` +
     markButton('snippet', snippet.id, read) +
     '</header>' +
+    (metaItems ? `<p class="anth-snippet__meta">${metaItems}</p>` : '') +
     renderBreadcrumb(snippet.topic_path) +
     renderSentences(snippet, options) +
     '</article>'
@@ -512,6 +542,7 @@ export function renderSnippetList(data, view, expandedSnippets) {
         skim: view.skim,
         expanded: expandedSnippets.has(snippet.id),
         re,
+        feedTitles: data.feed_titles || null,
       })
     )
     .join('');

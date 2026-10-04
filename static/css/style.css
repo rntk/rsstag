@@ -1051,6 +1051,26 @@ h3.post_title {
   font-size: 11.5px;
 }
 
+.anth-snippet__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--rsst-space-2);
+  margin-top: 2px;
+  color: var(--rsst-ink-tertiary);
+  font-size: 11.5px;
+}
+
+.anth-snippet__feed {
+  font-weight: 600;
+  color: var(--rsst-ink-secondary);
+}
+
+.anth-snippet__link {
+  color: var(--rsst-ink-secondary);
+  text-decoration: underline;
+}
+
 .anth-snippet__text {
   margin-top: var(--rsst-space-2);
   line-height: 1.55;

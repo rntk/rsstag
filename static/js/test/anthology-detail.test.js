@@ -16,6 +16,8 @@ import {
   renderHeader,
   renderSnippetCard,
   renderSnippetList,
+  snippetFeedTitle,
+  snippetSentenceLabel,
   renderThemeOverview,
   renderTree,
   resolveSelection,
@@ -394,6 +396,59 @@ test('renderSnippetList orders, filters and reports empties', () => {
     new Set()
   );
   assert.match(empty, /Everything here is read/);
+});
+
+test('snippetFeedTitle prefers embedded title, then the titles map', () => {
+  assert.equal(
+    snippetFeedTitle({ feed_title: 'Direct', feed_id: 'f1' }, { f1: 'Mapped' }),
+    'Direct'
+  );
+  assert.equal(snippetFeedTitle({ feed_id: 'f1' }, { f1: 'Mapped' }), 'Mapped');
+  assert.equal(snippetFeedTitle({ feed_id: 'f9' }, { f1: 'Mapped' }), 'f9');
+  assert.equal(snippetFeedTitle({}, null), '');
+});
+
+test('snippetSentenceLabel reads indices, then loaded sentences', () => {
+  assert.equal(snippetSentenceLabel({ sentence_indices: [0, 2], sentences: [] }), '0, 2');
+  assert.equal(snippetSentenceLabel({ sentences: [{ number: 4 }, { number: 5 }] }), '4, 5');
+  assert.equal(snippetSentenceLabel({}), '');
+});
+
+test('renderSnippetCard shows feed and post metadata', () => {
+  const html = renderSnippetCard(
+    {
+      ...s1,
+      feed_id: 'f1',
+      feed_title: 'Test Feed',
+      post_url: 'http://example.com/p-s1',
+      sentence_indices: [0, 1],
+    },
+    {}
+  );
+  assert.match(html, /anth-snippet__meta/);
+  assert.match(html, /Test Feed/);
+  assert.match(html, /sentences 0, 1/);
+  assert.match(html, /href="\/posts\/p-s1"/);
+  assert.match(html, /Original ↗/);
+  const mapped = renderSnippetCard(
+    { ...s1, feed_id: 'f1', sentence_indices: [3] },
+    { feedTitles: { f1: 'Mapped Feed' } }
+  );
+  assert.match(mapped, /Mapped Feed/);
+  assert.match(mapped, /sentences 3/);
+  assert.doesNotMatch(mapped, /Original/);
+  const bare = renderSnippetCard({ id: 'sx', sentences: [] }, {});
+  assert.doesNotMatch(bare, /anth-snippet__meta/);
+});
+
+test('renderSnippetCard escapes metadata', () => {
+  const html = renderSnippetCard(
+    { ...s1, feed_title: '<Feed>', post_url: 'http://example.com/?a=1&b=2' },
+    {}
+  );
+  assert.match(html, /&lt;Feed&gt;/);
+  assert.doesNotMatch(html, /<Feed>/);
+  assert.match(html, /a=1&amp;b=2/);
 });
 
 test('renderClusterStats and renderHeader', () => {

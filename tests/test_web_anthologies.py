@@ -240,6 +240,28 @@ class TestWebAnthologies(MongoWebTestCase):
         self.assertIsNone(payload["data"]["cluster"])
         self.assertEqual([s["id"] for s in payload["data"]["snippets"]], ["s4"])
 
+    def test_api_cluster_snippets_carry_feed_and_post_metadata(self) -> None:
+        anthology_id = self._seed_done()
+        self.test_db.posts.update_one(
+            {"owner": self.sid, "pid": "test-post-2"}, {"$set": {"url": "http://example.com/post-2"}}
+        )
+        status, payload = self._get_json(f"/api/anthologies/{anthology_id}/clusters/c2")
+        self.assertEqual(status, 200)
+        data = payload["data"]
+        self.assertEqual(data["feed_titles"], {"test-feed-1": "Test Feed"})
+        snippet = data["snippets"][0]
+        self.assertEqual(snippet["id"], "s3")
+        self.assertEqual(snippet["feed_title"], "Test Feed")
+        self.assertEqual(snippet["post_url"], "http://example.com/post-2")
+
+    def test_api_cluster_snippets_missing_post_url(self) -> None:
+        anthology_id = self._seed_done()
+        status, payload = self._get_json(f"/api/anthologies/{anthology_id}/clusters/c1")
+        self.assertEqual(status, 200)
+        snippet = payload["data"]["snippets"][0]
+        self.assertEqual(snippet["feed_title"], "Test Feed")
+        self.assertEqual(snippet["post_url"], "")
+
     def test_api_cluster_errors(self) -> None:
         anthology_id = self._seed_done()
         self.assertEqual(self.client.get(f"/api/anthologies/{anthology_id}/clusters/nope").status_code, 404)

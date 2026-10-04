@@ -236,10 +236,11 @@ def _annotate_read_counts(result: Dict[str, Any], sentence_maps: SentenceMap) ->
     return annotated
 
 
-def _feed_titles(app: "RSSTagApplication", owner: str, result: Dict[str, Any]) -> Dict[str, str]:
-    wanted: Set[str] = set()
-    for cluster in _as_dict(result.get("clusters")).values():
-        wanted.update(str(f) for f in _as_list(_as_dict(cluster).get("feed_ids")))
+def _feed_titles_for_ids(
+    app: "RSSTagApplication", owner: str, feed_ids: Iterable[str]
+) -> Dict[str, str]:
+    """Resolve feed ids to display titles with a single query."""
+    wanted: Set[str] = {str(f).strip() for f in feed_ids if str(f).strip()}
     if not wanted:
         return {}
     try:
@@ -251,6 +252,47 @@ def _feed_titles(app: "RSSTagApplication", owner: str, result: Dict[str, Any]) -
         }
     except Exception as exc:
         log.warning("Can't load feed titles for %s: %s", owner, exc)
+        return {}
+
+
+def _feed_titles(app: "RSSTagApplication", owner: str, result: Dict[str, Any]) -> Dict[str, str]:
+    wanted: Set[str] = set()
+    for cluster in _as_dict(result.get("clusters")).values():
+        wanted.update(str(f) for f in _as_list(_as_dict(cluster).get("feed_ids")))
+    return _feed_titles_for_ids(app, owner, wanted)
+
+
+def _snippet_feed_ids(snippets: Iterable[Dict[str, Any]]) -> List[str]:
+    feed_ids: Set[str] = {str(s.get("feed_id", "")).strip() for s in snippets}
+    feed_ids.discard("")
+    return sorted(feed_ids)
+
+
+def _post_urls(
+    app: "RSSTagApplication", owner: str, post_ids: List[str]
+) -> Dict[str, str]:
+    """Map post ids to their source urls with a single query."""
+    if not post_ids:
+        return {}
+    variants: List[Any] = []
+    for post_id in set(post_ids):
+        variants.append(post_id)
+        try:
+            variants.append(int(post_id))
+        except (TypeError, ValueError):
+            pass
+    try:
+        cursor = app.db.posts.find(
+            {"owner": owner, "pid": {"$in": variants}},
+            projection={"_id": False, "pid": True, "url": True},
+        )
+        return {
+            str(post["pid"]): str(post.get("url") or "")
+            for post in cursor
+            if post.get("pid") is not None and post.get("url")
+        }
+    except Exception as exc:
+        log.warning("Can't load post urls for %s: %s", owner, exc)
         return {}
 
 
@@ -285,7 +327,10 @@ def _get_detail_payload(
 
 
 def _snippet_with_sentences(
-    snippet: Dict[str, Any], sentence_maps: SentenceMap
+    snippet: Dict[str, Any],
+    sentence_maps: SentenceMap,
+    feed_title: str = "",
+    post_url: str = "",
 ) -> Dict[str, Any]:
     post_map: Dict[int, Dict[str, Any]] = sentence_maps.get(str(snippet.get("post_id", "")), {})
     sentences: List[Dict[str, Any]] = [
@@ -301,6 +346,8 @@ def _snippet_with_sentences(
         **snippet,
         "sentences": sentences,
         "read": bool(sentences) and all(s["read"] for s in sentences),
+        "feed_title": feed_title,
+        "post_url": post_url,
     }
 
 
@@ -326,10 +373,23 @@ def _build_cluster_payload(
     snippets: List[Dict[str, Any]] = [
         all_snippets[sid] for sid in snippet_ids if isinstance(all_snippets.get(sid), dict)
     ]
-    sentence_maps: SentenceMap = _load_sentence_maps(app, owner, _snippet_post_ids(snippets))
+    post_ids: List[str] = _snippet_post_ids(snippets)
+    sentence_maps: SentenceMap = _load_sentence_maps(app, owner, post_ids)
+    feed_titles: Dict[str, str] = _feed_titles_for_ids(app, owner, _snippet_feed_ids(snippets))
+    post_urls: Dict[str, str] = _post_urls(app, owner, post_ids)
+    enriched: List[Dict[str, Any]] = [
+        _snippet_with_sentences(
+            snippet,
+            sentence_maps,
+            feed_title=feed_titles.get(str(snippet.get("feed_id", "")), ""),
+            post_url=post_urls.get(str(snippet.get("post_id", "")), ""),
+        )
+        for snippet in snippets
+    ]
     return {
         "cluster": cluster,
-        "snippets": [_snippet_with_sentences(s, sentence_maps) for s in snippets],
+        "snippets": enriched,
+        "feed_titles": feed_titles,
     }
 
 
