@@ -8,7 +8,6 @@ from pymongo.database import Database
 
 from rsstag.post_grouping import RssTagPostGrouping
 
-MAX_SNIPPETS: int = 3000
 PREVIEW_CHARS: int = 240
 _GROUPING_BATCH: int = 500
 _POST_PROJECTION: Dict[str, bool] = {
@@ -67,9 +66,8 @@ def load_units(
     owner: str,
     seed_value: str,
     scope: Optional[Dict[str, Any]],
-    max_snippets: int = MAX_SNIPPETS,
 ) -> UnitsResult:
-    """Select in-scope posts and cut their groupings into snippets."""
+    """Select all in-scope posts and extract all eligible snippets without a cap."""
     posts_mode: bool = isinstance(scope, dict) and scope.get("mode") == "posts"
     posts: List[Dict[str, Any]] = _load_posts(db, owner, seed_value, scope, posts_mode)
     grouping: RssTagPostGrouping = RssTagPostGrouping(db)
@@ -84,13 +82,11 @@ def load_units(
             result.ungrouped_posts += 1
             continue
         for doc in docs:
-            if len(result.snippets) >= max_snippets:
-                break
             doc_key: str = str(doc.get("_id"))
             if doc_key in seen_docs:
                 continue
             seen_docs.add(doc_key)
-            _append_snippets(result.snippets, doc, post, seed, max_snippets)
+            _append_snippets(result.snippets, doc, post, seed)
     _log.info(
         "Anthology units for %s: posts=%d snippets=%d ungrouped=%d",
         owner, len(posts), len(result.snippets), result.ungrouped_posts,
@@ -137,7 +133,7 @@ def _load_groupings(
     docs_by_post: Dict[str, List[Dict[str, Any]]] = {}
     for start in range(0, len(pids), _GROUPING_BATCH):
         batch: List[Any] = pids[start : start + _GROUPING_BATCH]
-        for doc in grouping.get_by_post_ids(owner, batch):
+        for doc in grouping.get_by_post_ids(owner, batch, raise_on_error=True):
             for post_id in doc.get("post_ids") or []:
                 key: str = str(post_id)
                 if key in wanted:
@@ -152,15 +148,14 @@ def _append_snippets(
     doc: Dict[str, Any],
     post: Dict[str, Any],
     seed: Optional[str],
-    max_snippets: int,
 ) -> None:
     candidates: List[Tuple[str, List[int], str]] = _doc_groups(doc)
     if seed:
-        matching = [c for c in candidates if seed in c[0].casefold() or seed in c[2].casefold()]
+        matching: List[Tuple[str, List[int], str]] = [
+            c for c in candidates if seed in c[0].casefold() or seed in c[2].casefold()
+        ]
         candidates = matching or candidates
     for topic_path, indices, text in candidates:
-        if len(snippets) >= max_snippets:
-            return
         snippets.append(_make_snippet(len(snippets), post, topic_path, indices, text))
 
 

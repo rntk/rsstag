@@ -13,18 +13,18 @@ from rsstag.anthology import parsers, prompts
 from rsstag.anthology.candidates import (
     Cluster,
     Vectors,
-    centroid_similarity,
     cluster_rows,
     contrastive_keywords,
     make_cluster,
     merge_pairs,
+    nearest_clusters,
 )
 from rsstag.anthology.judge import Judge
 from rsstag.anthology.units import Snippet
 from rsstag.topic_merge import _union_groups
 
 MERGE_THRESHOLD: float = 0.35
-MAX_MERGE_PAIRS: int = 30
+MERGE_NEIGHBORS: int = 3  # candidate pairs per cluster; no global cap
 MERGE_PAIRS_PER_CALL: int = 10
 LABEL_CLUSTERS_PER_CALL: int = 8
 INTRUDER_SETS_PER_CALL: int = 6
@@ -65,6 +65,14 @@ def _previews(cluster: Cluster, snippets: Sequence[Snippet], count: int) -> List
     return [snippets[row].text for row in cluster.members[:count]]
 
 
+def _label_previews(cluster: Cluster, snippets: Sequence[Snippet]) -> List[str]:
+    """Inspect the core and boundary instead of only the closest members."""
+    rows: List[int] = (
+        cluster.members if cluster.size <= 4 else cluster.members[:2] + cluster.members[-2:]
+    )
+    return [snippets[row].text for row in rows]
+
+
 def default_label(cluster: Cluster, snippets: Sequence[Snippet]) -> str:
     if cluster.keywords:
         return parsers.clip_words(" ".join(cluster.keywords[:3]), 5)
@@ -78,8 +86,8 @@ def default_label(cluster: Cluster, snippets: Sequence[Snippet]) -> str:
 def merge_stage(
     clusters: List[Cluster], vectors: Vectors, snippets: Sequence[Snippet], judge: Judge
 ) -> Tuple[List[Cluster], int]:
-    """Ask the judge about similar cluster pairs and union the 'same' ones."""
-    pairs: List[Tuple[int, int]] = merge_pairs(clusters, MERGE_THRESHOLD, MAX_MERGE_PAIRS)
+    """Ask the judge about every cluster's similar neighbors and union the 'same' ones."""
+    pairs: List[Tuple[int, int]] = merge_pairs(clusters, MERGE_THRESHOLD, MERGE_NEIGHBORS)
     same: List[List[int]] = []
     for batch in _chunks(pairs, MERGE_PAIRS_PER_CALL):
         same += _judge_pairs(batch, clusters, snippets, judge)
@@ -103,9 +111,9 @@ def _judge_pairs(
         )
         for i, j in batch
     ]
-    answers: Dict[int, bool] = parsers.parse_pair_answers(
-        judge.ask(prompts.merge_prompt(payload)), len(batch)
-    )
+    prompt: str = prompts.merge_prompt(payload)
+    answers: Dict[int, bool] = parsers.parse_pair_answers(judge.ask(prompt), len(batch))
+    judge.record(prompt, len(batch), len(answers))
     return [list(batch[n - 1]) for n, is_same in sorted(answers.items()) if is_same]
 
 
@@ -163,12 +171,21 @@ def _judge_labels(
     batch: Sequence[Cluster], snippets: Sequence[Snippet], judge: Judge, seed: str,
     require_judgment: bool = False,
 ) -> None:
-    payload = [(c.keywords, _previews(c, snippets, 4)) for c in batch]
+    payload: List[Tuple[List[str], List[str]]] = [
+        (c.keywords, _label_previews(c, snippets)) for c in batch
+    ]
+    prompt: str = prompts.label_prompt(seed, payload)
+    raw: str = judge.ask(prompt)
     judgments: Dict[int, parsers.LabelJudgment] = parsers.parse_labels(
-        judge.ask(prompts.label_prompt(seed, payload)), len(batch), require_score=require_judgment
+        raw, len(batch), require_score=require_judgment
     )
+    valid_scores: Dict[int, parsers.LabelJudgment] = parsers.parse_labels(
+        raw, len(batch), require_score=True
+    )
+    judge.record(prompt, len(batch), len(valid_scores))
     for number, cluster in enumerate(batch, start=1):
         judgment: Optional[parsers.LabelJudgment] = judgments.get(number)
+        cluster.label_score_valid = number in valid_scores
         cluster.score = judgment.score if judgment else (1 if require_judgment else 3)
         cluster.kind = judgment.kind if judgment else "other"
         cluster.label = (judgment.label if judgment else "") or default_label(cluster, snippets)
@@ -210,13 +227,12 @@ def build_intruder_sets(clusters: List[Cluster]) -> List[IntruderSet]:
     """Four medoids plus the medoid of the nearest other cluster, seeded shuffle."""
     if len(clusters) < 2:
         return []
-    sims: np.ndarray = centroid_similarity(clusters)
-    np.fill_diagonal(sims, -np.inf)
+    nearest: List[List[Tuple[float, int]]] = nearest_clusters(clusters, 1)
     sets: List[IntruderSet] = []
     for idx, cluster in enumerate(clusters):
         if cluster.size < INTRUDER_MIN_SIZE:
             continue
-        intruder: int = clusters[int(np.argmax(sims[idx]))].members[0]
+        intruder: int = clusters[nearest[idx][0][1]].members[0]
         rows: List[int] = cluster.members[:4] + [intruder]
         _seeded_rng(cluster).shuffle(rows)
         sets.append(IntruderSet(cluster, rows, rows.index(intruder) + 1))
@@ -230,9 +246,9 @@ def _seeded_rng(cluster: Cluster) -> random.Random:
 
 def _judge_intruders(batch: Sequence[IntruderSet], snippets: Sequence[Snippet], judge: Judge) -> None:
     payload: List[List[str]] = [[snippets[row].text for row in s.rows] for s in batch]
-    answers: Dict[int, int] = parsers.parse_intruders(
-        judge.ask(prompts.intruder_prompt(payload)), len(batch)
-    )
+    prompt: str = prompts.intruder_prompt(payload)
+    answers: Dict[int, int] = parsers.parse_intruders(judge.ask(prompt), len(batch))
+    judge.record(prompt, len(batch), len(answers))
     for number, item in enumerate(batch, start=1):
         choice: Optional[int] = answers.get(number)
         item.cluster.intruder_ok = None if choice is None else choice == item.answer_position
@@ -272,9 +288,9 @@ def themes_stage(clusters: List[Cluster], vectors: Vectors, judge: Judge, seed: 
         theme.label = parsers.clip_words(theme.clusters[0].label, 5 if len(theme.clusters) == 1 else 4)
     if multi:
         payload = [([c.label for c in t.clusters], t.keywords) for t in multi]
-        labels: Dict[int, str] = parsers.parse_theme_labels(
-            judge.ask(prompts.theme_prompt(seed, payload)), len(multi)
-        )
+        prompt: str = prompts.theme_prompt(seed, payload)
+        labels: Dict[int, str] = parsers.parse_theme_labels(judge.ask(prompt), len(multi))
+        judge.record(prompt, len(multi), len(labels))
         for number, theme in enumerate(multi, start=1):
             theme.label = labels.get(number) or theme.label
     return themes

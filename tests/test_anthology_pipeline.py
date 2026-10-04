@@ -68,12 +68,14 @@ class TestAnthologyPipelineOffline(unittest.TestCase):
         result: Dict[str, Any] = store.save_result.call_args[0][1]
         assert_result_schema(self, result)
         stages_called: List[str] = [c[0][1] for c in store.set_stage.call_args_list]
-        self.assertEqual(stages_called, ["units", "candidates", "merge", "label", "intruder", "recovery", "loose", "themes"])
+        self.assertEqual(stages_called, ["units", "candidates", "merge", "label", "intruder", "repair", "assignment", "recovery", "loose", "themes"])
         self.assertEqual(result["metrics"]["ungrouped_posts"], 4)
         self.assertGreaterEqual(len(result["themes"]), 3)
         self.assertEqual(
             sum(result["metrics"]["first_pass_unsorted"].values()),
-            result["metrics"]["recovery_snippets_input"],
+            result["metrics"]["repair_snippets_assigned"]
+            + result["metrics"]["assignment_snippets_assigned"]
+            + result["metrics"]["recovery_snippets_input"],
         )
         self.assertGreater(result["metrics"]["llm_calls"], 0)
         self.assertEqual(result["metrics"]["intruder_accuracy"], 1.0)
@@ -243,6 +245,33 @@ class _MongoCase(unittest.TestCase):
 
 
 class TestAnthologyPipelineMongo(_MongoCase):
+    def test_load_all_snippets_beyond_old_cap_and_across_batches(self) -> None:
+        for post_count, group_count in [(1, 3001), (501, 7)]:
+            with self.subTest(posts=post_count, groups=group_count):
+                tag: str = f"scope-{post_count}"
+                posts: List[Dict[str, Any]] = []
+                groupings: List[Dict[str, Any]] = []
+                for index in range(post_count):
+                    pid: str = f"{post_count}-{index}"
+                    posts.append({
+                        "owner": self.owner, "pid": pid, "tags": [tag], "unix_date": index,
+                    })
+                    groupings.append({
+                        "owner": self.owner, "post_ids": [pid],
+                        "sentences": [{"number": i, "text": f"Topic text {i}"} for i in range(group_count)],
+                        "groups": {f"Topic {i}": [i] for i in range(group_count)},
+                    })
+                self.db_helper.init_db_from_dict(self.db, {"posts": posts, "post_grouping": groupings})
+                units: UnitsResult = load_units(self.db, self.owner, tag, None)
+                self.assertEqual(units.posts_in_scope, post_count)
+                self.assertEqual(units.ungrouped_posts, 0)
+                self.assertEqual(len(units.snippets), post_count * group_count)
+                self.assertEqual(len({s.id for s in units.snippets}), post_count * group_count)
+                self.assertEqual(
+                    {(s.post_id, s.topic_path) for s in units.snippets},
+                    {(p["pid"], f"Topic {i}") for p in posts for i in range(group_count)},
+                )
+
     def test_load_units_filters_by_seed_and_counts_ungrouped(self) -> None:
         self._seed_posts()
         units = load_units(self.db, self.owner, "news", {"mode": "all"})

@@ -10,11 +10,13 @@ from pymongo.database import Database
 
 from rsstag.anthologies import STATUS_FAILED, STATUS_PROCESSING, RssTagAnthologies
 from rsstag.anthology import stages
+from rsstag.anthology.assignment import assign_leftovers
 from rsstag.anthology.candidates import Cluster, Vectors, build_candidates, vectorize
 from rsstag.anthology.judge import Judge, JudgeUnavailableError, prepare_judgments
 from rsstag.anthology.loose import label_leftovers, loose_theme
-from rsstag.anthology.result import RunCounters, build_result
+from rsstag.anthology.result import RunCounters, build_result, coverage_problems
 from rsstag.anthology.recovery import recover_unsorted
+from rsstag.anthology.repair import repair_rejected
 from rsstag.anthology.units import Snippet, UnitsResult, load_units
 
 _log: logging.Logger = logging.getLogger("anthology.pipeline")
@@ -147,17 +149,30 @@ class AnthologyPipeline:
 
         self._stage(anthology_id, "label")
         labeled: stages.Filtered = stages.label_stage(clusters, snippets, self._judge, seed)
+        rejected: List[Cluster] = [
+            c for c in clusters if c.label_score_valid and c.score <= stages.DISSOLVE_SCORE
+        ]
         counters.first_pass_unsorted["label_rejected"] = len(labeled.released)
         clusters = self._apply(labeled, counters)
 
         self._stage(anthology_id, "intruder")
         filtered: stages.Filtered
         filtered, counters.intruder_accuracy = stages.intruder_stage(clusters, snippets, self._judge)
+        rejected.extend(
+            c for c in clusters
+            if c.intruder_ok is False and c.score <= stages.INTRUDER_DISSOLVE_SCORE
+        )
         counters.first_pass_unsorted["intruder_rejected"] = len(filtered.released)
         clusters = self._apply(filtered, counters)
 
+        self._stage(anthology_id, "repair")
+        clusters += repair_rejected(rejected, vectors, snippets, self._judge, seed, counters)
+
+        self._stage(anthology_id, "assignment")
+        clusters = assign_leftovers(clusters, vectors, snippets, self._judge, seed, counters)
+
         self._stage(anthology_id, "recovery")
-        first_pass_clusters: List[Cluster] = clusters
+        accepted_clusters: List[Cluster] = clusters
         clusters = recover_unsorted(clusters, vectors, snippets, self._judge, seed, counters)
 
         self._stage(anthology_id, "loose")
@@ -165,13 +180,30 @@ class AnthologyPipeline:
 
         self._stage(anthology_id, "themes")
         themes: List[stages.Theme] = self._themes(
-            first_pass_clusters, clusters[len(first_pass_clusters):], loose, vectors, seed
+            accepted_clusters, clusters[len(accepted_clusters):], loose, vectors, seed
         )
         self._judge.ensure_available()
+        self._verify_coverage(len(snippets), themes)
 
-        counters.llm_calls, counters.llm_cached = self._judge.calls, self._judge.cached
+        self._count_judge(counters)
         counters.duration_sec = time.time() - started
         return build_result(snippets, themes, counters)
+
+    def _count_judge(self, counters: RunCounters) -> None:
+        counters.llm_calls, counters.llm_cached = self._judge.calls, self._judge.cached
+        counters.llm_retries, counters.llm_failures = self._judge.retries, self._judge.failures
+        counters.judgments_expected = self._judge.expected
+        counters.judgments_missing = self._judge.missing
+
+    @staticmethod
+    def _verify_coverage(n_snippets: int, themes: List[stages.Theme]) -> None:
+        problems: List[str] = coverage_problems(n_snippets, themes)
+        if problems:
+            _log.error("Anthology coverage check failed: %s", "; ".join(problems[:20]))
+            raise AnthologyPipelineError(
+                f"Internal grouping error: {len(problems)} snippet placement problems; "
+                "please retry the build"
+            )
 
     def _themes(
         self,
@@ -181,7 +213,7 @@ class AnthologyPipeline:
         vectors: Vectors,
         seed: str,
     ) -> List[stages.Theme]:
-        """First-pass themes plus one theme per recovered cluster, loose topics last."""
+        """Accepted/repaired themes plus one per recovery group, loose topics last."""
         themes: List[stages.Theme] = stages.themes_stage(first_pass, vectors, self._judge, seed)
         themes.extend(
             stages.Theme(clusters=[cluster], label=cluster.label, keywords=list(cluster.keywords))

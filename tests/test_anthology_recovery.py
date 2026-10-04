@@ -11,7 +11,7 @@ import numpy as np
 
 from rsstag.anthology import recovery, stages
 from rsstag.anthology.candidates import Cluster, Vectors, build_candidates, centroid_of, make_cluster, vectorize
-from rsstag.anthology.judge import Judge
+from rsstag.anthology.judge import Judge, JudgeUnavailableError
 from rsstag.anthology.pipeline import AnthologyPipeline
 from rsstag.anthology.result import RunCounters, build_result
 from rsstag.anthology.stages import Theme
@@ -105,7 +105,7 @@ class TestAnthologyRecovery(unittest.TestCase):
         self.assertEqual(counters.recovery_snippets_input, 12)
         self.assertEqual(counters.recovery_snippets_assigned, 12)
 
-    def test_pipeline_recovers_groups_rejected_by_first_pass_label(self) -> None:
+    def test_pipeline_repairs_groups_rejected_by_first_pass_label(self) -> None:
         snippets: List[Snippet]
         snippets, _truth = synthetic_snippets(per_topic=4)
 
@@ -147,9 +147,10 @@ class TestAnthologyRecovery(unittest.TestCase):
         self.assertEqual(len(assigned_ids), 12)
         self.assertEqual(result["unsorted"], [])
         self.assertEqual(metrics["first_pass_unsorted"]["label_rejected"], 8)
-        self.assertEqual(metrics["recovery_snippets_input"], 8)
-        self.assertEqual(metrics["recovery_snippets_assigned"], 8)
-        self.assertEqual(metrics["recovery_clusters_final"], 2)
+        self.assertEqual(metrics["repair_snippets_assigned"], 8)
+        self.assertEqual(metrics["repair_clusters_final"], 2)
+        self.assertEqual(metrics["recovery_snippets_input"], 0)
+        self.assertEqual(metrics["recovery_snippets_assigned"], 0)
         self.assertEqual(metrics["coverage"], 1.0)
 
     def test_recovered_themes_stay_separate_from_first_pass_theme_groups(self) -> None:
@@ -339,7 +340,7 @@ class TestAnthologyRecovery(unittest.TestCase):
             def call(self, *args: object, **kwargs: object) -> str:
                 raise RuntimeError("judge unavailable")
 
-        judge: Judge = Judge(db, Outage(), "owner")
+        judge: Judge = Judge(db, Outage(), "owner", retry_delays=())
         self.assertEqual(judge.ask(cached_prompt), cached_judge.ask(cached_prompt))
         counters: RunCounters = RunCounters()
         initial: List[Cluster] = self._initial()
@@ -347,7 +348,8 @@ class TestAnthologyRecovery(unittest.TestCase):
         result: List[Cluster] = recovery.recover_unsorted(
             initial, self.vectors, self.snippets, judge, "seed", counters
         )
-        judge.ensure_available()
+        with self.assertRaises(JudgeUnavailableError):
+            judge.ensure_available()
 
         self.assertEqual(result, initial)
         self.assertEqual(counters.recovery_clusters_final, 0)

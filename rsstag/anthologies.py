@@ -33,7 +33,7 @@ def is_stuck(doc: Dict[str, Any]) -> bool:
     )
 
 
-STAGES: tuple = ("units", "candidates", "merge", "label", "intruder", "recovery", "loose", "themes", "done")
+STAGES: tuple = ("units", "candidates", "merge", "label", "intruder", "repair", "assignment", "recovery", "loose", "themes", "done")
 
 _LIST_PROJECTION: Dict[str, int] = {"result.snippets": 0, "result.clusters": 0}
 

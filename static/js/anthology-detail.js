@@ -285,6 +285,27 @@ export function renderMetrics(metrics) {
       `${metrics.llm_calls ?? 0}${metrics.llm_cached ? ` (+${metrics.llm_cached} cached)` : ''}`,
     ],
   ];
+  if (metrics.ungrouped_posts > 0) {
+    items.push([
+      'Posts missing topic grouping (run post grouping, then rebuild)',
+      metrics.ungrouped_posts,
+    ]);
+  }
+  if (metrics.judgments_missing > 0) {
+    items.push([
+      'Unanswered LLM judgments',
+      `${metrics.judgments_missing}/${metrics.judgments_expected ?? metrics.judgments_missing}`,
+    ]);
+  }
+  if (metrics.repair_snippets_assigned > 0) {
+    items.push(['Saved by topic refinement', metrics.repair_snippets_assigned]);
+  }
+  if (metrics.assignment_snippets_input > 0) {
+    items.push([
+      'Matched to existing topics',
+      `${metrics.assignment_snippets_assigned ?? 0}/${metrics.assignment_snippets_input}`,
+    ]);
+  }
   if (metrics.recovery_snippets_input > 0) {
     items.push([
       'Recovered from unsorted',

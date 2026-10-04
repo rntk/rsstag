@@ -10,15 +10,14 @@ from dataclasses import replace
 from typing import Dict, List, Set
 
 import numpy as np
-from sklearn.cluster import AgglomerativeClustering
 
 from rsstag.anthology import stages
 from rsstag.anthology.candidates import (
     Cluster,
     Vectors,
-    safe_rows,
     contrastive_keywords,
     make_cluster,
+    threshold_rows,
     vectorize,
 )
 from rsstag.anthology.judge import Judge
@@ -44,13 +43,7 @@ def loose_groups(dense: np.ndarray) -> List[List[int]]:
     n_rows: int = dense.shape[0]
     if n_rows < 2:
         return [list(range(n_rows))] if n_rows else []
-    model: AgglomerativeClustering = AgglomerativeClustering(
-        n_clusters=None,
-        distance_threshold=LOOSE_DISTANCE_THRESHOLD,
-        metric="cosine",
-        linkage="average",
-    )
-    labels: np.ndarray = model.fit_predict(safe_rows(dense))
+    labels: np.ndarray = threshold_rows(dense, LOOSE_DISTANCE_THRESHOLD)
     groups: Dict[int, List[int]] = {}
     for row, label in enumerate(labels.tolist()):
         groups.setdefault(int(label), []).append(row)

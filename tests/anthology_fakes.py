@@ -64,6 +64,9 @@ class FakeRouter:
     def call(self, settings: Optional[dict], user_msgs: List[str], **kwargs: Any) -> str:
         prompt: str = user_msgs[0]
         self.prompts.append(prompt)
+        if prompt.startswith("TASK: ASSIGN"):
+            payload: Dict[str, Any] = json.loads(prompt.split("\n")[-1])
+            return json.dumps([{"id": item["id"], "same": False} for item in payload["items"]])
         if prompt.startswith("TASK: MERGE"):
             count: int = len(_blocks(prompt, "Pair"))
             return "\n".join(f"{n}: {self.merge_answer}" for n in range(1, count + 1))
@@ -102,6 +105,9 @@ class FakeCollection:
 
     def update_one(self, query: Dict[str, Any], update: Dict[str, Any], upsert: bool = False) -> None:
         self.docs[(query["owner"], query["prompt_hash"])] = dict(update["$set"])
+
+    def delete_one(self, query: Dict[str, Any]) -> None:
+        self.docs.pop((query["owner"], query["prompt_hash"]), None)
 
     def create_index(self, *args: Any, **kwargs: Any) -> None:
         return None

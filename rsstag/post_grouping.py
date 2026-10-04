@@ -78,9 +78,10 @@ class RssTagPostGrouping:
             return []
 
     def get_by_post_ids(
-        self, owner: str, post_ids: List[PostId], projection: Optional[dict] = None
+        self, owner: str, post_ids: List[PostId], projection: Optional[dict] = None,
+        *, raise_on_error: bool = False,
     ) -> List[dict]:
-        """Get grouping documents containing any requested post in one query."""
+        """Get matching groupings; completeness-sensitive callers can raise on errors."""
         query_values: Set[PostId] = set()
         for post_id in post_ids:
             query_values.add(str(post_id))
@@ -96,6 +97,8 @@ class RssTagPostGrouping:
             ))
         except Exception as exc:
             self._log.warning("Could not load grouped topics for post IDs: %s", exc)
+            if raise_on_error:
+                raise RuntimeError("Could not load grouped topics; retry the anthology build") from exc
             return []
 
     @staticmethod

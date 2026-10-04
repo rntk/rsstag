@@ -68,7 +68,7 @@ class TestLabelLeftovers(unittest.TestCase):
 
         result: List[Cluster] = loose.label_leftovers(
             self.accepted, self.vectors, self.snippets,
-            Judge(FakeDB(), SilentRouter(), "owner"), "seed", RunCounters(),
+            Judge(FakeDB(), SilentRouter(), "owner", retry_delays=()), "seed", RunCounters(),
         )
         self.assertTrue(result)
         self.assertTrue(all(c.label for c in result))

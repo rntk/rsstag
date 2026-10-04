@@ -40,6 +40,15 @@ class TestUnionMerge(_Base):
 
 
 class TestLabelAndIntruder(_Base):
+    def test_label_previews_include_boundary_members(self) -> None:
+        cluster: Cluster = make_cluster("mixed", list(range(8)), self.vectors)
+        expected_rows: List[int] = cluster.members[:2] + cluster.members[-2:]
+        self.assertEqual(stages._label_previews(cluster, self.snippets),
+                         [self.snippets[row].text for row in expected_rows])
+        small: Cluster = make_cluster("small", [0, 1, 2], self.vectors)
+        self.assertEqual(stages._label_previews(small, self.snippets),
+                         [self.snippets[row].text for row in small.members])
+
     def test_label_stage_assigns_labels(self) -> None:
         result = stages.label_stage(self.clusters, self.snippets, self.judge, "seed")
         self.assertEqual(result.dissolved, 0)
@@ -47,6 +56,18 @@ class TestLabelAndIntruder(_Base):
             self.assertTrue(cluster.label.endswith("story"))
             self.assertEqual(cluster.score, 4)
             self.assertEqual(cluster.kind, "event")
+
+    def test_invalid_low_label_scores_do_not_authorize_repair(self) -> None:
+        class Scores:
+            def call(self, settings: object, msgs: List[str], **kwargs: object) -> str:
+                return '{"id": 1, "score": 0, "label": "invalid", "kind": "event"}\n{"id": 2, "score": 2, "label": "mixed", "kind": "event"}'
+
+        clusters: List[Cluster] = self.clusters[:2]
+        stages.label_stage(clusters, self.snippets, Judge(FakeDB(), Scores(), "owner"), "seed")
+        self.assertEqual(clusters[0].score, 1)
+        self.assertFalse(clusters[0].label_score_valid)
+        self.assertEqual(clusters[1].score, 2)
+        self.assertTrue(clusters[1].label_score_valid)
 
     def test_low_scores_dissolve(self) -> None:
         judge = Judge(FakeDB(), FakeRouter(label_score=2), "owner")
@@ -98,7 +119,7 @@ class TestLabelAndIntruder(_Base):
                 return ""
 
         result = stages.label_stage(
-            self.clusters[:2], self.snippets, Judge(FakeDB(), Empty(), "owner"),
+            self.clusters[:2], self.snippets, Judge(FakeDB(), Empty(), "owner", retry_delays=()),
             "seed", require_judgment=True,
         )
 
@@ -141,7 +162,7 @@ class TestLabelAndIntruder(_Base):
         ]
         for cluster in tested:
             cluster.score = 4
-        judge: Judge = Judge(FakeDB(), Empty(), "owner")
+        judge: Judge = Judge(FakeDB(), Empty(), "owner", retry_delays=())
         result, accuracy = stages.intruder_stage(
             tested, self.snippets, judge, require_judgment=True
         )
@@ -152,7 +173,7 @@ class TestLabelAndIntruder(_Base):
         untested: List[Cluster] = [make_cluster("c2", list(range(4)), self.vectors)]
         untested[0].score = 4
         no_comparison, no_accuracy = stages.intruder_stage(
-            untested, self.snippets, Judge(FakeDB(), Empty(), "owner"), require_judgment=True
+            untested, self.snippets, Judge(FakeDB(), Empty(), "owner", retry_delays=()), require_judgment=True
         )
         self.assertEqual(no_comparison.kept, untested)
         self.assertEqual(no_comparison.released, [])
@@ -193,7 +214,7 @@ class TestThemesAndJudge(_Base):
             def call(self, *args: object, **kwargs: object) -> str:
                 raise RuntimeError("down")
 
-        judge = Judge(FakeDB(), Broken(), "owner")
+        judge = Judge(FakeDB(), Broken(), "owner", retry_delays=())
         self.assertEqual(judge.ask("p"), "")
         with self.assertRaises(JudgeUnavailableError):
             judge.ensure_available()

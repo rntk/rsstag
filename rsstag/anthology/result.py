@@ -17,8 +17,22 @@ class RunCounters:
     intruder_accuracy: Optional[float] = None
     llm_calls: int = 0
     llm_cached: int = 0
+    llm_retries: int = 0
+    llm_failures: int = 0
+    judgments_expected: int = 0
+    judgments_missing: int = 0
     duration_sec: float = 0.0
     first_pass_unsorted: Dict[str, int] = field(default_factory=dict)
+    repair_clusters_input: int = 0
+    repair_clusters_candidate: int = 0
+    repair_clusters_final: int = 0
+    repair_snippets_assigned: int = 0
+    repair_llm_calls: int = 0
+    assignment_snippets_input: int = 0
+    assignment_candidates: int = 0
+    assignment_snippets_assigned: int = 0
+    assignment_llm_calls: int = 0
+    assignment_judgment_missing: int = 0
     recovery_snippets_input: int = 0
     recovery_snippets_assigned: int = 0
     recovery_clusters_candidate: int = 0
@@ -74,6 +88,10 @@ def build_metrics(
         "intruder_accuracy": counters.intruder_accuracy,
         "llm_calls": counters.llm_calls,
         "llm_cached": counters.llm_cached,
+        "llm_retries": counters.llm_retries,
+        "llm_failures": counters.llm_failures,
+        "judgments_expected": counters.judgments_expected,
+        "judgments_missing": counters.judgments_missing,
         "ungrouped_posts": counters.ungrouped_posts,
         "clusters_candidate": counters.clusters_candidate,
         "clusters_final": final_clusters,
@@ -81,6 +99,16 @@ def build_metrics(
         "merges": counters.merges,
         "duration_sec": round(counters.duration_sec, 3),
         "first_pass_unsorted": dict(counters.first_pass_unsorted),
+        "repair_clusters_input": counters.repair_clusters_input,
+        "repair_clusters_candidate": counters.repair_clusters_candidate,
+        "repair_clusters_final": counters.repair_clusters_final,
+        "repair_snippets_assigned": counters.repair_snippets_assigned,
+        "repair_llm_calls": counters.repair_llm_calls,
+        "assignment_snippets_input": counters.assignment_snippets_input,
+        "assignment_candidates": counters.assignment_candidates,
+        "assignment_snippets_assigned": counters.assignment_snippets_assigned,
+        "assignment_llm_calls": counters.assignment_llm_calls,
+        "assignment_judgment_missing": counters.assignment_judgment_missing,
         "recovery_snippets_input": counters.recovery_snippets_input,
         "recovery_snippets_assigned": counters.recovery_snippets_assigned,
         "recovery_clusters_candidate": counters.recovery_clusters_candidate,
@@ -91,6 +119,21 @@ def build_metrics(
         "loose_clusters": counters.loose_clusters,
         "loose_llm_calls": counters.loose_llm_calls,
     }
+
+
+def coverage_problems(n_snippets: int, themes: Sequence[Theme]) -> List[str]:
+    """Every snippet must be in at most one final cluster; rows must be valid."""
+    seen: Dict[int, str] = {}
+    problems: List[str] = []
+    for cluster in (c for theme in themes for c in theme.clusters):
+        for row in cluster.members:
+            if not 0 <= row < n_snippets:
+                problems.append(f"cluster {cluster.id} has unknown snippet row {row}")
+            elif row in seen:
+                problems.append(f"snippet row {row} is in clusters {seen[row]} and {cluster.id}")
+            else:
+                seen[row] = cluster.id
+    return problems
 
 
 def build_result(

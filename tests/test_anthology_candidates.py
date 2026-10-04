@@ -81,7 +81,8 @@ class TestAnthologyCandidates(unittest.TestCase):
     def test_fine_cluster_count_bounds(self) -> None:
         self.assertEqual(fine_cluster_count(5), 2)
         self.assertEqual(fine_cluster_count(60), 10)
-        self.assertEqual(fine_cluster_count(3000), 60)
+        self.assertEqual(fine_cluster_count(1500), 60)
+        self.assertEqual(fine_cluster_count(3000), 120)
         self.assertEqual(fine_cluster_count(2), 1)
 
     def test_merge_pairs_only_similar(self) -> None:

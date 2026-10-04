@@ -7,6 +7,8 @@ export const STAGES = [
   { id: 'merge', label: 'Merge' },
   { id: 'label', label: 'Label' },
   { id: 'intruder', label: 'Intruder test' },
+  { id: 'repair', label: 'Refine topics' },
+  { id: 'assignment', label: 'Match snippets' },
   { id: 'recovery', label: 'Recover unsorted' },
   { id: 'loose', label: 'Loose labels' },
   { id: 'themes', label: 'Themes' },

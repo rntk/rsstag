@@ -14,6 +14,7 @@ import {
   renderClusterHead,
   renderClusterStats,
   renderHeader,
+  renderMetrics,
   renderSnippetCard,
   renderSnippetList,
   snippetFeedTitle,
@@ -40,6 +41,23 @@ import {
   stepStates,
 } from '../libs/anthology-common.js';
 import { buildCreatePayload, needsPolling, renderCard, renderList } from '../anthologies-list.js';
+
+test('metrics disclose posts missing topic grouping', () => {
+  assert.match(
+    renderMetrics({ ungrouped_posts: 7 }),
+    /Posts missing topic grouping.*<dd>7<\/dd>/
+  );
+  assert.doesNotMatch(renderMetrics({ ungrouped_posts: 0 }), /Posts missing topic grouping/);
+  assert.doesNotMatch(renderMetrics({}), /Posts missing topic grouping/);
+});
+
+test('metrics disclose unanswered LLM judgments', () => {
+  assert.match(
+    renderMetrics({ judgments_missing: 3, judgments_expected: 40 }),
+    /Unanswered LLM judgments.*<dd>3\/40<\/dd>/
+  );
+  assert.doesNotMatch(renderMetrics({ judgments_missing: 0 }), /Unanswered LLM judgments/);
+});
 
 function makeResult() {
   return {
@@ -145,14 +163,26 @@ test('escapeHtml escapes all special characters', () => {
 
 test('stepStates marks done / current / failed', () => {
   const states = stepStates('processing', 'merge').map((s) => s.state);
-  assert.deepEqual(states, ['done', 'done', 'current', 'todo', 'todo', 'todo', 'todo', 'todo', 'todo']);
+  assert.deepEqual(states, [
+    'done',
+    'done',
+    'current',
+    'todo',
+    'todo',
+    'todo',
+    'todo',
+    'todo',
+    'todo',
+    'todo',
+    'todo',
+  ]);
   assert.equal(stepStates('failed', 'label')[3].state, 'failed');
   assert.ok(stepStates('done', 'done').every((s) => s.state === 'done'));
   assert.ok(stepStates('pending', null).every((s) => s.state === 'todo'));
   assert.match(renderStepper('processing', 'units'), /anth-stepper__step--current/);
-  assert.equal((renderStepper('pending', null).match(/<li/g) || []).length, 9);
-  assert.equal(stepStates('processing', 'recovery')[5].state, 'current');
-  assert.equal(stepStates('processing', 'loose')[6].state, 'current');
+  assert.equal((renderStepper('pending', null).match(/<li/g) || []).length, 11);
+  assert.equal(stepStates('processing', 'recovery')[7].state, 'current');
+  assert.equal(stepStates('processing', 'loose')[8].state, 'current');
 });
 
 test('format helpers', () => {
@@ -349,9 +379,29 @@ test('renderTree shows themes, expanded clusters, warnings and unsorted', () => 
 
 test('renderTree marks the loose theme and lists its single-snippet topics', () => {
   const result = makeResult();
-  result.themes.push({ id: 'tl', label: 'Loose topics', size: 2, cluster_ids: ['l0', 'l1'], loose: true });
-  result.clusters.l0 = { id: 'l0', label: 'Chip shortage', kind: 'event', score: 3, snippet_ids: ['s1'], loose: true };
-  result.clusters.l1 = { id: 'l1', label: 'Repair guide', kind: 'howto', score: 2, snippet_ids: ['s2'], loose: true };
+  result.themes.push({
+    id: 'tl',
+    label: 'Loose topics',
+    size: 2,
+    cluster_ids: ['l0', 'l1'],
+    loose: true,
+  });
+  result.clusters.l0 = {
+    id: 'l0',
+    label: 'Chip shortage',
+    kind: 'event',
+    score: 3,
+    snippet_ids: ['s1'],
+    loose: true,
+  };
+  result.clusters.l1 = {
+    id: 'l1',
+    label: 'Repair guide',
+    kind: 'howto',
+    score: 2,
+    snippet_ids: ['s2'],
+    loose: true,
+  };
   const html = renderTree(result, null, new Set(['tl']));
   assert.match(html, /anth-tree__theme--loose/);
   assert.match(html, /<ul class="anth-tree__clusters">.*Chip shortage.*Repair guide/s);
@@ -497,6 +547,27 @@ test('renderClusterStats and renderHeader', () => {
   assert.match(done, /50%/);
   assert.match(done, /2 \(\+1 cached\)/);
   assert.doesNotMatch(done, /Recovered from unsorted/);
+  assert.doesNotMatch(done, /Saved by topic refinement|Matched to existing topics/);
+  const refined = renderHeader({
+    seed_value: 'x',
+    status: 'done',
+    result: {
+      metrics: {
+        repair_snippets_assigned: 8,
+        assignment_snippets_input: 6,
+        assignment_snippets_assigned: 4,
+      },
+    },
+  });
+  assert.match(refined, /Saved by topic refinement/);
+  assert.match(refined, /Matched to existing topics/);
+  assert.match(refined, /4\/6/);
+  const unmatched = renderHeader({
+    seed_value: 'x',
+    status: 'done',
+    result: { metrics: { assignment_snippets_input: 3 } },
+  });
+  assert.match(unmatched, /0\/3/);
   const recovered = renderHeader({
     seed_value: 'x',
     status: 'done',
