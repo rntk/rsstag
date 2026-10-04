@@ -120,3 +120,26 @@ class TestWorkerProcessLifecycle(MongoWorkerLifecycleTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestWorkerTaskActivity(MongoWorkerLifecycleTestCase):
+    def test_update_heartbeat_sets_started_at_once(self) -> None:
+        self.workers.update_heartbeat(701)
+        first: Dict[str, Any] | None = self.db.worker_heartbeats.find_one({"worker_id": 701})
+        time.sleep(0.01)
+        self.workers.update_heartbeat(701)
+        second: Dict[str, Any] | None = self.db.worker_heartbeats.find_one({"worker_id": 701})
+        self.assertIsNotNone(first)
+        self.assertIsNotNone(second)
+        self.assertEqual(first["started_at"], second["started_at"])
+
+    def test_record_task_activity_tracks_last_task(self) -> None:
+        self.workers.update_heartbeat(702)
+        self.workers.record_task_activity(702, 3, "Completed")
+        self.workers.record_task_activity(702, 6, "Deferred")
+        record: Dict[str, Any] | None = self.db.worker_heartbeats.find_one({"worker_id": 702})
+        self.assertIsNotNone(record)
+        self.assertEqual(record["last_task_type"], 6)
+        self.assertEqual(record["last_task_outcome"], "Deferred")
+        self.assertEqual(record["tasks_processed"], 2)
+        self.assertIn("last_task_at", record)

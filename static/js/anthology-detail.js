@@ -294,8 +294,15 @@ export function renderMetrics(metrics) {
 
 function renderHeadState(payload) {
   if (isActive(payload)) {
-    const note = payload.status === 'pending' ? 'Queued…' : 'Building…';
-    return `<div class="anth-head__progress">${renderStepper(payload.status, payload.stage)}<span class="anth-muted">${note}</span></div>`;
+    const note = payload.stuck
+      ? 'No progress for an hour. Retry to restart.'
+      : payload.status === 'pending'
+        ? 'Queued…'
+        : 'Building…';
+    const retry = payload.stuck
+      ? '<button type="button" class="anth-btn" data-action="retry">Retry</button>'
+      : '';
+    return `<div class="anth-head__progress">${renderStepper(payload.status, payload.stage)}<span class="anth-muted">${note}</span>${retry}</div>`;
   }
   if (payload.status === 'failed') {
     return (

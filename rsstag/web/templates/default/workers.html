@@ -23,6 +23,9 @@
                 <th>Worker ID</th>
                 <th>Status</th>
                 <th>Last Heartbeat</th>
+                <th>Last Task</th>
+                <th>Idle For</th>
+                <th>Tasks Done</th>
                 <th>Actions</th>
             </tr>
         </thead>
@@ -32,6 +35,16 @@
                 <td>{{ worker.worker_id }}</td>
                 <td class="status-{{ worker.status }}">{{ worker.status }}</td>
                 <td>{{ worker.last_heartbeat | timestamp_to_datetime }}</td>
+                <td>
+                    {% if worker.last_task_at %}
+                        {{ worker.last_task_at | timestamp_to_datetime }}
+                        <div class="worker-last-task">{{ worker.last_task_title }} &middot; {{ worker.last_task_outcome }}</div>
+                    {% else %}
+                        N/A
+                    {% endif %}
+                </td>
+                <td>{{ worker.idle_for }}</td>
+                <td>{{ worker.tasks_processed }}</td>
                 <td>
                     <form action="/workers/kill/{{ worker.worker_id }}" method="post" class="inline-form">
                         <input type="submit" value="Kill" onclick="return confirm('Kill worker {{ worker.worker_id }}?')">

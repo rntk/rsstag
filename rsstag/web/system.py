@@ -1,6 +1,7 @@
 import gzip
 import json
 import logging
+import time
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
@@ -167,8 +168,48 @@ def _get_worker_token_context(
     return {"owner": owner, "token_id": str(token_id)}
 
 
+def _format_duration(seconds: float) -> str:
+    """Format a duration in seconds as a compact human string, e.g. '1h 5m'."""
+    total: int = max(0, int(seconds))
+    days, rem = divmod(total, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, secs = divmod(rem, 60)
+    parts: List[str] = []
+    if days:
+        parts.append(f"{days}d")
+    if hours:
+        parts.append(f"{hours}h")
+    if minutes and not days:
+        parts.append(f"{minutes}m")
+    if not parts:
+        parts.append(f"{secs}s")
+    return " ".join(parts)
+
+
+def _worker_view(
+    app: "RSSTagApplication", worker: Dict[str, Any], now: float
+) -> Dict[str, Any]:
+    """Add idle time and last task title to a worker heartbeat record."""
+    view: Dict[str, Any] = dict(worker)
+    last_task_at: Optional[float] = worker.get("last_task_at")
+    started_at: Optional[float] = worker.get("started_at")
+    view["tasks_processed"] = worker.get("tasks_processed", 0)
+    view["last_task_title"] = ""
+    if last_task_at:
+        view["idle_for"] = _format_duration(now - last_task_at)
+        view["last_task_title"] = app.tasks.get_task_title(worker.get("last_task_type"))
+    elif started_at:
+        view["idle_for"] = f"{_format_duration(now - started_at)} (no tasks yet)"
+    else:
+        view["idle_for"] = "N/A"
+    return view
+
+
 def on_workers_get(app: "RSSTagApplication", user: dict, _: Request) -> Response:
-    workers = app.workers.get_all_workers()
+    now: float = time.time()
+    workers: List[Dict[str, Any]] = [
+        _worker_view(app, worker, now) for worker in app.workers.get_all_workers()
+    ]
     page = app.template_env.get_template("workers.html")
     return Response(
         page.render(

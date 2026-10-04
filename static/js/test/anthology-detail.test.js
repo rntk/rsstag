@@ -412,6 +412,10 @@ test('renderClusterStats and renderHeader', () => {
   });
   assert.match(processing, /&lt;x&gt;/);
   assert.match(processing, /anth-stepper/);
+  const stuck = renderHeader({ seed_value: 'x', status: 'processing', stuck: true });
+  assert.match(stuck, /No progress for an hour/);
+  assert.match(stuck, /data-action="retry"/);
+  assert.doesNotMatch(processing, /data-action="retry"/);
   const failed = renderHeader({ seed_value: 'x', status: 'failed', error: 'boom', result: null });
   assert.match(failed, /boom/);
   assert.match(failed, /data-action="retry"/);
@@ -455,6 +459,10 @@ test('needsPolling and list rendering', () => {
   assert.match(processing, /&lt;t&gt;/);
   assert.match(processing, /anth-stepper/);
   assert.doesNotMatch(processing, /data-action="retry"/);
+
+  const stuck = renderCard({ id: 'stuck', seed_value: 't', status: 'processing', stuck: true });
+  assert.match(stuck, /No progress for an hour/);
+  assert.match(stuck, /data-action="retry"/);
 
   const done = renderCard({
     id: 'a2',

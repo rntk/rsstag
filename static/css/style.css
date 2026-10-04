@@ -1268,6 +1268,11 @@ h3.post_title {
   background-color: #f4f4f4;
 }
 
+.worker-last-task {
+  font-size: 0.85em;
+  color: #666;
+}
+
 .status-running {
   color: green;
 }

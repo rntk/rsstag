@@ -5,6 +5,7 @@ import json
 import time
 import unittest
 from typing import Any, Dict, List, Optional
+from unittest.mock import patch
 
 from bson import ObjectId
 
@@ -288,6 +289,35 @@ class TestWebAnthologies(MongoWebTestCase):
         anthology_id = self._seed(status="processing")
         self.assertEqual(self._post_json(f"/api/anthologies/{anthology_id}/retry", {})[0], 400)
         self.assertEqual(self._post_json(f"/api/anthologies/{ObjectId()}/retry", {})[0], 404)
+
+    def test_api_retry_stuck_processing(self) -> None:
+        anthology_id: str = self._seed(status="processing", updated_at=time.time() - 7200)
+        status: int
+        payload: Dict[str, Any]
+        status, payload = self._get_json(f"/api/anthologies/{anthology_id}")
+        self.assertTrue(payload["data"]["stuck"])
+        status, payload = self._post_json(f"/api/anthologies/{anthology_id}/retry", {})
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["data"]["status"], "pending")
+        self.assertIsNone(payload["data"]["stage"])
+        self.assertFalse(payload["data"]["stuck"])
+
+    def test_api_create_reports_queue_failure(self) -> None:
+        status: int
+        payload: Dict[str, Any]
+        with patch.object(self.app.tasks, "add_task", return_value=False):
+            status, payload = self._post_json("/api/anthologies", {"seed_value": "queue-failure"})
+        self.assertEqual(status, 500)
+        self.assertIn("Failed to queue", payload["error"])
+
+    def test_api_retry_reports_queue_failure(self) -> None:
+        anthology_id: str = self._seed(status="failed")
+        status: int
+        payload: Dict[str, Any]
+        with patch.object(self.app.tasks, "add_task", return_value=False):
+            status, payload = self._post_json(f"/api/anthologies/{anthology_id}/retry", {})
+        self.assertEqual(status, 500)
+        self.assertIn("Failed to queue", payload["error"])
 
     def test_api_delete(self) -> None:
         anthology_id = self._seed_done()

@@ -1,4 +1,5 @@
 import socket
+import time
 import unittest
 from typing import Any, Dict, Optional
 
@@ -90,6 +91,16 @@ class TestAnthologyStorage(unittest.TestCase):
         self.assertEqual((doc["status"], doc["stage"]), ("pending", None))
         self.assertIsNotNone(doc["result"])
         self.assertEqual(self.store.get_pending(self.owner)["_id"], anthology_id)
+
+    def test_retry_protects_active_processing_and_owner(self) -> None:
+        anthology_id: Optional[str] = self.store.create(self.owner, "tag", "retry", None)
+        self.store.update_status(anthology_id, "processing")
+        self.assertFalse(self.store.reset_for_retry(self.owner, anthology_id))
+        self.db.anthologies.update_many(
+            {"owner": self.owner}, {"$set": {"updated_at": time.time() - 7200}}
+        )
+        self.assertFalse(self.store.reset_for_retry("another-owner", anthology_id))
+        self.assertTrue(self.store.reset_for_retry(self.owner, anthology_id))
 
     def test_list_by_owner_is_light_and_sorted(self) -> None:
         older = self.store.create(self.owner, "tag", "a", None)

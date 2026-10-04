@@ -314,6 +314,21 @@ def _apply_outcome(
     return True
 
 
+def _record_activity(
+    workers_db: RssTagWorkers,
+    worker_id: int,
+    task: Dict[str, Any],
+    outcome: TaskOutcome,
+) -> None:
+    """Store last processed task info for the /workers page; never raises."""
+    try:
+        workers_db.record_task_activity(
+            worker_id, task.get("type"), type(outcome).__name__
+        )
+    except Exception as e:
+        logging.warning("Failed to record activity for worker %s: %s", worker_id, e)
+
+
 def worker(config: Dict[str, Any]) -> None:
     import os
 
@@ -427,7 +442,9 @@ def worker(config: Dict[str, Any]) -> None:
                 else:
                     outcome = _run_handler(registry, task)
 
-                if _apply_outcome(tasks, users, task, outcome):
+                failed = _apply_outcome(tasks, users, task, outcome)
+                _record_activity(workers_db, worker_id, task, outcome)
+                if failed:
                     time.sleep(randint(3, 8))
             except Exception as e:
                 logging.error(

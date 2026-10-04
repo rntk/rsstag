@@ -508,9 +508,12 @@ function setAnthologyActionState(button, statusNode, message, isLoading) {
  */
 async function startTagAnthology(button, statusNode) {
   setAnthologyActionState(button, statusNode, 'Starting anthology…', true);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20000);
 
   try {
     const response = await fetch('/api/anthologies', {
+      signal: controller.signal,
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -519,7 +522,7 @@ async function startTagAnthology(button, statusNode) {
         scope: { mode: 'all' },
       }),
     });
-    const payload = await response.json().catch(() => ({}));
+    const payload = await response.json();
 
     if (!response.ok || payload.error) {
       throw new Error(payload.error || 'Failed to start anthology');
@@ -529,8 +532,14 @@ async function startTagAnthology(button, statusNode) {
     window.location.href = anthologyId ? `/anthologies/${anthologyId}` : '/anthologies';
   } catch (error) {
     console.error('Unable to start tag anthology', error);
-    const message = error instanceof Error ? error.message : 'Failed to start anthology';
+    const message = controller.signal.aborted
+      ? 'Starting anthology timed out. Try again or check Anthologies.'
+      : error instanceof Error
+        ? error.message
+        : 'Failed to start anthology';
     setAnthologyActionState(button, statusNode, message, false);
+  } finally {
+    clearTimeout(timeout);
   }
 }
 

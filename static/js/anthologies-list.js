@@ -44,7 +44,10 @@ function renderCardStats(item) {
 
 function renderCardProgress(item) {
   if (isActive(item)) {
-    return renderStepper(item.status, item.stage);
+    return (
+      renderStepper(item.status, item.stage) +
+      (item.stuck ? '<p class="anth-error">No progress for an hour. Retry to restart.</p>' : '')
+    );
   }
   if (item.status === 'failed') {
     return `<p class="anth-error">${escapeHtml(item.error || 'Build failed')}</p>`;
@@ -55,7 +58,7 @@ function renderCardProgress(item) {
 function renderCardActions(item) {
   const id = escapeHtml(item.id);
   const retry =
-    item.status === 'processing'
+    item.status === 'processing' && !item.stuck
       ? ''
       : `<button type="button" class="anth-btn" data-action="retry" data-id="${id}">${
           item.status === 'done' ? 'Rebuild' : 'Retry'

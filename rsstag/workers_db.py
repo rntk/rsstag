@@ -16,10 +16,30 @@ class RssTagWorkers:
 
     def update_heartbeat(self, worker_id: int, status: str = "running") -> None:
         """Update worker heartbeat"""
+        now: float = time.time()
         self._db.worker_heartbeats.update_one(
             {"worker_id": worker_id},
-            {"$set": {"last_heartbeat": time.time(), "status": status}},
+            {
+                "$set": {"last_heartbeat": now, "status": status},
+                "$setOnInsert": {"started_at": now},
+            },
             upsert=True
+        )
+
+    def record_task_activity(
+        self, worker_id: int, task_type: Any, outcome: str
+    ) -> None:
+        """Record that the worker processed a real (non-noop) task."""
+        self._db.worker_heartbeats.update_one(
+            {"worker_id": worker_id},
+            {
+                "$set": {
+                    "last_task_at": time.time(),
+                    "last_task_type": task_type,
+                    "last_task_outcome": outcome,
+                },
+                "$inc": {"tasks_processed": 1},
+            },
         )
 
     def get_all_workers(self) -> List[Dict[str, Any]]:

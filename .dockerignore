@@ -13,3 +13,5 @@ l.txt
 *.w2v
 *.npy
 *.fasttext
+__pycache__
+*.py[cod]

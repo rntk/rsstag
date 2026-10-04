@@ -1895,7 +1895,6 @@ class _AnthologyWorker:
 
     def handle_anthology(self, task: Dict[str, Any]) -> bool:
         from rsstag.anthologies import STATUS_FAILED, RssTagAnthologies
-        from rsstag.anthology.pipeline import AnthologyPipeline
 
         anthology_doc: Dict[str, Any] = task.get("data") or {}
         anthology_id: str = str(anthology_doc.get("_id", "")).strip()
@@ -1904,16 +1903,18 @@ class _AnthologyWorker:
             logging.error("Anthology task missing anthology id or owner: %s", task)
             return False
 
-        pipeline: AnthologyPipeline = AnthologyPipeline(
-            self._db,
-            self._llm,
-            owner=owner,
-            settings=task.get("user", {}).get("settings", {}),
-        )
         try:
+            from rsstag.anthology.pipeline import AnthologyPipeline
+
+            pipeline: AnthologyPipeline = AnthologyPipeline(
+                self._db,
+                self._llm,
+                owner=owner,
+                settings=task.get("user", {}).get("settings", {}),
+            )
             return pipeline.run(anthology_id)
         except Exception as exc:
-            logging.error("Can't build anthology %s. Info: %s", anthology_id, exc)
+            logging.exception("Can't build anthology %s. Info: %s", anthology_id, exc)
             RssTagAnthologies(self._db).update_status(
                 anthology_id, STATUS_FAILED, error=f"Anthology worker error: {exc}"
             )

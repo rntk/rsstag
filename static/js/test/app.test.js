@@ -372,3 +372,47 @@ test('syncGlobalToolsOffset clears variable when toolbar is absent', () => {
   context.module.exports.syncGlobalToolsOffset();
   assert.deepEqual(removed, ['--global-tools-height']);
 });
+
+test('startTagAnthology recovers from a hanging request', async () => {
+  const start = appSource.indexOf('async function startTagAnthology(');
+  const end = appSource.indexOf('/** @returns {void} */', start);
+  const stateStart = appSource.indexOf('function setAnthologyActionState(');
+  const stateEnd = appSource.indexOf('/**', stateStart);
+  const button = { dataset: { seedValue: 'tag' }, setAttribute() {} };
+  const statusNode = { textContent: '' };
+  let expire;
+  let cleared = false;
+  const context = {
+    module: { exports: {} },
+    AbortController,
+    Error,
+    console: { error() {} },
+    setTimeout(callback, delay) {
+      assert.equal(delay, 20000);
+      expire = callback;
+      return 1;
+    },
+    clearTimeout(id) {
+      assert.equal(id, 1);
+      cleared = true;
+    },
+    fetch(url, options) {
+      return new Promise((resolve, reject) => {
+        options.signal.addEventListener('abort', () => reject(new Error('aborted')));
+      });
+    },
+  };
+  vm.runInNewContext(
+    appSource.slice(stateStart, stateEnd) +
+      appSource.slice(start, end) +
+      'module.exports = startTagAnthology;',
+    context
+  );
+  const pending = context.module.exports(button, statusNode);
+  assert.equal(button.disabled, true);
+  expire();
+  await pending;
+  assert.equal(button.disabled, false);
+  assert.match(statusNode.textContent, /timed out/);
+  assert.equal(cleared, true);
+});

@@ -21,6 +21,17 @@ STATUS_PROCESSING: str = "processing"
 STATUS_DONE: str = "done"
 STATUS_FAILED: str = "failed"
 
+PROCESSING_TIMEOUT_SECONDS: float = 3600.0
+
+
+def is_stuck(doc: Dict[str, Any]) -> bool:
+    """A processing run without progress for an hour can be retried."""
+    return (
+        doc.get("status") == STATUS_PROCESSING
+        and float(doc.get("updated_at") or 0) <= time.time() - PROCESSING_TIMEOUT_SECONDS
+    )
+
+
 STAGES: tuple = ("units", "candidates", "merge", "label", "intruder", "themes", "done")
 
 _LIST_PROJECTION: Dict[str, int] = {"result.snippets": 0, "result.clusters": 0}
@@ -153,11 +164,30 @@ class RssTagAnthologies:
 
     def reset_for_retry(self, owner: str, anthology_id: Any) -> bool:
         """Put an anthology back to pending; the old result stays until replaced."""
-        return self._update(
-            anthology_id,
-            {"status": STATUS_PENDING, "stage": None, "error": None},
-            owner=owner,
-        )
+        object_id: Optional[ObjectId] = self._to_object_id(anthology_id)
+        if object_id is None:
+            return False
+        now: float = time.time()
+        query: Dict[str, Any] = {
+            "_id": object_id,
+            "owner": owner,
+            "$or": [
+                {"status": {"$ne": STATUS_PROCESSING}},
+                {
+                    "status": STATUS_PROCESSING,
+                    "updated_at": {"$not": {"$gt": now - PROCESSING_TIMEOUT_SECONDS}},
+                },
+            ],
+        }
+        try:
+            result: Any = self._db.anthologies.update_one(
+                query,
+                {"$set": {"status": STATUS_PENDING, "stage": None, "error": None, "updated_at": now}},
+            )
+            return result.matched_count > 0
+        except Exception as exc:
+            self._log.exception("Can't reset anthology %s: %s", anthology_id, exc)
+            return False
 
     def delete(self, owner: str, anthology_id: Any) -> bool:
         """Delete an anthology of an owner."""

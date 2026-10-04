@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Set, Tupl
 
 from werkzeug.wrappers import Request, Response
 
+from rsstag.anthologies import is_stuck
 from rsstag.read_state import ReadStateService
 from rsstag.tasks import TASK_ANTHOLOGY
 
@@ -71,6 +72,7 @@ def _serialize_summary(doc: Dict[str, Any]) -> Dict[str, Any]:
         "scope": doc.get("scope") or {"mode": "all"},
         "status": doc.get("status", "pending"),
         "stage": doc.get("stage"),
+        "stuck": is_stuck(doc),
         "error": doc.get("error"),
         "stale": bool(doc.get("stale", False)),
         "created_at": doc.get("created_at", 0),
@@ -340,11 +342,12 @@ def _not_found(app: "RSSTagApplication") -> Response:
     return app._json_response({"error": "Anthology not found"}, 404)
 
 
-def _enqueue(app: "RSSTagApplication", owner: str, scope: Any) -> None:
+def _enqueue(app: "RSSTagApplication", owner: str, scope: Any) -> bool:
     try:
-        app.tasks.add_task({"user": owner, "type": TASK_ANTHOLOGY, "scope": scope or {"mode": "all"}})
+        return bool(app.tasks.add_task({"user": owner, "type": TASK_ANTHOLOGY, "scope": scope or {"mode": "all"}}))
     except Exception as exc:
-        log.error("Can't enqueue anthology task for %s: %s", owner, exc)
+        log.exception("Can't enqueue anthology task for %s: %s", owner, exc)
+        return False
 
 
 def _ready_result(doc: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -470,8 +473,8 @@ def on_anthologies_api_create_post(app: "RSSTagApplication", user: dict, rqst: R
         return app._json_response({"error": "Failed to create anthology"}, 500)
 
     status: str = str(doc.get("status", "pending"))
-    if status == "pending":
-        _enqueue(app, user["sid"], doc.get("scope") or scope)
+    if status == "pending" and not _enqueue(app, user["sid"], doc.get("scope") or scope):
+        return app._json_response({"error": "Failed to queue anthology. Please retry."}, 500)
     return app._json_response(
         {"data": {"anthology_id": anthology_id, "status": status, "anthology": _serialize_summary(doc)}}
     )
@@ -530,11 +533,12 @@ def on_anthologies_api_retry_post(
     doc: Optional[Dict[str, Any]] = app.anthologies.get_by_id(user["sid"], anthology_id)
     if not doc:
         return _not_found(app)
-    if str(doc.get("status", "")) == "processing":
+    if str(doc.get("status", "")) == "processing" and not is_stuck(doc):
         return app._json_response({"error": "Anthology is already processing"}, 400)
     if not app.anthologies.reset_for_retry(user["sid"], anthology_id):
         return app._json_response({"error": "Failed to reset anthology"}, 500)
-    _enqueue(app, user["sid"], doc.get("scope"))
+    if not _enqueue(app, user["sid"], doc.get("scope")):
+        return app._json_response({"error": "Failed to queue anthology. Please retry."}, 500)
     payload: Optional[Dict[str, Any]] = _get_detail_payload(app, user["sid"], anthology_id)
     return app._json_response({"data": payload})
 
