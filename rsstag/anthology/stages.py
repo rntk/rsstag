@@ -41,6 +41,7 @@ class Theme:
     clusters: List[Cluster]
     label: str = ""
     keywords: List[str] = field(default_factory=list)
+    loose: bool = False
 
     @property
     def size(self) -> int:
@@ -138,8 +139,7 @@ def label_stage(
     require_judgment: bool = False,
 ) -> Filtered:
     """Score and name clusters; low scores dissolve into unsorted."""
-    for batch in _chunks(clusters, LABEL_CLUSTERS_PER_CALL):
-        _judge_labels(batch, snippets, judge, seed, require_judgment=require_judgment)
+    label_clusters(clusters, snippets, judge, seed, require_judgment=require_judgment)
     result: Filtered = Filtered(kept=[])
     for cluster in clusters:
         if cluster.score <= DISSOLVE_SCORE:
@@ -148,6 +148,15 @@ def label_stage(
         else:
             result.kept.append(cluster)
     return result
+
+
+def label_clusters(
+    clusters: List[Cluster], snippets: Sequence[Snippet], judge: Judge, seed: str,
+    require_judgment: bool = False,
+) -> None:
+    """Score and name clusters in batches without dissolving any of them."""
+    for batch in _chunks(clusters, LABEL_CLUSTERS_PER_CALL):
+        _judge_labels(batch, snippets, judge, seed, require_judgment=require_judgment)
 
 
 def _judge_labels(

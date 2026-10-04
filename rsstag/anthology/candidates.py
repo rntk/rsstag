@@ -42,6 +42,7 @@ class Cluster:
     kind: str = "other"
     score: int = 3
     intruder_ok: Optional[bool] = None
+    loose: bool = False  # lenient leftover group, not validated by score/intruder checks
 
     @property
     def size(self) -> int:
@@ -101,10 +102,10 @@ def cluster_rows(
     model: AgglomerativeClustering = AgglomerativeClustering(
         n_clusters=min(n_clusters, n_rows), metric="cosine", linkage="average"
     )
-    return model.fit_predict(_safe_rows(dense))
+    return model.fit_predict(safe_rows(dense))
 
 
-def _safe_rows(dense: np.ndarray) -> np.ndarray:
+def safe_rows(dense: np.ndarray) -> np.ndarray:
     """Cosine distance is undefined for zero rows; give them a tiny shared axis."""
     rows: np.ndarray = np.array(dense, dtype=float, copy=True)
     zero_rows: np.ndarray = np.linalg.norm(rows, axis=1) == 0

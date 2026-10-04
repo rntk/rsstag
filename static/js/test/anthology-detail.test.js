@@ -145,13 +145,14 @@ test('escapeHtml escapes all special characters', () => {
 
 test('stepStates marks done / current / failed', () => {
   const states = stepStates('processing', 'merge').map((s) => s.state);
-  assert.deepEqual(states, ['done', 'done', 'current', 'todo', 'todo', 'todo', 'todo', 'todo']);
+  assert.deepEqual(states, ['done', 'done', 'current', 'todo', 'todo', 'todo', 'todo', 'todo', 'todo']);
   assert.equal(stepStates('failed', 'label')[3].state, 'failed');
   assert.ok(stepStates('done', 'done').every((s) => s.state === 'done'));
   assert.ok(stepStates('pending', null).every((s) => s.state === 'todo'));
   assert.match(renderStepper('processing', 'units'), /anth-stepper__step--current/);
-  assert.equal((renderStepper('pending', null).match(/<li/g) || []).length, 8);
+  assert.equal((renderStepper('pending', null).match(/<li/g) || []).length, 9);
   assert.equal(stepStates('processing', 'recovery')[5].state, 'current');
+  assert.equal(stepStates('processing', 'loose')[6].state, 'current');
 });
 
 test('format helpers', () => {
@@ -346,6 +347,17 @@ test('renderTree shows themes, expanded clusters, warnings and unsorted', () => 
   assert.match(renderTree(null, null, new Set()), /appear when the build finishes/);
 });
 
+test('renderTree marks the loose theme and lists its single-snippet topics', () => {
+  const result = makeResult();
+  result.themes.push({ id: 'tl', label: 'Loose topics', size: 2, cluster_ids: ['l0', 'l1'], loose: true });
+  result.clusters.l0 = { id: 'l0', label: 'Chip shortage', kind: 'event', score: 3, snippet_ids: ['s1'], loose: true };
+  result.clusters.l1 = { id: 'l1', label: 'Repair guide', kind: 'howto', score: 2, snippet_ids: ['s2'], loose: true };
+  const html = renderTree(result, null, new Set(['tl']));
+  assert.match(html, /anth-tree__theme--loose/);
+  assert.match(html, /<ul class="anth-tree__clusters">.*Chip shortage.*Repair guide/s);
+  assert.equal((html.match(/anth-tree__theme--loose/g) || []).length, 1);
+});
+
 test('renderThemeOverview lists cluster cards and theme action', () => {
   const result = makeResult();
   const html = renderThemeOverview(result.themes[0], result);
@@ -492,6 +504,14 @@ test('renderClusterStats and renderHeader', () => {
   });
   assert.match(recovered, /Recovered from unsorted/);
   assert.match(recovered, /6\/8/);
+  assert.doesNotMatch(recovered, /Loosely labeled/);
+  const loose = renderHeader({
+    seed_value: 'x',
+    status: 'done',
+    result: { metrics: { loose_snippets: 9, loose_clusters: 5 } },
+  });
+  assert.match(loose, /Loosely labeled/);
+  assert.match(loose, /9 in 5 topics/);
 });
 
 // ============================================================

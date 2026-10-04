@@ -12,6 +12,7 @@ from rsstag.anthologies import STATUS_FAILED, STATUS_PROCESSING, RssTagAnthologi
 from rsstag.anthology import stages
 from rsstag.anthology.candidates import Cluster, Vectors, build_candidates, vectorize
 from rsstag.anthology.judge import Judge, JudgeUnavailableError, prepare_judgments
+from rsstag.anthology.loose import label_leftovers, loose_theme
 from rsstag.anthology.result import RunCounters, build_result
 from rsstag.anthology.recovery import recover_unsorted
 from rsstag.anthology.units import Snippet, UnitsResult, load_units
@@ -159,18 +160,37 @@ class AnthologyPipeline:
         first_pass_clusters: List[Cluster] = clusters
         clusters = recover_unsorted(clusters, vectors, snippets, self._judge, seed, counters)
 
+        self._stage(anthology_id, "loose")
+        loose: List[Cluster] = label_leftovers(clusters, vectors, snippets, self._judge, seed, counters)
+
         self._stage(anthology_id, "themes")
-        themes: List[stages.Theme] = stages.themes_stage(first_pass_clusters, vectors, self._judge, seed)
-        themes.extend(
-            stages.Theme(clusters=[cluster], label=cluster.label, keywords=list(cluster.keywords))
-            for cluster in clusters[len(first_pass_clusters):]
+        themes: List[stages.Theme] = self._themes(
+            first_pass_clusters, clusters[len(first_pass_clusters):], loose, vectors, seed
         )
-        themes.sort(key=lambda theme: (-theme.size, theme.clusters[0].id))
         self._judge.ensure_available()
 
         counters.llm_calls, counters.llm_cached = self._judge.calls, self._judge.cached
         counters.duration_sec = time.time() - started
         return build_result(snippets, themes, counters)
+
+    def _themes(
+        self,
+        first_pass: List[Cluster],
+        recovered: List[Cluster],
+        loose: List[Cluster],
+        vectors: Vectors,
+        seed: str,
+    ) -> List[stages.Theme]:
+        """First-pass themes plus one theme per recovered cluster, loose topics last."""
+        themes: List[stages.Theme] = stages.themes_stage(first_pass, vectors, self._judge, seed)
+        themes.extend(
+            stages.Theme(clusters=[cluster], label=cluster.label, keywords=list(cluster.keywords))
+            for cluster in recovered
+        )
+        themes.sort(key=lambda theme: (-theme.size, theme.clusters[0].id))
+        if loose:
+            themes.append(loose_theme(loose, vectors))
+        return themes
 
     @staticmethod
     def _apply(filtered: stages.Filtered, counters: RunCounters) -> List[Cluster]:

@@ -19,24 +19,31 @@ def assert_result_schema(case: unittest.TestCase, result: Dict[str, Any]) -> Non
     case.assertEqual(set(result), {"themes", "clusters", "unsorted", "snippets", "metrics"})
     theme_cluster_ids: List[str] = [cid for t in result["themes"] for cid in t["cluster_ids"]]
     case.assertEqual(sorted(theme_cluster_ids), sorted(result["clusters"]))
-    sizes: List[int] = [t["size"] for t in result["themes"]]
+    strict_themes: List[Dict[str, Any]] = [t for t in result["themes"] if not t["loose"]]
+    sizes: List[int] = [t["size"] for t in strict_themes]
     case.assertEqual(sizes, sorted(sizes, reverse=True))
+    case.assertEqual(result["themes"][: len(strict_themes)], strict_themes, "loose theme must be last")
     assigned: Set[str] = set()
+    loose: Set[str] = set()
     for cluster in result["clusters"].values():
         case.assertIn(cluster["kind"], CLUSTER_KINDS)
         case.assertTrue(1 <= cluster["score"] <= 5)
         case.assertLessEqual(len(cluster["label"].split()), 5)
         case.assertLessEqual(len(cluster["keywords"]), 8)
         case.assertIn(cluster["start_snippet_id"], cluster["snippet_ids"])
-        assigned.update(cluster["snippet_ids"])
-    case.assertEqual(assigned | set(result["unsorted"]), set(result["snippets"]))
+        (loose if cluster["loose"] else assigned).update(cluster["snippet_ids"])
+    case.assertEqual(assigned | loose | set(result["unsorted"]), set(result["snippets"]))
     case.assertFalse(assigned & set(result["unsorted"]))
+    case.assertFalse(assigned & loose)
     for snippet in result["snippets"].values():
         case.assertLessEqual(len(snippet["preview"]), 240)
     metrics: Dict[str, Any] = result["metrics"]
     case.assertEqual(metrics["snippets_total"], len(result["snippets"]))
     case.assertEqual(metrics["snippets_assigned"], len(assigned))
-    case.assertEqual(metrics["clusters_final"], len(result["clusters"]))
+    case.assertEqual(metrics["loose_snippets"], len(loose))
+    case.assertEqual(
+        metrics["clusters_final"] + metrics["loose_clusters"], len(result["clusters"])
+    )
 
 
 class TestAnthologyPipelineOffline(unittest.TestCase):
@@ -61,7 +68,7 @@ class TestAnthologyPipelineOffline(unittest.TestCase):
         result: Dict[str, Any] = store.save_result.call_args[0][1]
         assert_result_schema(self, result)
         stages_called: List[str] = [c[0][1] for c in store.set_stage.call_args_list]
-        self.assertEqual(stages_called, ["units", "candidates", "merge", "label", "intruder", "recovery", "themes"])
+        self.assertEqual(stages_called, ["units", "candidates", "merge", "label", "intruder", "recovery", "loose", "themes"])
         self.assertEqual(result["metrics"]["ungrouped_posts"], 4)
         self.assertGreaterEqual(len(result["themes"]), 3)
         self.assertEqual(

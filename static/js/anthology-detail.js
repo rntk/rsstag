@@ -291,6 +291,9 @@ export function renderMetrics(metrics) {
       `${metrics.recovery_snippets_assigned ?? 0}/${metrics.recovery_snippets_input}`,
     ]);
   }
+  if (metrics.loose_snippets > 0) {
+    items.push(['Loosely labeled', `${metrics.loose_snippets} in ${metrics.loose_clusters ?? 0} topics`]);
+  }
   return `<dl class="anth-metrics">${items
     .map(
       ([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`
@@ -358,7 +361,7 @@ function renderTreeTheme(theme, result, selection, expanded) {
     ? `<ul class="anth-tree__clusters">${clusters.map((c) => renderTreeCluster(c, selection)).join('')}</ul>`
     : '';
   return (
-    `<li class="anth-tree__theme${open ? ' is-open' : ''}">` +
+    `<li class="anth-tree__theme${open ? ' is-open' : ''}${theme.loose ? ' anth-tree__theme--loose' : ''}">` +
     '<div class="anth-tree__row">' +
     `<button type="button" class="anth-tree__toggle" data-action="toggle" data-id="${escapeHtml(theme.id)}" aria-expanded="${open}" aria-label="Toggle clusters">${open ? '▾' : '▸'}</button>` +
     `<button type="button" class="anth-tree__theme-btn${active ? ' is-active' : ''}" data-action="select" data-id="${escapeHtml(theme.id)}">` +

@@ -46,7 +46,7 @@ def recover_unsorted(
     calls_before: int = judge.calls
     recovered: List[Cluster] = _validate(candidates, local_vectors, remaining, judge, seed, counters)
     counters.recovery_llm_calls = judge.calls - calls_before
-    mapped: List[Cluster] = [_map_cluster(c, rows, vectors) for c in recovered]
+    mapped: List[Cluster] = [map_cluster(c, rows, vectors) for c in recovered]
     counters.recovery_clusters_final = len(mapped)
     counters.recovery_snippets_assigned = sum(c.size for c in mapped)
     _log.info(
@@ -79,12 +79,14 @@ def _validate(
     return checked.kept
 
 
-def _map_cluster(cluster: Cluster, rows: List[int], vectors: Vectors) -> Cluster:
+def map_cluster(
+    cluster: Cluster, rows: List[int], vectors: Vectors, prefix: str = "r"
+) -> Cluster:
     """Restore global indices while preserving the locally judged display data."""
     members: List[int] = [rows[row] for row in cluster.members]
     return replace(
         cluster,
-        id=f"r{cluster.id[1:]}",
+        id=f"{prefix}{cluster.id[1:]}",
         members=members,
         centroid=centroid_of(vectors.dense, members),
     )

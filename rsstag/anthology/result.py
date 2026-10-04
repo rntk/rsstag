@@ -25,6 +25,9 @@ class RunCounters:
     recovery_clusters_final: int = 0
     recovery_llm_calls: int = 0
     recovery_intruder_accuracy: Optional[float] = None
+    loose_snippets: int = 0
+    loose_clusters: int = 0
+    loose_llm_calls: int = 0
 
 
 def cluster_to_dict(cluster: Cluster, snippets: Sequence[Snippet]) -> Dict[str, Any]:
@@ -37,6 +40,7 @@ def cluster_to_dict(cluster: Cluster, snippets: Sequence[Snippet]) -> Dict[str, 
         "kind": cluster.kind,
         "score": int(cluster.score),
         "intruder_ok": cluster.intruder_ok,
+        "loose": cluster.loose,
         "keywords": list(cluster.keywords[:8]),
         "cohesion": float(cluster.cohesion),
         "snippet_ids": [s.id for s in members],
@@ -54,6 +58,7 @@ def theme_to_dict(index: int, theme: Theme) -> Dict[str, Any]:
         "keywords": list(theme.keywords[:8]),
         "size": theme.size,
         "cluster_ids": [c.id for c in theme.clusters],
+        "loose": theme.loose,
     }
 
 
@@ -82,19 +87,27 @@ def build_metrics(
         "recovery_clusters_final": counters.recovery_clusters_final,
         "recovery_llm_calls": counters.recovery_llm_calls,
         "recovery_intruder_accuracy": counters.recovery_intruder_accuracy,
+        "loose_snippets": counters.loose_snippets,
+        "loose_clusters": counters.loose_clusters,
+        "loose_llm_calls": counters.loose_llm_calls,
     }
 
 
 def build_result(
     snippets: Sequence[Snippet], themes: Sequence[Theme], counters: RunCounters
 ) -> Dict[str, Any]:
-    """Assemble the result dict; every snippet not in a final cluster is unsorted."""
+    """Assemble the result dict; every snippet not in a final cluster is unsorted.
+
+    Loose clusters label leftovers for browsing but don't count as coverage.
+    """
     clusters: List[Cluster] = [c for theme in themes for c in theme.clusters]
-    assigned: set = {row for c in clusters for row in c.members}
+    placed: set = {row for c in clusters for row in c.members}
+    strict: List[Cluster] = [c for c in clusters if not c.loose]
+    assigned: set = {row for c in strict for row in c.members}
     return {
         "themes": [theme_to_dict(i, theme) for i, theme in enumerate(themes)],
         "clusters": {c.id: cluster_to_dict(c, snippets) for c in clusters},
-        "unsorted": [s.id for row, s in enumerate(snippets) if row not in assigned],
+        "unsorted": [s.id for row, s in enumerate(snippets) if row not in placed],
         "snippets": {s.id: s.to_dict() for s in snippets},
-        "metrics": build_metrics(len(snippets), len(assigned), len(clusters), counters),
+        "metrics": build_metrics(len(snippets), len(assigned), len(strict), counters),
     }

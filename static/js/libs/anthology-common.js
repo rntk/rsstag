@@ -8,6 +8,7 @@ export const STAGES = [
   { id: 'label', label: 'Label' },
   { id: 'intruder', label: 'Intruder test' },
   { id: 'recovery', label: 'Recover unsorted' },
+  { id: 'loose', label: 'Loose labels' },
   { id: 'themes', label: 'Themes' },
   { id: 'done', label: 'Done' },
 ];
