@@ -52,7 +52,7 @@ def _stopword_list() -> List[str]:
     return sorted(set(stopwords.words("english")) | set(stopwords.words("russian")))
 
 
-def vectorize(texts: Sequence[str]) -> Vectors:
+def vectorize(texts: Sequence[str], min_df: Optional[int] = None) -> Vectors:
     """TF-IDF over texts, reduced by LSA when the vocabulary is large."""
     n_docs: int = len(texts)
     vectorizer: TfidfVectorizer = TfidfVectorizer(
@@ -61,7 +61,7 @@ def vectorize(texts: Sequence[str]) -> Vectors:
         token_pattern=_TOKEN_PATTERN,
         lowercase=True,
         max_df=0.9 if n_docs >= 20 else 1.0,
-        min_df=2 if n_docs >= 200 else 1,
+        min_df=min_df if min_df is not None else (2 if n_docs >= 200 else 1),
         max_features=30000,
     )
     try:
@@ -91,10 +91,12 @@ def fine_cluster_count(n_docs: int) -> int:
     return max(1, min(max(2, round(n_docs / 6)), 60, n_docs - 1))
 
 
-def cluster_rows(dense: np.ndarray, n_clusters: int) -> np.ndarray:
-    """Agglomerative (cosine, average) labels; tiny inputs form one cluster."""
+def cluster_rows(
+    dense: np.ndarray, n_clusters: int, split_small: bool = False
+) -> np.ndarray:
+    """Cosine/average clustering; optionally split tiny inputs for recovery."""
     n_rows: int = dense.shape[0]
-    if n_rows < 4 or n_clusters <= 1:
+    if (n_rows < 4 and not split_small) or n_rows < 2 or n_clusters <= 1:
         return np.zeros(n_rows, dtype=int)
     model: AgglomerativeClustering = AgglomerativeClustering(
         n_clusters=min(n_clusters, n_rows), metric="cosine", linkage="average"
@@ -111,12 +113,17 @@ def _safe_rows(dense: np.ndarray) -> np.ndarray:
     return rows
 
 
-def build_candidates(vectors: Vectors) -> Tuple[List[Cluster], List[int]]:
+def build_candidates(
+    vectors: Vectors, n_clusters: Optional[int] = None, split_small: bool = False
+) -> Tuple[List[Cluster], List[int]]:
     """Fine clusters of the snippets plus the singleton rows (unsorted)."""
     n_rows: int = vectors.dense.shape[0]
     if n_rows == 0:
         return [], []
-    labels: np.ndarray = cluster_rows(vectors.dense, fine_cluster_count(n_rows))
+    labels: np.ndarray = cluster_rows(
+        vectors.dense, fine_cluster_count(n_rows) if n_clusters is None else n_clusters,
+        split_small=split_small,
+    )
     groups: Dict[int, List[int]] = {}
     for row, label in enumerate(labels.tolist()):
         groups.setdefault(int(label), []).append(row)

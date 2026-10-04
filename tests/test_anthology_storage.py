@@ -3,6 +3,11 @@ import time
 import unittest
 from typing import Any, Dict, Optional
 
+from unittest.mock import MagicMock
+
+from bson import ObjectId
+from pymongo import ReturnDocument
+
 from rsstag.anthologies import RssTagAnthologies
 from tests.db_utils import DBHelper
 
@@ -32,6 +37,58 @@ class TestAnthologyStorageOffline(unittest.TestCase):
             RssTagAnthologies._normalize_scope({"mode": "feeds", "feed_ids": [1, "", "b"], "provider": " "}),
             {"mode": "feeds", "feed_ids": ["1", "b"]},
         )
+
+
+class TestAnthologyRunQueries(unittest.TestCase):
+    def setUp(self) -> None:
+        self.db: Any = MagicMock()
+        self.store: RssTagAnthologies = RssTagAnthologies(self.db)
+        self.anthology_id: ObjectId = ObjectId()
+        self.db.anthologies.update_one.return_value.matched_count = 1
+
+    def test_all_run_writes_require_current_processing_token_and_owner(self) -> None:
+        writes: list = [
+            lambda: self.store.set_stage(self.anthology_id, "recovery", run_id="old", owner="owner"),
+            lambda: self.store.update_status(self.anthology_id, "failed", run_id="old", owner="owner"),
+            lambda: self.store.save_result(self.anthology_id, _result([]), run_id="old", owner="owner"),
+            lambda: self.store.heartbeat(self.anthology_id, "owner", "old"),
+        ]
+        for write in writes:
+            self.assertTrue(write())
+            self.assertEqual(self.db.anthologies.update_one.call_args.args[0], {
+                "_id": self.anthology_id, "status": "processing", "run_id": "old", "owner": "owner",
+            })
+        self.db.anthologies.update_one.return_value.matched_count = 0
+        self.assertFalse(self.store.save_result(self.anthology_id, _result([]), run_id="old", owner="owner"))
+
+    def test_token_without_owner_cannot_write(self) -> None:
+        self.assertFalse(self.store.set_stage(self.anthology_id, "recovery", run_id="old"))
+        self.db.anthologies.update_one.assert_not_called()
+
+    def test_legacy_writes_cannot_overwrite_token_owned_run(self) -> None:
+        self.store.update_status(self.anthology_id, "failed", owner="owner")
+        self.assertEqual(self.db.anthologies.update_one.call_args.args[0], {
+            "_id": self.anthology_id, "owner": "owner", "run_id": {"$exists": False},
+        })
+
+    def test_retry_removes_previous_token_in_same_update(self) -> None:
+        self.assertTrue(self.store.reset_for_retry("owner", self.anthology_id))
+        update: Dict[str, Any] = self.db.anthologies.update_one.call_args.args[1]
+        self.assertEqual(update["$unset"], {"run_id": ""})
+        self.assertEqual(update["$set"]["status"], "pending")
+
+    def test_claim_only_pending_and_returns_unique_token(self) -> None:
+        self.db.anthologies.find_one_and_update.return_value = {"_id": self.anthology_id}
+        first: Optional[str] = self.store.claim_run("owner", self.anthology_id)
+        second: Optional[str] = self.store.claim_run("owner", self.anthology_id)
+        self.assertTrue(first)
+        self.assertNotEqual(first, second)
+        args: Any = self.db.anthologies.find_one_and_update.call_args
+        self.assertEqual(args.args[0], {"_id": self.anthology_id, "owner": "owner", "status": "pending"})
+        self.assertEqual(args.args[1]["$set"]["run_id"], second)
+        self.assertEqual(args.kwargs["return_document"], ReturnDocument.AFTER)
+        self.db.anthologies.find_one_and_update.return_value = None
+        self.assertIsNone(self.store.claim_run("owner", self.anthology_id))
 
 
 class TestAnthologyStorage(unittest.TestCase):
@@ -101,6 +158,29 @@ class TestAnthologyStorage(unittest.TestCase):
         )
         self.assertFalse(self.store.reset_for_retry("another-owner", anthology_id))
         self.assertTrue(self.store.reset_for_retry(self.owner, anthology_id))
+
+    def test_retry_fences_old_build_after_new_claim(self) -> None:
+        anthology_id: Optional[str] = self.store.create(self.owner, "tag", "fenced", None)
+        first: Optional[str] = self.store.claim_run(self.owner, anthology_id)
+        self.assertIsNotNone(first)
+        self.assertIsNone(self.store.claim_run(self.owner, anthology_id))
+        self.assertTrue(self.store.heartbeat(anthology_id, self.owner, first))
+        self.assertFalse(self.store.reset_for_retry(self.owner, anthology_id))
+        self.db.anthologies.update_many(
+            {"owner": self.owner}, {"$set": {"updated_at": time.time() - 7200}}
+        )
+        self.assertTrue(self.store.reset_for_retry(self.owner, anthology_id))
+        self.assertNotIn("run_id", self.store.get_by_id(self.owner, anthology_id))
+        second: Optional[str] = self.store.claim_run(self.owner, anthology_id)
+        self.assertNotEqual(first, second)
+        self.assertFalse(self.store.heartbeat(anthology_id, self.owner, first))
+        self.assertFalse(self.store.set_stage(anthology_id, "done", run_id=first, owner=self.owner))
+        self.assertFalse(self.store.update_status(anthology_id, "failed", run_id=first, owner=self.owner))
+        self.assertFalse(self.store.save_result(anthology_id, _result(["old"]), run_id=first, owner=self.owner))
+        self.assertFalse(self.store.save_result(anthology_id, _result(["wrong-owner"]), run_id=second, owner="other"))
+        self.assertTrue(self.store.save_result(anthology_id, _result(["new"]), run_id=second, owner=self.owner))
+        self.assertFalse(self.store.update_status(anthology_id, "failed", run_id=second, owner=self.owner))
+        self.assertEqual(self.store.get_by_id(self.owner, anthology_id)["post_ids"], ["new"])
 
     def test_list_by_owner_is_light_and_sorted(self) -> None:
         older = self.store.create(self.owner, "tag", "a", None)

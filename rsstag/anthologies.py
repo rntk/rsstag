@@ -9,6 +9,7 @@ import hashlib
 import json
 import logging
 import time
+import uuid
 from typing import Any, Dict, List, Optional
 
 from bson import ObjectId
@@ -32,7 +33,7 @@ def is_stuck(doc: Dict[str, Any]) -> bool:
     )
 
 
-STAGES: tuple = ("units", "candidates", "merge", "label", "intruder", "themes", "done")
+STAGES: tuple = ("units", "candidates", "merge", "label", "intruder", "recovery", "themes", "done")
 
 _LIST_PROJECTION: Dict[str, int] = {"result.snippets": 0, "result.clusters": 0}
 
@@ -111,16 +112,47 @@ class RssTagAnthologies:
             self._log.error("Can't list anthologies for %s. Info: %s", owner, exc)
             return []
 
-    def update_status(self, anthology_id: Any, status: str, error: Optional[str] = None) -> bool:
-        """Set status (and error message) of an anthology."""
-        return self._update(anthology_id, {"status": status, "error": error})
+    def claim_run(self, owner: str, anthology_id: Any) -> Optional[str]:
+        """Atomically claim a pending anthology with a unique build token."""
+        object_id: Optional[ObjectId] = self._to_object_id(anthology_id)
+        if object_id is None:
+            return None
+        run_id: str = uuid.uuid4().hex
+        try:
+            doc: Optional[Dict[str, Any]] = self._db.anthologies.find_one_and_update(
+                {"_id": object_id, "owner": owner, "status": STATUS_PENDING},
+                {"$set": {"status": STATUS_PROCESSING, "run_id": run_id,
+                          "stage": None, "error": None, "updated_at": time.time()}},
+                return_document=ReturnDocument.AFTER,
+            )
+            return run_id if doc else None
+        except Exception as exc:
+            self._log.exception("Can't claim anthology %s: %s", anthology_id, exc)
+            return None
 
-    def set_stage(self, anthology_id: Any, stage: str) -> bool:
+    def update_status(
+        self, anthology_id: Any, status: str, error: Optional[str] = None,
+        run_id: Optional[str] = None, owner: Optional[str] = None,
+    ) -> bool:
+        """Set status only while the supplied build still owns the anthology."""
+        return self._update(anthology_id, {"status": status, "error": error}, owner, run_id)
+
+    def set_stage(
+        self, anthology_id: Any, stage: str, run_id: Optional[str] = None,
+        owner: Optional[str] = None,
+    ) -> bool:
         """Record the pipeline stage currently running."""
-        return self._update(anthology_id, {"stage": stage})
+        return self._update(anthology_id, {"stage": stage}, owner, run_id)
 
-    def save_result(self, anthology_id: Any, result: Dict[str, Any]) -> bool:
-        """Store a finished result and mark the anthology done."""
+    def heartbeat(self, anthology_id: Any, owner: str, run_id: str) -> bool:
+        """Refresh the active build's lease without changing its stage."""
+        return self._update(anthology_id, {}, owner, run_id)
+
+    def save_result(
+        self, anthology_id: Any, result: Dict[str, Any], run_id: Optional[str] = None,
+        owner: Optional[str] = None,
+    ) -> bool:
+        """Store a finished result only for the current build."""
         return self._update(
             anthology_id,
             {
@@ -131,6 +163,7 @@ class RssTagAnthologies:
                 "stale": False,
                 "error": None,
             },
+            owner, run_id,
         )
 
     def mark_stale_for_source_change(self, owner: str, changed_post_ids: List[str]) -> int:
@@ -182,7 +215,8 @@ class RssTagAnthologies:
         try:
             result: Any = self._db.anthologies.update_one(
                 query,
-                {"$set": {"status": STATUS_PENDING, "stage": None, "error": None, "updated_at": now}},
+                {"$set": {"status": STATUS_PENDING, "stage": None, "error": None, "updated_at": now},
+                 "$unset": {"run_id": ""}},
             )
             return result.matched_count > 0
         except Exception as exc:
@@ -201,11 +235,21 @@ class RssTagAnthologies:
             self._log.error("Can't delete anthology %s. Info: %s", anthology_id, exc)
             return False
 
-    def _update(self, anthology_id: Any, fields: Dict[str, Any], owner: Optional[str] = None) -> bool:
+    def _update(
+        self, anthology_id: Any, fields: Dict[str, Any], owner: Optional[str] = None,
+        run_id: Optional[str] = None,
+    ) -> bool:
         object_id: Optional[ObjectId] = self._to_object_id(anthology_id)
         if object_id is None:
             return False
         query: Dict[str, Any] = {"_id": object_id}
+        if run_id is not None:
+            if owner is None:
+                return False
+            query.update({"status": STATUS_PROCESSING, "run_id": run_id})
+        else:
+            # Legacy callers cannot modify a newer token-owned build.
+            query["run_id"] = {"$exists": False}
         if owner is not None:
             query["owner"] = owner
         try:

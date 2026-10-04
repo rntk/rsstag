@@ -9,6 +9,9 @@ sys.modules.setdefault("rsstag.tags", types.SimpleNamespace(RssTagTags=object))
 
 from typing import Any, Dict, List
 
+from bson import ObjectId
+from pymongo import ReturnDocument
+
 from rsstag.task_state import TASK_STATUS_PENDING
 from rsstag.tasks import (
     RssTagTasks,
@@ -24,6 +27,33 @@ from rsstag.tasks import (
     SCOPE_MODE_CATEGORIES,
     SCOPE_MODE_PROVIDER,
 )
+
+
+class TestAnthologyTaskClaim(unittest.TestCase):
+    def test_claim_returns_document_with_ownership_token(self) -> None:
+        db: Any = MagicMock()
+        storage: RssTagTasks = RssTagTasks(db)
+        storage._state = MagicMock()
+        storage._state.claim.return_value = {
+            "_id": ObjectId(), "user": "owner", "type": TASK_ANTHOLOGY,
+        }
+        users: Any = MagicMock()
+        users.get_by_sid.return_value = {"sid": "owner"}
+        anthology_id: ObjectId = ObjectId()
+
+        def claimed_document(query: Dict[str, Any], update: Dict[str, Any], **kwargs: Any) -> Dict[str, Any]:
+            self.assertEqual(query, {"owner": "owner", "status": "pending"})
+            self.assertEqual(kwargs["return_document"], ReturnDocument.AFTER)
+            return {"_id": anthology_id, "owner": "owner", **update["$set"]}
+
+        db.anthologies.find_one_and_update.side_effect = claimed_document
+        first: Dict[str, Any] = storage.get_task(users)
+        second: Dict[str, Any] = storage.get_task(users)
+        self.assertEqual(first["type"], TASK_ANTHOLOGY)
+        self.assertEqual(first["data"]["status"], "processing")
+        self.assertEqual(first["data"]["_id"], anthology_id)
+        self.assertTrue(first["data"]["run_id"])
+        self.assertNotEqual(first["data"]["run_id"], second["data"]["run_id"])
 
 
 class TestRssTagTasksScope(unittest.TestCase):

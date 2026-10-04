@@ -66,6 +66,45 @@ class TestLabelAndIntruder(_Base):
             self.assertEqual(cluster.score, 3)
             self.assertEqual(cluster.label, " ".join(cluster.keywords[:3]))
 
+    def test_strict_labeling_rejects_missing_or_invalid_scores(self) -> None:
+        class PartialLabels:
+            def call(self, settings: object, msgs: List[str], **kwargs: object) -> str:
+                return (
+                    '```json\n{"id": 1, "score": 4, "label": "valid", "kind": "event"}\n'
+                    '{"id": 2, "label": "missing score", "kind": "event"}\n'
+                    '{"id": 3, "score": "garbage", "label": "invalid score", "kind": "event"}\n'
+                    '{"id": 4, "score": 3.7, "label": "fractional score", "kind": "event"}\n'
+                    '{"id": 5, "score": 99, "label": "out of range", "kind": "event"}\n```'
+                )
+
+        clusters: List[Cluster] = [
+            make_cluster(f"strict{number}", [number * 2, number * 2 + 1], self.vectors)
+            for number in range(5)
+        ]
+        judge: Judge = Judge(FakeDB(), PartialLabels(), "owner")
+
+        result = stages.label_stage(
+            clusters, self.snippets, judge, "seed", require_judgment=True
+        )
+
+        self.assertEqual(result.kept, [clusters[0]])
+        self.assertEqual(result.released, [row for cluster in clusters[1:] for row in cluster.members])
+        self.assertEqual(clusters[0].score, 4)
+        self.assertEqual([cluster.score for cluster in clusters[1:]], [1, 1, 1, 1])
+
+    def test_strict_labeling_empty_answer_rejects_every_candidate(self) -> None:
+        class Empty:
+            def call(self, *args: object, **kwargs: object) -> str:
+                return ""
+
+        result = stages.label_stage(
+            self.clusters[:2], self.snippets, Judge(FakeDB(), Empty(), "owner"),
+            "seed", require_judgment=True,
+        )
+
+        self.assertEqual(result.kept, [])
+        self.assertEqual(result.released, [row for cluster in self.clusters[:2] for row in cluster.members])
+
     def test_intruder_sets_are_deterministic(self) -> None:
         first = [(s.rows, s.answer_position) for s in stages.build_intruder_sets(self.clusters)]
         second = [(s.rows, s.answer_position) for s in stages.build_intruder_sets(self.clusters)]
@@ -90,6 +129,34 @@ class TestLabelAndIntruder(_Base):
         result, _ = stages.intruder_stage(self.clusters, self.snippets, judge)
         wrong: Set[str] = {s.cluster.id for s in sets if s.answer_position != 1}
         self.assertEqual({c.id for c in self.clusters} - {c.id for c in result.kept}, wrong)
+
+    def test_strict_intruder_check_rejects_missing_answers_but_allows_untested(self) -> None:
+        class Empty:
+            def call(self, *args: object, **kwargs: object) -> str:
+                return ""
+
+        tested: List[Cluster] = [
+            make_cluster("c0", list(range(4)), self.vectors),
+            make_cluster("c1", list(range(4, 8)), self.vectors),
+        ]
+        for cluster in tested:
+            cluster.score = 4
+        judge: Judge = Judge(FakeDB(), Empty(), "owner")
+        result, accuracy = stages.intruder_stage(
+            tested, self.snippets, judge, require_judgment=True
+        )
+        self.assertEqual(result.kept, [])
+        self.assertEqual(result.released, [row for cluster in tested for row in cluster.members])
+        self.assertIsNone(accuracy)
+
+        untested: List[Cluster] = [make_cluster("c2", list(range(4)), self.vectors)]
+        untested[0].score = 4
+        no_comparison, no_accuracy = stages.intruder_stage(
+            untested, self.snippets, Judge(FakeDB(), Empty(), "owner"), require_judgment=True
+        )
+        self.assertEqual(no_comparison.kept, untested)
+        self.assertEqual(no_comparison.released, [])
+        self.assertIsNone(no_accuracy)
 
 
 class TestThemesAndJudge(_Base):

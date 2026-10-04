@@ -11,7 +11,7 @@ from rsstag.workers.llm_worker import _AnthologyWorker
 class TestAnthologyWorker(unittest.TestCase):
     def setUp(self) -> None:
         self.worker: _AnthologyWorker = _AnthologyWorker(MagicMock(), MagicMock())
-        self.task: Dict[str, Any] = {"data": {"_id": "anthology-id"}, "user": {"sid": "owner"}}
+        self.task: Dict[str, Any] = {"data": {"_id": "anthology-id", "run_id": "run-token"}, "user": {"sid": "owner"}}
 
     def test_import_failure_marks_anthology_failed(self) -> None:
         original_import: Any = builtins.__import__
@@ -28,6 +28,7 @@ class TestAnthologyWorker(unittest.TestCase):
             store.return_value.update_status.assert_called_once_with(
                 "anthology-id", "failed",
                 error="Anthology worker error: No module named 'rsstag.anthology_agent'",
+                run_id="run-token", owner="owner",
             )
 
     def test_constructor_failure_marks_anthology_failed(self) -> None:
@@ -36,5 +37,14 @@ class TestAnthologyWorker(unittest.TestCase):
         ):
             self.assertFalse(self.worker.handle_anthology(self.task))
             store.return_value.update_status.assert_called_once_with(
-                "anthology-id", "failed", error="Anthology worker error: startup failed"
+                "anthology-id", "failed", error="Anthology worker error: startup failed",
+                run_id="run-token", owner="owner",
+            )
+
+    def test_passes_claim_token_to_pipeline(self) -> None:
+        with patch("rsstag.anthology.pipeline.AnthologyPipeline") as pipeline:
+            pipeline.return_value.run.return_value = True
+            self.assertTrue(self.worker.handle_anthology(self.task))
+            pipeline.return_value.run.assert_called_once_with(
+                "anthology-id", run_id="run-token"
             )

@@ -1,5 +1,6 @@
 import logging
 import time
+import uuid
 import gzip
 from typing import Optional, List, Dict, Any, Set, Tuple, Callable, Literal, Iterator
 from rsstag.users import RssTagUsers
@@ -842,17 +843,20 @@ class RssTagTasks:
                     self._state.complete(user_task["_id"])
                 data = {"pending_topic_groupings": pending_docs}
             elif user_task["type"] == TASK_ANTHOLOGY:
+                run_id: str = uuid.uuid4().hex
                 data = self._db.anthologies.find_one_and_update(
                     {"owner": task["user"]["sid"], "status": "pending"},
                     {
                         "$set": {
                             "status": "processing",
+                            "run_id": run_id,
                             "stage": None,
                             "error": None,
                             "updated_at": time.time(),
                         }
                     },
                     sort=[("created_at", 1)],
+                    return_document=ReturnDocument.AFTER,
                 )
                 unlock_task = True
                 if not data:

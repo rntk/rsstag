@@ -145,12 +145,13 @@ test('escapeHtml escapes all special characters', () => {
 
 test('stepStates marks done / current / failed', () => {
   const states = stepStates('processing', 'merge').map((s) => s.state);
-  assert.deepEqual(states, ['done', 'done', 'current', 'todo', 'todo', 'todo', 'todo']);
+  assert.deepEqual(states, ['done', 'done', 'current', 'todo', 'todo', 'todo', 'todo', 'todo']);
   assert.equal(stepStates('failed', 'label')[3].state, 'failed');
   assert.ok(stepStates('done', 'done').every((s) => s.state === 'done'));
   assert.ok(stepStates('pending', null).every((s) => s.state === 'todo'));
   assert.match(renderStepper('processing', 'units'), /anth-stepper__step--current/);
-  assert.equal((renderStepper('pending', null).match(/<li/g) || []).length, 7);
+  assert.equal((renderStepper('pending', null).match(/<li/g) || []).length, 8);
+  assert.equal(stepStates('processing', 'recovery')[5].state, 'current');
 });
 
 test('format helpers', () => {
@@ -483,6 +484,14 @@ test('renderClusterStats and renderHeader', () => {
   assert.match(done, /stale/);
   assert.match(done, /50%/);
   assert.match(done, /2 \(\+1 cached\)/);
+  assert.doesNotMatch(done, /Recovered from unsorted/);
+  const recovered = renderHeader({
+    seed_value: 'x',
+    status: 'done',
+    result: { metrics: { recovery_snippets_input: 8, recovery_snippets_assigned: 6 } },
+  });
+  assert.match(recovered, /Recovered from unsorted/);
+  assert.match(recovered, /6\/8/);
 });
 
 // ============================================================

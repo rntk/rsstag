@@ -1899,6 +1899,7 @@ class _AnthologyWorker:
         anthology_doc: Dict[str, Any] = task.get("data") or {}
         anthology_id: str = str(anthology_doc.get("_id", "")).strip()
         owner: str = str(task.get("user", {}).get("sid", "")).strip()
+        run_id: Optional[str] = anthology_doc.get("run_id")
         if not anthology_id or not owner:
             logging.error("Anthology task missing anthology id or owner: %s", task)
             return False
@@ -1912,11 +1913,12 @@ class _AnthologyWorker:
                 owner=owner,
                 settings=task.get("user", {}).get("settings", {}),
             )
-            return pipeline.run(anthology_id)
+            return pipeline.run(anthology_id, run_id=run_id)
         except Exception as exc:
             logging.exception("Can't build anthology %s. Info: %s", anthology_id, exc)
             RssTagAnthologies(self._db).update_status(
-                anthology_id, STATUS_FAILED, error=f"Anthology worker error: {exc}"
+                anthology_id, STATUS_FAILED, error=f"Anthology worker error: {exc}",
+                run_id=run_id, owner=owner,
             )
             return False
 

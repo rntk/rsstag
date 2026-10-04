@@ -1,6 +1,6 @@
 """Serialize pipeline state into the stored anthology result schema."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence
 
 from rsstag.anthology.candidates import Cluster
@@ -18,6 +18,13 @@ class RunCounters:
     llm_calls: int = 0
     llm_cached: int = 0
     duration_sec: float = 0.0
+    first_pass_unsorted: Dict[str, int] = field(default_factory=dict)
+    recovery_snippets_input: int = 0
+    recovery_snippets_assigned: int = 0
+    recovery_clusters_candidate: int = 0
+    recovery_clusters_final: int = 0
+    recovery_llm_calls: int = 0
+    recovery_intruder_accuracy: Optional[float] = None
 
 
 def cluster_to_dict(cluster: Cluster, snippets: Sequence[Snippet]) -> Dict[str, Any]:
@@ -68,6 +75,13 @@ def build_metrics(
         "clusters_dissolved": counters.clusters_dissolved,
         "merges": counters.merges,
         "duration_sec": round(counters.duration_sec, 3),
+        "first_pass_unsorted": dict(counters.first_pass_unsorted),
+        "recovery_snippets_input": counters.recovery_snippets_input,
+        "recovery_snippets_assigned": counters.recovery_snippets_assigned,
+        "recovery_clusters_candidate": counters.recovery_clusters_candidate,
+        "recovery_clusters_final": counters.recovery_clusters_final,
+        "recovery_llm_calls": counters.recovery_llm_calls,
+        "recovery_intruder_accuracy": counters.recovery_intruder_accuracy,
     }
 
 

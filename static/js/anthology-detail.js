@@ -285,6 +285,12 @@ export function renderMetrics(metrics) {
       `${metrics.llm_calls ?? 0}${metrics.llm_cached ? ` (+${metrics.llm_cached} cached)` : ''}`,
     ],
   ];
+  if (metrics.recovery_snippets_input > 0) {
+    items.push([
+      'Recovered from unsorted',
+      `${metrics.recovery_snippets_assigned ?? 0}/${metrics.recovery_snippets_input}`,
+    ]);
+  }
   return `<dl class="anth-metrics">${items
     .map(
       ([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`

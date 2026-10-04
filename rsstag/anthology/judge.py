@@ -3,7 +3,7 @@
 import hashlib
 import logging
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from pymongo.database import Database
 
@@ -33,9 +33,20 @@ class Judge:
         self.calls: int = 0
         self.cached: int = 0
         self.failures: int = 0
+        self.on_progress: Optional[Callable[[], None]] = None
 
     def ask(self, prompt: str) -> str:
         """Return the (possibly cached) model answer; '' on failure."""
+        if self.on_progress is not None:
+            self.on_progress()
+        try:
+            return self._answer(prompt)
+        finally:
+            if self.on_progress is not None:
+                self.on_progress()
+
+    def _answer(self, prompt: str) -> str:
+        """Resolve the answer while keeping progress callbacks outside LLM errors."""
         prompt_hash: str = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
         cached: Optional[str] = self._cached(prompt_hash)
         if cached is not None:

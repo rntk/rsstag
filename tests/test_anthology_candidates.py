@@ -50,6 +50,24 @@ class TestAnthologyCandidates(unittest.TestCase):
         self.assertEqual(sorted(clusters[0].members), [0, 1, 2])
         self.assertEqual(unsorted, [])
 
+    def test_split_small_can_separate_a_pair_from_an_unrelated_snippet(self) -> None:
+        vectors = vectorize([
+            "rocket launch nasa satellite orbit mission",
+            "rocket launch mission nasa booster",
+            "pasta tomato sauce garlic cheese recipe",
+        ])
+
+        default_clusters, default_unsorted = build_candidates(vectors)
+        fine_clusters, fine_unsorted = build_candidates(
+            vectors, n_clusters=2, split_small=True
+        )
+
+        self.assertEqual(len(default_clusters), 1)
+        self.assertEqual(default_unsorted, [])
+        self.assertEqual([cluster.size for cluster in fine_clusters], [2])
+        self.assertEqual(fine_unsorted, [2])
+        self.assertEqual(sorted(fine_clusters[0].members), [0, 1])
+
     def test_empty_vocabulary_is_handled(self) -> None:
         vectors = vectorize(["the and", "a the", "и в", "the"])
         self.assertEqual(vectors.dense.shape[0], 4)

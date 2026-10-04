@@ -65,10 +65,10 @@ def _try_json(text: str) -> Any:
 def _as_int(value: Any) -> Optional[int]:
     try:
         return int(str(value).strip().lstrip("#"))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         try:
             return int(float(value))
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             return None
 
 
@@ -87,7 +87,9 @@ def parse_pair_answers(raw: str, count: int) -> Dict[int, bool]:
     return answers
 
 
-def parse_labels(raw: str, count: int) -> Dict[int, LabelJudgment]:
+def parse_labels(
+    raw: str, count: int, require_score: bool = False
+) -> Dict[int, LabelJudgment]:
     """JSON objects -> {cluster number: judgment}; invalid fields get defaults."""
     judgments: Dict[int, LabelJudgment] = {}
     for obj in parse_json_objects(raw):
@@ -95,6 +97,15 @@ def parse_labels(raw: str, count: int) -> Dict[int, LabelJudgment]:
         if index is None or index in judgments:
             continue
         score: Optional[int] = _as_int(obj.get("score"))
+        if require_score and (score is None or not 1 <= score <= 5):
+            continue
+        if require_score:
+            try:
+                exact_score: float = float(obj.get("score"))
+            except (TypeError, ValueError, OverflowError):
+                continue
+            if exact_score != score:
+                continue
         kind: str = str(obj.get("kind") or "other").strip().lower()
         judgments[index] = LabelJudgment(
             score=min(5, max(1, score)) if score is not None else 3,

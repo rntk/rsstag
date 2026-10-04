@@ -5,7 +5,7 @@ import logging
 import math
 import random
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 import numpy as np
 
@@ -134,11 +134,12 @@ def apply_merges(
 
 
 def label_stage(
-    clusters: List[Cluster], snippets: Sequence[Snippet], judge: Judge, seed: str
+    clusters: List[Cluster], snippets: Sequence[Snippet], judge: Judge, seed: str,
+    require_judgment: bool = False,
 ) -> Filtered:
     """Score and name clusters; low scores dissolve into unsorted."""
     for batch in _chunks(clusters, LABEL_CLUSTERS_PER_CALL):
-        _judge_labels(batch, snippets, judge, seed)
+        _judge_labels(batch, snippets, judge, seed, require_judgment=require_judgment)
     result: Filtered = Filtered(kept=[])
     for cluster in clusters:
         if cluster.score <= DISSOLVE_SCORE:
@@ -150,15 +151,16 @@ def label_stage(
 
 
 def _judge_labels(
-    batch: Sequence[Cluster], snippets: Sequence[Snippet], judge: Judge, seed: str
+    batch: Sequence[Cluster], snippets: Sequence[Snippet], judge: Judge, seed: str,
+    require_judgment: bool = False,
 ) -> None:
     payload = [(c.keywords, _previews(c, snippets, 4)) for c in batch]
     judgments: Dict[int, parsers.LabelJudgment] = parsers.parse_labels(
-        judge.ask(prompts.label_prompt(seed, payload)), len(batch)
+        judge.ask(prompts.label_prompt(seed, payload)), len(batch), require_score=require_judgment
     )
     for number, cluster in enumerate(batch, start=1):
         judgment: Optional[parsers.LabelJudgment] = judgments.get(number)
-        cluster.score = judgment.score if judgment else 3
+        cluster.score = judgment.score if judgment else (1 if require_judgment else 3)
         cluster.kind = judgment.kind if judgment else "other"
         cluster.label = (judgment.label if judgment else "") or default_label(cluster, snippets)
 
@@ -174,7 +176,8 @@ class IntruderSet:
 
 
 def intruder_stage(
-    clusters: List[Cluster], snippets: Sequence[Snippet], judge: Judge
+    clusters: List[Cluster], snippets: Sequence[Snippet], judge: Judge,
+    require_judgment: bool = False,
 ) -> Tuple[Filtered, Optional[float]]:
     """Word-intrusion style check; wrong answers on weak clusters dissolve them."""
     sets: List[IntruderSet] = build_intruder_sets(clusters)
@@ -183,8 +186,10 @@ def intruder_stage(
     answered: List[bool] = [s.cluster.intruder_ok for s in sets if s.cluster.intruder_ok is not None]
     accuracy: Optional[float] = round(sum(answered) / len(answered), 4) if answered else None
     result: Filtered = Filtered(kept=[])
+    tested: Set[str] = {item.cluster.id for item in sets}
     for cluster in clusters:
-        if cluster.intruder_ok is False and cluster.score <= INTRUDER_DISSOLVE_SCORE:
+        missing: bool = require_judgment and cluster.id in tested and cluster.intruder_ok is None
+        if missing or (cluster.intruder_ok is False and cluster.score <= INTRUDER_DISSOLVE_SCORE):
             result.released += cluster.members
             result.dissolved += 1
         else:
@@ -264,4 +269,3 @@ def themes_stage(clusters: List[Cluster], vectors: Vectors, judge: Judge, seed: 
         for number, theme in enumerate(multi, start=1):
             theme.label = labels.get(number) or theme.label
     return themes
-

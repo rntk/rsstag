@@ -7,6 +7,7 @@ export const STAGES = [
   { id: 'merge', label: 'Merge' },
   { id: 'label', label: 'Label' },
   { id: 'intruder', label: 'Intruder test' },
+  { id: 'recovery', label: 'Recover unsorted' },
   { id: 'themes', label: 'Themes' },
   { id: 'done', label: 'Done' },
 ];
@@ -52,7 +53,7 @@ export function stepStates(status, stage) {
   });
 }
 
-/** @returns {string} HTML for a 7-step progress bar */
+/** @returns {string} HTML for the anthology progress bar */
 export function renderStepper(status, stage) {
   const steps = stepStates(status, stage)
     .map(

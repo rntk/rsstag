@@ -1,5 +1,6 @@
 import socket
 import unittest
+from threading import Event
 from typing import Any, Dict, List, Set
 from unittest.mock import MagicMock, patch
 
@@ -46,6 +47,8 @@ class TestAnthologyPipelineOffline(unittest.TestCase):
         store: MagicMock = MagicMock()
         store.get_by_id.return_value = {"_id": "a1", "seed_value": "news", "scope": {"mode": "all"}}
         store.save_result.return_value = True
+        store.claim_run.return_value = "test-run"
+        store.heartbeat.return_value = True
         pipeline = AnthologyPipeline(db, router, "owner")
         pipeline._store = store
         units = UnitsResult(snippets=snippets, posts_in_scope=40, ungrouped_posts=4)
@@ -58,9 +61,13 @@ class TestAnthologyPipelineOffline(unittest.TestCase):
         result: Dict[str, Any] = store.save_result.call_args[0][1]
         assert_result_schema(self, result)
         stages_called: List[str] = [c[0][1] for c in store.set_stage.call_args_list]
-        self.assertEqual(stages_called, ["units", "candidates", "merge", "label", "intruder", "themes"])
+        self.assertEqual(stages_called, ["units", "candidates", "merge", "label", "intruder", "recovery", "themes"])
         self.assertEqual(result["metrics"]["ungrouped_posts"], 4)
-        self.assertEqual(len(result["themes"]), 3)
+        self.assertGreaterEqual(len(result["themes"]), 3)
+        self.assertEqual(
+            sum(result["metrics"]["first_pass_unsorted"].values()),
+            result["metrics"]["recovery_snippets_input"],
+        )
         self.assertGreater(result["metrics"]["llm_calls"], 0)
         self.assertEqual(result["metrics"]["intruder_accuracy"], 1.0)
 
@@ -77,6 +84,7 @@ class TestAnthologyPipelineOffline(unittest.TestCase):
     def test_no_snippets_marks_failed(self) -> None:
         store: MagicMock = MagicMock()
         store.get_by_id.return_value = {"_id": "a1", "seed_value": "news", "scope": None}
+        store.claim_run.return_value = "test-run"
         pipeline = AnthologyPipeline(FakeDB(), FakeRouter(), "owner")
         pipeline._store = store
         with patch("rsstag.anthology.pipeline.load_units", return_value=UnitsResult(posts_in_scope=3, ungrouped_posts=3)):
@@ -93,6 +101,89 @@ class TestAnthologyPipelineOffline(unittest.TestCase):
         pipeline._store = store
         self.assertFalse(pipeline.run("missing"))
         self.assertEqual(store.update_status.call_args[0][1], "failed")
+
+
+class TestAnthologyRunOwnership(unittest.TestCase):
+    def setUp(self) -> None:
+        self.store: MagicMock = MagicMock()
+        self.store.get_by_id.return_value = {
+            "seed_value": "news", "status": "processing", "run_id": "current-run",
+        }
+        self.store.heartbeat.return_value = True
+        self.store.save_result.return_value = True
+        self.pipeline: AnthologyPipeline = AnthologyPipeline(FakeDB(), FakeRouter(), "owner")
+        self.pipeline._store = self.store
+        self.result: Dict[str, Any] = {"metrics": {}}
+
+    def test_stale_task_cannot_start_or_mark_current_run_failed(self) -> None:
+        with patch.object(self.pipeline, "_build") as build:
+            self.assertFalse(self.pipeline.run("a1", run_id="old-run"))
+        build.assert_not_called()
+        self.store.save_result.assert_not_called()
+        self.store.update_status.assert_not_called()
+        self.store.claim_run.assert_not_called()
+
+    def test_background_heartbeat_refreshes_a_blocking_build(self) -> None:
+        refreshed: Event = Event()
+
+        def heartbeat(anthology_id: str, owner: str, run_id: str) -> bool:
+            self.assertEqual((anthology_id, owner, run_id), ("a1", "owner", "current-run"))
+            refreshed.set()
+            return True
+
+        def blocking_build(*args: Any) -> Dict[str, Any]:
+            self.assertTrue(refreshed.wait(timeout=1.0), "no heartbeat during blocking work")
+            return self.result
+
+        self.store.heartbeat.side_effect = heartbeat
+        with patch("rsstag.anthology.pipeline.HEARTBEAT_INTERVAL_SECONDS", 0.01), patch.object(
+            self.pipeline, "_build", side_effect=blocking_build
+        ):
+            self.assertTrue(self.pipeline.run("a1", run_id="current-run"))
+        self.store.save_result.assert_called_once_with(
+            "a1", self.result, run_id="current-run", owner="owner"
+        )
+        self.assertIsNone(self.pipeline._judge.on_progress)
+
+    def test_lost_ownership_before_publish_does_not_write_result_or_failure(self) -> None:
+        self.store.heartbeat.return_value = False
+        with patch.object(self.pipeline, "_build", return_value=self.result):
+            self.assertFalse(self.pipeline.run("a1", run_id="current-run"))
+        self.store.save_result.assert_not_called()
+        self.store.update_status.assert_not_called()
+
+    def test_lost_ownership_during_judge_call_stops_after_call(self) -> None:
+        def slow_answer(*args: Any, **kwargs: Any) -> str:
+            self.store.heartbeat.return_value = False
+            return "an answer from the superseded run"
+
+        def build_with_judge(*args: Any) -> Dict[str, Any]:
+            self.pipeline._judge.ask("a new prompt")
+            self.fail("superseded judge call should stop this build")
+            return self.result
+
+        with patch.object(self.pipeline._judge._llm, "call", side_effect=slow_answer), patch.object(
+            self.pipeline, "_build", side_effect=build_with_judge
+        ):
+            self.assertFalse(self.pipeline.run("a1", run_id="current-run"))
+        self.store.save_result.assert_not_called()
+        self.store.update_status.assert_not_called()
+
+    def test_build_failure_is_fenced_to_its_claim(self) -> None:
+        with patch.object(self.pipeline, "_build", side_effect=RuntimeError("failed build")):
+            self.assertFalse(self.pipeline.run("a1", run_id="current-run"))
+        self.store.update_status.assert_called_once_with(
+            "a1", "failed", error="Anthology pipeline error: failed build",
+            run_id="current-run", owner="owner",
+        )
+
+    def test_failed_direct_claim_leaves_other_run_untouched(self) -> None:
+        self.store.claim_run.return_value = None
+        with patch.object(self.pipeline, "_build") as build:
+            self.assertFalse(self.pipeline.run("a1"))
+        build.assert_not_called()
+        self.store.save_result.assert_not_called()
+        self.store.update_status.assert_not_called()
 
 
 class _MongoCase(unittest.TestCase):
