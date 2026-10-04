@@ -1,4 +1,4 @@
-/* global window, document, console, setTimeout, clearTimeout, FormData */
+/* global window, document, console, setTimeout, clearTimeout, fetch, FormData */
 // Anthologies list page: create form, cards, retry/delete, progress polling.
 import {
   escapeHtml,
@@ -12,6 +12,8 @@ import {
 } from './libs/anthology-common.js';
 
 const POLL_MS = 4000;
+const SEED_SUGGESTIONS_URL = '/tags-search';
+const SEED_SUGGEST_DEBOUNCE_MS = 500;
 
 /** @param {Record<string, any>} form @returns {{seed_type: string, seed_value: string, scope: object}} */
 export function buildCreatePayload(form) {
@@ -26,6 +28,32 @@ export function buildCreatePayload(form) {
 /** @param {Array<{status?: string}>} items */
 export function needsPolling(items) {
   return Array.isArray(items) && items.some(isActive);
+}
+
+/**
+ * Render tag suggestions like the /group/tag/ search field does.
+ * A suggestion fills the Tag input instead of navigating away.
+ * @param {Array<{tag?: string, unread?: number, all?: number, info_url?: string}>} items
+ * @returns {string}
+ */
+export function renderTagSuggestions(items) {
+  if (!Array.isArray(items) || !items.length) {
+    return '';
+  }
+  return items
+    .map((item) => {
+      const tag = String(item.tag ?? '');
+      const counts = `${item.unread ?? '—'} / ${item.all ?? '—'}`;
+      const info = item.info_url
+        ? ` <a href="${escapeHtml(item.info_url)}" title="Tag info">...</a>`
+        : '';
+      return (
+        '<p class="anth-suggest__item">' +
+        `<button type="button" data-tag="${escapeHtml(tag)}">${escapeHtml(tag)} (${escapeHtml(counts)})</button>` +
+        `${info}</p>`
+      );
+    })
+    .join('');
 }
 
 function renderCardStats(item) {
@@ -137,6 +165,79 @@ function bindCreateForm(form, statusNode) {
   });
 }
 
+export function initSeedSuggestions() {
+  const input = document.getElementById('anthology-seed-value');
+  const results = document.getElementById('anthology-seed-suggestions');
+  if (!input || !results) {
+    return;
+  }
+  let timer = 0;
+  let generation = 0;
+
+  const hide = () => {
+    generation += 1;
+    clearTimeout(timer);
+    timer = 0;
+    results.hidden = true;
+    results.innerHTML = '';
+  };
+
+  const fetchSuggestions = (request) => {
+    if (!request) {
+      hide();
+      return;
+    }
+    const id = generation;
+    const form = new FormData();
+    form.append('req', request);
+    fetch(SEED_SUGGESTIONS_URL, { method: 'POST', credentials: 'include', body: form })
+      .then((response) => response.json())
+      .then((data) => {
+        if (id !== generation || request !== input.value.trim()) {
+          return;
+        }
+        results.innerHTML = renderTagSuggestions(data && data.data);
+        results.hidden = !results.innerHTML;
+      })
+      .catch(() => {
+        if (id !== generation || request !== input.value.trim()) {
+          return;
+        }
+        hide();
+      });
+  };
+
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    if (!input.value.trim()) {
+      hide();
+      return;
+    }
+    timer = setTimeout(() => {
+      fetchSuggestions(input.value.trim());
+    }, SEED_SUGGEST_DEBOUNCE_MS);
+  });
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      hide();
+    }
+  });
+  results.addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-tag]');
+    if (!button) {
+      return;
+    }
+    input.value = button.dataset.tag;
+    input.focus();
+    hide();
+  });
+  document.addEventListener('click', (event) => {
+    if (!results.contains(event.target) && event.target !== input) {
+      hide();
+    }
+  });
+}
+
 export function initAnthologiesList() {
   const listNode = document.getElementById('anthology-list');
   const form = document.getElementById('anthology-create-form');
@@ -173,5 +274,6 @@ export function initAnthologiesList() {
   if (form && statusNode) {
     bindCreateForm(form, statusNode);
   }
+  initSeedSuggestions();
   schedule();
 }

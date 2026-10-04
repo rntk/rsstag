@@ -148,6 +148,11 @@ class TestWebAnthologies(MongoWebTestCase):
         self.assertIn("done-tag", body)
         self.assertNotIn("pending-tag", body)
 
+    def test_list_page_tag_field_has_search_suggestions(self) -> None:
+        body = self.client.get("/anthologies").get_data(as_text=True)
+        self.assertIn('id="anthology-seed-value"', body)
+        self.assertIn('id="anthology-seed-suggestions"', body)
+
     def test_detail_page_renders_and_escapes(self) -> None:
         anthology_id = self._seed(seed_value="<script>x</script>", result=build_result())
         response = self.client.get(f"/anthologies/{anthology_id}")

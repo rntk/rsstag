@@ -18,11 +18,12 @@
 
         <form id="anthology-create-form" class="anth-create-form">
             <input type="hidden" name="seed_type" value="tag" />
-            <label class="anth-create-form__field">
-                <span>Tag</span>
+            <div class="anth-create-form__field anth-suggest-wrap">
+                <label for="anthology-seed-value"><span>Tag</span></label>
                 <input id="anthology-seed-value" name="seed_value" type="text"
-                    value="{{ initial_seed_value|e }}" placeholder="playstation 5" required />
-            </label>
+                    value="{{ initial_seed_value|e }}" placeholder="playstation 5" required autocomplete="off" />
+                <div id="anthology-seed-suggestions" class="anth-suggest" hidden></div>
+            </div>
             <label class="anth-create-form__field">
                 <span>Corpus</span>
                 <select id="anthology-feed-id" name="feed_id">
