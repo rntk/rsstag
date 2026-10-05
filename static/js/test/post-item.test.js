@@ -160,39 +160,11 @@ test('changePostsContentState triggers CHANGE_POSTS_CONTENT_STATE event', () => 
   assert.ok(/showed\s*:/.test(src), 'should pass showed in payload');
 });
 
-test('source declares highliteTag method', () => {
+test('post bodies use the isolated frame renderer', () => {
   const src = readSource();
-  assert.ok(/highliteTag\s*\(/.test(src), 'should declare highliteTag() method');
-});
-
-test('highliteTag uses highlite_tag CSS class', () => {
-  const src = readSource();
-  assert.ok(/highlite_tag/.test(src), 'should use highlite_tag CSS class in spans');
-});
-
-test('source declares stripGlobalStyles method', () => {
-  const src = readSource();
-  assert.ok(/stripGlobalStyles\s*\(/.test(src), 'should declare stripGlobalStyles() method');
-});
-
-test('stripGlobalStyles removes style tags via regex', () => {
-  const src = readSource();
-  assert.ok(/<style[\s\S]*?<\/style>/.test(src) || /<style/.test(src), 'should strip <style> tags');
-});
-
-test('stripGlobalStyles removes stylesheet links via regex', () => {
-  const src = readSource();
-  assert.ok(/stylesheet/.test(src), 'should strip stylesheet <link> tags');
-});
-
-test('source declares dangerHTML method', () => {
-  const src = readSource();
-  assert.ok(/dangerHTML\s*\(/.test(src), 'should declare dangerHTML() method');
-});
-
-test('dangerHTML returns object with __html key', () => {
-  const src = readSource();
-  assert.ok(/__html/.test(src), 'should return __html object for dangerouslySetInnerHTML');
+  assert.ok(/<PostContentFrame/.test(src));
+  assert.ok(/onSelect=\{this.setCurrent\}/.test(src));
+  assert.ok(!/stripGlobalStyles|dangerHTML\(/.test(src));
 });
 
 test('source declares getNode method', () => {
@@ -298,11 +270,6 @@ test('render includes post_meta CSS class', () => {
 test('render includes post_feed_title CSS class', () => {
   const src = readSource();
   assert.ok(/post_feed_title/.test(src), 'should use post_feed_title CSS class');
-});
-
-test('render includes post-content-isolated wrapper', () => {
-  const src = readSource();
-  assert.ok(/post-content-isolated/.test(src), 'should use post-content-isolated wrapper class');
 });
 
 test('render includes post_content CSS class', () => {

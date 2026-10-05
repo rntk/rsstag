@@ -1,5 +1,6 @@
 'use strict';
 import React from 'react';
+import PostContentFrame from './post-content-frame.js';
 import { stopwords } from '../libs/stopwords.js';
 
 export default class PostsItem extends React.Component {
@@ -47,62 +48,6 @@ export default class PostsItem extends React.Component {
       window.scrollTo(0, this.node.offsetTop);
       this.need_scroll = false;
     }
-  }
-
-  // TODO: dirty hack, may affect performance.
-  highliteTag(content) {
-    let words = this.state.words.slice().filter((w) => !this.stopw.has(w));
-    if (!words.length) {
-      return content;
-    }
-    words.sort((a, b) => {
-      if (a.length < b.length) {
-        return 1;
-      }
-      if (a.length > b.length) {
-        return -1;
-      }
-
-      return 0;
-    });
-    const repl = '<span class="highlite_tag">$1</span>';
-    const reg = new RegExp(`(${words.join('|')})`, 'gi');
-
-    const tagRegex = /(<[^>]+>)/g;
-    const parts = content.split(tagRegex);
-
-    const result = parts.map((part, index) => {
-      if (index % 2 === 1) {
-        // It's a tag
-        return part;
-      } else {
-        // It's text
-        return part.replaceAll(reg, repl);
-      }
-    });
-
-    return result.join('');
-  }
-
-  stripGlobalStyles(content) {
-    if (!content) {
-      return content;
-    }
-    return content
-      .replace(/<style[\s\S]*?<\/style>/gi, '')
-      .replace(/<link\b[^>]*rel=["']?stylesheet["']?[^>]*>/gi, '');
-  }
-
-  dangerHTML(post) {
-    let html = { __html: '' };
-
-    if (post.showed) {
-      //TODO: add content clearing from scripts, iframes etc.
-      const cleanedContent = this.stripGlobalStyles(post.post.content.content);
-      html = { __html: this.highliteTag(cleanedContent) };
-    }
-
-    return html;
   }
 
   getNode(node) {
@@ -253,11 +198,15 @@ export default class PostsItem extends React.Component {
             |{post.post.date}
             {post.post.clusters ? ' | ' + post.post.clusters.join(', ') : ''}
           </div>
-          <div className="post-content-isolated">
-            <div
-              className={'post_content ' + (post.showed ? '' : 'hide')}
-              dangerouslySetInnerHTML={this.dangerHTML(post)}
-            ></div>
+          <div className={'post_content ' + (post.showed ? '' : 'hide')}>
+            {post.showed && (
+              <PostContentFrame
+                html={post.post.content.content || ''}
+                url={post.post.url}
+                words={(this.state.words || []).filter((word) => !this.stopw.has(word))}
+                onSelect={this.setCurrent}
+              />
+            )}
           </div>
           <div className="post_tag_contexts">{post_tag_contexts}</div>
           <div className="post_tools">

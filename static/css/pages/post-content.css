@@ -1,95 +1,3 @@
-/* Post content presentation. These rules do not scope embedded stylesheets. */
-.post-content-isolated {
-  /* Create a stacking context for post content. */
-  isolation: isolate;
-
-  /* Scope CSS counters; selector matching is unaffected. */
-  contain: style;
-
-  /* Reset to default display behavior */
-  display: block;
-
-  /* Basic spacing and layout */
-  margin: 0;
-  padding: 0;
-
-  /* Ensure content is readable */
-  font-family: Arial, sans-serif;
-  font-size: 12pt;
-  line-height: 1.5;
-  color: #000;
-
-  /* Prevent overflow issues */
-  overflow: auto;
-  overflow-wrap: break-word;
-
-  /* Reset any inherited text properties */
-  text-align: left;
-  text-decoration: none;
-
-  /* Ensure images don't break layout */
-  img {
-    max-width: 100%;
-    height: auto;
-  }
-
-  & > * {
-    /* Restore browser defaults for direct children. */
-    all: revert;
-  }
-
-  /* Hide style elements visually; their CSS can still apply to the document. */
-  style {
-    display: none !important;
-  }
-
-  /* Style links within post content. */
-  a {
-    color: #0066cc;
-    text-decoration: underline;
-
-    &:hover {
-      color: #0052a3;
-    }
-  }
-
-  /* Reset common elements that might have problematic styles */
-  /* Use & to properly scope these to children of .post-content-isolated */
-  & body,
-  & table,
-  & p,
-  & div,
-  & span,
-  & h1,
-  & h2,
-  & h3,
-  & h4,
-  & h5,
-  & h6,
-  & td,
-  & tr {
-    margin: revert !important;
-    padding: revert !important;
-    background: revert !important;
-    background-color: transparent !important;
-    color: inherit !important;
-  }
-
-  /* Ensure tables from content don't break layout */
-  table {
-    max-width: 100%;
-    border-collapse: collapse;
-  }
-
-  /* Handle code blocks safely */
-  pre,
-  code {
-    white-space: pre-wrap;
-    overflow-wrap: break-word;
-    overflow-x: auto;
-  }
-}
-
 .filter-form {
   margin: 20px 0;
   display: flex;
@@ -241,3 +149,10 @@
 
 /* Global Chat Styles end */
 
+/* The article's styles live in its iframe document. */
+.post-content-frame {
+  display: block;
+  width: 100%;
+  border: 0;
+  min-height: 1px;
+}

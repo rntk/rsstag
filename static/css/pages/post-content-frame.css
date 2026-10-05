@@ -1,0 +1,27 @@
+/* Loaded only inside article frames. Author styles follow these defaults. */
+html {
+  overflow-wrap: break-word;
+}
+
+body {
+  margin: 0;
+  display: flow-root;
+  font-family: Arial, sans-serif;
+  font-size: 12pt;
+  line-height: 1.5;
+}
+
+img,
+video {
+  max-width: 100%;
+  height: auto;
+}
+
+pre {
+  overflow-x: auto;
+}
+
+.highlite_tag {
+  background-color: yellow;
+  color: inherit;
+}
