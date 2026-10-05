@@ -11,10 +11,19 @@ import {
   renderStepper,
   scopeLabel,
 } from './libs/anthology-common.js';
+import {
+  collapsedForLevel,
+  hasTopics,
+  maxTopicLevel,
+  renderTopicHierarchy,
+  snippetInTopic,
+  topicParts,
+} from './libs/anthology-topics.js';
 
 export const UNSORTED_ID = 'unsorted';
 export const OTHER_THEME_ID = '__other';
 export const SORT_MODES = ['relevance', 'newest', 'oldest'];
+export const MAIN_TABS = ['snippets', 'topics'];
 const POLL_MS = 4000;
 const WORD_CHAR = '[\\p{L}\\p{N}]';
 
@@ -129,9 +138,9 @@ export function summarizeRead(snippets) {
   );
 }
 
-export function filterSnippets(snippets, unreadOnly) {
-  const list = snippets || [];
-  return unreadOnly ? list.filter((snippet) => !snippet.read) : list.slice();
+export function filterSnippets(snippets, unreadOnly, topic = '') {
+  const list = (snippets || []).filter((snippet) => !topic || snippetInTopic(snippet, topic));
+  return unreadOnly ? list.filter((snippet) => !snippet.read) : list;
 }
 
 function byDate(direction) {
@@ -443,18 +452,45 @@ export function renderThemeOverview(theme, result) {
   );
 }
 
-function renderToolbar(view) {
+function topicFilterChip(topic) {
+  if (!topic) return '';
+  return (
+    `<span class="anth-chip anth-topic-filter">Topic: ${topicParts(topic).map(escapeHtml).join(' › ')}` +
+    ' <button type="button" class="anth-link" data-action="topic-clear" aria-label="Clear topic filter">✕</button></span>'
+  );
+}
+
+export function renderToolbar(view) {
   const options = SORT_MODES.map(
     (mode) => `<option value="${mode}"${view.sort === mode ? ' selected' : ''}>${mode}</option>`
   ).join('');
+  const sorting =
+    view.tab === 'topics'
+      ? ''
+      : `<label><input type="checkbox" data-control="skim"${view.skim ? ' checked' : ''}/> Skim</label>` +
+        `<label>Sort <select data-control="sort">${options}</select></label>` +
+        topicFilterChip(view.topic);
   return (
     '<div class="anth-toolbar">' +
     `<label><input type="checkbox" data-control="unreadOnly"${view.unreadOnly ? ' checked' : ''}/> Unread only</label>` +
-    `<label><input type="checkbox" data-control="skim"${view.skim ? ' checked' : ''}/> Skim</label>` +
-    `<label>Sort <select data-control="sort">${options}</select></label>` +
+    sorting +
     '<span class="anth-muted anth-toolbar__hint">j / k — next / previous subtopic</span>' +
     '</div>'
   );
+}
+
+/** Snippets / Topics switch; only shown when snippets carry topic paths. */
+export function renderMainTabs(activeTab) {
+  const tabs = [
+    ['snippets', 'Snippets'],
+    ['topics', 'Topics'],
+  ];
+  return `<div class="anth-tabs" role="tablist">${tabs
+    .map(([tab, label]) => {
+      const active = tab === activeTab;
+      return `<button type="button" class="anth-tabs__tab${active ? ' is-active' : ''}" role="tab" aria-selected="${active}" data-action="tab" data-tab="${tab}">${label}</button>`;
+    })
+    .join('')}</div>`;
 }
 
 function intruderText(value) {
@@ -607,7 +643,11 @@ export function renderSnippetList(data, view, expandedSnippets) {
   const cluster = data.cluster;
   const startId = cluster ? cluster.start_snippet_id : null;
   const re = buildKeywordRegex(cluster ? cluster.keywords : []);
-  const list = sortSnippets(filterSnippets(data.snippets, view.unreadOnly), view.sort, startId);
+  const list = sortSnippets(
+    filterSnippets(data.snippets, view.unreadOnly, view.topic),
+    view.sort,
+    startId
+  );
   if (!list.length) {
     return `<p class="anth-empty">${view.unreadOnly ? 'Everything here is read.' : 'No snippets.'}</p>`;
   }
@@ -633,7 +673,8 @@ function createState(payload) {
     payload,
     selection: null,
     expanded: new Set(),
-    view: { unreadOnly: false, sort: 'relevance', skim: false },
+    view: { unreadOnly: false, sort: 'relevance', skim: false, tab: 'snippets', topic: '' },
+    topicView: { level: null, collapsed: new Set() },
     clusters: new Map(),
     loadingClusters: new Set(),
     payloadGeneration: 0,
@@ -660,6 +701,8 @@ function createController(root, initialPayload) {
   function select(selection, updateHash = true) {
     if (!selection || !state.selection || selection.id !== state.selection.id) {
       state.expandedSnippets.clear();
+      state.view.topic = '';
+      state.topicView = { level: null, collapsed: new Set() };
     }
     state.selection = selection;
     if (selection && selection.kind === 'cluster') {
@@ -704,11 +747,55 @@ function createController(root, initialPayload) {
     }
     const cluster = data.cluster;
     const read = summarizeRead(data.snippets);
+    const withTopics = hasTopics(data.snippets);
+    const view = withTopics ? state.view : { ...state.view, tab: 'snippets', topic: '' };
     nodes.main.innerHTML =
       renderClusterHead(cluster, read) +
-      renderToolbar(state.view) +
-      `<div class="anth-snippets">${renderSnippetList(data, state.view, state.expandedSnippets)}</div>`;
+      (withTopics ? renderMainTabs(view.tab) : '') +
+      renderToolbar(view) +
+      (view.tab === 'topics'
+        ? renderTopicsTab(data.snippets)
+        : `<div class="anth-snippets">${renderSnippetList(data, view, state.expandedSnippets)}</div>`);
   }
+
+  function renderTopicsTab(snippets) {
+    const visible = filterSnippets(snippets, state.view.unreadOnly);
+    if (state.topicView.level === null) {
+      state.topicView.level = maxTopicLevel(visible);
+    }
+    return renderTopicHierarchy(visible, state.topicView);
+  }
+
+  function selectedSnippets() {
+    const data = state.selection ? state.clusters.get(state.selection.id) : null;
+    return filterSnippets(data ? data.snippets : [], state.view.unreadOnly);
+  }
+
+  const topicActions = {
+    tab: (button) => {
+      state.view.tab = MAIN_TABS.includes(button.dataset.tab) ? button.dataset.tab : 'snippets';
+      renderMain();
+    },
+    'topic-filter': (button) => {
+      state.view.topic = button.dataset.path || '';
+      state.view.tab = 'snippets';
+      renderMain();
+    },
+    'topic-clear': () => {
+      state.view.topic = '';
+      renderMain();
+    },
+    'topic-toggle': (button) => {
+      const path = button.dataset.path;
+      if (!state.topicView.collapsed.delete(path)) state.topicView.collapsed.add(path);
+      renderMain();
+    },
+    'topic-level': (button) => {
+      const level = Number(button.dataset.level) || 0;
+      state.topicView = { level, collapsed: collapsedForLevel(selectedSnippets(), level) };
+      renderMain();
+    },
+  };
 
   function renderMain() {
     const result = state.payload.result;
@@ -805,6 +892,7 @@ function createController(root, initialPayload) {
     retry,
     feeds: (button) => openFeeds(button.dataset.id),
     'close-feeds': () => nodes.feeds.close(),
+    ...topicActions,
   };
 
   function onClick(event) {

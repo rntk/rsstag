@@ -142,3 +142,41 @@ test('opens and closes the feeds dialog for a cluster', () => {
   dialog.querySelector('[data-action="close-feeds"]').click();
   expect(dialog.open).toBe(false);
 });
+
+test('topics tab shows the topic hierarchy and filters snippets by topic', async () => {
+  const data = clusterData('First', false);
+  data.snippets[0].topic_path = 'Tech > AI';
+  data.snippets.push({
+    id: 's2',
+    post_id: 'p2',
+    title: 'Other post',
+    read: false,
+    topic_path: 'Sport',
+    sentences: [{ number: 0, text: 'Second', read: false }],
+  });
+  fetchJson.mockResolvedValue(data);
+  initAnthologyDetail();
+  const main = document.getElementById('anth-main');
+  await vi.waitFor(() => expect(main.querySelector('[data-tab="topics"]')).not.toBeNull());
+  expect(main.querySelectorAll('.anth-snippet')).toHaveLength(2);
+
+  main.querySelector('[data-tab="topics"]').click();
+  expect(main.querySelector('.anth-topics .fh-root')).not.toBeNull();
+  expect(main.querySelector('.anth-snippet')).toBeNull();
+
+  main.querySelector('[data-action="topic-filter"][data-path="Tech"]').click();
+  expect(main.querySelector('[data-tab="snippets"]').getAttribute('aria-selected')).toBe('true');
+  expect(main.querySelectorAll('.anth-snippet')).toHaveLength(1);
+  expect(main.textContent).toContain('First');
+
+  main.querySelector('[data-action="topic-clear"]').click();
+  expect(main.querySelectorAll('.anth-snippet')).toHaveLength(2);
+});
+
+test('hides the tabs when snippets have no topics', async () => {
+  fetchJson.mockResolvedValue(clusterData('Plain', false));
+  initAnthologyDetail();
+  const main = document.getElementById('anth-main');
+  await vi.waitFor(() => expect(main.textContent).toContain('Plain'));
+  expect(main.querySelector('.anth-tabs')).toBeNull();
+});

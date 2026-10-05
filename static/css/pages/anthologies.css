@@ -792,6 +792,115 @@
   font-size: 12px;
 }
 
+/* Snippets / Topics tabs of a subtopic */
+.anth-tabs {
+  display: flex;
+  gap: var(--rsst-space-1);
+  margin-bottom: var(--rsst-space-2);
+  border-bottom: 1px solid var(--rsst-border);
+}
+
+.anth-tabs__tab {
+  margin-bottom: -1px;
+  padding: 6px var(--rsst-space-3);
+  border: 1px solid transparent;
+  border-radius: 4px 4px 0 0;
+  background: none;
+  color: var(--rsst-ink-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+
+  &:hover {
+    color: var(--rsst-ink);
+  }
+
+  &.is-active {
+    border-color: var(--rsst-border);
+    border-bottom-color: var(--rsst-surface-canvas);
+    background: var(--rsst-surface-canvas);
+    color: var(--rsst-ink);
+    font-weight: 600;
+  }
+}
+
+.anth-topic-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Topic-path hierarchy (reuses the /hierarchy fh-* swim lanes) */
+.anth-topics__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rsst-space-2);
+  margin-bottom: var(--rsst-space-2);
+}
+
+.anth-topics__levels {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--rsst-ink-tertiary);
+  font-size: 12px;
+
+  .is-active {
+    border-color: var(--rsst-primary);
+    background: var(--rsst-primary);
+    color: var(--rsst-surface-canvas);
+  }
+}
+
+.anth-topics {
+  overflow-x: auto;
+  padding-bottom: var(--rsst-space-2);
+
+  .fh-root {
+    --fh-row-gap: 6px;
+    --fh-row-height: 36px;
+    --fh-label-width: 240px;
+  }
+
+  .fh-branch__label,
+  .fh-leaf {
+    font-size: 13px;
+  }
+
+  .fh-branch__label-text {
+    padding: 7px 10px 7px 8px;
+  }
+
+  .fh-leaf {
+    padding: 6px 12px;
+  }
+}
+
+.anth-topics__share {
+  display: flex;
+  align-items: center;
+  gap: var(--rsst-space-2);
+  color: var(--rsst-ink-tertiary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.anth-topics__bar {
+  width: calc(var(--anth-topic-share, 0%) * 1.6);
+  min-width: 3px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--fh-accent-color, var(--rsst-ink-tertiary));
+}
+
+.anth-topics__count {
+  color: var(--rsst-ink-tertiary);
+  font-size: 12px;
+  font-weight: 400;
+}
+
 @media (max-width: 1100px) {
   .anth-explorer {
     grid-template-columns: 240px minmax(0, 1fr);
