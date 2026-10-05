@@ -221,41 +221,71 @@ def on_workers_get(app: "RSSTagApplication", user: dict, _: Request) -> Response
     )
 
 
-def on_workers_spawn_post(app: "RSSTagApplication", user: dict, _: Request) -> Response:
+def _workers_list_url(app: "RSSTagApplication") -> str:
+    """URL of the workers page; plain form POSTs redirect here."""
+    url: Optional[str] = app.routes.get_url_by_endpoint("on_workers_get")
+    return url or "/workers"
+
+
+def _wants_json_response(request: Request) -> bool:
+    """True when the client explicitly asks for JSON (fetch/XHR)."""
+    if request.headers.get("X-Requested-With", "").lower() == "xmlhttprequest":
+        return True
+    return "application/json" in request.headers.get("Accept", "")
+
+
+def on_workers_spawn_post(
+    app: "RSSTagApplication", user: dict, request: Request
+) -> Response:
     app.workers.add_spawn_command()
-    return Response(json.dumps({"success": True}), mimetype="application/json")
+    if _wants_json_response(request):
+        return Response(json.dumps({"success": True}), mimetype="application/json")
+    return redirect(_workers_list_url(app))
 
 
 def on_workers_kill_post(
-    app: "RSSTagApplication", user: dict, _: Request, worker_id: int
+    app: "RSSTagApplication", user: dict, request: Request, worker_id: int
 ) -> Response:
     if not app.workers.is_known_worker(worker_id):
-        return Response(
-            json.dumps({"success": False, "error": "Unknown worker id"}),
-            mimetype="application/json",
-            status=404,
-        )
+        logging.warning("Kill requested for unknown worker id %s", worker_id)
+        if _wants_json_response(request):
+            return Response(
+                json.dumps({"success": False, "error": "Unknown worker id"}),
+                mimetype="application/json",
+                status=404,
+            )
+        return redirect(_workers_list_url(app))
     app.workers.add_kill_command(worker_id)
-    return Response(json.dumps({"success": True}), mimetype="application/json")
+    if _wants_json_response(request):
+        return Response(json.dumps({"success": True}), mimetype="application/json")
+    return redirect(_workers_list_url(app))
 
 
 def on_workers_delete_post(
-    app: "RSSTagApplication", user: dict, _: Request, worker_id: int
+    app: "RSSTagApplication", user: dict, request: Request, worker_id: int
 ) -> Response:
     if not app.workers.is_known_worker(worker_id):
-        return Response(
-            json.dumps({"success": False, "error": "Unknown worker id"}),
-            mimetype="application/json",
-            status=404,
-        )
+        logging.warning("Delete requested for unknown worker id %s", worker_id)
+        if _wants_json_response(request):
+            return Response(
+                json.dumps({"success": False, "error": "Unknown worker id"}),
+                mimetype="application/json",
+                status=404,
+            )
+        return redirect(_workers_list_url(app))
     deleted: bool = app.workers.delete_worker(worker_id)
     if not deleted:
-        return Response(
-            json.dumps({"success": False, "error": "Unable to delete worker"}),
-            mimetype="application/json",
-            status=500,
-        )
-    return Response(json.dumps({"success": True}), mimetype="application/json")
+        logging.error("Unable to delete worker %s from DB", worker_id)
+        if _wants_json_response(request):
+            return Response(
+                json.dumps({"success": False, "error": "Unable to delete worker"}),
+                mimetype="application/json",
+                status=500,
+            )
+        return redirect(_workers_list_url(app))
+    if _wants_json_response(request):
+        return Response(json.dumps({"success": True}), mimetype="application/json")
+    return redirect(_workers_list_url(app))
 
 
 def on_statistics_get(app: "RSSTagApplication", user: dict, _: Request) -> Response:

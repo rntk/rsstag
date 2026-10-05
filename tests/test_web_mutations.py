@@ -138,6 +138,70 @@ class TestWebMutations(MongoWebTestCase):
         after = self.test_db.worker_commands.count_documents({"command": "spawn"})
         self.assertGreater(after, before)
 
+    def test_workers_spawn_post_redirects_to_workers_page(self) -> None:
+        """Plain form POST /workers/spawn redirects instead of raw JSON."""
+        resp = self.auth_client.post("/workers/spawn")
+        self.assertIn(resp.status_code, (301, 302))
+        self.assertTrue(resp.headers.get("Location", "").endswith("/workers"))
+
+    def test_workers_delete_post_redirects_to_workers_page(self) -> None:
+        """POST /workers/delete/<id> from the page redirects to /workers."""
+        worker_id = 4242
+        self.app.workers.update_heartbeat(worker_id)
+        self.assertTrue(self.app.workers.is_known_worker(worker_id))
+        resp = self.auth_client.post(f"/workers/delete/{worker_id}")
+        self.assertIn(resp.status_code, (301, 302))
+        self.assertTrue(resp.headers.get("Location", "").endswith("/workers"))
+        self.assertFalse(self.app.workers.is_known_worker(worker_id))
+
+    def test_workers_delete_post_json_client_still_gets_json(self) -> None:
+        """Fetch/XHR callers asking for JSON keep the JSON response."""
+        worker_id = 4243
+        self.app.workers.update_heartbeat(worker_id)
+        resp = self.auth_client.post(
+            f"/workers/delete/{worker_id}", headers={"Accept": "application/json"}
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(json.loads(resp.get_data(as_text=True)), {"success": True})
+        self.assertFalse(self.app.workers.is_known_worker(worker_id))
+
+    def test_workers_delete_post_xhr_client_still_gets_json(self) -> None:
+        """XHR callers get JSON even without an explicit Accept header."""
+        worker_id = 4244
+        self.app.workers.update_heartbeat(worker_id)
+        resp = self.auth_client.post(
+            f"/workers/delete/{worker_id}",
+            headers={"X-Requested-With": "XMLHttpRequest"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(json.loads(resp.get_data(as_text=True)), {"success": True})
+        self.assertFalse(self.app.workers.is_known_worker(worker_id))
+
+    def test_workers_kill_post_redirects_to_workers_page(self) -> None:
+        """Plain form POST /workers/kill/<id> redirects to /workers."""
+        worker_id = 4245
+        self.app.workers.update_heartbeat(worker_id)
+        before = self.test_db.worker_commands.count_documents(
+            {"command": "kill", "worker_id": worker_id}
+        )
+        resp = self.auth_client.post(f"/workers/kill/{worker_id}")
+        self.assertIn(resp.status_code, (301, 302))
+        self.assertTrue(resp.headers.get("Location", "").endswith("/workers"))
+        after = self.test_db.worker_commands.count_documents(
+            {"command": "kill", "worker_id": worker_id}
+        )
+        self.assertGreater(after, before)
+
+    def test_workers_kill_post_json_client_still_gets_json(self) -> None:
+        """Fetch callers asking for JSON keep the JSON response on kill."""
+        worker_id = 4246
+        self.app.workers.update_heartbeat(worker_id)
+        resp = self.auth_client.post(
+            f"/workers/kill/{worker_id}", headers={"Accept": "application/json"}
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(json.loads(resp.get_data(as_text=True)), {"success": True})
+
     def test_x_oauth_callback_preserves_existing_refresh_token(self) -> None:
         self.app.users.update_by_sid(
             self.user_sid,
