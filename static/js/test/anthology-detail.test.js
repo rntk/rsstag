@@ -19,13 +19,16 @@ import {
   renderSnippetList,
   snippetFeedTitle,
   snippetSentenceLabel,
+  pieSlices,
   renderThemeOverview,
+  renderThemePie,
   renderTree,
   resolveSelection,
   scoreDots,
   selectionHash,
   sortSnippets,
   stepCluster,
+  themeClusters,
   summarizeRead,
   themeForCluster,
   themesWithOrphans,
@@ -43,10 +46,7 @@ import {
 import { buildCreatePayload, needsPolling, renderCard, renderList } from '../anthologies-list.js';
 
 test('metrics disclose posts missing topic grouping', () => {
-  assert.match(
-    renderMetrics({ ungrouped_posts: 7 }),
-    /Posts missing topic grouping.*<dd>7<\/dd>/
-  );
+  assert.match(renderMetrics({ ungrouped_posts: 7 }), /Posts missing topic grouping.*<dd>7<\/dd>/);
   assert.doesNotMatch(renderMetrics({ ungrouped_posts: 0 }), /Posts missing topic grouping/);
   assert.doesNotMatch(renderMetrics({}), /Posts missing topic grouping/);
 });
@@ -415,6 +415,61 @@ test('renderThemeOverview lists cluster cards and theme action', () => {
   assert.match(html, /data-kind="theme" data-id="t0" data-readed="true"/);
   const virtual = renderThemeOverview(themesWithOrphans(result)[2], result);
   assert.doesNotMatch(virtual, /data-action="mark"/);
+});
+
+test('themeClusters drops fully read subtopics only when unread only', () => {
+  const result = makeResult();
+  result.clusters.c2.read = { unread: 0, total: 2 };
+  assert.deepEqual(
+    themeClusters(result.themes[0], result).map((c) => c.id),
+    ['c1', 'c2']
+  );
+  assert.deepEqual(
+    themeClusters(result.themes[0], result, true).map((c) => c.id),
+    ['c1']
+  );
+});
+
+test('pieSlices sizes by snippet count and skips empty subtopics', () => {
+  const result = makeResult();
+  const empty = { id: 'cx', snippet_ids: [] };
+  const slices = pieSlices([result.clusters.c1, result.clusters.c2, empty]);
+  assert.deepEqual(
+    slices.map((s) => [s.cluster.id, s.value, s.color]),
+    [
+      ['c1', 2, 0],
+      ['c2', 1, 1],
+    ]
+  );
+  assert.equal(slices[0].start, 0);
+  assert.equal(slices[1].end, 1);
+});
+
+test('renderThemePie renders clickable slices and legend', () => {
+  const result = makeResult();
+  const html = renderThemePie([result.clusters.c1, result.clusters.c2]);
+  assert.equal((html.match(/<path [^>]*data-action="select"/g) || []).length, 2);
+  assert.match(html, /data-id="c1"[^>]*><title>Date · 2 snippets · 67%<\/title>/);
+  assert.match(html, /Rumors &lt;b&gt;/);
+  assert.match(renderThemePie([result.clusters.c3]), /<circle /);
+  assert.match(renderThemePie([]), /No snippets to chart/);
+});
+
+test('renderThemeOverview chart tab honors unread only', () => {
+  const result = makeResult();
+  result.clusters.c2.read = { unread: 0, total: 2 };
+  const html = renderThemeOverview(result.themes[0], result, {
+    themeTab: 'chart',
+    unreadOnly: true,
+  });
+  assert.match(html, /data-action="theme-tab" data-tab="chart"/);
+  assert.match(html, /data-control="unreadOnly" checked/);
+  assert.match(html, /<svg class="anth-pie__chart"/);
+  assert.match(html, /<circle [^>]*data-id="c1"/);
+  assert.doesNotMatch(html, /data-id="c2"/);
+  assert.doesNotMatch(html, /anth-cluster-card"/);
+  const allRead = renderThemeOverview(result.themes[1], result, { unreadOnly: true });
+  assert.match(allRead, /Every subtopic here is read/);
 });
 
 test('renderClusterHead covers clusters and unsorted', () => {

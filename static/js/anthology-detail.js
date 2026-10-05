@@ -24,6 +24,9 @@ export const UNSORTED_ID = 'unsorted';
 export const OTHER_THEME_ID = '__other';
 export const SORT_MODES = ['relevance', 'newest', 'oldest'];
 export const MAIN_TABS = ['snippets', 'topics'];
+export const THEME_TABS = ['cards', 'chart'];
+const PIE_COLORS = 8;
+const PIE_RADIUS = 90;
 const POLL_MS = 4000;
 const WORD_CHAR = '[\\p{L}\\p{N}]';
 
@@ -325,7 +328,10 @@ export function renderMetrics(metrics, totalRead) {
     ]);
   }
   if (metrics.loose_snippets > 0) {
-    items.push(['Loosely labeled', `${metrics.loose_snippets} in ${metrics.loose_clusters ?? 0} topics`]);
+    items.push([
+      'Loosely labeled',
+      `${metrics.loose_snippets} in ${metrics.loose_clusters ?? 0} topics`,
+    ]);
   }
   return `<dl class="anth-metrics">${items
     .map(
@@ -437,18 +443,123 @@ function renderClusterCard(cluster) {
 }
 
 function themeUnread(read) {
-  return read && read.total ? ` · ${escapeHtml(`${read.unread}/${read.total}`)} unread sentences` : '';
+  return read && read.total
+    ? ` · ${escapeHtml(`${read.unread}/${read.total}`)} unread sentences`
+    : '';
 }
 
-export function renderThemeOverview(theme, result) {
+/** Fully read subtopics drop out when `unreadOnly` is set. */
+export function themeClusters(theme, result, unreadOnly = false) {
   const clusters = (theme.cluster_ids || []).map((id) => result.clusters[id]).filter(Boolean);
+  return unreadOnly
+    ? clusters.filter((c) => !(c.read && c.read.total && !c.read.unread))
+    : clusters;
+}
+
+/** Pie slices sized by snippet count; empty subtopics are skipped. */
+export function pieSlices(clusters) {
+  const sized = clusters
+    .map((cluster) => ({ cluster, value: (cluster.snippet_ids || []).length }))
+    .filter((item) => item.value > 0);
+  const total = sized.reduce((sum, item) => sum + item.value, 0);
+  let start = 0;
+  return sized.map((item, index) => {
+    const share = item.value / total;
+    const slice = { ...item, share, start, end: start + share, color: index % PIE_COLORS };
+    start = slice.end;
+    return slice;
+  });
+}
+
+function piePoint(fraction) {
+  const angle = 2 * Math.PI * fraction - Math.PI / 2;
+  const x = 100 + PIE_RADIUS * Math.cos(angle);
+  const y = 100 + PIE_RADIUS * Math.sin(angle);
+  return `${x.toFixed(2)} ${y.toFixed(2)}`;
+}
+
+function pieShape(slice) {
+  if (slice.share >= 1) {
+    return `<circle cx="100" cy="100" r="${PIE_RADIUS}"`;
+  }
+  const large = slice.share > 0.5 ? 1 : 0;
+  const d = `M100 100 L${piePoint(slice.start)} A${PIE_RADIUS} ${PIE_RADIUS} 0 ${large} 1 ${piePoint(slice.end)} Z`;
+  return `<path d="${d}"`;
+}
+
+function sliceTitle(slice) {
+  const label = slice.cluster.label || slice.cluster.id;
+  return `${label} · ${slice.value} snippets · ${formatPercent(slice.share)}`;
+}
+
+function renderPieSlice(slice) {
+  return (
+    `${pieShape(slice)} class="anth-pie__slice anth-pie--c${slice.color}" data-action="select" data-id="${escapeHtml(slice.cluster.id)}">` +
+    `<title>${escapeHtml(sliceTitle(slice))}</title>${slice.share >= 1 ? '</circle>' : '</path>'}`
+  );
+}
+
+function renderPieLegendItem(slice) {
+  const cluster = slice.cluster;
+  return (
+    `<li><button type="button" class="anth-pie__legend-item" data-action="select" data-id="${escapeHtml(cluster.id)}">` +
+    `<span class="anth-pie__swatch anth-pie--c${slice.color}"></span>` +
+    `<span class="anth-pie__label">${intruderFlag(cluster)}${escapeHtml(cluster.label || cluster.id)}</span>` +
+    `<span class="anth-muted">${slice.value} · ${escapeHtml(formatPercent(slice.share))}</span>${unreadBadge(cluster.read)}` +
+    '</button></li>'
+  );
+}
+
+export function renderThemePie(clusters) {
+  const slices = pieSlices(clusters);
+  if (!slices.length) return '<p class="anth-empty">No snippets to chart.</p>';
+  return (
+    '<div class="anth-pie">' +
+    `<svg class="anth-pie__chart" viewBox="0 0 200 200" role="img" aria-label="Subtopics by snippet count">${slices.map(renderPieSlice).join('')}</svg>` +
+    `<ul class="anth-pie__legend">${slices.map(renderPieLegendItem).join('')}</ul>` +
+    '</div>'
+  );
+}
+
+function renderThemeToolbar(view) {
+  return (
+    '<div class="anth-toolbar">' +
+    `<label><input type="checkbox" data-control="unreadOnly"${view.unreadOnly ? ' checked' : ''}/> Unread only</label>` +
+    '</div>'
+  );
+}
+
+function renderThemeBody(clusters, view) {
+  if (!clusters.length) {
+    return `<p class="anth-empty">${view.unreadOnly ? 'Every subtopic here is read.' : 'No subtopics.'}</p>`;
+  }
+  return view.themeTab === 'chart'
+    ? renderThemePie(clusters)
+    : `<ul class="anth-cluster-cards">${clusters.map(renderClusterCard).join('')}</ul>`;
+}
+
+/**
+ * @param {{unreadOnly?: boolean, themeTab?: string}} view
+ */
+export function renderThemeOverview(theme, result, view = {}) {
+  const all = themeClusters(theme, result);
+  const clusters = view.unreadOnly ? themeClusters(theme, result, true) : all;
   const action = theme.virtual
     ? ''
     : markButton('theme', theme.id, theme.read, ['Mark theme read', 'Mark theme unread']);
   return (
     `<header class="anth-main__head"><div><h2>${escapeHtml(theme.label || theme.id)}</h2>${keywordChips(theme.keywords)}</div>${action}</header>` +
-    `<p class="anth-muted">${clusters.length} subtopics · ${escapeHtml(theme.size ?? 0)} snippets${themeUnread(theme.read)}. Pick one to read.</p>` +
-    `<ul class="anth-cluster-cards">${clusters.map(renderClusterCard).join('')}</ul>`
+    `<p class="anth-muted">${all.length} subtopics · ${escapeHtml(theme.size ?? 0)} snippets${themeUnread(theme.read)}. Pick one to read.</p>` +
+    renderTabs(
+      [
+        ['cards', 'Cards'],
+        ['chart', 'Chart'],
+      ],
+      view.themeTab || 'cards',
+      'theme-tab'
+    ) +
+    renderThemeToolbar(view) +
+    renderThemeBody(clusters, view)
   );
 }
 
@@ -479,18 +590,25 @@ export function renderToolbar(view) {
   );
 }
 
-/** Snippets / Topics switch; only shown when snippets carry topic paths. */
-export function renderMainTabs(activeTab) {
-  const tabs = [
-    ['snippets', 'Snippets'],
-    ['topics', 'Topics'],
-  ];
+function renderTabs(tabs, activeTab, action) {
   return `<div class="anth-tabs" role="tablist">${tabs
     .map(([tab, label]) => {
       const active = tab === activeTab;
-      return `<button type="button" class="anth-tabs__tab${active ? ' is-active' : ''}" role="tab" aria-selected="${active}" data-action="tab" data-tab="${tab}">${label}</button>`;
+      return `<button type="button" class="anth-tabs__tab${active ? ' is-active' : ''}" role="tab" aria-selected="${active}" data-action="${action}" data-tab="${tab}">${label}</button>`;
     })
     .join('')}</div>`;
+}
+
+/** Snippets / Topics switch; only shown when snippets carry topic paths. */
+export function renderMainTabs(activeTab) {
+  return renderTabs(
+    [
+      ['snippets', 'Snippets'],
+      ['topics', 'Topics'],
+    ],
+    activeTab,
+    'tab'
+  );
 }
 
 function intruderText(value) {
@@ -500,7 +618,9 @@ function intruderText(value) {
 }
 
 function formatCohesion(value) {
-  return Number.isFinite(Number(value)) && value !== null ? `cohesion ${Number(value).toFixed(2)}` : '';
+  return Number.isFinite(Number(value)) && value !== null
+    ? `cohesion ${Number(value).toFixed(2)}`
+    : '';
 }
 
 function feedsLink(cluster) {
@@ -673,7 +793,14 @@ function createState(payload) {
     payload,
     selection: null,
     expanded: new Set(),
-    view: { unreadOnly: false, sort: 'relevance', skim: false, tab: 'snippets', topic: '' },
+    view: {
+      unreadOnly: false,
+      sort: 'relevance',
+      skim: false,
+      tab: 'snippets',
+      topic: '',
+      themeTab: 'cards',
+    },
     topicView: { level: null, collapsed: new Set() },
     clusters: new Map(),
     loadingClusters: new Set(),
@@ -776,6 +903,10 @@ function createController(root, initialPayload) {
       state.view.tab = MAIN_TABS.includes(button.dataset.tab) ? button.dataset.tab : 'snippets';
       renderMain();
     },
+    'theme-tab': (button) => {
+      state.view.themeTab = THEME_TABS.includes(button.dataset.tab) ? button.dataset.tab : 'cards';
+      renderMain();
+    },
     'topic-filter': (button) => {
       state.view.topic = button.dataset.path || '';
       state.view.tab = 'snippets';
@@ -806,7 +937,7 @@ function createController(root, initialPayload) {
     }
     if (selection.kind === 'theme') {
       const theme = themesWithOrphans(result).find((item) => item.id === selection.id);
-      nodes.main.innerHTML = renderThemeOverview(theme, result);
+      nodes.main.innerHTML = renderThemeOverview(theme, result, state.view);
       return;
     }
     renderClusterMain(selection.id);

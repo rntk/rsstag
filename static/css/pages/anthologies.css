@@ -660,6 +660,103 @@
   font-size: 12px;
 }
 
+/* Theme overview Chart tab: subtopic pie with a clickable legend */
+.anth-pie {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--rsst-space-5);
+  margin-top: var(--rsst-space-3);
+}
+
+.anth-pie__chart {
+  flex: 0 0 auto;
+  width: min(320px, 100%);
+  height: auto;
+}
+
+.anth-pie__slice {
+  fill: var(--anth-slice);
+  stroke: var(--rsst-surface-canvas);
+  stroke-width: 1;
+  cursor: pointer;
+
+  &:hover {
+    opacity: 0.8;
+  }
+}
+
+.anth-pie__legend {
+  display: flex;
+  flex: 1 1 240px;
+  flex-direction: column;
+  gap: 2px;
+  list-style: none;
+}
+
+.anth-pie__legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--rsst-space-2);
+  width: 100%;
+  padding: 4px var(--rsst-space-2);
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+
+  &:hover {
+    background: var(--rsst-surface-sunken);
+  }
+}
+
+.anth-pie__swatch {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--anth-slice);
+}
+
+.anth-pie__label {
+  flex: 1 1 auto;
+}
+
+.anth-pie--c0 {
+  --anth-slice: var(--rsst-chart-1);
+}
+
+.anth-pie--c1 {
+  --anth-slice: var(--rsst-chart-2);
+}
+
+.anth-pie--c2 {
+  --anth-slice: var(--rsst-chart-3);
+}
+
+.anth-pie--c3 {
+  --anth-slice: var(--rsst-chart-4);
+}
+
+.anth-pie--c4 {
+  --anth-slice: var(--rsst-chart-5);
+}
+
+.anth-pie--c5 {
+  --anth-slice: var(--rsst-chart-6);
+}
+
+.anth-pie--c6 {
+  --anth-slice: var(--rsst-chart-7);
+}
+
+.anth-pie--c7 {
+  --anth-slice: var(--rsst-chart-8);
+}
+
 .anth-snippets {
   display: flex;
   flex-direction: column;
@@ -779,7 +876,8 @@
 .anth-feeds-dialog__list {
   overflow-y: auto;
   margin: 0;
-  padding: var(--rsst-space-3) var(--rsst-space-4) var(--rsst-space-3) calc(var(--rsst-space-4) * 2);
+  padding: var(--rsst-space-3) var(--rsst-space-4) var(--rsst-space-3)
+    calc(var(--rsst-space-4) * 2);
   font-size: 13px;
 
   li + li {
@@ -854,8 +952,11 @@
   }
 }
 
+/* Scrolls on both axes: an x-only overflow would still become the sticky
+   container and pin the titles to a box that never scrolls vertically. */
 .anth-topics {
-  overflow-x: auto;
+  max-height: calc(100vh - var(--rsst-header-height) - 2 * var(--rsst-space-3));
+  overflow: auto;
   padding-bottom: var(--rsst-space-2);
 
   .fh-root {
@@ -870,6 +971,7 @@
   }
 
   .fh-branch__label-text {
+    top: 0;
     padding: 7px 10px 7px 8px;
   }
 
@@ -1106,4 +1208,3 @@
 .inline-form {
   display: inline;
 }
-

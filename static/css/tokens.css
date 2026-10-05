@@ -46,6 +46,16 @@
   --rsst-space-4: 16px;
   --rsst-space-5: 24px;
   --rsst-space-6: 32px;
+
+  /* Categorical chart palette (anthology subtopic pie) */
+  --rsst-chart-1: #4e79a7;
+  --rsst-chart-2: #f28e2b;
+  --rsst-chart-3: #59a14f;
+  --rsst-chart-4: #e15759;
+  --rsst-chart-5: #76b7b2;
+  --rsst-chart-6: #edc948;
+  --rsst-chart-7: #b07aa1;
+  --rsst-chart-8: #9c755f;
 }
 
 *,
@@ -91,4 +101,3 @@ body:has(#global_tools) {
 img {
   max-width: 100%;
 }
-

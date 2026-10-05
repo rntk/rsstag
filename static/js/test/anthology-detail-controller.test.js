@@ -180,3 +180,32 @@ test('hides the tabs when snippets have no topics', async () => {
   await vi.waitFor(() => expect(main.textContent).toContain('Plain'));
   expect(main.querySelector('.anth-tabs')).toBeNull();
 });
+
+test('theme Chart tab and Unread only hide fully read subtopics; slice opens subtopic', () => {
+  const read = { ...cluster, id: 'c2', label: 'Done', read: { unread: 0, total: 1 } };
+  const themed = {
+    ...payload,
+    result: {
+      themes: [{ id: 't0', label: 'Theme', size: 2, cluster_ids: ['c1', 'c2'] }],
+      clusters: { c1: { ...cluster, read: { unread: 1, total: 1 } }, c2: read },
+      unsorted: [],
+    },
+  };
+  document.getElementById('anthology-detail-data').textContent = JSON.stringify(themed);
+  window.history.replaceState(null, '', '#t0');
+  fetchJson.mockReturnValue(new Promise(() => {}));
+  initAnthologyDetail();
+  const main = document.getElementById('anth-main');
+
+  main.querySelector('[data-action="theme-tab"][data-tab="chart"]').click();
+  expect(main.querySelectorAll('.anth-pie__slice')).toHaveLength(2);
+
+  const toggle = main.querySelector('[data-control="unreadOnly"]');
+  toggle.checked = true;
+  toggle.dispatchEvent(new window.Event('change', { bubbles: true }));
+  expect(main.querySelectorAll('.anth-pie__slice')).toHaveLength(1);
+  expect(main.querySelector('[data-id="c2"]')).toBeNull();
+
+  main.querySelector('.anth-pie__slice').dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+  expect(window.location.hash).toBe('#c1');
+});
