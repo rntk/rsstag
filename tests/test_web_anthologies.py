@@ -153,6 +153,12 @@ class TestWebAnthologies(MongoWebTestCase):
         self.assertIn('id="anthology-seed-value"', body)
         self.assertIn('id="anthology-seed-suggestions"', body)
 
+    def test_root_dashboard_links_anthologies(self) -> None:
+        response = self.client.get("/")
+        body = response.get_data(as_text=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('href="/anthologies"', body)
+
     def test_detail_page_renders_and_escapes(self) -> None:
         anthology_id = self._seed(seed_value="<script>x</script>", result=build_result())
         response = self.client.get(f"/anthologies/{anthology_id}")
