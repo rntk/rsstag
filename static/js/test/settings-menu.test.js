@@ -477,10 +477,10 @@ test('render includes only_unread checkbox', () => {
   assert.ok(/only unread/.test(src), 'should include "only unread" label');
 });
 
-test('render includes hot_tags checkbox', () => {
+test('render no longer includes the removed hot_tags setting', () => {
   const src = readSource();
-  assert.ok(/hot_tags/.test(src), 'should include hot_tags checkbox');
-  assert.ok(/hot tags/.test(src), 'should include "hot tags" label');
+  assert.ok(!/hot_tags/.test(src), 'hot_tags setting was replaced by the tags page sort switcher');
+  assert.ok(!/hot tags/.test(src), 'should not include "hot tags" label');
 });
 
 test('render includes similar_posts checkbox', () => {

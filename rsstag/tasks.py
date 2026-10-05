@@ -11,6 +11,7 @@ from rsstag.post_grouping import RssTagPostGrouping
 import rsstag.providers.providers as data_providers
 from rsstag.quality import build_scope_key
 from rsstag.tags import RssTagTags
+from rsstag.tag_rank import pending_base_rank_query
 from rsstag.topic_merge import build_pending_topic_merge_query
 from rsstag.task_state import (
     TaskStateMachine,
@@ -55,6 +56,11 @@ TASK_TAGS_TOPICS = 30
 TASK_POST_QUALITY = 31
 TASK_SOURCE_QUALITY = 32
 TASK_FEEDS_LIST = 33
+# Whole-user tag ranking passes that add keys to each tag's ``rank`` subdoc.
+TASK_TAGS_CORPUS_RANK = 34
+TASK_TAGS_COOC_RANK = 35
+TASK_TAGS_EMBED_RANK = 36
+TASK_TAGS_LLM_RANK = 37
 
 SCOPE_MODE_ALL = "all"
 SCOPE_MODE_POSTS = "posts"
@@ -95,6 +101,10 @@ TASK_SCOPE_REGISTRY: Dict[int, Dict[str, Any]] = {
     TASK_TOPIC_MERGE: {"scope": SCOPE_CAPABILITY_SCOPED_SUPPORTED},
     TASK_POST_QUALITY: {"scope": SCOPE_CAPABILITY_SCOPED_SUPPORTED},
     TASK_SOURCE_QUALITY: {"scope": SCOPE_CAPABILITY_SCOPED_SUPPORTED},
+    TASK_TAGS_CORPUS_RANK: {"scope": SCOPE_CAPABILITY_GLOBAL_ONLY},
+    TASK_TAGS_COOC_RANK: {"scope": SCOPE_CAPABILITY_GLOBAL_ONLY},
+    TASK_TAGS_EMBED_RANK: {"scope": SCOPE_CAPABILITY_GLOBAL_ONLY},
+    TASK_TAGS_LLM_RANK: {"scope": SCOPE_CAPABILITY_GLOBAL_ONLY},
 }
 
 # Task types whose queue identity includes their scope, so that scoring one
@@ -194,6 +204,10 @@ TASK_LEASE_SECONDS: Dict[int, float] = {
     TASK_ANTHOLOGY: 3600.0,
     TASK_TAGS_TOPICS: 7200.0,
     TASK_POST_QUALITY: 3600.0,
+    TASK_TAGS_CORPUS_RANK: 7200.0,
+    TASK_TAGS_COOC_RANK: 7200.0,
+    TASK_TAGS_EMBED_RANK: 7200.0,
+    TASK_TAGS_LLM_RANK: 7200.0,
 }
 
 
@@ -870,8 +884,7 @@ class RssTagTasks:
                 data = []
                 tags_dt = self._db.tags.find(
                     {
-                        "owner": task["user"]["sid"],
-                        "temperature": 0,
+                        **pending_base_rank_query(task["user"]["sid"]),
                         "processing": claimable_item_processing(),
                     },
                     projection={"tag": True, "posts_count": True, "freq": True},
@@ -888,7 +901,13 @@ class RssTagTasks:
                     self._state.release(user_task["_id"])
                 else:
                     task["type"] = TASK_NOOP
-                    self._state.complete(user_task["_id"])
+                    pending: int = self._db.tags.count_documents(
+                        pending_base_rank_query(task["user"]["sid"])
+                    )
+                    if pending == 0:
+                        self._state.complete(user_task["_id"])
+                    else:
+                        self._state.release(user_task["_id"])
             elif user_task["type"] == TASK_NER:
                 data = []
                 ps = self._db.posts.find(
@@ -1485,7 +1504,7 @@ class RssTagTasks:
                     )
                 elif task["type"] == TASK_TAGS_RANK:
                     info["count"] = self._db.tags.count_documents(
-                        {"owner": user_id, "temperature": 0}
+                        pending_base_rank_query(user_id)
                     )
                 elif task["type"] == TASK_NER:
                     info["count"] = self._db.posts.count_documents(
@@ -1554,6 +1573,10 @@ class RssTagTasks:
             TASK_POST_QUALITY: "Post quality scoring (incremental, supports scope)",
             TASK_SOURCE_QUALITY: "Feed/category quality rollup (supports scope)",
             TASK_FEEDS_LIST: "Refresh sources list from provider (no posts)",
+            TASK_TAGS_CORPUS_RANK: "Tags rank: sources, titles, trends",
+            TASK_TAGS_COOC_RANK: "Tags rank: co-occurrence spread",
+            TASK_TAGS_EMBED_RANK: "Tags rank: embeddings",
+            TASK_TAGS_LLM_RANK: "Tags rank: LLM informativeness",
         }
 
         if task_type in task_titles:

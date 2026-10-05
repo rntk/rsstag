@@ -284,3 +284,60 @@
   padding: 0.5em;
 }
 
+
+/* Tag list sort switcher (Count / Informative / Hot + Hide generic), shared by
+   the group-by-tag page family via tag-sort-switcher.html. */
+.tag-sort-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--rsst-space-3);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.tag-sort-switcher__label {
+  color: var(--rsst-ink-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.tag-sort-switcher__group {
+  display: inline-flex;
+  border: 1px solid var(--rsst-border);
+}
+
+.tag-sort-switcher__link,
+.tag-sort-switcher__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--rsst-space-1);
+  padding: var(--rsst-space-2) var(--rsst-space-4);
+  color: var(--rsst-ink-secondary);
+  background-color: var(--rsst-surface-sunken);
+  text-decoration: none;
+}
+
+.tag-sort-switcher__link + .tag-sort-switcher__link {
+  border-left: 1px solid var(--rsst-border);
+}
+
+.tag-sort-switcher__link:hover,
+.tag-sort-switcher__toggle:hover {
+  color: var(--rsst-ink);
+}
+
+.tag-sort-switcher__link--active,
+.tag-sort-switcher__toggle--active {
+  color: var(--rsst-surface-canvas);
+  background-color: var(--rsst-ink);
+}
+
+.tag-sort-switcher__link--active:hover,
+.tag-sort-switcher__toggle--active:hover {
+  color: var(--rsst-surface-canvas);
+}
+
+.tag-sort-switcher__toggle .material-symbols-outlined {
+  font-size: 1rem;
+}

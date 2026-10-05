@@ -5,10 +5,8 @@ import logging
 import math
 import os.path
 import re
-import time
 from collections import Counter, defaultdict
 from functools import lru_cache
-from random import randint
 from typing import Any, Dict, List, Optional
 
 from pymongo import UpdateOne
@@ -24,6 +22,8 @@ from rsstag.post_grouping import RssTagPostGrouping
 from rsstag.sentiment import RuSentiLex, SentimentConverter, WordNetAffectRuRom
 from rsstag.snippet_clusters import RssTagSnippetClusters
 from rsstag.snippets import merge_grouped_snippets
+from rsstag import tag_rank_cooc, tag_rank_corpus, tag_rank_embed, tag_rank_llm
+from rsstag.tag_rank import compute_base_rank, legacy_temperature, recompute_derived
 from rsstag.tags import RssTagTags
 from rsstag.tags_builder import TagsBuilder
 from rsstag.users import RssTagUsers
@@ -82,6 +82,18 @@ class TagWorker(BaseWorker):
 
     def handle_tags_topics(self, task: dict[str, Any]) -> bool:
         return self.make_tags_topics(task["user"]["sid"])
+
+    def handle_tags_corpus_rank(self, task: dict[str, Any]) -> bool:
+        return tag_rank_corpus.run(self._db, self._config, task["user"]["sid"])
+
+    def handle_tags_cooc_rank(self, task: dict[str, Any]) -> bool:
+        return tag_rank_cooc.run(self._db, self._config, task["user"]["sid"])
+
+    def handle_tags_embed_rank(self, task: dict[str, Any]) -> bool:
+        return tag_rank_embed.run(self._db, self._config, task["user"]["sid"])
+
+    def handle_tags_llm_rank(self, task: dict[str, Any]) -> bool:
+        return tag_rank_llm.run(self._db, self._config, task["user"]["sid"])
 
     def clear_user_data(self, user: dict) -> bool:
         try:
@@ -234,60 +246,6 @@ class TagWorker(BaseWorker):
 
         return result
 
-    def process_words(self, tag: dict) -> bool:
-        seconds_interval = 3600
-        current_time = time.time()
-        max_repeats = 5
-        result = True
-        word_query = {"word": tag["tag"], "owner": tag["owner"]}
-        for _ in range(0, max_repeats):
-            try:
-                word = self._db.words.find_one(word_query)
-                if word:
-                    old_mid = sum(word["numbers"]) / len(word["numbers"])
-                    time_delta = current_time - word["it"]
-                    if time_delta > seconds_interval:
-                        update_query = {
-                            "$set": {"it": current_time},
-                            "$push": {"numbers": tag["posts_count"]},
-                        }
-                        word["numbers"].append(tag["posts_count"])
-                        new_mid = sum(word["numbers"]) / len(word["numbers"])
-                    else:
-                        numbers_length = len(word["numbers"]) - 1
-                        key_name = "numbers." + str(numbers_length)
-                        update_query = {"$inc": {key_name: tag["posts_count"]}}
-                        word["numbers"][-1] += tag["posts_count"]
-                        new_mid = sum(word["numbers"]) / len(word["numbers"])
-                    temperature = abs(new_mid - old_mid)
-                    self._db.tags.find_one_and_update(
-                        {"tag": tag["tag"], "owner": tag["owner"]},
-                        {"$set": {"temperature": temperature}},
-                    )
-                    self._db.words.find_one_and_update(word_query, update_query)
-                else:
-                    self._db.words.insert(
-                        {
-                            "word": tag["tag"],
-                            "owner": tag["owner"],
-                            "numbers": [tag["posts_count"]],
-                            "it": current_time,
-                        }
-                    )
-            except Exception as e:
-                result = False
-                logging.error(
-                    "Can`t process word %s for user %s. Info: %s",
-                    tag["tag"],
-                    tag["owner"],
-                    e,
-                )
-            if result:
-                break
-            time.sleep(randint(3, 10))
-
-        return result
-
     def make_letters(self, owner: str) -> bool:
         router = RSSTagRoutes(self._config["settings"]["host_name"])
         letters = RssTagLetters(self._db)
@@ -317,15 +275,18 @@ class TagWorker(BaseWorker):
                 if not cl_entity:
                     continue
                 for word in entity:
-                    if len(word) > 1:
-                        count_ent[word] += 1
+                    tag: str = self._builder.process_word(word) if len(word) > 1 else ""
+                    if tag:
+                        count_ent[tag] += 1
 
         if not count_ent:
             return True
 
-        logging.info("Found %s entities for user %s", len(count_ent), owner)
+        logging.info("Found %s entity tags for user %s", len(count_ent), owner)
         tags = RssTagTags(self._db)
-        result = tags.add_entities(owner, count_ent)
+        result = tags.mark_entities(owner, dict(count_ent))
+        if result:
+            recompute_derived(self._db, owner, list(count_ent))
 
         return result
 
@@ -798,53 +759,43 @@ class TagWorker(BaseWorker):
 
         return True
 
-    @lru_cache(maxsize=10)
-    def _get_posts_count(self, owner: str, task_id: str) -> Optional[int]:
-        posts_h = RssTagPosts(self._db)
+    def _total_posts(self, owner: str) -> int:
+        try:
+            return int(RssTagPosts(self._db).count(owner) or 0)
+        except Exception as e:
+            logging.error("Can`t count posts for %s. Info: %s", owner, e)
+            return -1
 
-        return posts_h.count(owner)
-
-    @lru_cache(maxsize=10)
-    def _get_tags_count(self, owner: str, task_id: str) -> int:
-        tags_h = RssTagTags(self._db)
-
-        return tags_h.get_tags_sum(owner)
-
-    def _make_tags_rank(self, task: dict) -> bool:
-        user_sid = task["user"]["sid"]
-        posts_count = self._get_posts_count(user_sid, task["_id"])
-        if posts_count == 0:
-            return True
-        if posts_count is None:
-            return False
-        tags_count = self._get_tags_count(user_sid, task["_id"])
-        if tags_count == 0:
-            return True
-        if tags_count is None:
-            return False
-        tag_temps = {}
-        for tag_d in task["data"]:
-            tf = tag_d["freq"] / tags_count
-            idf = math.log(posts_count / tag_d["posts_count"])
-            temp = tf * idf
-            tag_temps[tag_d["tag"]] = temp
-
-        tags_h = RssTagTags(self._db)
-        tags_h.add_entities(user_sid, tag_temps, replace=True)
-
-        return True
+    def _tag_rank_update(self, tag_d: dict, total_posts: int) -> UpdateOne:
+        posts_count: int = int(tag_d.get("posts_count") or 0)
+        freq: int = int(tag_d.get("freq") or 0)
+        is_stopword: bool = tag_d["tag"] in self._stopw
+        base_rank: dict[str, Any] = compute_base_rank(
+            tag_d["tag"], posts_count, freq, total_posts, is_stopword
+        )
+        fields: dict[str, Any] = {f"rank.{key}": value for key, value in base_rank.items()}
+        fields["rank_pending"] = True
+        fields["temperature"] = legacy_temperature(posts_count, freq, is_stopword)
+        return UpdateOne({"_id": tag_d["_id"]}, {"$set": fields})
 
     def make_tags_rank(self, task: dict) -> bool:
-        tag_temps = {}
-        for tag_d in task["data"]:
-            tf = tag_d["posts_count"] / math.log(1 + tag_d["freq"])
-            if tag_d["tag"] in self._stopw:
-                tf /= tag_d["freq"]
-            tag_temps[tag_d["tag"]] = tf + 0.01
-
-        tags_h = RssTagTags(self._db)
-        tags_h.add_entities(task["user"]["sid"], tag_temps)
-
+        """Write ridf/burst/df_ratio/shape_junk for the claimed tags batch."""
+        tags_batch: List[dict] = list(task.get("data") or [])
+        if not tags_batch:
+            return True
+        owner: str = task["user"]["sid"]
+        total_posts: int = self._total_posts(owner)
+        if total_posts < 0:
+            return False
+        updates: List[UpdateOne] = [
+            self._tag_rank_update(tag_d, total_posts) for tag_d in tags_batch
+        ]
+        try:
+            self._db.tags.bulk_write(updates, ordered=False)
+            recompute_derived(self._db, owner, [tag_d["tag"] for tag_d in tags_batch])
+        except Exception as e:
+            logging.error("Can`t save tags rank for %s. Info: %s", owner, e)
+            return False
         return True
 
     def make_clean_bigrams(self, task: dict) -> bool:

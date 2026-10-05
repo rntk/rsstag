@@ -314,3 +314,33 @@ test('formatScore rounds to at most 4 decimals', () => {
   assert.equal(formatScore(2), '2');
   assert.equal(formatScore(0), '0');
 });
+
+// ============================================================
+// Manual hide / pin controls
+// ============================================================
+
+test('tag item imports the user-rank helpers and wires pin/hide buttons', () => {
+  const src = readSource();
+  assert.ok(/from '\.\.\/libs\/tag-user-rank\.js'/.test(src), 'imports tag-user-rank helpers');
+  assert.ok(/tag_pin_button/.test(src) && /tag_hide_button/.test(src), 'pin and hide buttons');
+  assert.ok(/'unpin'/.test(src) && /'unhide'/.test(src), 'unpin / unhide labels');
+  assert.ok(/saveUserRank\(this\.state\.tag\.tag,\s*value\)/.test(src), 'calls the API');
+});
+
+test('tag item renders controls only when the payload supports user rank', () => {
+  const src = readSource();
+  assert.ok(/supportsUserRank\(this\.state\.tag,\s*this\.props\.is_bigram\)/.test(src));
+  assert.ok(/renderUserRankControls\(\)/.test(src));
+});
+
+test('tag item shows a pin marker and a state class for hidden / pinned tags', () => {
+  const src = readSource();
+  assert.ok(/cloud_item_pin/.test(src), 'pin marker');
+  assert.ok(/userRankClass\(this\.state\.tag\.user_rank\)/.test(src), 'state class on <li>');
+});
+
+test('tag item updates local state after a successful save and reports failures', () => {
+  const src = readSource();
+  assert.ok(/user_rank:\s*value/.test(src), 'updates tag.user_rank');
+  assert.ok(/tag_user_rank_error/.test(src), 'shows an error message');
+});

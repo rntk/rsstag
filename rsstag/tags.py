@@ -1,7 +1,9 @@
 import logging
 from collections import defaultdict
-from typing import Optional, List, Iterator
-from pymongo import MongoClient, ASCENDING, DESCENDING, UpdateOne
+from typing import Any, Optional, List, Iterator
+from pymongo import MongoClient, UpdateOne
+
+from rsstag.tag_rank import NOISE_FILTER, USER_RANKS, apply_derived, rank_snapshot_filter, sort_fields
 
 
 class RssTagTags:
@@ -12,6 +14,9 @@ class RssTagTags:
         "posts_count",
         "processing",
         "topic_backed",
+        "rank.score",
+        "rank.hot",
+        "rank.noise",
     ]
 
     def __init__(self, db: MongoClient) -> None:
@@ -52,37 +57,101 @@ class RssTagTags:
 
         return self._db.tags.find(query, projection=projection)
 
-    def get_all(
-        self,
-        owner: str,
-        only_unread: Optional[bool] = None,
-        hot_tags: bool = False,
-        opts: Optional[dict] = None,
-        projection: Optional[dict] = None,
-    ) -> Iterator[dict]:
-        query = {"owner": owner}
-        if opts and "regexp" in opts:
-            query["tag"] = {"$regex": opts["regexp"], "$options": "i"}
-        if opts and "topic_backed" in opts:
-            query["topic_backed"] = bool(opts["topic_backed"])
-        sort_data = []
-        if hot_tags:
-            sort_data.append(("temperature", DESCENDING))
+    @staticmethod
+    def _user_rank_update(derived: dict[str, Any], value: Optional[str]) -> dict[str, Any]:
+        fields: dict[str, Any] = {
+            "rank.score": derived["score"],
+            "rank.noise": derived["noise"],
+        }
+        if value is None:
+            return {"$set": fields, "$unset": {"user_rank": ""}}
+        fields["user_rank"] = value
+        return {"$set": fields}
+
+    def set_user_rank(self, owner: str, tag: str, value: Optional[str]) -> bool:
+        """Hide / pin a tag (``None`` clears the override); True when a tag was updated.
+
+        ``rank.score`` and ``rank.noise`` are re-derived so list queries keep
+        using the plain ``rank.noise`` filter and ``rank.score`` sort.
+        """
+        if value is not None and value not in USER_RANKS:
+            self._log.warning("Unknown user rank %r for tag %s", value, tag)
+            return False
+        query: dict[str, Any] = {"owner": owner, "tag": tag}
+        try:
+            for attempt in range(3):
+                doc: Optional[dict] = self._db.tags.find_one(query)
+                if not doc:
+                    return False
+                rank: Any = doc.get("rank")
+                derived: dict[str, Any] = apply_derived(
+                    rank if isinstance(rank, dict) else {},
+                    int(doc.get("posts_count") or 0),
+                    value,
+                )
+                update: dict[str, Any] = self._user_rank_update(derived, value)
+                snapshot: dict[str, Any] = {**query, **rank_snapshot_filter(doc)}
+                if self._db.tags.update_one(snapshot, update).matched_count > 0:
+                    return True
+            self._log.warning("Tag rank inputs kept changing for tag %s", tag)
+            return False
+        except Exception as exc:
+            self._log.error("Can`t set user rank for tag %s. Info: %s", tag, exc)
+            return False
+
+    @staticmethod
+    def _apply_list_filters(
+        query: dict, only_unread: Optional[bool], hide_noise: bool
+    ) -> dict:
+        """Add the unread and generic-tag filters shared by list queries."""
         if only_unread:
-            sort_data.append(("unread_count", DESCENDING))
             query["unread_count"] = {"$gt": 0}
-        else:
-            sort_data.append(("posts_count", DESCENDING))
-        sort_data.append(("tag", ASCENDING))
-        params = {}
+        if hide_noise:
+            query.update(NOISE_FILTER)
+        return query
+
+    @staticmethod
+    def _find_params(opts: Optional[dict], projection: Optional[dict]) -> dict:
+        params: dict[str, Any] = {}
         if opts and "offset" in opts:
             params["skip"] = opts["offset"]
         if opts and "limit" in opts:
             params["limit"] = opts["limit"]
         if projection:
             params["projection"] = projection
+        return params
 
-        return self._db.tags.find(query, **params).allow_disk_use(True).sort(sort_data)
+    def _find_sorted(
+        self,
+        query: dict,
+        only_unread: Optional[bool],
+        sort: str,
+        hide_noise: bool,
+        opts: Optional[dict],
+        projection: Optional[dict],
+    ) -> Iterator[dict]:
+        if opts and "regexp" in opts:
+            query["tag"] = {"$regex": opts["regexp"], "$options": "i"}
+        self._apply_list_filters(query, only_unread, hide_noise)
+        return (
+            self._db.tags.find(query, **self._find_params(opts, projection))
+            .allow_disk_use(True)
+            .sort(sort_fields(sort, bool(only_unread)))
+        )
+
+    def get_all(
+        self,
+        owner: str,
+        only_unread: Optional[bool] = None,
+        sort: str = "count",
+        opts: Optional[dict] = None,
+        projection: Optional[dict] = None,
+        hide_noise: bool = False,
+    ) -> Iterator[dict]:
+        query: dict[str, Any] = {"owner": owner}
+        if opts and "topic_backed" in opts:
+            query["topic_backed"] = bool(opts["topic_backed"])
+        return self._find_sorted(query, only_unread, sort, hide_noise, opts, projection)
 
     def count(
         self,
@@ -92,12 +161,12 @@ class RssTagTags:
         sentiments: Optional[List[str]] = None,
         groups: Optional[List[str]] = None,
         topic_backed: Optional[bool] = None,
+        hide_noise: bool = False,
     ) -> int:
         query = {"owner": owner}
         if regexp:
             query["tag"] = {"$regex": regexp, "$options": "i"}
-        if only_unread:
-            query["unread_count"] = {"$gt": 0}
+        self._apply_list_filters(query, only_unread, hide_noise)
         if sentiments:
             query["$and"] = [
                 {"sentiment": {"$exists": True}},
@@ -170,9 +239,10 @@ class RssTagTags:
         owner: str,
         sentiments: List[str],
         only_unread: Optional[bool] = None,
-        hot_tags: bool = False,
+        sort: str = "count",
         opts: Optional[dict] = None,
         projection: Optional[dict] = None,
+        hide_noise: bool = False,
     ) -> Iterator[dict]:
         query = {
             "owner": owner,
@@ -181,58 +251,23 @@ class RssTagTags:
                 {"sentiment": {"$all": sentiments}},
             ],
         }
-        if opts and "regexp" in opts:
-            query["tag"] = {"$regex": opts["regexp"], "$options": "i"}
-        sort_data = []
-        if hot_tags:
-            sort_data.append(("temperature", DESCENDING))
-        if only_unread:
-            sort_data.append(("unread_count", DESCENDING))
-            query["unread_count"] = {"$gt": 0}
-        else:
-            sort_data.append(("posts_count", DESCENDING))
-        params = {}
-        if opts and "offset" in opts:
-            params["skip"] = opts["offset"]
-        if opts and "limit" in opts:
-            params["limit"] = opts["limit"]
-        if projection:
-            params["projection"] = projection
-
-        return self._db.tags.find(query, **params).allow_disk_use(True).sort(sort_data)
+        return self._find_sorted(query, only_unread, sort, hide_noise, opts, projection)
 
     def get_by_group(
         self,
         owner: str,
         groups: List[str],
         only_unread: Optional[bool] = None,
-        hot_tags: bool = False,
+        sort: str = "count",
         opts: Optional[dict] = None,
         projection: Optional[dict] = None,
+        hide_noise: bool = False,
     ) -> Iterator[dict]:
         query = {
             "owner": owner,
             "$and": [{"groups": {"$exists": True}}, {"groups": {"$all": groups}}],
         }
-        if opts and "regexp" in opts:
-            query["tag"] = {"$regex": opts["regexp"], "$options": "i"}
-        sort_data = []
-        if hot_tags:
-            sort_data.append(("temperature", DESCENDING))
-        if only_unread:
-            sort_data.append(("unread_count", DESCENDING))
-            query["unread_count"] = {"$gt": 0}
-        else:
-            sort_data.append(("posts_count", DESCENDING))
-        params = {}
-        if opts and "offset" in opts:
-            params["skip"] = opts["offset"]
-        if opts and "limit" in opts:
-            params["limit"] = opts["limit"]
-        if projection:
-            params["projection"] = projection
-
-        return self._db.tags.find(query, **params).allow_disk_use(True).sort(sort_data)
+        return self._find_sorted(query, only_unread, sort, hide_noise, opts, projection)
 
     def add_groups(self, owner: str, tags_groups: dict) -> bool:
         updates = []
@@ -262,32 +297,23 @@ class RssTagTags:
 
         return groups
 
-    def add_entities(self, owner: str, entities: dict, replace: bool = False) -> bool:
-        if replace:
-            operator = "$set"
-        else:
-            operator = "$inc"
+    def mark_entities(self, owner: str, entities: dict[str, int]) -> bool:
+        """Flag tags as named entities and count NER hits; never touches temperature."""
         updates = [
             UpdateOne(
-                {"owner": owner, "tag": entity},
-                {operator: {"temperature": number, "ner": number}},
+                {"owner": owner, "tag": tag},
+                {"$set": {"rank.is_entity": True, "rank_pending": True}, "$inc": {"ner": number}},
             )
-            for entity, number in entities.items()
+            for tag, number in entities.items()
         ]
-        if updates:
-            self._db.tags.bulk_write(updates)
-
+        if not updates:
+            return True
+        try:
+            self._db.tags.bulk_write(updates, ordered=False)
+        except Exception as e:
+            self._log.error("Can`t mark entities for %s. Info: %s", owner, e)
+            return False
         return True
-
-    def get_tags_sum(self, owner: str) -> int:
-        cursor = self._db.tags.aggregate(
-            [
-                {"$match": {"owner": owner}},
-                {"$group": {"_id": "$owner", "counter": {"$sum": "$posts_count"}}},
-            ]
-        )
-        for dt in cursor:
-            return dt["counter"]
 
     def add_classifications(self, owner: str, tag: str, classifications: list) -> bool:
         self._db.tags.update_one(
@@ -324,35 +350,21 @@ class RssTagTags:
         owner: str,
         category: str,
         only_unread: Optional[bool] = None,
-        hot_tags: bool = False,
+        sort: str = "count",
         opts: Optional[dict] = None,
         projection: Optional[dict] = None,
+        hide_noise: bool = False,
     ) -> Iterator[dict]:
         query = {"owner": owner, "classifications.category": category}
-        if opts and "regexp" in opts:
-            query["tag"] = {"$regex": opts["regexp"], "$options": "i"}
-        sort_data = []
-        if hot_tags:
-            sort_data.append(("temperature", DESCENDING))
-        if only_unread:
-            sort_data.append(("unread_count", DESCENDING))
-            query["unread_count"] = {"$gt": 0}
-        else:
-            sort_data.append(("posts_count", DESCENDING))
-        params = {}
-        if opts and "offset" in opts:
-            params["skip"] = opts["offset"]
-        if opts and "limit" in opts:
-            params["limit"] = opts["limit"]
-        if projection:
-            params["projection"] = projection
-
-        return self._db.tags.find(query, **params).allow_disk_use(True).sort(sort_data)
+        return self._find_sorted(query, only_unread, sort, hide_noise, opts, projection)
 
     def count_by_category(
-        self, owner: str, category: str, only_unread: bool = False
+        self,
+        owner: str,
+        category: str,
+        only_unread: bool = False,
+        hide_noise: bool = False,
     ) -> int:
         query = {"owner": owner, "classifications.category": category}
-        if only_unread:
-            query["unread_count"] = {"$gt": 0}
+        self._apply_list_filters(query, only_unread, hide_noise)
         return self._db.tags.count_documents(query)

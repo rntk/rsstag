@@ -105,6 +105,11 @@ class RSSTagRoutes:
             {"url": "/tags/canvas", "endpoint": "on_tags_canvas_get", "methods": ["GET"]},
             {"url": "/api/tags/canvas", "endpoint": "on_tags_canvas_data_get", "methods": ["GET"]},
             {
+                "url": "/api/tags/user-rank",
+                "endpoint": "on_tags_user_rank_post",
+                "methods": ["POST"],
+            },
+            {
                 "url": "/group/bi-grams/<int:page_number>",
                 "endpoint": "on_group_by_bigrams_get",
                 "methods": ["GET"],

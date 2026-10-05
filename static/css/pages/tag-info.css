@@ -449,6 +449,48 @@
   font-variant-numeric: tabular-nums;
 }
 
+.cloud_item_pin {
+  color: #d97706;
+  font-size: 10pt;
+}
+
+.cloud_item_hidden {
+  opacity: 0.45;
+}
+
+.cloud_item_hidden:hover {
+  opacity: 1;
+}
+
+.cloud_item_pinned {
+  border-color: #d97706;
+}
+
+.cloud_item_tools .tag_pin_button,
+.cloud_item_tools .tag_hide_button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #008ec9;
+  font: inherit;
+  cursor: pointer;
+}
+
+.cloud_item_tools .tag_pin_button:hover,
+.cloud_item_tools .tag_hide_button:hover {
+  text-decoration: underline;
+}
+
+.cloud_item_tools .tag_pin_button:disabled,
+.cloud_item_tools .tag_hide_button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.tag_user_rank_error {
+  color: #dc2626;
+}
+
 .cloud_item_info {
   display: flex;
   flex-wrap: wrap;

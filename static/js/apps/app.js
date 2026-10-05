@@ -692,7 +692,8 @@ export function initApp() {
     renderToRoot('cats_list', <CategoriesList ES={window.EVSYS} />);
   } else if (pageType === 'tags-group') {
     const tags_storage = new TagsStorage(window.EVSYS);
-    renderToRoot('tags_page', <TagsList ES={window.EVSYS} />);
+    const preserveOrder = ['informative', 'hot'].includes(window.initial_tag_sort);
+    renderToRoot('tags_page', <TagsList ES={window.EVSYS} preserveOrder={preserveOrder} />);
     renderToRoot('letters_list', <LettersList ES={window.EVSYS} />);
     renderToRoot('search_tools', <SearchInput ES={window.EVSYS} />);
     tags_storage.start();

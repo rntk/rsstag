@@ -61,9 +61,13 @@ export function compareByScore(scoreKey) {
 /**
  * Ranked (non-alphabetical) ordering: by score when scoreKey is set, otherwise by count.
  * @param {string} [scoreKey]
+ * @param {boolean} [preserveOrder] Keep the server's selected ranking.
  * @returns {(a: Object, b: Object) => number}
  */
-export function rankedComparator(scoreKey) {
+export function rankedComparator(scoreKey, preserveOrder = false) {
+  if (preserveOrder) {
+    return () => 0;
+  }
   return scoreKey ? compareByScore(scoreKey) : compareByCount;
 }
 

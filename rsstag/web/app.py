@@ -458,15 +458,17 @@ class RSSTagApplication(object):
             )
 
     def on_group_by_bigrams_get(
-        self, user: dict, _: Request, page_number: int = 1
+        self, user: dict, request: Request, page_number: int = 1
     ) -> Response:
-        return bigrams_handlers.on_group_by_bigrams_get(self, user, page_number)
+        return bigrams_handlers.on_group_by_bigrams_get(
+            self, user, page_number, request=request
+        )
 
     def on_group_by_tags_sentiment(
-        self, user: dict, _: Request, sentiment: str, page_number: int = 1
+        self, user: dict, request: Request, sentiment: str, page_number: int = 1
     ) -> Response:
         return tags_handlers.on_group_by_tags_sentiment(
-            self, user, sentiment, page_number
+            self, user, sentiment, page_number, request=request
         )
 
     def on_group_by_tags_startwith_get(
@@ -477,9 +479,11 @@ class RSSTagApplication(object):
         )
 
     def on_group_by_tags_group(
-        self, user: dict, _: Request, group: str, page_number: int = 1
+        self, user: dict, request: Request, group: str, page_number: int = 1
     ) -> Response:
-        return tags_handlers.on_group_by_tags_group(self, user, group, page_number)
+        return tags_handlers.on_group_by_tags_group(
+            self, user, group, page_number, request=request
+        )
 
     def on_get_tag_similar(
         self, user: dict, _: Request, model: str, tag: str
@@ -586,10 +590,10 @@ class RSSTagApplication(object):
         return tags_handlers.on_group_by_tags_categories_get(self, user, page_number)
 
     def on_group_by_tags_by_category_get(
-        self, user: dict, _: Request, quoted_category: str, page_number: int = 1
+        self, user: dict, request: Request, quoted_category: str, page_number: int = 1
     ):
         return tags_handlers.on_group_by_tags_by_category_get(
-            self, user, quoted_category, page_number
+            self, user, quoted_category, page_number, request=request
         )
 
     def on_group_by_bigrams_dyn_get(self, user: dict, _: Request, page_number: int):

@@ -245,10 +245,10 @@ class TestRssTagBiGramsStorage(unittest.TestCase):
             limit=5,
         )
 
-    def test_get_all_hot_tags(self):
+    def test_get_all_hot_sort(self):
         cursor = self._mock_find_chain()
 
-        result = self.storage.get_all("alice", hot_tags=True)
+        result = self.storage.get_all("alice", sort="hot")
 
         self.assertIs(result, cursor)
         cursor.sort.assert_called_once_with(

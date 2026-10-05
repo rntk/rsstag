@@ -92,18 +92,19 @@ class RssTagBiGrams:
         self,
         owner: str,
         only_unread: bool = False,
-        hot_tags: bool = False,
+        sort: str = "count",
         opts: dict = None,
         projection: dict = None,
         context_tags: Optional[List[str]] = None,
     ) -> Iterator[dict]:
+        """List bi-grams; any non-"count" sort mode orders by temperature first."""
         query = {"owner": owner}
         if opts and "regexp" in opts:
             query["tag"] = {"$regex": opts["regexp"], "$options": "i"}
         if context_tags:
             query["tags"] = {"$all": context_tags}
         sort_data = []
-        if hot_tags:
+        if sort in ("hot", "informative"):
             sort_data.append(("temperature", DESCENDING))
         if only_unread:
             sort_data.append(("unread_count", DESCENDING))

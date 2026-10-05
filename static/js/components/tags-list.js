@@ -6,8 +6,8 @@ import { compareByName, rankedComparator } from '../libs/tag-sort.js';
 export default class TagsList extends React.Component {
   constructor(props) {
     super(props);
-    // Score-ranked lists (scoreKey set) open in ranked order; others stay grouped by letter.
-    this.state = { groupByLetter: !props.scoreKey };
+    // Ranked lists open flat so the selected ordering is immediately visible.
+    this.state = { groupByLetter: !props.scoreKey && !props.preserveOrder };
     this.updateTags = this.updateTags.bind(this);
     this.toggleGrouping = this.toggleGrouping.bind(this);
   }
@@ -24,6 +24,9 @@ export default class TagsList extends React.Component {
   }
 
   rankedLabel() {
+    if (this.props.preserveOrder) {
+      return 'Show selected ranking';
+    }
     return this.props.scoreKey ? 'Show by score' : 'Show by frequency';
   }
 
@@ -77,7 +80,9 @@ export default class TagsList extends React.Component {
         ));
 
       if (!this.state.groupByLetter) {
-        const sortedFlat = tags.sort(rankedComparator(this.props.scoreKey));
+        const sortedFlat = tags.sort(
+          rankedComparator(this.props.scoreKey, this.props.preserveOrder)
+        );
 
         return (
           <div key={mode}>

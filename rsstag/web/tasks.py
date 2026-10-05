@@ -29,6 +29,10 @@ from rsstag.tasks import (
     TASK_RAW_TO_POSTS,
     TASK_TAGS_TOPICS,
     TASK_SOURCE_QUALITY,
+    TASK_TAGS_CORPUS_RANK,
+    TASK_TAGS_COOC_RANK,
+    TASK_TAGS_EMBED_RANK,
+    TASK_TAGS_LLM_RANK,
     build_telegram_read_state_task,
     get_task_scope_hint,
 )
@@ -67,6 +71,10 @@ def on_tasks_get(app, user: dict, request: Request) -> Response:
         # picking it here would mean one LLM call for every post the user owns.
         # Quality scans are started per feed/category from /group/category.
         TASK_SOURCE_QUALITY: "Roll up feed quality",
+        TASK_TAGS_CORPUS_RANK: "Tags rank: sources, titles, trends",
+        TASK_TAGS_COOC_RANK: "Tags rank: co-occurrence spread",
+        TASK_TAGS_EMBED_RANK: "Tags rank: embeddings",
+        TASK_TAGS_LLM_RANK: "Tags rank: LLM informativeness",
     }
     available_tasks = {
         task_type: f"{title} ({get_task_scope_hint(task_type)})"

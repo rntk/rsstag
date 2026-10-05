@@ -8,17 +8,31 @@ from urllib.parse import quote
 if TYPE_CHECKING:
     from rsstag.web.app import RSSTagApplication
 
-from werkzeug.wrappers import Response
+from dataclasses import replace
+
+from werkzeug.wrappers import Request, Response
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from rsstag.stopwords import stopwords
 from rsstag.context_filter import ContextFilterManager, TagContextFilter
 from rsstag.web.context_filter_handlers import get_context_filter_manager
+from rsstag.web.tag_list_view import (
+    TagListView,
+    build_sort_switcher,
+    preserve_list_view_in_pages,
+    read_list_view,
+)
 
 
 def on_group_by_bigrams_get(
-    app: "RSSTagApplication", user: dict, page_number: int = 1
+    app: "RSSTagApplication",
+    user: dict,
+    page_number: int = 1,
+    request: Optional[Request] = None,
 ) -> Response:
+    view: TagListView = replace(
+        read_list_view(request), topics=False, hide_noise=False
+    )
     manager: ContextFilterManager = get_context_filter_manager(user)
     tag_filter: Optional[TagContextFilter] = manager.get_filter("tags")
     context_tags: Optional[list[str]] = None
@@ -46,11 +60,12 @@ def on_group_by_bigrams_get(
         user["settings"]["tags_on_page"],
         "on_group_by_bigrams_get",
     )
+    preserve_list_view_in_pages(pages_map, view)
     sorted_tags = []
     tags = app.bi_grams.get_all(
         user["sid"],
         user["settings"]["only_unread"],
-        user["settings"]["hot_tags"],
+        view.sort,
         opts={"offset": start_tags_range, "limit": user["settings"]["tags_on_page"]},
         context_tags=context_tags,
     )
@@ -89,6 +104,13 @@ def on_group_by_bigrams_get(
             letters=letters,
             user_settings=user["settings"],
             provider=user.get("provider", ""),
+            sort_switcher=build_sort_switcher(
+                app.routes.get_url_by_endpoint(
+                    endpoint="on_group_by_bigrams_get", params={"page_number": 1}
+                ),
+                view,
+                show_noise_toggle=False,
+            ),
         ),
         mimetype="text/html",
     )

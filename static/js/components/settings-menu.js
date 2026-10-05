@@ -233,18 +233,6 @@ export default class SettingsMenu extends React.Component {
               </label>
             </div>
             <div>
-              <label htmlFor="hot_tags">
-                <input
-                  id="hot_tags"
-                  name="hot_tags"
-                  type="checkbox"
-                  checked={this.state.settings.hot_tags}
-                  onChange={this.changeBoolSettings}
-                />
-                hot tags
-              </label>
-            </div>
-            <div>
               <label htmlFor="similar_posts">
                 <input
                   id="similar_posts"

@@ -6,7 +6,13 @@ from types import SimpleNamespace
 from unittest import mock
 from werkzeug.wrappers import Request
 
-from rsstag.web.tags import on_tags_canvas_data_get
+from rsstag.web.tag_list_view import TagListView
+from rsstag.web.tags import (
+    _filter_and_sort_scoped,
+    _tag_list_item,
+    on_tags_canvas_data_get,
+    on_tags_user_rank_post,
+)
 from tests.web_test_utils import MongoWebTestCase
 
 
@@ -49,6 +55,87 @@ class TestTagsCanvasData(unittest.TestCase):
             SimpleNamespace(), {}, Request.from_values(query_string="offset=invalid")
         )
         self.assertEqual(response.status_code, 400)
+
+
+class TestTagsUserRankHandler(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tags = mock.Mock()
+        self.tags.get_by_tag.return_value = {"tag": "python"}
+        self.tags.set_user_rank.return_value = True
+        self.app = SimpleNamespace(tags=self.tags)
+        self.user: dict[str, object] = {"sid": "owner"}
+
+    def _post(self, body: object) -> tuple[int, dict]:
+        request = Request.from_values(
+            method="POST", data=json.dumps(body), content_type="application/json"
+        )
+        response = on_tags_user_rank_post(self.app, self.user, request)
+        return response.status_code, json.loads(response.get_data(as_text=True))
+
+    def test_sets_each_valid_value(self) -> None:
+        for value in ("hidden", "pinned", None):
+            with self.subTest(value=value):
+                status, data = self._post({"tag": "python", "value": value})
+                self.assertEqual((200, {"ok": True}), (status, data))
+                self.tags.set_user_rank.assert_called_with("owner", "python", value)
+
+    def test_rejects_bad_input(self) -> None:
+        bodies: list[object] = [
+            {"value": "hidden"},
+            {"tag": "  ", "value": "hidden"},
+            {"tag": 5, "value": "hidden"},
+            {"tag": "python", "value": "bogus"},
+            {"tag": "python", "value": 1},
+            ["python"],
+        ]
+        for body in bodies:
+            with self.subTest(body=body):
+                status, data = self._post(body)
+                self.assertEqual(400, status)
+                self.assertIn("error", data)
+        self.tags.set_user_rank.assert_not_called()
+
+    def test_rejects_non_json_body(self) -> None:
+        request = Request.from_values(method="POST", data="not json")
+        response = on_tags_user_rank_post(self.app, self.user, request)
+        self.assertEqual(400, response.status_code)
+
+    def test_unknown_tag_is_404(self) -> None:
+        self.tags.get_by_tag.return_value = None
+        status, _ = self._post({"tag": "ghost", "value": "hidden"})
+        self.assertEqual(404, status)
+        self.tags.set_user_rank.assert_not_called()
+
+    def test_storage_failure_is_500(self) -> None:
+        self.tags.set_user_rank.return_value = False
+        status, data = self._post({"tag": "python", "value": "hidden"})
+        self.assertEqual(500, status)
+        self.assertIn("error", data)
+        self.tags.get_by_tag.side_effect = RuntimeError("db down")
+        self.assertEqual(500, self._post({"tag": "python", "value": None})[0])
+
+
+class TestScopedUserRank(unittest.TestCase):
+    def test_context_filter_branch_uses_user_rank(self) -> None:
+        names: list[str] = ["generic", "hidden", "plain", "pinned"]
+        counts: dict[str, int] = {name: 5 for name in names}
+        docs: dict[str, dict] = {
+            "generic": {"rank": {"noise": True, "score": 0.0}},
+            "hidden": {"user_rank": "hidden", "rank": {"noise": False, "score": 9.0}},
+            "plain": {"rank": {"noise": False, "score": 1.0}},
+            "pinned": {"user_rank": "pinned", "rank": {"noise": True, "score": 1000.0}},
+        }
+        view = TagListView(sort="informative", hide_noise=True)
+        self.assertEqual(["pinned", "plain"], _filter_and_sort_scoped(names, counts, docs, view))
+        shown = TagListView(sort="informative", hide_noise=False)
+        self.assertEqual(
+            ["pinned", "hidden", "plain", "generic"],
+            _filter_and_sort_scoped(names, counts, docs, shown),
+        )
+
+    def test_tag_list_item_exposes_user_rank(self) -> None:
+        self.assertIsNone(_tag_list_item({}, "a", 1)["user_rank"])
+        self.assertEqual("pinned", _tag_list_item({"user_rank": "pinned"}, "a", 1)["user_rank"])
 
 
 class TestWebTags(MongoWebTestCase):
@@ -125,6 +212,35 @@ class TestWebTags(MongoWebTestCase):
         body = response.get_data(as_text=True)
         self.assertIn("testtag", body)
 
+    def test_user_rank_api_hides_and_pins_tags_on_group_page(self) -> None:
+        self._seed_tag("pinme", 5)
+        self._seed_tag("hideme", 5)
+        for tag, value in (("pinme", "pinned"), ("hideme", "hidden")):
+            response = self.client.post("/api/tags/user-rank", json={"tag": tag, "value": value})
+            self.assertEqual(200, response.status_code)
+            self.assertEqual({"ok": True}, response.get_json())
+        stored: dict = self.test_db.tags.find_one({"owner": self.sid, "tag": "hideme"})
+        self.assertEqual("hidden", stored["user_rank"])
+        self.assertTrue(stored["rank"]["noise"])
+        page = self.client.get("/group/tag/1?sort=informative&hide_noise=1").get_data(as_text=True)
+        self.assertIn("pinme", page)
+        self.assertNotIn("hideme", page)
+        self.assertLess(page.index("pinme"), page.index("testtag"))
+        shown = self.client.get("/group/tag/1").get_data(as_text=True)
+        self.assertIn("hideme", shown)
+        self.assertRegex(shown, r"user_rank\W+hidden")
+        cleared = self.client.post("/api/tags/user-rank", json={"tag": "hideme", "value": None})
+        self.assertEqual(200, cleared.status_code)
+        self.assertNotIn(
+            "user_rank", self.test_db.tags.find_one({"owner": self.sid, "tag": "hideme"})
+        )
+
+    def test_user_rank_api_validates_input(self) -> None:
+        bad = self.client.post("/api/tags/user-rank", json={"tag": "testtag", "value": "x"})
+        self.assertEqual(400, bad.status_code)
+        missing = self.client.post("/api/tags/user-rank", json={"tag": "ghost", "value": "hidden"})
+        self.assertEqual(404, missing.status_code)
+
     def test_tags_canvas_page_and_chunked_data(self) -> None:
         self._seed_tag("canvas-second", count=2)
         page = self.client.get("/tags/canvas")
@@ -199,6 +315,83 @@ class TestWebTags(MongoWebTestCase):
         body = response.get_data(as_text=True)
         self.assertIn("ctxtag", body)
         self.assertNotIn("testtag", body)
+
+    def _seed_ranked_tags(self, sid: str) -> None:
+        ranked: list[tuple[str, int, dict]] = [
+            ("rank_common", 9, {"score": 0.1, "noise": True}),
+            ("rank_topical", 3, {"score": 4.0, "noise": False, "hot": 0.5}),
+            ("rank_trend", 2, {"score": 1.0, "noise": False, "hot": 5.0}),
+        ]
+        for tag, count, rank in ranked:
+            self.test_db.tags.insert_one(
+                {
+                    "owner": sid,
+                    "tag": tag,
+                    "posts_count": count,
+                    "unread_count": count,
+                    "words": [tag],
+                    "local_url": f"/entity/{tag}",
+                    "processing": 0,
+                    "temperature": 1,
+                    "freq": 1.0,
+                    "rank": rank,
+                }
+            )
+
+    @staticmethod
+    def _page_tag_names(body: str) -> list[str]:
+        match = re.search(r"var initial_tags_list = (.*?);", body, re.DOTALL)
+        assert match is not None
+        return [item["tag"] for item in json.loads(match.group(1))]
+
+    def test_on_group_by_tags_get_sort_switcher(self) -> None:
+        _, sid = self.seed_test_user("rank-sort-user", "password")
+        self._seed_ranked_tags(sid)
+        client = self.get_authenticated_client(sid)
+
+        body = client.get("/group/tag/1").get_data(as_text=True)
+        self.assertEqual(
+            ["rank_common", "rank_topical", "rank_trend"], self._page_tag_names(body)
+        )
+        self.assertIn("tag-sort-switcher", body)
+        self.assertIn('href="/group/tag/1?sort=informative"', body)
+        self.assertIn('initial_tag_sort = "count";', body)
+
+        body = client.get("/group/tag/1?sort=informative&hide_noise=1").get_data(
+            as_text=True
+        )
+        self.assertEqual(["rank_topical", "rank_trend"], self._page_tag_names(body))
+        self.assertIn('initial_tag_sort = "informative";', body)
+        self.assertIn("/group/tag/1?sort=hot&hide_noise=1", body)
+
+        body = client.get("/group/tag/1?sort=hot").get_data(as_text=True)
+        self.assertEqual(
+            ["rank_trend", "rank_topical", "rank_common"], self._page_tag_names(body)
+        )
+        self.assertIn('initial_tag_sort = "hot";', body)
+
+    def test_on_group_by_tags_get_sorts_context_filtered_tags(self) -> None:
+        _, sid = self.seed_test_user("rank-ctx-user", "password")
+        self._seed_ranked_tags(sid)
+        self.test_db.posts.insert_one(
+            {
+                "owner": sid,
+                "pid": "rank-ctx-post",
+                "feed_id": "rank-ctx-feed",
+                "tags": ["rank_common", "rank_topical", "rank_trend"],
+                "read": False,
+                "processing": 0,
+            }
+        )
+        self.app.users.update_settings(
+            sid, {"context_filter": {"feeds": ["rank-ctx-feed"]}}
+        )
+        client = self.get_authenticated_client(sid)
+
+        body = client.get("/group/tag/1?sort=informative&hide_noise=1").get_data(
+            as_text=True
+        )
+        self.assertEqual(["rank_topical", "rank_trend"], self._page_tag_names(body))
 
     def test_on_group_by_tags_get_pagination(self) -> None:
         user, sid = self.seed_test_user("pagination-user", "password")

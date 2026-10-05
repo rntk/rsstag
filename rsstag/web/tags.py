@@ -20,6 +20,23 @@ from rsstag.surprise import BayesianSurprise
 from rsstag.llm.llamacpp import LLamaCPP
 from rsstag.charts import create_svg_histogram
 from rsstag.web.context_filter_handlers import get_context_filter_manager
+from rsstag.tag_rank import (
+    DEFAULT_SORT_MODE,
+    USER_RANKS,
+    is_noise,
+    sort_key,
+    sort_names,
+)
+from rsstag.web.tag_list_view import (
+    TagListView,
+    append_list_view,
+    build_sort_switcher,
+    preserve_list_view_in_pages,
+    read_list_view,
+    secondary_list_view,
+    tag_hint,
+    topic_filter_enabled,
+)
 
 from gensim.models.word2vec import Word2Vec
 from gensim.models.fasttext import FastText
@@ -60,35 +77,6 @@ def _get_scoped_tag_counts(app: "RSSTagApplication", user: dict) -> tuple[bool, 
     )
 
 
-def _topic_filter_enabled(request: Optional[Request]) -> bool:
-    """Return whether the optional topic-backed tag filter was requested."""
-    if request is None:
-        return False
-    return request.args.get("topics", "").strip().casefold() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-
-
-def _append_topic_filter(url: str, enabled: bool) -> str:
-    """Keep the topic-backed tag filter on generated page links."""
-    if not enabled:
-        return url
-    separator = "&" if "?" in url else "?"
-    return f"{url}{separator}topics=1"
-
-
-def _preserve_topic_filter_in_pages(pages_map: dict[str, list[dict]], enabled: bool) -> None:
-    """Apply the optional filter to all pagination links in a page map."""
-    if not enabled:
-        return
-    for page_links in pages_map.values():
-        for page_link in page_links:
-            page_link["url"] = _append_topic_filter(page_link["url"], enabled)
-
-
 def on_tags_canvas_get(
     app: "RSSTagApplication", user: dict, request: Request
 ) -> Response:
@@ -97,12 +85,12 @@ def on_tags_canvas_get(
         page.render(
             user_settings=user["settings"],
             provider=user.get("provider", ""),
-            topic_filter_active=_topic_filter_enabled(request),
-            list_link=_append_topic_filter(
+            topic_filter_active=topic_filter_enabled(request),
+            list_link=append_list_view(
                 app.routes.get_url_by_endpoint(
                     "on_group_by_tags_get", params={"page_number": 1}
                 ),
-                _topic_filter_enabled(request),
+                read_list_view(request),
             ),
         ),
         mimetype="text/html",
@@ -123,7 +111,7 @@ def on_tags_canvas_data_get(
         )
 
     only_unread: bool = bool(user["settings"].get("only_unread"))
-    topic_filter_active: bool = _topic_filter_enabled(request)
+    topic_filter_active: bool = topic_filter_enabled(request)
     context_filter_active, scoped_counts = _get_scoped_tag_counts(app, user)
     if context_filter_active:
         topic_names: set[str] = (
@@ -159,7 +147,7 @@ def on_tags_canvas_data_get(
                 "words": doc.get("words", []),
             }
             for doc in app.tags.get_all(
-                user["sid"], only_unread, False, opts=opts,
+                user["sid"], only_unread, opts=opts,
                 projection={"tag": 1, "local_url": 1, "unread_count": 1,
                             "posts_count": 1, "temperature": 1, "words": 1, "_id": 0},
             )
@@ -171,101 +159,150 @@ def on_tags_canvas_data_get(
     )
 
 
+def _tag_docs_by_name(
+    app: "RSSTagApplication", owner: str, names: list[str]
+) -> dict[str, dict[str, Any]]:
+    """Fetch the rank-related fields for a set of tag names in one query."""
+    if not names:
+        return {}
+    projection: dict[str, int] = {
+        "tag": 1,
+        "rank": 1,
+        "temperature": 1,
+        "user_rank": 1,
+        "_id": 0,
+    }
+    return {
+        str(doc["tag"]): doc
+        for doc in app.tags.get_by_tags(owner, names, projection=projection)
+        if doc.get("tag")
+    }
+
+
+def _filter_and_sort_scoped(
+    names: list[str],
+    counts: dict[str, int],
+    docs: dict[str, dict[str, Any]],
+    view: TagListView,
+) -> list[str]:
+    """Apply the generic-tag filter and the sort mode to context-scoped tags."""
+    if view.hide_noise:
+        names = [name for name in names if not is_noise(docs.get(name))]
+    return sort_names(names, counts, docs, view.sort)
+
+
+def _scoped_visible_names(
+    app: "RSSTagApplication",
+    user: dict,
+    scoped_counts: dict[str, int],
+    view: TagListView,
+) -> list[str]:
+    """Ordered tag names visible on the context-filtered tags page."""
+    names: list[str] = [name for name, count in scoped_counts.items() if count > 0]
+    if view.topics:
+        topic_names: set[str] = app.tags.get_topic_backed_names(
+            user["sid"], user["settings"]["only_unread"]
+        )
+        names = [name for name in names if name in topic_names]
+    needs_docs: bool = view.sort != DEFAULT_SORT_MODE or view.hide_noise
+    docs: dict[str, dict[str, Any]] = (
+        _tag_docs_by_name(app, user["sid"], names) if needs_docs else {}
+    )
+    return _filter_and_sort_scoped(names, scoped_counts, docs, view)
+
+
+def _tag_list_item(
+    doc: dict[str, Any], tag_name: str, count: int
+) -> dict[str, Any]:
+    """Template/JS payload for one tag of a tag list page."""
+    return {
+        "tag": tag_name,
+        "url": doc.get("local_url", f"/entity/{quote(tag_name)}"),
+        "words": doc.get("words", [tag_name]),
+        "count": count,
+        "sentiment": doc.get("sentiment", []),
+        "hint": tag_hint(doc),
+        "user_rank": doc.get("user_rank"),
+    }
+
+
+def _doc_count(doc: dict[str, Any], only_unread: bool) -> int:
+    return int(doc.get("unread_count" if only_unread else "posts_count", 0) or 0)
+
+
+def _page_numbers(page_number: int, page_count: int) -> tuple[int, int]:
+    """Return (current page for links, zero-based page index) like other pages."""
+    current: int = page_number
+    if page_number <= 0:
+        current = 1
+    elif page_number > page_count:
+        current = page_count
+    index: int = current - 1
+    if index < 0:
+        index = 1
+    return current, index
+
+
+def _global_tags_page(
+    app: "RSSTagApplication", user: dict, view: TagListView, start: int
+) -> list[dict[str, Any]]:
+    only_unread: bool = bool(user["settings"]["only_unread"])
+    tag_opts: dict[str, Any] = {"offset": start, "limit": user["settings"]["tags_on_page"]}
+    if view.topics:
+        tag_opts["topic_backed"] = True
+    tags = app.tags.get_all(
+        user["sid"], only_unread, view.sort, opts=tag_opts, hide_noise=view.hide_noise
+    )
+    return [_tag_list_item(t, t["tag"], _doc_count(t, only_unread)) for t in tags]
+
+
+def _scoped_tags_page(
+    app: "RSSTagApplication",
+    user: dict,
+    names: list[str],
+    scoped_counts: dict[str, int],
+    start: int,
+) -> list[dict[str, Any]]:
+    paged: list[str] = names[start : start + user["settings"]["tags_on_page"]]
+    return [
+        _tag_list_item(
+            app.tags.get_by_tag(user["sid"], name) or {}, name, scoped_counts[name]
+        )
+        for name in paged
+    ]
+
+
 def on_group_by_tags_get(
     app: "RSSTagApplication",
     user: dict,
     page_number: int = 1,
     request: Optional[Request] = None,
 ) -> Response:
-    topic_filter_active = _topic_filter_enabled(request)
+    view: TagListView = read_list_view(request)
     context_filter_active, scoped_counts = _get_scoped_tag_counts(app, user)
-    topic_backed_tags: set[str] = (
-        app.tags.get_topic_backed_names(
-            user["sid"], user["settings"]["only_unread"]
-        )
-        if topic_filter_active and context_filter_active
-        else set()
-    )
-
+    scoped_names: list[str] = []
     if context_filter_active:
-        visible_scoped_tags = {
-            tag
-            for tag in scoped_counts
-            if not topic_filter_active or tag in topic_backed_tags
-        }
-        tags_count = len(visible_scoped_tags)
-    elif topic_filter_active:
+        scoped_names = _scoped_visible_names(app, user, scoped_counts, view)
+        tags_count = len(scoped_names)
+    else:
         tags_count = app.tags.count(
             user["sid"],
             user["settings"]["only_unread"],
-            topic_backed=True,
+            topic_backed=True if view.topics else None,
+            hide_noise=view.hide_noise,
         )
-    else:
-        tags_count = app.tags.count(user["sid"], user["settings"]["only_unread"])
     page_count = app.get_page_count(tags_count, user["settings"]["tags_on_page"])
-    p_number = page_number
-    if page_number <= 0:
-        p_number = 1
-    elif page_number > page_count:
-        p_number = page_count
-
-    new_cookie_page_value = p_number
-    p_number -= 1
-    if p_number < 0:
-        p_number = 1
+    new_cookie_page_value, p_number = _page_numbers(page_number, page_count)
     pages_map, start_tags_range, end_tags_range = app.calc_pager_data(
         p_number, page_count, user["settings"]["tags_on_page"], "on_group_by_tags_get"
     )
-    _preserve_topic_filter_in_pages(pages_map, topic_filter_active)
-    sorted_tags: list[dict[str, Any]] = []
+    preserve_list_view_in_pages(pages_map, view)
     if context_filter_active:
-        sorted_scoped = sorted(scoped_counts.items(), key=lambda item: item[1], reverse=True)
-        if topic_filter_active:
-            sorted_scoped = [
-                item
-                for item in sorted_scoped
-                if item[0] in topic_backed_tags
-            ]
-        paged_scoped = sorted_scoped[
-            start_tags_range : start_tags_range + user["settings"]["tags_on_page"]
-        ]
-        for tag_name, count in paged_scoped:
-            tag_doc = app.tags.get_by_tag(user["sid"], tag_name) or {}
-            sorted_tags.append(
-                {
-                    "tag": tag_name,
-                    "url": tag_doc.get("local_url", f"/entity/{quote(tag_name)}"),
-                    "words": tag_doc.get("words", [tag_name]),
-                    "count": count,
-                    "sentiment": tag_doc.get("sentiment", []),
-                }
-            )
-    else:
-        tag_opts: dict[str, Any] = {
-            "offset": start_tags_range,
-            "limit": user["settings"]["tags_on_page"],
-        }
-        if topic_filter_active:
-            tag_opts["topic_backed"] = True
-        tags = app.tags.get_all(
-            user["sid"],
-            user["settings"]["only_unread"],
-            user["settings"]["hot_tags"],
-            opts=tag_opts,
+        sorted_tags = _scoped_tags_page(
+            app, user, scoped_names, scoped_counts, start_tags_range
         )
-
-        for t in tags:
-            sorted_tags.append(
-                {
-                    "tag": t["tag"],
-                    "url": t["local_url"],
-                    "words": t["words"],
-                    "count": t["unread_count"]
-                    if user["settings"]["only_unread"]
-                    else t["posts_count"],
-                    "sentiment": t["sentiment"] if "sentiment" in t else [],
-                }
-            )
+    else:
+        sorted_tags = _global_tags_page(app, user, view, start_tags_range)
     db_letters = app.letters.get(user["sid"], make_sort=True)
     if db_letters:
         letters = app.letters.to_list(db_letters, user["settings"]["only_unread"])
@@ -273,12 +310,15 @@ def on_group_by_tags_get(
         letters = []
     page = app.template_env.get_template("group-by-tag.html")
 
-    sort_by_link: str = _append_topic_filter(
+    sort_by_link: str = append_list_view(
         app.routes.get_url_by_endpoint(
             endpoint="on_group_by_tags_get",
             params={"page_number": new_cookie_page_value},
         ),
-        topic_filter_active,
+        view,
+    )
+    first_page_link: str = app.routes.get_url_by_endpoint(
+        endpoint="on_group_by_tags_get", params={"page_number": 1}
     )
 
     return Response(
@@ -297,10 +337,49 @@ def on_group_by_tags_get(
             letters=letters,
             user_settings=user["settings"],
             provider=user.get("provider", ""),
-            topic_filter_active=topic_filter_active,
+            topic_filter_active=view.topics,
+            sort_switcher=build_sort_switcher(first_page_link, view),
         ),
         mimetype="text/html",
     )
+
+
+def _json_response(payload: dict[str, Any], status: int = 200) -> Response:
+    return Response(json.dumps(payload), mimetype="application/json", status=status)
+
+
+def _parse_user_rank_body(request: Request) -> tuple[str, Optional[str]]:
+    """Validate the user-rank request body; raises ValueError on bad input."""
+    data: Any = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        raise ValueError("Invalid request body")
+    tag: Any = data.get("tag")
+    if not isinstance(tag, str) or not tag.strip():
+        raise ValueError("Tag cannot be empty")
+    value: Any = data.get("value")
+    if value is not None and value not in USER_RANKS:
+        raise ValueError("Value must be 'hidden', 'pinned' or null")
+    return tag.strip(), value
+
+
+def on_tags_user_rank_post(
+    app: "RSSTagApplication", user: dict, request: Request
+) -> Response:
+    """POST /api/tags/user-rank - hide / pin a tag (value null clears it)."""
+    try:
+        tag, value = _parse_user_rank_body(request)
+    except ValueError as exc:
+        logging.warning("Bad user rank request: %s", exc)
+        return _json_response({"error": str(exc)}, 400)
+    try:
+        if not app.tags.get_by_tag(user["sid"], tag):
+            return _json_response({"error": "Tag not found"}, 404)
+        if not app.tags.set_user_rank(user["sid"], tag, value):
+            raise RuntimeError("storage did not update the tag")
+    except Exception as exc:
+        logging.error("Can`t set user rank for tag %s. Info: %s", tag, exc)
+        return _json_response({"error": "Could not update the tag. Please try again."}, 500)
+    return _json_response({"ok": True})
 
 
 def on_s_tree_get(
@@ -437,11 +516,19 @@ def on_s_tree_get(
 
 
 def on_group_by_tags_sentiment(
-    app: "RSSTagApplication", user: dict, sentiment: str, page_number: int = 1
+    app: "RSSTagApplication",
+    user: dict,
+    sentiment: str,
+    page_number: int = 1,
+    request: Optional[Request] = None,
 ) -> Response:
+    view: TagListView = secondary_list_view(request)
     sentiment = sentiment.replace("|", "/")
     tags_count = app.tags.count(
-        user["sid"], user["settings"]["only_unread"], sentiments=[sentiment]
+        user["sid"],
+        user["settings"]["only_unread"],
+        sentiments=[sentiment],
+        hide_noise=view.hide_noise,
     )
     page_count = app.get_page_count(tags_count, user["settings"]["tags_on_page"])
     p_number = page_number
@@ -461,13 +548,15 @@ def on_group_by_tags_sentiment(
         "on_group_by_tags_sentiment",
         sentiment=sentiment,
     )
+    preserve_list_view_in_pages(pages_map, view)
     sorted_tags = []
     tags = app.tags.get_by_sentiment(
         user["sid"],
         [sentiment],
         user["settings"]["only_unread"],
-        user["settings"]["hot_tags"],
+        view.sort,
         opts={"offset": start_tags_range, "limit": user["settings"]["tags_on_page"]},
+        hide_noise=view.hide_noise,
     )
 
     for t in tags:
@@ -480,6 +569,8 @@ def on_group_by_tags_sentiment(
                 if user["settings"]["only_unread"]
                 else t["posts_count"],
                 "sentiment": t["sentiment"] if "sentiment" in t else [],
+                "hint": tag_hint(t),
+                "user_rank": t.get("user_rank"),
             }
         )
     db_letters = app.letters.get(user["sid"], make_sort=True)
@@ -508,6 +599,12 @@ def on_group_by_tags_sentiment(
             letters=letters,
             user_settings=user["settings"],
             provider=user.get("provider", ""),
+            sort_switcher=build_sort_switcher(
+                app.routes.get_url_by_endpoint(
+                    endpoint="on_group_by_tags_sentiment", params={"sentiment": sentiment, "page_number": 1}
+                ),
+                view,
+            ),
         ),
         mimetype="text/html",
     )
@@ -523,8 +620,12 @@ def on_group_by_tags_startwith_get(
     if letter not in db_letters["letters"]:
         return app.on_error(user, request, NotFound())
 
+    view: TagListView = secondary_list_view(request)
     tags_count = app.tags.count(
-        user["sid"], user["settings"]["only_unread"], "^{}".format(letter)
+        user["sid"],
+        user["settings"]["only_unread"],
+        "^{}".format(letter),
+        hide_noise=view.hide_noise,
     )
     page_count = app.get_page_count(tags_count, user["settings"]["tags_on_page"])
     p_number = page_number
@@ -544,16 +645,18 @@ def on_group_by_tags_startwith_get(
         "on_group_by_tags_startwith_get",
         letter=letter,
     )
+    preserve_list_view_in_pages(pages_map, view)
     sorted_tags = []
     tags = app.tags.get_all(
         user["sid"],
         user["settings"]["only_unread"],
-        user["settings"]["hot_tags"],
+        view.sort,
         opts={
             "offset": start_tags_range,
             "limit": user["settings"]["tags_on_page"],
             "regexp": "^{}".format(letter),
         },
+        hide_noise=view.hide_noise,
     )
 
     for t in tags:
@@ -566,6 +669,8 @@ def on_group_by_tags_startwith_get(
                 if user["settings"]["only_unread"]
                 else t["posts_count"],
                 "sentiment": t["sentiment"] if "sentiment" in t else [],
+                "hint": tag_hint(t),
+                "user_rank": t.get("user_rank"),
             }
         )
     if db_letters:
@@ -594,16 +699,30 @@ def on_group_by_tags_startwith_get(
             letters=letters,
             user_settings=user["settings"],
             provider=user.get("provider", ""),
+            sort_switcher=build_sort_switcher(
+                app.routes.get_url_by_endpoint(
+                    endpoint="on_group_by_tags_startwith_get", params={"letter": letter, "page_number": 1}
+                ),
+                view,
+            ),
         ),
         mimetype="text/html",
     )
 
 
 def on_group_by_tags_group(
-    app: "RSSTagApplication", user: dict, group: str, page_number=1
+    app: "RSSTagApplication",
+    user: dict,
+    group: str,
+    page_number: int = 1,
+    request: Optional[Request] = None,
 ) -> Response:
+    view: TagListView = secondary_list_view(request)
     tags_count = app.tags.count(
-        user["sid"], user["settings"]["only_unread"], groups=[group]
+        user["sid"],
+        user["settings"]["only_unread"],
+        groups=[group],
+        hide_noise=view.hide_noise,
     )
     page_count = app.get_page_count(tags_count, user["settings"]["tags_on_page"])
     p_number = page_number
@@ -623,13 +742,15 @@ def on_group_by_tags_group(
         "on_group_by_tags_group",
         group=group,
     )
+    preserve_list_view_in_pages(pages_map, view)
     sorted_tags = []
     tags = app.tags.get_by_group(
         user["sid"],
         [group],
         user["settings"]["only_unread"],
-        user["settings"]["hot_tags"],
+        view.sort,
         opts={"offset": start_tags_range, "limit": user["settings"]["tags_on_page"]},
+        hide_noise=view.hide_noise,
     )
 
     for t in tags:
@@ -642,6 +763,8 @@ def on_group_by_tags_group(
                 if user["settings"]["only_unread"]
                 else t["posts_count"],
                 "sentiment": t["sentiment"] if "sentiment" in t else [],
+                "hint": tag_hint(t),
+                "user_rank": t.get("user_rank"),
             }
         )
     db_letters = app.letters.get(user["sid"], make_sort=True)
@@ -671,6 +794,12 @@ def on_group_by_tags_group(
             letters=letters,
             user_settings=user["settings"],
             provider=user.get("provider", ""),
+            sort_switcher=build_sort_switcher(
+                app.routes.get_url_by_endpoint(
+                    endpoint="on_group_by_tags_group", params={"group": group, "page_number": 1}
+                ),
+                view,
+            ),
         ),
         mimetype="text/html",
     )
@@ -2037,19 +2166,28 @@ def on_group_by_tags_categories_get(
 
 
 def on_group_by_tags_by_category_get(
-    app: "RSSTagApplication", user: dict, quoted_category: str, page_number: int = 1
+    app: "RSSTagApplication",
+    user: dict,
+    quoted_category: str,
+    page_number: int = 1,
+    request: Optional[Request] = None,
 ) -> Response:
+    view: TagListView = secondary_list_view(request)
     category = quoted_category
     only_unread = user["settings"].get("only_unread", False)
     context_filter_active, scoped_counts = _get_scoped_tag_counts(app, user)
     scoped_category_tags = []
     if context_filter_active:
         for tag_doc in app.tags.get_by_tags(user["sid"], list(scoped_counts.keys())):
+            if view.hide_noise and is_noise(tag_doc):
+                continue
             if any(cl.get("category") == category for cl in tag_doc.get("classifications", [])):
                 scoped_category_tags.append(tag_doc)
         tags_count = len(scoped_category_tags)
     else:
-        tags_count = app.tags.count_by_category(user["sid"], category, only_unread)
+        tags_count = app.tags.count_by_category(
+            user["sid"], category, only_unread, hide_noise=view.hide_noise
+        )
     page_count = app.get_page_count(tags_count, user["settings"]["tags_on_page"])
     p_number = page_number
     if page_number <= 0:
@@ -2069,12 +2207,17 @@ def on_group_by_tags_by_category_get(
         "on_group_by_tags_by_category_get",
         quoted_category=category,
     )
+    preserve_list_view_in_pages(pages_map, view)
 
     sorted_tags = []
     if context_filter_active:
         scoped_category_tags.sort(
-            key=lambda tag_doc: scoped_counts.get(tag_doc.get("tag", ""), 0),
-            reverse=True,
+            key=lambda tag_doc: sort_key(
+                view.sort,
+                tag_doc.get("tag", ""),
+                scoped_counts.get(tag_doc.get("tag", ""), 0),
+                tag_doc,
+            )
         )
         paged = scoped_category_tags[
             start_tags_range : start_tags_range + user["settings"]["tags_on_page"]
@@ -2087,6 +2230,8 @@ def on_group_by_tags_by_category_get(
                     "words": t.get("words", []),
                     "count": scoped_counts.get(t["tag"], 0),
                     "sentiment": t["sentiment"] if "sentiment" in t else [],
+                    "hint": tag_hint(t),
+                    "user_rank": t.get("user_rank"),
                 }
             )
     else:
@@ -2094,8 +2239,9 @@ def on_group_by_tags_by_category_get(
             user["sid"],
             category,
             only_unread,
-            user["settings"]["hot_tags"],
+            view.sort,
             opts={"offset": start_tags_range, "limit": user["settings"]["tags_on_page"]},
+            hide_noise=view.hide_noise,
         )
 
         for t in tags:
@@ -2106,6 +2252,8 @@ def on_group_by_tags_by_category_get(
                     "words": t["words"],
                     "count": t["unread_count"] if only_unread else t["posts_count"],
                     "sentiment": t["sentiment"] if "sentiment" in t else [],
+                    "hint": tag_hint(t),
+                    "user_rank": t.get("user_rank"),
                 }
             )
 
@@ -2138,6 +2286,12 @@ def on_group_by_tags_by_category_get(
             letters=letters,
             user_settings=user["settings"],
             provider=user.get("provider", ""),
+            sort_switcher=build_sort_switcher(
+                app.routes.get_url_by_endpoint(
+                    endpoint="on_group_by_tags_by_category_get", params={"quoted_category": category, "page_number": 1}
+                ),
+                view,
+            ),
         ),
         mimetype="text/html",
     )

@@ -1,0 +1,22 @@
+{# Sort switcher for tag list pages. Expects ``sort_switcher`` built by
+   rsstag.web.tag_list_view.build_sort_switcher; renders nothing without it. #}
+{% if sort_switcher %}
+<nav class="tag-sort-switcher" aria-label="Sort tags">
+    <span class="tag-sort-switcher__label">Sort</span>
+    <div class="tag-sort-switcher__group">
+        {% for option in sort_switcher['modes'] %}
+        <a href="{{ option['url'] }}"
+           class="tag-sort-switcher__link{% if option['active'] %} tag-sort-switcher__link--active{% endif %}"
+           {% if option['active'] %}aria-current="true"{% endif %}>{{ option['label'] }}</a>
+        {% endfor %}
+    </div>
+    {% if sort_switcher['noise'] %}
+    <a href="{{ sort_switcher['noise']['url'] }}"
+       class="tag-sort-switcher__toggle{% if sort_switcher['noise']['active'] %} tag-sort-switcher__toggle--active{% endif %}"
+       aria-pressed="{{ 'true' if sort_switcher['noise']['active'] else 'false' }}">
+        <span class="material-symbols-outlined">{{ 'check_box' if sort_switcher['noise']['active'] else 'check_box_outline_blank' }}</span>
+        <span>Hide generic</span>
+    </a>
+    {% endif %}
+</nav>
+{% endif %}

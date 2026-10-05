@@ -32,7 +32,7 @@ class TestRssTagTagsStorage(unittest.TestCase):
         result = self.storage.get_all(
             "alice",
             only_unread=True,
-            hot_tags=True,
+            sort="hot",
             opts=opts,
             projection=projection,
         )
@@ -50,7 +50,7 @@ class TestRssTagTagsStorage(unittest.TestCase):
         )
         cursor.allow_disk_use.assert_called_once_with(True)
         cursor.sort.assert_called_once_with(
-            [("temperature", -1), ("unread_count", -1)]
+            [("rank.hot", -1), ("temperature", -1), ("unread_count", -1), ("tag", 1)]
         )
 
     def test_get_groups_accumulates_values_from_aggregation(self):

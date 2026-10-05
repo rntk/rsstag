@@ -1,11 +1,82 @@
 'use strict';
 import React from 'react';
 import { finiteScore, formatScore } from '../libs/tag-sort.js';
+import {
+  USER_RANK_HIDDEN,
+  USER_RANK_PINNED,
+  saveUserRank,
+  supportsUserRank,
+  toggledUserRank,
+  userRankClass,
+} from '../libs/tag-user-rank.js';
 
 export default class TagItem extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { tag: props.tag };
+    this.state = { tag: props.tag, saving: false, error: '' };
+    this.togglePin = this.toggleUserRank.bind(this, 'pin');
+    this.toggleHide = this.toggleUserRank.bind(this, 'hide');
+  }
+
+  toggleUserRank(action, event) {
+    if (event) {
+      event.preventDefault();
+    }
+    if (this.state.saving) {
+      return Promise.resolve();
+    }
+    const value = toggledUserRank(this.state.tag.user_rank, action);
+    this.setState({ saving: true, error: '' });
+    return saveUserRank(this.state.tag.tag, value)
+      .then(() => {
+        this.setState((prev) => ({
+          tag: { ...prev.tag, user_rank: value },
+          saving: false,
+        }));
+      })
+      .catch((err) => {
+        console.error('Can not save tag user rank', err);
+        this.setState({ saving: false, error: 'Could not save, try again' });
+      });
+  }
+
+  renderUserRankControls() {
+    const rank = this.state.tag.user_rank;
+    return (
+      <React.Fragment>
+        <button
+          type="button"
+          className="tag_pin_button"
+          onClick={this.togglePin}
+          disabled={this.state.saving}
+        >
+          {rank === USER_RANK_PINNED ? 'unpin' : 'pin'}
+        </button>
+        <button
+          type="button"
+          className="tag_hide_button"
+          onClick={this.toggleHide}
+          disabled={this.state.saving}
+        >
+          {rank === USER_RANK_HIDDEN ? 'unhide' : 'hide'}
+        </button>
+        {this.state.error ? <span className="tag_user_rank_error">{this.state.error}</span> : null}
+      </React.Fragment>
+    );
+  }
+
+  renderPinMarker() {
+    if (this.state.tag.user_rank !== USER_RANK_PINNED) {
+      return null;
+    }
+    return (
+      <React.Fragment>
+        {' '}
+        <span className="cloud_item_pin" title="Pinned">
+          &#9733;
+        </span>
+      </React.Fragment>
+    );
   }
 
   renderScore() {
@@ -75,14 +146,19 @@ export default class TagItem extends React.Component {
     }
 
     return (
-      <li className={'cloud_item ' + sentiment}>
+      <li className={'cloud_item ' + sentiment + userRankClass(this.state.tag.user_rank)}>
         <div className="cloud_item_header">
           <a name={this.state.tag.tag}></a>
-          <a href={this.state.tag.url} className="cloud_item_title">
+          <a
+            href={this.state.tag.url}
+            className="cloud_item_title"
+            title={this.state.tag.hint || undefined}
+          >
             {this.state.tag.tag}
           </a>{' '}
           <span className="cloud_item_count">({this.state.tag.count})</span>
           {this.renderScore()}
+          {this.renderPinMarker()}
         </div>
         {sub_tags.length > 0 || words ? (
           <div className="cloud_item_info">
@@ -93,6 +169,9 @@ export default class TagItem extends React.Component {
           </div>
         ) : null}
         <div className="cloud_item_tools">
+          {supportsUserRank(this.state.tag, this.props.is_bigram)
+            ? this.renderUserRankControls()
+            : null}
           <a href={'/tag-hierarchy?tag=' + encodeURIComponent(this.state.tag.tag)}>
             word hierarchy
           </a>

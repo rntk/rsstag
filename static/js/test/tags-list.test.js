@@ -39,11 +39,11 @@ test('constructor calls super(props)', () => {
   assert.ok(/super\s*\(\s*props\s*\)/.test(src), 'should call super(props)');
 });
 
-test('constructor initializes groupByLetter to true unless scoreKey is given', () => {
+test('constructor opens score-ranked and server-ranked lists in flat view', () => {
   const src = readSource();
   assert.ok(
-    /this\.state\s*=\s*\{\s*groupByLetter\s*:\s*!props\.scoreKey\s*\}/.test(src),
-    'should default groupByLetter to !props.scoreKey (true without a score)'
+    /groupByLetter\s*:\s*!props\.scoreKey\s*&&\s*!props\.preserveOrder/.test(src),
+    'should group only when neither a score nor server ordering is selected'
   );
 });
 
@@ -225,7 +225,10 @@ test('render returns div with key=flat for flat view', () => {
 
 test('flat view sorts with rankedComparator(scoreKey)', () => {
   const src = readSource();
-  assert.ok(/rankedComparator\(this\.props\.scoreKey\)/.test(src), 'should rank by scoreKey');
+  assert.ok(
+    /rankedComparator\(this\.props\.scoreKey, this\.props\.preserveOrder\)/.test(src),
+    'should honor scoreKey and server ordering'
+  );
   assert.ok(/tag-sort\.js/.test(src), 'should import the shared comparators');
 });
 
@@ -244,6 +247,27 @@ test('ranked order without scoreKey is count desc, ties by name (unchanged)', ()
     tags.sort(rankedComparator()).map((t) => t.tag),
     ['c', 'a', 'b']
   );
+});
+
+test('server-ranked lists preserve order after grouping and returning to flat view', () => {
+  const tags = [
+    { tag: 'zebra', count: 1 },
+    { tag: 'alpha', count: 30 },
+    { tag: 'middle', count: 100 },
+  ];
+  const names = (items) => items.map((tag) => tag.tag);
+  assert.deepEqual(names([...tags].sort(rankedComparator(undefined, true))), [
+    'zebra',
+    'alpha',
+    'middle',
+  ]);
+  assert.deepEqual(names([...tags].sort(compareByName)), ['alpha', 'middle', 'zebra']);
+  assert.deepEqual(names([...tags].sort(rankedComparator(undefined, true))), [
+    'zebra',
+    'alpha',
+    'middle',
+  ]);
+  assert.deepEqual(names(tags), ['zebra', 'alpha', 'middle']);
 });
 
 test('ranked order with scoreKey is score desc, ties by name; alphabetical unaffected', () => {

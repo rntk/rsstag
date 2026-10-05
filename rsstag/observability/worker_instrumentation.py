@@ -34,6 +34,10 @@ from rsstag.tasks import (
     TASK_TAG_CLASSIFICATION_BATCH,
     TASK_DELETE_FEEDS,
     TASK_SNIPPET_CLUSTERING,
+    TASK_TAGS_CORPUS_RANK,
+    TASK_TAGS_COOC_RANK,
+    TASK_TAGS_EMBED_RANK,
+    TASK_TAGS_LLM_RANK,
 )
 
 TASK_TYPE_NAMES = {
@@ -64,6 +68,10 @@ TASK_TYPE_NAMES = {
     TASK_TAG_CLASSIFICATION_BATCH: "tag_classification_batch",
     TASK_DELETE_FEEDS: "delete_feeds",
     TASK_SNIPPET_CLUSTERING: "snippet_clustering",
+    TASK_TAGS_CORPUS_RANK: "tags_corpus_rank",
+    TASK_TAGS_COOC_RANK: "tags_cooc_rank",
+    TASK_TAGS_EMBED_RANK: "tags_embed_rank",
+    TASK_TAGS_LLM_RANK: "tags_llm_rank",
 }
 
 
