@@ -273,7 +273,7 @@ function markButton(kind, id, read, labels = ['Mark read', 'Mark unread']) {
 // Header
 // ============================================================
 
-export function renderMetrics(metrics) {
+export function renderMetrics(metrics, totalRead) {
   if (!metrics) return '';
   const items = [
     ['Snippets', metrics.snippets_total ?? '—'],
@@ -285,6 +285,9 @@ export function renderMetrics(metrics) {
       `${metrics.llm_calls ?? 0}${metrics.llm_cached ? ` (+${metrics.llm_cached} cached)` : ''}`,
     ],
   ];
+  if (totalRead && totalRead.total) {
+    items.push(['Unread sentences', `${totalRead.unread}/${totalRead.total}`]);
+  }
   if (metrics.ungrouped_posts > 0) {
     items.push([
       'Posts missing topic grouping (run post grouping, then rebuild)',
@@ -356,7 +359,7 @@ export function renderHeader(payload) {
     `<span class="anth-muted">${escapeHtml(scopeLabel(payload.scope))}</span>` +
     '</div>' +
     renderHeadState(payload) +
-    renderMetrics(result.metrics)
+    renderMetrics(result.metrics, result.total_read)
   );
 }
 
@@ -424,6 +427,10 @@ function renderClusterCard(cluster) {
   );
 }
 
+function themeUnread(read) {
+  return read && read.total ? ` · ${escapeHtml(`${read.unread}/${read.total}`)} unread sentences` : '';
+}
+
 export function renderThemeOverview(theme, result) {
   const clusters = (theme.cluster_ids || []).map((id) => result.clusters[id]).filter(Boolean);
   const action = theme.virtual
@@ -431,7 +438,7 @@ export function renderThemeOverview(theme, result) {
     : markButton('theme', theme.id, theme.read, ['Mark theme read', 'Mark theme unread']);
   return (
     `<header class="anth-main__head"><div><h2>${escapeHtml(theme.label || theme.id)}</h2>${keywordChips(theme.keywords)}</div>${action}</header>` +
-    `<p class="anth-muted">${clusters.length} subtopics · ${escapeHtml(theme.size ?? 0)} snippets. Pick one to read.</p>` +
+    `<p class="anth-muted">${clusters.length} subtopics · ${escapeHtml(theme.size ?? 0)} snippets${themeUnread(theme.read)}. Pick one to read.</p>` +
     `<ul class="anth-cluster-cards">${clusters.map(renderClusterCard).join('')}</ul>`
   );
 }
@@ -445,30 +452,69 @@ function renderToolbar(view) {
     `<label><input type="checkbox" data-control="unreadOnly"${view.unreadOnly ? ' checked' : ''}/> Unread only</label>` +
     `<label><input type="checkbox" data-control="skim"${view.skim ? ' checked' : ''}/> Skim</label>` +
     `<label>Sort <select data-control="sort">${options}</select></label>` +
+    '<span class="anth-muted anth-toolbar__hint">j / k — next / previous subtopic</span>' +
     '</div>'
   );
 }
 
-export function renderClusterHead(cluster, read, feedCount) {
+function intruderText(value) {
+  if (value === true) return 'intruder test passed';
+  if (value === false) return '<span class="anth-error">intruder test failed</span>';
+  return 'intruder test not run';
+}
+
+function formatCohesion(value) {
+  return Number.isFinite(Number(value)) && value !== null ? `cohesion ${Number(value).toFixed(2)}` : '';
+}
+
+function feedsLink(cluster) {
+  const count = (cluster.feed_ids || []).length;
+  const label = `${count} feed${count === 1 ? '' : 's'}`;
+  return count
+    ? `<button type="button" class="anth-link" data-action="feeds" data-id="${escapeHtml(cluster.id)}">${label}</button>`
+    : label;
+}
+
+function clusterMeta(cluster, read) {
+  return [
+    `${scoreDots(cluster.score)} ${escapeHtml(cluster.score ?? '—')}/5`,
+    escapeHtml(formatCohesion(cluster.cohesion)),
+    intruderText(cluster.intruder_ok),
+    escapeHtml(`${(cluster.snippet_ids || []).length} snippets`),
+    escapeHtml(formatDateRange(cluster.date_min, cluster.date_max)),
+    feedsLink(cluster),
+    escapeHtml(`${read.unread}/${read.total} unread`),
+  ]
+    .filter(Boolean)
+    .map((item) => `<span>${item}</span>`)
+    .join('');
+}
+
+export function renderClusterHead(cluster, read) {
   if (!cluster) {
     return (
       `<header class="anth-main__head"><div><h2>Unsorted</h2><p class="anth-muted">Snippets that did not fit any subtopic.</p></div>` +
       `${markButton(UNSORTED_ID, UNSORTED_ID, read, ['Mark all read', 'Mark all unread'])}</header>`
     );
   }
-  const range = formatDateRange(cluster.date_min, cluster.date_max);
-  const meta = [
-    range,
-    `${feedCount} feed${feedCount === 1 ? '' : 's'}`,
-    `${read.unread}/${read.total} unread`,
-  ]
-    .filter(Boolean)
-    .map((item) => `<span>${escapeHtml(item)}</span>`)
-    .join('');
   return (
     `<header class="anth-main__head"><div><h2>${intruderFlag(cluster)}${escapeHtml(cluster.label || cluster.id)} ${kindBadge(cluster.kind)}</h2>` +
-    `${keywordChips(cluster.keywords)}<p class="anth-main__meta">${meta}</p></div>` +
+    `${keywordChips(cluster.keywords)}<p class="anth-main__meta">${clusterMeta(cluster, read)}</p></div>` +
     `${markButton('cluster', cluster.id, read, ['Mark cluster read', 'Mark cluster unread'])}</header>`
+  );
+}
+
+/** Body of the feeds dialog for one cluster. */
+export function renderFeedsDialog(cluster, feedTitles) {
+  const feeds = (cluster.feed_ids || [])
+    .map((id) => `<li>${escapeHtml((feedTitles && feedTitles[id]) || id)}</li>`)
+    .join('');
+  return (
+    '<header class="anth-feeds-dialog__head">' +
+    `<h2>Feeds · ${escapeHtml(cluster.label || cluster.id)}</h2>` +
+    '<button type="button" class="anth-btn anth-btn--small" data-action="close-feeds">Close</button>' +
+    '</header>' +
+    `<ul class="anth-feeds-dialog__list">${feeds}</ul>`
   );
 }
 
@@ -579,58 +625,6 @@ export function renderSnippetList(data, view, expandedSnippets) {
 }
 
 // ============================================================
-// Right pane
-// ============================================================
-
-function statRow(label, value) {
-  return value === '' || value === null || value === undefined
-    ? ''
-    : `<div><dt>${escapeHtml(label)}</dt><dd>${value}</dd></div>`;
-}
-
-function intruderText(value) {
-  if (value === true) return 'passed';
-  if (value === false) return '<span class="anth-error">failed</span>';
-  return 'not run';
-}
-
-export function renderClusterStats(cluster, feedTitles) {
-  const feeds = (cluster.feed_ids || [])
-    .map((id) => `<li>${escapeHtml((feedTitles && feedTitles[id]) || id)}</li>`)
-    .join('');
-  const cohesion = Number.isFinite(Number(cluster.cohesion))
-    ? Number(cluster.cohesion).toFixed(2)
-    : '';
-  return (
-    '<h2 class="anth-pane__title">Subtopic</h2><dl class="anth-stats">' +
-    statRow('Quality', `${scoreDots(cluster.score)} ${escapeHtml(cluster.score ?? '—')}/5`) +
-    statRow('Cohesion', escapeHtml(cohesion)) +
-    statRow('Intruder test', intruderText(cluster.intruder_ok)) +
-    statRow('Snippets', escapeHtml((cluster.snippet_ids || []).length)) +
-    statRow('Dates', escapeHtml(formatDateRange(cluster.date_min, cluster.date_max))) +
-    '</dl>' +
-    (feeds ? `<h3 class="anth-pane__subtitle">Feeds</h3><ul class="anth-feeds">${feeds}</ul>` : '')
-  );
-}
-
-export function renderStatsPane(payload, selection) {
-  const result = payload.result;
-  if (!result) return '';
-  if (selection && selection.kind === 'cluster') {
-    return renderClusterStats(result.clusters[selection.id], payload.feed_titles);
-  }
-  const read = result.total_read || { unread: 0, total: 0 };
-  return (
-    '<h2 class="anth-pane__title">Overview</h2><dl class="anth-stats">' +
-    statRow('Themes', escapeHtml((result.themes || []).length)) +
-    statRow('Subtopics', escapeHtml(Object.keys(result.clusters || {}).length)) +
-    statRow('Unsorted', escapeHtml((result.unsorted || []).length)) +
-    statRow('Unread', escapeHtml(`${read.unread}/${read.total} sentences`)) +
-    '</dl><p class="anth-muted anth-hint">Keys: j / k — next / previous subtopic.</p>'
-  );
-}
-
-// ============================================================
 // Controller
 // ============================================================
 
@@ -653,7 +647,7 @@ function createController(root, initialPayload) {
     head: root.querySelector('#anth-head'),
     tree: root.querySelector('#anth-tree'),
     main: root.querySelector('#anth-main'),
-    stats: root.querySelector('#anth-stats'),
+    feeds: root.querySelector('#anth-feeds-dialog'),
     note: root.querySelector('#anth-note'),
   };
   const state = createState(initialPayload);
@@ -711,7 +705,7 @@ function createController(root, initialPayload) {
     const cluster = data.cluster;
     const read = summarizeRead(data.snippets);
     nodes.main.innerHTML =
-      renderClusterHead(cluster, read, cluster ? (cluster.feed_ids || []).length : 0) +
+      renderClusterHead(cluster, read) +
       renderToolbar(state.view) +
       `<div class="anth-snippets">${renderSnippetList(data, state.view, state.expandedSnippets)}</div>`;
   }
@@ -734,7 +728,6 @@ function createController(root, initialPayload) {
   function render() {
     nodes.head.innerHTML = renderHeader(state.payload);
     nodes.tree.innerHTML = renderTree(state.payload.result, state.selection, state.expanded);
-    nodes.stats.innerHTML = renderStatsPane(state.payload, state.selection);
     renderMain();
   }
 
@@ -790,6 +783,13 @@ function createController(root, initialPayload) {
     }
   }
 
+  function openFeeds(id) {
+    const cluster = state.payload.result && state.payload.result.clusters[id];
+    if (!nodes.feeds || !cluster) return;
+    nodes.feeds.innerHTML = renderFeedsDialog(cluster, state.payload.feed_titles);
+    if (!nodes.feeds.open) nodes.feeds.showModal();
+  }
+
   const actions = {
     select: (button) => select(resolveSelection(button.dataset.id, state.payload.result)),
     toggle: (button) => {
@@ -803,9 +803,15 @@ function createController(root, initialPayload) {
     },
     mark: markRead,
     retry,
+    feeds: (button) => openFeeds(button.dataset.id),
+    'close-feeds': () => nodes.feeds.close(),
   };
 
   function onClick(event) {
+    if (event.target === nodes.feeds) {
+      nodes.feeds.close();
+      return;
+    }
     const button = event.target.closest('[data-action]');
     if (button && actions[button.dataset.action]) actions[button.dataset.action](button);
   }
@@ -819,6 +825,7 @@ function createController(root, initialPayload) {
 
   function onKey(event) {
     if (event.target.closest && event.target.closest('input, select, textarea')) return;
+    if (nodes.feeds && nodes.feeds.open) return;
     if ((event.key !== 'j' && event.key !== 'k') || !state.payload.result) return;
     const current =
       state.selection && state.selection.kind === 'cluster' ? state.selection.id : null;

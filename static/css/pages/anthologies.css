@@ -376,8 +376,7 @@
 }
 
 .anth-card__stats,
-.anth-metrics,
-.anth-stats {
+.anth-metrics {
   display: flex;
   flex-wrap: wrap;
   gap: var(--rsst-space-4);
@@ -453,7 +452,7 @@
 
 .anth-explorer {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr) 220px;
+  grid-template-columns: 280px minmax(0, 1fr);
   gap: var(--rsst-space-3);
   align-items: start;
 }
@@ -463,8 +462,7 @@
   background: var(--rsst-surface-canvas);
 }
 
-.anth-pane--tree,
-.anth-pane--stats {
+.anth-pane--tree {
   position: sticky;
   top: calc(var(--rsst-header-height) + var(--rsst-space-3));
   max-height: calc(100vh - var(--rsst-header-height) - 2 * var(--rsst-space-3));
@@ -744,30 +742,59 @@
   color: var(--rsst-ink-tertiary);
 }
 
-/* Right pane */
-.anth-stats {
+/* Feeds dialog */
+.anth-feeds-dialog {
+  /* Global * { margin: 0 } reset breaks UA dialog centering (margin: auto). */
+  margin: auto;
+  width: min(480px, calc(100vw - 32px));
+  max-height: 70vh;
+  padding: 0;
+  border: 1px solid var(--rsst-border);
+  background: var(--rsst-surface-canvas);
+  color: var(--rsst-ink);
+}
+
+.anth-feeds-dialog[open] {
+  display: flex;
   flex-direction: column;
-  gap: var(--rsst-space-2);
-  padding: 0 var(--rsst-space-1);
 }
 
-.anth-feeds {
-  padding-left: var(--rsst-space-4);
+.anth-feeds-dialog::backdrop {
+  background: rgb(0 0 0 / 45%);
+}
+
+.anth-feeds-dialog__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--rsst-space-3);
+  padding: var(--rsst-space-3) var(--rsst-space-4);
+  border-bottom: 1px solid var(--rsst-border);
+
+  h2 {
+    font-size: 15px;
+  }
+}
+
+.anth-feeds-dialog__list {
+  overflow-y: auto;
+  margin: 0;
+  padding: var(--rsst-space-3) var(--rsst-space-4) var(--rsst-space-3) calc(var(--rsst-space-4) * 2);
+  font-size: 13px;
+
+  li + li {
+    margin-top: var(--rsst-space-1);
+  }
+}
+
+.anth-toolbar__hint {
+  margin-left: auto;
   font-size: 12px;
-}
-
-.anth-hint {
-  margin-top: var(--rsst-space-3);
-  padding: 0 var(--rsst-space-1);
 }
 
 @media (max-width: 1100px) {
   .anth-explorer {
     grid-template-columns: 240px minmax(0, 1fr);
-  }
-
-  .anth-pane--stats {
-    display: none;
   }
 }
 

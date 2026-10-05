@@ -12,7 +12,7 @@ import {
   OTHER_THEME_ID,
   parseHash,
   renderClusterHead,
-  renderClusterStats,
+  renderFeedsDialog,
   renderHeader,
   renderMetrics,
   renderSnippetCard,
@@ -419,11 +419,17 @@ test('renderThemeOverview lists cluster cards and theme action', () => {
 
 test('renderClusterHead covers clusters and unsorted', () => {
   const cluster = makeResult().clusters.c1;
-  const html = renderClusterHead(cluster, { unread: 0, total: 3 }, 1);
-  assert.match(html, /1 feed</);
+  const html = renderClusterHead(cluster, { unread: 0, total: 3 });
+  assert.match(html, /data-action="feeds" data-id="c1">1 feed</);
+  assert.match(html, /intruder test passed/);
+  assert.match(html, /0\/3 unread/);
   assert.match(html, /Mark cluster unread/);
   assert.match(html, /data-readed="false"/);
-  const unsorted = renderClusterHead(null, { unread: 1, total: 1 }, 0);
+  const noFeeds = renderClusterHead(makeResult().clusters.c2, { unread: 1, total: 1 });
+  assert.match(noFeeds, /0 feeds/);
+  assert.doesNotMatch(noFeeds, /data-action="feeds"/);
+  assert.match(noFeeds, /intruder test failed/);
+  const unsorted = renderClusterHead(null, { unread: 1, total: 1 });
   assert.match(unsorted, /Unsorted/);
   assert.match(unsorted, /data-kind="unsorted"/);
 });
@@ -514,13 +520,13 @@ test('renderSnippetCard escapes metadata', () => {
   assert.match(html, /a=1&amp;b=2/);
 });
 
-test('renderClusterStats and renderHeader', () => {
+test('renderFeedsDialog and renderHeader', () => {
   const cluster = { ...makeResult().clusters.c2, cohesion: 0.4567, feed_ids: ['f1', 'f2'] };
-  const stats = renderClusterStats(cluster, { f1: 'Feed <One>' });
-  assert.match(stats, /0\.46/);
-  assert.match(stats, /failed/);
-  assert.match(stats, /Feed &lt;One&gt;/);
-  assert.match(stats, /<li>f2<\/li>/);
+  assert.match(renderClusterHead(cluster, { unread: 1, total: 2 }), /cohesion 0\.46/);
+  const dialog = renderFeedsDialog(cluster, { f1: 'Feed <One>' });
+  assert.match(dialog, /Feed &lt;One&gt;/);
+  assert.match(dialog, /<li>f2<\/li>/);
+  assert.match(dialog, /data-action="close-feeds"/);
 
   const processing = renderHeader({
     seed_value: '<x>',

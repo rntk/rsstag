@@ -53,7 +53,8 @@ beforeEach(() => {
   document.body.innerHTML = `
     <div id="anthology-app">
       <div id="anth-head"></div><div id="anth-tree"></div>
-      <div id="anth-main"></div><div id="anth-stats"></div>
+      <div id="anth-main"></div>
+      <dialog id="anth-feeds-dialog"></dialog>
       <div id="anth-note"></div>
       <button id="update" data-action="mark" data-kind="cluster"
         data-id="c1" data-readed="true">Mark read</button>
@@ -115,4 +116,29 @@ test('reuses a pending cluster request when the view changes', () => {
   document.getElementById('anthology-app').append(control);
   control.dispatchEvent(new window.Event('change', { bubbles: true }));
   expect(fetchJson).toHaveBeenCalledTimes(1);
+});
+
+test('opens and closes the feeds dialog for a cluster', () => {
+  fetchJson.mockReturnValue(deferred().promise);
+  const withFeeds = { ...cluster, feed_ids: ['f1', 'f2'] };
+  const data = document.getElementById('anthology-detail-data');
+  data.textContent = JSON.stringify({
+    ...payload,
+    feed_titles: { f1: 'First feed' },
+    result: { ...payload.result, clusters: { c1: withFeeds } },
+  });
+  initAnthologyDetail();
+  const link = document.createElement('button');
+  Object.assign(link.dataset, { action: 'feeds', id: 'c1' });
+  document.getElementById('anthology-app').append(link);
+  link.click();
+
+  const dialog = document.getElementById('anth-feeds-dialog');
+  expect(dialog.open).toBe(true);
+  expect([...dialog.querySelectorAll('li')].map((li) => li.textContent)).toEqual([
+    'First feed',
+    'f2',
+  ]);
+  dialog.querySelector('[data-action="close-feeds"]').click();
+  expect(dialog.open).toBe(false);
 });
