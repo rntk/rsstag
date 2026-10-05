@@ -87,33 +87,6 @@ class TestRssTagPostsExtra(unittest.TestCase):
             ]
         )
 
-    def test_get_by_bi_grams(self):
-        cursor = MagicMock()
-        cursor.allow_disk_use.return_value = cursor
-        cursor.sort.return_value = cursor
-        self.db.posts.find.return_value = cursor
-
-        result = self.storage.get_by_bi_grams(
-            owner="alice",
-            tags=["bigram1", "bigram2"],
-            only_unread=True,
-            projection={"title": 1},
-            context_tags=["tag1"]
-        )
-
-        self.assertIs(result, cursor)
-        self.db.posts.find.assert_called_once_with(
-            {
-                "owner": "alice",
-                "bi_grams": {"$all": ["bigram1", "bigram2"]},
-                "read": False,
-                "tags": {"$all": ["tag1"]}
-            },
-            projection={"title": 1}
-        )
-        cursor.allow_disk_use.assert_called_once_with(True)
-        cursor.sort.assert_called_once_with([("feed_id", -1), ("unix_date", -1)])
-
     def test_get_by_feed_id(self):
         cursor = MagicMock()
         cursor.allow_disk_use.return_value = cursor

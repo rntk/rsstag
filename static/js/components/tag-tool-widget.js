@@ -99,7 +99,6 @@ export default class TagToolWidget extends React.Component {
           ? createPortal(
               <TagsList
                 tags={this.state.tags}
-                is_bigram={this.props.is_bigram}
                 is_entities={this.props.is_entities}
                 scoreKey={this.props.scoreKey}
                 scoreLabel={this.props.scoreLabel}

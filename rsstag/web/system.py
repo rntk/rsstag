@@ -35,7 +35,6 @@ def _prune_owner_data(app: "RSSTagApplication", owner: str) -> Dict[str, int]:
         "raw_posts",
         "raw_download_state",
         "tags",
-        "bi_grams",
         "letters",
         "words",
         "post_grouping",

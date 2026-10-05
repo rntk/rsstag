@@ -933,10 +933,6 @@ class TestWebTags(MongoWebTestCase):
         response = self.client.get("/tag-pmi/testtag")
         self.assertIn(response.status_code, [200, 500])
 
-    def test_on_get_tag_bi_grams(self) -> None:
-        response = self.client.get("/tag-bi-grams/testtag")
-        self.assertIn(response.status_code, [200, 500])
-
     def test_on_tag_contexts_classification_get(self) -> None:
         self.test_db.tags.update_one(
             {"owner": self.sid, "tag": "testtag"},

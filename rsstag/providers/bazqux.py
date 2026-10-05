@@ -356,7 +356,6 @@ class BazquxProvider:
                             "favorite": False,
                             "attachments": attachments_list,
                             "tags": [],
-                            "bi_grams": [],
                             "pid": generate_post_pid(BAZQUX, stream_id, post["id"]),
                             "owner": user["sid"],
                             "processing": POST_NOT_IN_PROCESSING,

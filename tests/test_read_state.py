@@ -48,45 +48,34 @@ class TestReadStateServiceNormalizeIndices(unittest.TestCase):
 class TestReadStateServiceCollectCounters(unittest.TestCase):
     def test_empty_post(self):
         result = ReadStateService._collect_counters({})
-        self.assertEqual(result, ({}, {}, {}))
+        self.assertEqual(result, ({}, {}))
 
     def test_post_with_tags(self):
         post = {"tags": ["apple", "banana"]}
-        tags, bi_grams, letters = ReadStateService._collect_counters(post)
+        tags, letters = ReadStateService._collect_counters(post)
         self.assertEqual(tags, {"apple": 1, "banana": 1})
         self.assertEqual(letters, {"a": 1, "b": 1})
 
     def test_post_with_duplicate_tags(self):
         post = {"tags": ["apple", "apple"]}
-        tags, bi_grams, letters = ReadStateService._collect_counters(post)
+        tags, letters = ReadStateService._collect_counters(post)
         self.assertEqual(tags, {"apple": 2})
         self.assertEqual(letters, {"a": 2})
 
-    def test_post_with_bi_grams(self):
-        post = {"tags": [], "bi_grams": ["apple banana", "banana cherry"]}
-        tags, bi_grams, letters = ReadStateService._collect_counters(post)
-        self.assertEqual(bi_grams, {"apple banana": 1, "banana cherry": 1})
-
     def test_post_with_mixed_content(self):
-        post = {"tags": ["apple"], "bi_grams": ["apple banana"]}
-        tags, bi_grams, letters = ReadStateService._collect_counters(post)
+        post = {"tags": ["apple"]}
+        tags, letters = ReadStateService._collect_counters(post)
         self.assertEqual(tags, {"apple": 1})
-        self.assertEqual(bi_grams, {"apple banana": 1})
         self.assertEqual(letters, {"a": 1})
 
     def test_empty_string_tags_skipped(self):
         post = {"tags": ["apple", "", "banana"]}
-        tags, _, _ = ReadStateService._collect_counters(post)
+        tags, _ = ReadStateService._collect_counters(post)
         self.assertEqual(tags, {"apple": 1, "banana": 1})
-
-    def test_empty_string_bi_grams_skipped(self):
-        post = {"bi_grams": ["a b", "", "c d"]}
-        _, bi_grams, _ = ReadStateService._collect_counters(post)
-        self.assertEqual(bi_grams, {"a b": 1, "c d": 1})
 
     def test_tag_to_string_conversion(self):
         post = {"tags": [123, "abc"]}
-        tags, _, _ = ReadStateService._collect_counters(post)
+        tags, _ = ReadStateService._collect_counters(post)
         self.assertEqual(tags, {"123": 1, "abc": 1})
 
 
@@ -99,20 +88,17 @@ class TestReadStateServiceMarkSentences(unittest.TestCase):
     def setUp(self) -> None:
         self.posts: MagicMock = MagicMock()
         self.tags: MagicMock = MagicMock()
-        self.bi_grams: MagicMock = MagicMock()
         self.letters: MagicMock = MagicMock()
         self.tasks: MagicMock = MagicMock()
         self.post_grouping: MagicMock = MagicMock()
 
         self.posts.change_status.return_value = True
         self.tags.change_unread.return_value = True
-        self.bi_grams.change_unread.return_value = True
         self.tasks.add_task.return_value = True
 
         self.service: ReadStateService = ReadStateService(
             self.posts,
             self.tags,
-            self.bi_grams,
             self.letters,
             self.tasks,
             self.post_grouping,
@@ -126,7 +112,6 @@ class TestReadStateServiceMarkSentences(unittest.TestCase):
             "id": "provider-id-1",
             "read": read,
             "tags": ["tag1"],
-            "bi_grams": ["tag1 tag2"],
         }
         if provider is not None:
             post["provider"] = provider
@@ -200,7 +185,7 @@ class TestReadStateServiceMarkSentences(unittest.TestCase):
         self.post_grouping.update_snippets_read_status.return_value = True
         self.posts.get_by_pid.side_effect = [None, {
             "pid": 42, "id": "provider-42", "read": False,
-            "tags": [], "bi_grams": [],
+            "tags": [],
         }]
 
         result: Dict[str, Any] = self.service.mark_sentences(

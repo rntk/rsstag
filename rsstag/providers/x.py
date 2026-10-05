@@ -369,7 +369,6 @@ class XProvider:
             "favorite": False,
             "attachments": attachments,
             "tags": [],
-            "bi_grams": [],
             "pid": generate_post_pid(X, feed_id, str(post["id"])),
             "owner": user["sid"],
             "processing": POST_NOT_IN_PROCESSING,

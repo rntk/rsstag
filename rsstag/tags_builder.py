@@ -3,7 +3,7 @@
 import re
 import logging
 from collections import defaultdict
-from typing import List, Dict
+from typing import List
 from nltk.stem import SnowballStemmer
 from rsstag.stopwords import stopwords
 from functools import lru_cache
@@ -14,11 +14,6 @@ class TagsBuilder:
 
     def __init__(self, text_clean_re: str = r"[^\w\d ]") -> None:
         self.purge()
-        """self._text = ''
-        self._prepared_text = ''
-        self._words = {}
-        self._bi_grams = {}
-        self._bi_grams_words = defaultdict(set)"""
         self.text_clearing = re.compile(text_clean_re)
         self.only_cyrillic = re.compile(r"^[а-яА-ЯёЁ]*$")
         self.only_latin = re.compile(r"^[a-zA-Z]*$")
@@ -27,16 +22,13 @@ class TagsBuilder:
         self.cyrillic = SnowballStemmer("russian")
         self._stopwords = None
         self._log = logging.getLogger("TagsBuilder")
-        self._window = 2
 
     def purge(self) -> None:
         """Clear state"""
         self._text = ""
-        self._tags: defaultdict = defaultdict(int)
-        self._words = defaultdict(set)
+        self._tags: defaultdict[str, int] = defaultdict(int)
+        self._words: defaultdict[str, set[str]] = defaultdict(set)
         self._prepared_text = ""
-        self._bi_grams = {}
-        self._bi_grams_words = defaultdict(set)
 
     def text2words(self, text: str) -> List[str]:
         """Make words list from text"""
@@ -76,87 +68,25 @@ class TagsBuilder:
 
         return tag
 
-    def get_tags(self) -> defaultdict:
+    def get_tags(self) -> defaultdict[str, int]:
         """Get builded tags"""
         return self._tags
 
-    def get_words(self) -> Dict[str, set]:
+    def get_words(self) -> dict[str, set[str]]:
         """Get words grouped by tag"""
         return self._words
-
-    def get_bi_grams(self) -> dict:
-        """Get bi-grams"""
-        return self._bi_grams
-
-    def get_bi_grams_words(self) -> dict:
-        """Return words for bi-grams"""
-        return self._bi_grams_words
 
     def build_tags(self, text: str) -> None:
         """Build tags and words from text"""
         self._text = text
-        words = self.text2words(text)
+        words: list[str] = self.text2words(text)
+        lemmas: list[str] = []
         for current_word in words:
-            tag = self.process_word(current_word)
+            tag: str = self.process_word(current_word)
             if tag:
+                lemmas.append(tag)
                 self._tags[tag] += 1
                 self._words[tag].add(current_word)
-
-    def build_bi_grams(self, text: str) -> None:
-        words = self.text2words(text)
-        if words:
-            prev_word = words[0]
-            prev_tag = self.process_word(prev_word)
-            for current_word in words[1:]:
-                current_tag = self.process_word(current_word)
-                if current_tag:
-                    bi_gram = prev_tag + " " + current_tag
-                    if bi_gram not in self._bi_grams:
-                        self._bi_grams[bi_gram] = {prev_tag, current_tag}
-                    self._bi_grams_words[bi_gram].add(prev_word)
-                    self._bi_grams_words[bi_gram].add(current_word)
-                    prev_word = current_word
-                    prev_tag = current_tag
-
-    def build_tags_and_bi_grams(self, text: str) -> None:
-        """Build tags and words from text"""
-        self._text = text
-        words = self.text2words(text)
-        if not words:
-            return
-        post_bis = set()
-        lemmas = []
-        for word_pos, word in enumerate(words):
-            tag = self.process_word(word)
-            if not tag:
-                continue
-            lemmas.append(tag)
-            self._tags[tag] += 1
-            self._words[tag].add(word)
-            for i in range(self._window):
-                i += 1
-                bi_words = []
-                prev_pos = word_pos - i
-                if prev_pos >= 0:
-                    bi_words.append(words[prev_pos])
-                next_pos = word_pos + i
-                if next_pos < len(words):
-                    bi_words.append(words[next_pos])
-                for bi_word in bi_words:
-                    bi_tag = self.process_word(bi_word)
-                    if not bi_tag:
-                        logging.error("Bigram bug: %s - %s", bi_word, bi_tag)
-                        continue
-                    bi_grams_l = [tag, bi_tag]
-                    bi_grams_l.sort()
-                    bi_gram = " ".join(bi_grams_l)
-                    if bi_gram in post_bis:
-                        continue
-                    post_bis.add(bi_gram)
-                    if bi_gram not in self._bi_grams:
-                        self._bi_grams[bi_gram] = {tag, bi_tag}
-                    self._bi_grams_words[bi_gram].add(word)
-                    self._bi_grams_words[bi_gram].add(bi_word)
         self._prepared_text = " ".join(lemmas)
 
     def get_prepared_text(self) -> str:

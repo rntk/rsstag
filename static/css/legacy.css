@@ -232,7 +232,6 @@ h3.post_title {
 }
 
 .page,
-#bigrams_table_page,
 #tags_page {
   width: 80%;
   margin: 0.5em auto 3em auto;

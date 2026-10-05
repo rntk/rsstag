@@ -72,7 +72,6 @@ export default class TagsList extends React.Component {
             tag_hash={this.state.tag_hash}
             ES={this.props.ES}
             uniq_id={tag.tag}
-            is_bigram={this.props.is_bigram}
             is_entity={this.props.is_entities}
             scoreKey={this.props.scoreKey}
             scoreLabel={this.props.scoreLabel}

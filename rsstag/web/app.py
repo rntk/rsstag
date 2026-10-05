@@ -18,7 +18,6 @@ from rsstag.quality import RssTagQuality
 from rsstag.feeds import RssTagFeeds
 from rsstag.tags import RssTagTags
 from rsstag.letters import RssTagLetters
-from rsstag.bi_grams import RssTagBiGrams
 from rsstag.users import RssTagUsers
 from rsstag.tokens import RssTagTokens
 from rsstag.workers_db import RssTagWorkers
@@ -29,7 +28,6 @@ import rsstag.web.users as users_handlers
 import rsstag.web.tags as tags_handlers
 import rsstag.web.tag_explorer as tag_explorer_handlers
 import rsstag.web.tag_concordance as tag_concordance_handlers
-import rsstag.web.bigrams as bigrams_handlers
 import rsstag.web.keywords as keywords_handlers
 import rsstag.web.openai as openai_handlers
 import rsstag.web.prefixes as prefixes_handlers
@@ -68,7 +66,6 @@ HANDLER_MODULES = (
     tag_concordance_handlers,
     users_handlers,
     tags_handlers,
-    bigrams_handlers,
     keywords_handlers,
     openai_handlers,
     prefixes_handlers,
@@ -158,8 +155,6 @@ class RSSTagApplication(object):
         self.tags.prepare()
         self.letters = RssTagLetters(self.db)
         self.letters.prepare()
-        self.bi_grams = RssTagBiGrams(self.db)
-        self.bi_grams.prepare()
         self.users = RssTagUsers(self.db)
         self.users.prepare()
         self.tokens = RssTagTokens(self.db)
@@ -457,13 +452,6 @@ class RSSTagApplication(object):
                 status=503,
             )
 
-    def on_group_by_bigrams_get(
-        self, user: dict, request: Request, page_number: int = 1
-    ) -> Response:
-        return bigrams_handlers.on_group_by_bigrams_get(
-            self, user, page_number, request=request
-        )
-
     def on_group_by_tags_sentiment(
         self, user: dict, request: Request, sentiment: str, page_number: int = 1
     ) -> Response:
@@ -493,9 +481,6 @@ class RSSTagApplication(object):
     def on_get_tag_siblings(self, user: dict, _: Request, tag: str) -> Response:
         return tags_handlers.on_get_tag_siblings(self, user, tag)
 
-    def on_get_tag_bi_grams(self, user: dict, _: Request, tag: str) -> Response:
-        return bigrams_handlers.on_get_tag_bi_grams(self, user, tag)
-
     def on_post_links_get(self, user: dict, _: Request, post_id: str) -> Response:
         return posts_handlers.on_post_links_get(self, user, post_id)
 
@@ -510,9 +495,6 @@ class RSSTagApplication(object):
 
     def on_tag_dates_get(self, user: dict, _: Request, tag: str) -> Response:
         return tags_handlers.on_tag_dates_get(self, user, tag)
-
-    def on_bigrams_dates_get(self, user: dict, _: Request, tag: str) -> Response:
-        return bigrams_handlers.on_bigrams_dates_get(self, user, tag)
 
     def on_tag_topics_get(self, user: dict, _: Request, tag: str) -> Response:
         return tags_handlers.on_tag_topics_get(self, user, tag)
@@ -595,9 +577,6 @@ class RSSTagApplication(object):
         return tags_handlers.on_group_by_tags_by_category_get(
             self, user, quoted_category, page_number, request=request
         )
-
-    def on_group_by_bigrams_dyn_get(self, user: dict, _: Request, page_number: int):
-        return bigrams_handlers.on_group_by_bigrams_dyn_get(self, user, page_number)
 
     def on_group_by_rake_dyn_get(self, user: dict, _: Request, page_number: int):
         return keywords_handlers.on_group_by_rake_dyn_get(self, user, page_number)

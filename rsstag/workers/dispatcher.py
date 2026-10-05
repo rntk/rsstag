@@ -19,8 +19,6 @@ from rsstag.providers.telegram import TelegramProvider
 from rsstag.providers.textfile import TextFileProvider
 from rsstag.providers.x import XProvider
 from rsstag.tasks import (
-    TASK_BIGRAMS_RANK,
-    TASK_CLEAN_BIGRAMS,
     TASK_CLUSTERING,
     TASK_ANTHOLOGY,
     TASK_DELETE_FEEDS,
@@ -196,13 +194,11 @@ def _build_registry(tag_worker: TagWorker, llm_worker: LLMWorker, provider_worke
     registry.register(TASK_W2V, tag_worker.handle_w2v)
     registry.register(TASK_FASTTEXT, tag_worker.handle_fasttext)
     registry.register(TASK_TAGS_GROUP, tag_worker.handle_tags_groups)
-    registry.register(TASK_BIGRAMS_RANK, tag_worker.make_bi_grams_rank)
     registry.register(TASK_TAGS_RANK, tag_worker.make_tags_rank)
     registry.register(TASK_TAGS_CORPUS_RANK, tag_worker.handle_tags_corpus_rank)
     registry.register(TASK_TAGS_COOC_RANK, tag_worker.handle_tags_cooc_rank)
     registry.register(TASK_TAGS_EMBED_RANK, tag_worker.handle_tags_embed_rank)
     registry.register(TASK_TAGS_LLM_RANK, tag_worker.handle_tags_llm_rank)
-    registry.register(TASK_CLEAN_BIGRAMS, tag_worker.make_clean_bigrams)
     registry.register(TASK_POST_GROUPING, llm_worker.handle_post_grouping)
     registry.register(TASK_ANTHOLOGY, llm_worker.handle_anthology)
     registry.register(TASK_TOPIC_MERGE, llm_worker.handle_topic_merge)

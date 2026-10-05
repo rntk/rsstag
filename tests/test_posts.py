@@ -178,31 +178,6 @@ class TestRssTagPosts(unittest.TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["pid"], "p1")
 
-    def test_get_by_bi_grams(self):
-        data = {
-            "posts": [
-                {
-                    "owner": self.owner,
-                    "bi_grams": ["b1", "b2"],
-                    "feed_id": "f1",
-                    "unix_date": 100,
-                },
-                {
-                    "owner": self.owner,
-                    "bi_grams": ["b1"],
-                    "feed_id": "f1",
-                    "unix_date": 200,
-                },
-            ]
-        }
-        self.db_helper.init_db_from_dict(self.db, data)
-
-        results = list(self.posts.get_by_bi_grams(self.owner, ["b1"]))
-        self.assertEqual(len(results), 2)
-
-        results = list(self.posts.get_by_bi_grams(self.owner, ["b1", "b2"]))
-        self.assertEqual(len(results), 1)
-
     def test_get_by_feed_id(self):
         data = {
             "posts": [

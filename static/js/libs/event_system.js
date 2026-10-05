@@ -39,7 +39,6 @@ export default class EventsSystem {
 
     this.WORDTREE_TEXTS_UPDATED = 'wordtree_texts_updated';
 
-    this.BIGRAMS_MENTIONS_UPDATED = 'bigrams_mentions_updated';
 
     this.TOPICS_TEXTS_UPDATED = 'topics_texts_updated';
 

@@ -157,27 +157,6 @@ class RssTagPosts:
             query["read"] = not only_unread
         return self._db.posts.count_documents(query)
 
-    def get_by_bi_grams(
-        self,
-        owner: str,
-        tags: list,
-        only_unread: Optional[bool] = None,
-        projection: Optional[dict] = None,
-        context_tags: Optional[list] = None,
-    ) -> Iterator[dict]:
-        query = {"owner": owner, "bi_grams": {"$all": tags}}
-        if only_unread is not None:
-            query["read"] = not only_unread
-        if context_tags:
-            query["tags"] = {"$all": context_tags}
-        sort_data = [("feed_id", DESCENDING), ("unix_date", DESCENDING)]
-
-        return (
-            self._db.posts.find(query, projection=projection)
-            .allow_disk_use(True)
-            .sort(sort_data)
-        )
-
     def get_by_feed_id(
         self,
         owner: str,

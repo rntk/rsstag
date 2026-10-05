@@ -55,16 +55,16 @@ class TestWebFrontendContracts(MongoWebTestCase):
             html,
             [
                 'id="similar_w2v_tags"',
-                'id="bi_grams"',
                 'id="mentions_chart"',
+                'id="pmi"',
                 'id="wordtree"',
                 'id="openai_tool"',
                 "var initial_tag =",
             ],
         )
-        self.assertNotIn("Bi-grams Graph", html)
-        self.assertNotIn('id="bi_grams_graph"', html)
-        self.assertNotIn('id="load_bi_grams_graph"', html)
+        for removed_id in ("bi_grams", "bigrams_mentions_chart"):
+            with self.subTest(removed_id=removed_id):
+                self.assertNotIn(f'id="{removed_id}"', html)
 
     def test_topics_list_page_contract(self) -> None:
         html = self._get_html("/topics-list")

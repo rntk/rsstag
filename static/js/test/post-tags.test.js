@@ -165,15 +165,6 @@ test('PostsTags passes uniq_id prop to TagItem', () => {
   assert.ok(/uniq_id\s*=\s*\{?\s*tg/.test(src), 'should pass uniq_id=tg');
 });
 
-test('PostsTags passes is_bigram prop as false', () => {
-  const src = readSource();
-  assert.ok(/is_bigram\s*=\s*\{?\s*false/.test(src), 'should pass is_bigram=false');
-});
-
-// ============================================================
-// Container and layout tests
-// ============================================================
-
 test('PostsTags wraps tags in ol with cloud class', () => {
   const src = readSource();
   assert.ok(/<ol className\s*=\s*['"]cloud['"]/.test(src), 'should use ol with cloud class');

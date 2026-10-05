@@ -160,7 +160,6 @@ class TestWebTagHierarchy(MongoWebTestCase):
             {
                 "$set": {
                     "tags": ["machine", "learning"],
-                    "bi_grams": ["machine learning"],
                     "content.content": gzip.compress(
                         b"<p>Use machine learning today</p>"
                     ),

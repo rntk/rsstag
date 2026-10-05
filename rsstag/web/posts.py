@@ -1001,65 +1001,6 @@ def on_tag_get(
     )
 
 
-def on_bi_gram_get(
-    app: "RSSTagApplication", user: dict, request: Request, bi_gram: str
-) -> Response:
-    current_bi_gram = app.bi_grams.get_by_bi_gram(user["sid"], bi_gram)
-    if not current_bi_gram:
-        return app.on_error(user, request, NotFound())
-
-    projection = {"_id": False, "content.content": False}
-    if user["settings"]["only_unread"]:
-        only_unread = user["settings"]["only_unread"]
-    else:
-        only_unread = None
-    db_posts_c = app.posts.get_by_bi_grams(
-        user["sid"], [bi_gram], only_unread, projection
-    )
-    db_posts = list(db_posts_c)
-
-    if user["settings"]["similar_posts"]:
-        clusters = app.posts.get_clusters(db_posts)
-        cl_posts = app.posts.get_by_clusters(
-            user["sid"], list(clusters), only_unread, projection
-        )
-        db_posts.extend(cl_posts)
-    posts = []
-    by_feed = {}
-    pids = set()
-    for post in db_posts:
-        post["lemmas"] = _decode_post_lemmas(post)
-        if post["pid"] not in pids:
-            pids.add(post["pid"])
-            if post["feed_id"] not in by_feed:
-                feed = app.feeds.get_by_feed_id(user["sid"], post["feed_id"])
-                if feed:
-                    by_feed[post["feed_id"]] = feed
-            if post["feed_id"] in by_feed:
-                posts.append(
-                    {
-                        "post": post,
-                        "pos": post["pid"],
-                        "category_title": by_feed[post["feed_id"]]["category_title"],
-                        "feed_title": by_feed[post["feed_id"]]["title"],
-                        "favicon": by_feed[post["feed_id"]]["favicon"],
-                    }
-                )
-    page = app.template_env.get_template("posts.html")
-
-    return Response(
-        page.render(
-            posts=posts,
-            tag=bi_gram,
-            group="tag",
-            words=current_bi_gram["words"],
-            user_settings=user["settings"],
-            provider=user.get("provider", ""),
-        ),
-        mimetype="text/html",
-    )
-
-
 def on_feed_get(
     app: "RSSTagApplication", user: dict, request: Request, quoted_feed: str
 ) -> Response:
@@ -1772,7 +1713,6 @@ def on_hierarchy_get(
                 "owner": user["sid"],
                 "$or": [
                     {"tags": tag},
-                    {"bi_grams": tag},
                     {"tags": {"$all": tag.split()}},
                 ],
             }
@@ -1866,13 +1806,12 @@ def _change_posts_status(
 ) -> tuple[dict, int]:
     """Mark posts read/unread and update derived counters. Returns (body, code)."""
     tags: dict[str, int] = defaultdict(int)
-    bi_grams: dict[str, int] = defaultdict(int)
     letters: dict[str, int] = defaultdict(int)
     for_insert: list[dict] = []
     db_posts = app.posts.get_by_pids(
         user["sid"],
         post_ids,
-        {"id": True, "tags": True, "bi_grams": True, "read": True, "provider": True},
+        {"id": True, "tags": True, "read": True, "provider": True},
     )
     for d in db_posts:
         if d["read"] != readed:
@@ -1891,8 +1830,6 @@ def _change_posts_status(
                 if not t:
                     continue
                 letters[t[0]] += 1
-            for bi_g in d["bi_grams"]:
-                bi_grams[bi_g] += 1
 
     if not app.tasks.add_task(
         {"type": TASK_MARK, "user": user["sid"], "data": for_insert}
@@ -1902,8 +1839,6 @@ def _change_posts_status(
     changed = app.posts.change_status(user["sid"], post_ids, readed)
     if changed and tags:
         changed = app.tags.change_unread(user["sid"], tags, readed)
-    if changed and bi_grams:
-        changed = app.bi_grams.change_unread(user["sid"], bi_grams, readed)
     if changed and letters:
         app.letters.change_unread(user["sid"], letters, readed)
         changed = True
@@ -5191,7 +5126,6 @@ def on_read_snippets_post(
     service = ReadStateService(
         app.posts,
         app.tags,
-        app.bi_grams,
         app.letters,
         app.tasks,
         app.post_grouping,

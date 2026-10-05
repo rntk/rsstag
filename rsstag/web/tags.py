@@ -1710,7 +1710,7 @@ def on_get_tfidf_tags(app: "RSSTagApplication", user: dict, rqst: Request) -> Re
         strings = cleaner.get_content()
         txt = " ".join(strings)
         builder.purge()
-        builder.build_tags_and_bi_grams(txt)
+        builder.build_tags(txt)
         builder.get_prepared_text()
         texts.append(builder.get_prepared_text())
 

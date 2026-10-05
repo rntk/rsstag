@@ -1,3 +1,4 @@
+import gzip
 import inspect
 import socket
 import tempfile
@@ -79,6 +80,39 @@ class TestWorkerClassesInit(unittest.TestCase):
 
         self.assertIsInstance(worker, TagWorker)
 
+    def test_make_tags_stores_tags_and_lemmas_without_pairs(self) -> None:
+        owner: str = "tags-only-worker"
+        posts: list[dict[str, Any]] = [
+            {"owner": owner, "content": {
+                "title": "Running", "content": gzip.compress(b"<p>runs fast</p>")
+            }},
+            {"owner": owner, "content": {
+                "title": "Running", "content": gzip.compress(b"<p>fast</p>")
+            }},
+        ]
+        self.db_helper.init_db_from_dict(self.db, {"posts": posts})
+        with patch("rsstag.workers.base.stopwords.words", return_value=[]):
+            worker: TagWorker = TagWorker(self.db, self.config)
+        self.assertTrue(worker.make_tags(list(self.db.posts.find({"owner": owner}))))
+        saved_posts: list[dict[str, Any]] = list(self.db.posts.find({"owner": owner}))
+        self.assertEqual(
+            [gzip.decompress(post["lemmas"]).decode("utf-8") for post in saved_posts],
+            ["run run fast", "run fast"],
+        )
+        for post in saved_posts:
+            self.assertEqual(set(post["tags"]), {"run", "fast"})
+            self.assertNotIn("bi_grams", post)
+        saved_tags: dict[str, dict[str, Any]] = {
+            tag["tag"]: tag for tag in self.db.tags.find({"owner": owner})
+        }
+        self.assertEqual(set(saved_tags), {"run", "fast"})
+        self.assertEqual(saved_tags["run"]["freq"], 3)
+        self.assertEqual(saved_tags["fast"]["freq"], 2)
+        for tag in saved_tags.values():
+            self.assertEqual(tag["posts_count"], 2)
+            self.assertEqual(tag["unread_count"], 2)
+        self.assertNotIn("bi_grams", self.db.list_collection_names())
+
     def test_tag_worker_exposes_expected_handler_methods(self) -> None:
         expected_methods: List[str] = [
             "handle_tags",
@@ -90,14 +124,12 @@ class TestWorkerClassesInit(unittest.TestCase):
             "handle_tags_sentiment",
             "handle_tags_groups",
             "handle_tags_topics",
-            "make_bi_grams_rank",
             "make_tags_rank",
             "handle_tags_corpus_rank",
             "handle_tags_cooc_rank",
             "handle_tags_embed_rank",
             "handle_tags_llm_rank",
             "handle_fasttext",
-            "make_clean_bigrams",
             "handle_delete_feeds",
         ]
 
@@ -169,14 +201,12 @@ class TestWorkerClassesInit(unittest.TestCase):
                 "handle_tags_sentiment",
                 "handle_tags_groups",
                 "handle_tags_topics",
-                "make_bi_grams_rank",
                 "make_tags_rank",
                 "handle_tags_corpus_rank",
                 "handle_tags_cooc_rank",
                 "handle_tags_embed_rank",
                 "handle_tags_llm_rank",
                 "handle_fasttext",
-                "make_clean_bigrams",
                 "handle_delete_feeds",
             ],
             LLMWorker: [

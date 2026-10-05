@@ -32,11 +32,10 @@ export function userRankClass(userRank) {
  * Whether the tag payload supports manual hide / pin (the server sends the
  * `user_rank` key, null when unset, only on the tag list pages).
  * @param {Object} tag
- * @param {boolean} [isBigram]
  * @returns {boolean}
  */
-export function supportsUserRank(tag, isBigram) {
-  return !isBigram && !!tag && Object.prototype.hasOwnProperty.call(tag, 'user_rank');
+export function supportsUserRank(tag) {
+  return !!tag && Object.prototype.hasOwnProperty.call(tag, 'user_rank');
 }
 
 /**

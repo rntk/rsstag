@@ -35,10 +35,8 @@ TASK_W2V = 8
 TASK_D2V = 9
 TASK_TAGS_SENTIMENT = 10
 TASK_TAGS_GROUP = 11
-TASK_BIGRAMS_RANK = 13
 TASK_TAGS_RANK = 14
 TASK_FASTTEXT = 15
-TASK_CLEAN_BIGRAMS = 16
 TASK_MARK_TELEGRAM = 17
 TASK_GMAIL_SORT = 18
 TASK_POST_GROUPING = 19
@@ -158,12 +156,11 @@ def get_scoped_supported_tasks() -> Dict[int, str]:
     }
 
 POST_NOT_IN_PROCESSING = 0
-BIGRAM_NOT_IN_PROCESSING = 0
 TASK_NOT_IN_PROCESSING = 0
 TASK_FREEZED = -1
 TAG_NOT_IN_PROCESSING = 0
 POST_GROUPING_NOT_IN_PROCESSING = 0
-# An item-level ``processing`` lock (posts/tags/bi_grams) older than this is
+# An item-level ``processing`` lock (posts/tags) older than this is
 # considered leaked by a crashed worker and becomes claimable again.
 ITEM_LOCK_MAX_AGE_SECONDS = 3600.0
 MAX_EXTERNAL_ERROR_LENGTH = 1000
@@ -269,7 +266,6 @@ class RssTagTasks:
         self._log = logging.getLogger("tasks")
         self._state = TaskStateMachine(db)
         self._posts_bath_size = 200
-        self._bigrams_bath_size = 1000
         self._tags_bath_size = 1000
         # One LLM call per post, so keep the claimed batch small enough that a
         # worker returns to the queue (and refreshes its lease) regularly.
@@ -750,29 +746,6 @@ class RssTagTasks:
                         unlock_task = False
                 if unlock_task:
                     self._state.release(user_task["_id"])
-            elif user_task["type"] == TASK_BIGRAMS_RANK:
-                data = []
-                bis_dt = self._db.bi_grams.find(
-                    {
-                        "owner": task["user"]["sid"],
-                        "temperature": 0,
-                        "processing": claimable_item_processing(),
-                    },
-                    projection={"tag": True, "posts_count": True},
-                ).limit(self._bigrams_bath_size)
-                ids = []
-                for bi_dt in bis_dt:
-                    data.append(bi_dt)
-                    ids.append(bi_dt["_id"])
-                if ids:
-                    self._db.bi_grams.update_many(
-                        {"_id": {"$in": ids}},
-                        {"$set": {"processing": time.time()}},
-                    )
-                    self._state.release(user_task["_id"])
-                else:
-                    task["type"] = TASK_NOOP
-                    self._state.complete(user_task["_id"])
             elif user_task["type"] == TASK_POST_GROUPING:
                 data = []
                 owner: str = task["user"]["sid"]
@@ -1195,17 +1168,6 @@ class RssTagTasks:
                             'worded': True
                         }}
                     )"""
-            elif task["type"] == TASK_BIGRAMS_RANK:
-                remove_task = False
-                updates = []
-                for bigram in task["data"]:
-                    updates.append(
-                        UpdateOne(
-                            {"_id": bigram["_id"]},
-                            {"$set": {"processing": BIGRAM_NOT_IN_PROCESSING}},
-                        )
-                    )
-                self._db.bi_grams.bulk_write(updates, ordered=False)
             elif task["type"] == TASK_TAGS_RANK:
                 remove_task = False
                 updates = []
@@ -1498,10 +1460,6 @@ class RssTagTasks:
                     info["count"] = self._db.posts.count_documents(
                         {"owner": user_id, "tags": []}
                     )
-                elif task["type"] == TASK_BIGRAMS_RANK:
-                    info["count"] = self._db.bi_grams.count_documents(
-                        {"owner": user_id, "temperature": 0}
-                    )
                 elif task["type"] == TASK_TAGS_RANK:
                     info["count"] = self._db.tags.count_documents(
                         pending_base_rank_query(user_id)
@@ -1555,9 +1513,7 @@ class RssTagTasks:
             TASK_FASTTEXT: "Learning FastText (global only)",
             TASK_TAGS_SENTIMENT: "Tags sentiment",
             TASK_TAGS_GROUP: "Tags groups searching",
-            TASK_BIGRAMS_RANK: "Bi-grams ranking",
             TASK_TAGS_RANK: "Tags ranking",
-            TASK_CLEAN_BIGRAMS: "Clean bi-grams",
             TASK_POST_GROUPING: "Post grouping (incremental, supports scope)",
             TASK_TAG_CLASSIFICATION: "Tags classification",
             TASK_POST_GROUPING_BATCH: "Post grouping (batch, incremental, supports scope)",

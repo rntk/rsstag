@@ -461,7 +461,7 @@ def _mark_read(
     app: "RSSTagApplication", user: dict, source_refs: List[Dict[str, Any]], readed: bool
 ) -> Dict[str, Any]:
     service: ReadStateService = ReadStateService(
-        app.posts, app.tags, app.bi_grams, app.letters, app.tasks, app.post_grouping
+        app.posts, app.tags, app.letters, app.tasks, app.post_grouping
     )
     try:
         return service.mark_sentences(user["sid"], user.get("provider", ""), source_refs, readed)

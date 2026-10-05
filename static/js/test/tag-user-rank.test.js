@@ -36,11 +36,10 @@ test('userRankClass maps overrides to item modifiers', () => {
   assert.equal(userRankClass(undefined), '');
 });
 
-test('supportsUserRank requires the user_rank key and a non-bigram list', () => {
+test('supportsUserRank requires the user_rank key', () => {
   assert.equal(supportsUserRank({ tag: 'a', user_rank: null }), true);
   assert.equal(supportsUserRank({ tag: 'a', user_rank: 'hidden' }), true);
   assert.equal(supportsUserRank({ tag: 'a' }), false);
-  assert.equal(supportsUserRank({ tag: 'a', user_rank: null }, true), false);
   assert.equal(supportsUserRank(null), false);
 });
 

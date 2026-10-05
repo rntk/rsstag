@@ -2,18 +2,15 @@
 
 import gzip
 import logging
-import math
 import os.path
 import re
 from collections import Counter, defaultdict
-from functools import lru_cache
 from typing import Any, Dict, List, Optional
 
 from pymongo import UpdateOne
 from sklearn.cluster import DBSCAN
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-from rsstag.bi_grams import RssTagBiGrams
 from rsstag.entity_extractor import RssTagEntityExtractor
 from rsstag.html_cleaner import HTMLCleaner
 from rsstag.letters import RssTagLetters
@@ -100,7 +97,6 @@ class TagWorker(BaseWorker):
             self._db.posts.delete_many({"owner": user["sid"]})
             self._db.feeds.delete_many({"owner": user["sid"]})
             self._db.tags.delete_many({"owner": user["sid"]})
-            self._db.bi_grams.delete_many({"owner": user["sid"]})
             self._db.letters.delete_many({"owner": user["sid"]})
             result = True
         except Exception as e:
@@ -112,7 +108,6 @@ class TagWorker(BaseWorker):
     def clear_user_processed_data(self, user: dict) -> bool:
         try:
             self._db.tags.delete_many({"owner": user["sid"]})
-            self._db.bi_grams.delete_many({"owner": user["sid"]})
             self._db.letters.delete_many({"owner": user["sid"]})
             result = True
         except Exception as e:
@@ -127,37 +122,30 @@ class TagWorker(BaseWorker):
     ) -> bool:
         if not posts:
             return False
-        posts_updates = []
-        tags_updates = []
-        bi_grams_updates = []
-        sum_tags = {}
-        sum_bigrams = {}
-        routes = RSSTagRoutes(self._config["settings"]["host_name"])
-        owner = posts[0]["owner"]
+        posts_updates: list[UpdateOne] = []
+        tags_updates: list[UpdateOne] = []
+        sum_tags: dict[str, dict[str, Any]] = {}
+        routes: RSSTagRoutes = RSSTagRoutes(self._config["settings"]["host_name"])
+        owner: str = posts[0]["owner"]
         for post in posts:
-            content = gzip.decompress(post["content"]["content"])
-            text = post["content"]["title"] + " " + content.decode("utf-8")
+            content: bytes = gzip.decompress(post["content"]["content"])
+            text: str = post["content"]["title"] + " " + content.decode("utf-8")
             self._cleaner.purge()
             self._cleaner.feed(text)
-            strings = self._cleaner.get_content()
+            strings: list[str] = self._cleaner.get_content()
             text = " ".join(strings)
             self._builder.purge()
-            self._builder.build_tags_and_bi_grams(text)
-            tags = self._builder.get_tags()
-            tag_words = self._builder.get_words()
-            bi_grams = self._builder.get_bi_grams()
-            bi_words = self._builder.get_bi_grams_words()
-            post_tags = {
+            self._builder.build_tags(text)
+            tags: dict[str, int] = self._builder.get_tags()
+            tag_words: dict[str, set[str]] = self._builder.get_words()
+            post_tags: dict[str, Any] = {
                 "lemmas": gzip.compress(
                     self._builder.get_prepared_text().encode("utf-8", "replace")
                 ),
                 "tags": [""],
-                "bi_grams": [],
             }
             if tags:
                 post_tags["tags"] = [tag for tag in tags]
-            if bi_grams:
-                post_tags["bi_grams"] = list(bi_grams.keys())
             posts_updates.append(UpdateOne({"_id": post["_id"]}, {"$set": post_tags}))
             for tag, freq in tags.items():
                 if tag not in sum_tags:
@@ -165,16 +153,6 @@ class TagWorker(BaseWorker):
                 sum_tags[tag]["posts"] += 1
                 sum_tags[tag]["freq"] += freq
                 sum_tags[tag]["words"].update(tag_words[tag])
-            for bigram, bi_tags in bi_grams.items():
-                if bigram not in sum_bigrams:
-                    sum_bigrams[bigram] = {
-                        "tags": list(bi_tags),
-                        "posts": 0,
-                        "words": set(),
-                    }
-                sum_bigrams[bigram]["posts"] += 1
-                sum_bigrams[bigram]["words"].update(bi_words[bigram])
-
         for tag, tag_d in sum_tags.items():
             tags_updates.append(
                 UpdateOne(
@@ -200,49 +178,15 @@ class TagWorker(BaseWorker):
                     upsert=True,
                 )
             )
-        for bi_gram, bi_d in sum_bigrams.items():
-            has_stop = False
-            for bi_t in bi_d["tags"]:
-                if bi_t in self._stopw:
-                    has_stop = True
-                    break
-            if has_stop:
-                continue
-            bi_grams_updates.append(
-                UpdateOne(
-                    {"owner": owner, "tag": bi_gram},
-                    {
-                        "$set": {
-                            "read": False,
-                            "tag": bi_gram,
-                            "owner": owner,
-                            "temperature": 0,
-                            "local_url": routes.get_url_by_endpoint(
-                                endpoint="on_bi_gram_get", params={"bi_gram": bi_gram}
-                            ),
-                            "tags": list(bi_d["tags"]),
-                            "processing": TAG_NOT_IN_PROCESSING,
-                        },
-                        "$inc": {
-                            "posts_count": bi_d["posts"],
-                            "unread_count": bi_d["posts"],
-                        },
-                        "$addToSet": {"words": {"$each": list(bi_d["words"])}},
-                    },
-                    upsert=True,
-                )
-            )
         try:
             if posts_updates:
                 self._db.posts.bulk_write(posts_updates, ordered=False)
             if tags_updates:
                 self._db.tags.bulk_write(tags_updates, ordered=False)
-            if bi_grams_updates:
-                self._db.bi_grams.bulk_write(bi_grams_updates, ordered=False)
             result = True
         except Exception as e:
             result = False
-            logging.error("Can`t save tags/bi-grams for posts. Info: %s", e)
+            logging.error("Can`t save tags for posts. Info: %s", e)
 
         return result
 
@@ -669,96 +613,6 @@ class TagWorker(BaseWorker):
 
         return result
 
-    @lru_cache(maxsize=5128)
-    def _tags_freqs(self, user_sid: str, tag: str) -> int:
-        tags = RssTagTags(self._db)
-        tag_d = tags.get_by_tag(user_sid, tag)
-        if tag_d:
-            return tag_d["freq"]
-
-        return 0
-
-    def make_bi_grams_rank(self, task: dict) -> bool:
-        """
-        https://arxiv.org/pdf/1307.0596
-        """
-        bi_grams = RssTagBiGrams(self._db)
-        user_sid = task["user"]["sid"]
-        bi_count = bi_grams.count(user_sid)
-        if bi_count == 0:
-            return False
-
-        posts = RssTagPosts(self._db)
-        total_docs = posts.count(user_sid) or 1
-
-        bi_temps = {}
-        q = 0.5
-
-        for bi in task["data"]:
-            grams = bi["tag"].split(" ")
-            if not grams[0] or not grams[1]:
-                logging.error("Bigrams bug: %s", bi["tag"])
-                continue
-
-            f1 = self._tags_freqs(user_sid, grams[0])
-            f2 = self._tags_freqs(user_sid, grams[1])
-            d_xy = bi["posts_count"]
-
-            denominator = (f1 * f2) / total_docs
-
-            sqrt_term = math.sqrt(f1) * math.sqrt(math.log(q) / -2) if f1 > 0 else 0
-
-            denominator += sqrt_term
-
-            if denominator > 0 and d_xy > 0:
-                cpmi = math.log(d_xy / denominator)
-            else:
-                cpmi = 0
-
-            if grams[0] in self._stopw or grams[1] in self._stopw:
-                cpmi /= f1 + f2
-
-            bi_temps[bi["tag"]] = max(cpmi + 0.01, 0.01)
-
-        bi_grams.set_temperatures(user_sid, bi_temps)
-
-        return True
-
-    def _make_bi_grams_rank(self, user_sid: str) -> bool:
-        tags = RssTagTags(self._db)
-        bi_grams = RssTagBiGrams(self._db)
-        freq_cache = {}
-        bi_count = bi_grams.count(user_sid)
-        if bi_count == 0:
-            return False
-        cursor = bi_grams.get_all(
-            user_sid, projection={"tag": True, "posts_count": True}
-        )
-        for bi in cursor:
-            grams = bi["tag"].split(" ")
-            for_search = []
-            for tag in grams:
-                if tag not in freq_cache:
-                    for_search.append(tag)
-            if for_search:
-                freqs = tags.get_by_tags(
-                    user_sid, for_search, projection={"tag": True, "freq": True}
-                )
-                for fr in freqs:
-                    freq_cache[fr["tag"]] = fr["freq"]
-            if not grams[0] or not grams[1]:
-                logging.error("Bigrams bug: %s", bi["tag"])
-                continue
-            f1 = freq_cache[grams[0]]
-            f2 = freq_cache[grams[1]]
-            bi_f = bi["posts_count"]
-            temp = bi_f / math.log(f1 + f2)
-            if grams[0] in self._stopw or grams[1] in self._stopw:
-                temp /= f1 + f2
-            bi_grams.set_temperature(user_sid, bi["tag"], temp)
-
-        return True
-
     def _total_posts(self, owner: str) -> int:
         try:
             return int(RssTagPosts(self._db).count(owner) or 0)
@@ -798,10 +652,6 @@ class TagWorker(BaseWorker):
             return False
         return True
 
-    def make_clean_bigrams(self, task: dict) -> bool:
-        bi_grams = RssTagBiGrams(self._db)
-        return bi_grams.remove_by_count(task["user"]["sid"], 1)
-
     def handle_delete_feeds(self, task: dict) -> bool:
         user_sid = task["user"]["sid"]
         feed_ids = task.get("feed_ids", [])
@@ -817,7 +667,6 @@ class TagWorker(BaseWorker):
                 {"owner": user_sid, "feed_id": {"$in": feed_ids}},
                 projection={
                     "tags": True,
-                    "bi_grams": True,
                     "read": True,
                     "_id": True,
                     "pid": True,
@@ -825,7 +674,6 @@ class TagWorker(BaseWorker):
             )
 
             tag_stats = defaultdict(lambda: {"posts_count": 0, "unread_count": 0})
-            bi_gram_stats = defaultdict(lambda: {"posts_count": 0, "unread_count": 0})
             post_ids = []
             pids = []
 
@@ -840,13 +688,6 @@ class TagWorker(BaseWorker):
                     tag_stats[tag]["posts_count"] += 1
                     if is_unread:
                         tag_stats[tag]["unread_count"] += 1
-                for bg in post.get("bi_grams", []):
-                    if not bg:
-                        continue
-                    bi_gram_stats[bg]["posts_count"] += 1
-                    if is_unread:
-                        bi_gram_stats[bg]["unread_count"] += 1
-
             logging.info(
                 "Collected %s posts and %s pids for deletion", len(post_ids), len(pids)
             )
@@ -885,23 +726,6 @@ class TagWorker(BaseWorker):
                 self._db.tags.bulk_write(tag_updates, ordered=False)
                 logging.info("Updated counters for %s tags", len(tag_updates))
 
-            bi_gram_updates = []
-            for bg, stats in bi_gram_stats.items():
-                bi_gram_updates.append(
-                    UpdateOne(
-                        {"owner": user_sid, "tag": bg},
-                        {
-                            "$inc": {
-                                "posts_count": -stats["posts_count"],
-                                "unread_count": -stats["unread_count"],
-                            }
-                        },
-                    )
-                )
-            if bi_gram_updates:
-                self._db.bi_grams.bulk_write(bi_gram_updates, ordered=False)
-                logging.info("Updated counters for %s bi-grams", len(bi_gram_updates))
-
             # 7. Delete feed documents
             res = self._db.feeds.delete_many(
                 {"owner": user_sid, "feed_id": {"$in": feed_ids}}
@@ -912,14 +736,7 @@ class TagWorker(BaseWorker):
             res_tags = self._db.tags.delete_many(
                 {"owner": user_sid, "posts_count": {"$lte": 0}}
             )
-            res_bis = self._db.bi_grams.delete_many(
-                {"owner": user_sid, "posts_count": {"$lte": 0}}
-            )
-            logging.info(
-                "Orphan cleanup: deleted %s tags and %s bi-grams",
-                res_tags.deleted_count,
-                res_bis.deleted_count,
-            )
+            logging.info("Orphan cleanup: deleted %s tags", res_tags.deleted_count)
 
             # Sync letters
             self.make_letters(user_sid)

@@ -28,11 +28,6 @@ test('source defines TAB_WORDSTREE constant', () => {
   );
 });
 
-test('source defines TAB_BIGRAMS constant', () => {
-  const src = readSource();
-  assert.ok(/TAB_BIGRAMS\s*=\s*['"]bigrams['"]/.test(src), 'should define TAB_BIGRAMS = "bigrams"');
-});
-
 test('source defines TAB_WORDSCLOUD constant', () => {
   const src = readSource();
   assert.ok(
@@ -78,12 +73,11 @@ test('constructor creates tabs Map', () => {
   assert.ok(/this\.tabs\s*=\s*new Map/.test(src), 'should create this.tabs as Map');
 });
 
-test('constructor sets 6 tabs in Map', () => {
+test('constructor sets regular posts, tags, word tree, word cloud, and chat tabs', () => {
   const src = readSource();
   assert.ok(/this\.tabs\.set\s*\(\s*TAB_POSTS/.test(src), 'should set posts tab');
   assert.ok(/this\.tabs\.set\s*\(\s*TAB_TAGS/.test(src), 'should set tags tab');
   assert.ok(/this\.tabs\.set\s*\(\s*TAB_WORDSTREE/.test(src), 'should set wordstree tab');
-  assert.ok(/this\.tabs\.set\s*\(\s*TAB_BIGRAMS/.test(src), 'should set bigrams tab');
   assert.ok(/this\.tabs\.set\s*\(\s*TAB_WORDSCLOUD/.test(src), 'should set wordscloud tab');
   assert.ok(/this\.tabs\.set\s*\(\s*TAB_CHAT/.test(src), 'should set chat tab');
 });
@@ -315,14 +309,6 @@ test('render uses target="_blank" and rel="noopener noreferrer"', () => {
   );
 });
 
-test('render conditionally renders PostsBigrams for bigrams tab', () => {
-  const src = readSource();
-  assert.ok(
-    /TAB_BIGRAMS/.test(src) && /PostsBigrams/.test(src),
-    'should render PostsBigrams for bigrams tab'
-  );
-});
-
 test('render conditionally renders PostsTags for tags tab', () => {
   const src = readSource();
   assert.ok(/TAB_TAGS/.test(src) && /PostsTags/.test(src), 'should render PostsTags for tags tab');
@@ -382,11 +368,6 @@ test('source imports WordTree', () => {
 test('source imports PostsWordsCloud', () => {
   const src = readSource();
   assert.ok(/import PostsWordsCloud from/.test(src), 'should import PostsWordsCloud');
-});
-
-test('source imports PostsBigrams', () => {
-  const src = readSource();
-  assert.ok(/import\s*\{\s*PostsBigrams\s*\}\s*from/.test(src), 'should import PostsBigrams');
 });
 
 test('source imports PostsTags', () => {

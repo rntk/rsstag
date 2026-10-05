@@ -101,9 +101,7 @@ export default class TagItem extends React.Component {
       sentiment = this.state.tag.sentiment[0].replace('/', '_');
     }
     let hide_tag_info_link = false;
-    if (this.props.is_bigram) {
-      hide_tag_info_link = true;
-    } else if (this.props.is_entity) {
+    if (this.props.is_entity) {
       hide_tag_info_link = this.state.tag.tag.search(/\s/) !== -1;
     }
     let sub_tags = [];
@@ -169,9 +167,7 @@ export default class TagItem extends React.Component {
           </div>
         ) : null}
         <div className="cloud_item_tools">
-          {supportsUserRank(this.state.tag, this.props.is_bigram)
-            ? this.renderUserRankControls()
-            : null}
+          {supportsUserRank(this.state.tag) ? this.renderUserRankControls() : null}
           <a href={'/tag-hierarchy?tag=' + encodeURIComponent(this.state.tag.tag)}>
             word hierarchy
           </a>

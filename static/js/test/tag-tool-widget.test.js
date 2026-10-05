@@ -232,10 +232,9 @@ test('render portals TagsList into the list container when not hidden and render
   );
 });
 
-test('render passes tags, is_bigram and is_entities props to the portaled TagsList', () => {
+test('render passes tags and is_entities props to the portaled TagsList', () => {
   const src = readSource();
   assert.ok(/tags=\{this\.state\.tags\}/.test(src));
-  assert.ok(/is_bigram=\{this\.props\.is_bigram\}/.test(src));
   assert.ok(/is_entities=\{this\.props\.is_entities\}/.test(src));
 });
 

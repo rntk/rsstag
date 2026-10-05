@@ -34,9 +34,7 @@ export function PostsTags(state) {
       words: [tg],
       url: '/tag/' + encodeURIComponent(tg),
     };
-    tags.push(
-      <TagItem key={tg} tag={tag} tags={[]} tag_hash={tg} uniq_id={tg} is_bigram={false} />
-    );
+    tags.push(<TagItem key={tg} tag={tag} tags={[]} tag_hash={tg} uniq_id={tg} />);
   }
 
   return (

@@ -110,16 +110,6 @@ class RSSTagRoutes:
                 "methods": ["POST"],
             },
             {
-                "url": "/group/bi-grams/<int:page_number>",
-                "endpoint": "on_group_by_bigrams_get",
-                "methods": ["GET"],
-            },
-            {
-                "url": "/group/bi-grams-dyn/<int:page_number>",
-                "endpoint": "on_group_by_bigrams_dyn_get",
-                "methods": ["GET"],
-            },
-            {
                 "url": "/group/rake-dyn/<int:page_number>",
                 "endpoint": "on_group_by_rake_dyn_get",
                 "methods": ["GET"],
@@ -337,11 +327,6 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
-                "url": "/tag-bi-grams/<string:tag>",
-                "endpoint": "on_get_tag_bi_grams",
-                "methods": ["GET"],
-            },
-            {
                 "url": "/tag-pmi/<string:tag>",
                 "endpoint": "on_get_tag_pmi",
                 "methods": ["GET"],
@@ -362,11 +347,6 @@ class RSSTagRoutes:
                 "methods": ["POST"],
             },
             {"url": "/speech", "endpoint": "on_post_speech", "methods": ["POST"]},
-            {
-                "url": "/bi-gram/<string:bi_gram>",
-                "endpoint": "on_bi_gram_get",
-                "methods": ["GET"],
-            },
             {
                 "url": "/tag-info/<string:tag>",
                 "endpoint": "on_get_tag_page",
@@ -486,11 +466,6 @@ class RSSTagRoutes:
             {
                 "url": "/topics-texts/<string:tag>",
                 "endpoint": "on_topics_texts_get",
-                "methods": ["GET"],
-            },
-            {
-                "url": "/bigrams-dates/<string:tag>",
-                "endpoint": "on_bigrams_dates_get",
                 "methods": ["GET"],
             },
             {

@@ -355,11 +355,6 @@ test('render uses tagItems helper function', () => {
 // TagItem props tests
 // ============================================================
 
-test('render passes is_bigram prop to TagItem', () => {
-  const src = readSource();
-  assert.ok(/is_bigram\s*=\s*\{?\s*this\.props\.is_bigram/.test(src), 'should pass is_bigram prop');
-});
-
 test('render passes is_entities prop to TagItem', () => {
   const src = readSource();
   assert.ok(

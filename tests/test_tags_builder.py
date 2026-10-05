@@ -5,36 +5,49 @@ from rsstag.tags_builder import TagsBuilder
 class TestTagsBuilder(unittest.TestCase):
     _text = ""
 
-    def setUp(self):
+    def setUp(self) -> None:
         self._text = (
             "тестировали? тестировала тестировал testing, tested оно 2016 Pokémon   "
         )
 
-    def test_builder(self):
-        builder = TagsBuilder("[^\w\d ]")
+    def test_builder(self) -> None:
+        builder: TagsBuilder = TagsBuilder(r"[^\w\d ]")
         builder.build_tags(self._text)
-        tags = builder.get_tags()
-        expect_tags = ["тестировать", "test", "оно", "2016", "pokémon"]
-        self.assertEqual(tags.sort(), expect_tags.sort())
-        words = builder.get_words()
+        tags: dict[str, int] = builder.get_tags()
+        expected: dict[str, int] = {"тестирова": 3, "test": 2, "он": 1, "2016": 1, "pokémon": 1}
+        self.assertEqual(tags, expected)
+        words: dict[str, set[str]] = builder.get_words()
         self.assertEqual(
             words,
             {
-                "тестировать": set(["тестировали", "тестировала", "тестировал"]),
+                "тестирова": set(["тестировали", "тестировала", "тестировал"]),
                 "test": set(["testing", "tested"]),
-                "оно": set(["оно"]),
+                "он": set(["оно"]),
                 "2016": set(["2016"]),
                 "pokémon": set(["pokémon"]),
             },
         )
         builder.purge()
         tags = builder.get_tags()
-        self.assertEqual(tags, [])
+        self.assertEqual(tags, {})
         words = builder.get_words()
         self.assertEqual(words, {})
 
+    def test_build_tags_preserves_lemma_order_and_resets_state(self) -> None:
+        builder: TagsBuilder = TagsBuilder()
+        builder.build_tags(self._text)
+        self.assertEqual(
+            builder.get_prepared_text(),
+            "тестирова тестирова тестирова test test он 2016 pokémon",
+        )
+        builder.purge()
+        self.assertEqual(builder.get_prepared_text(), "")
+        builder.build_tags("")
+        self.assertEqual(builder.get_prepared_text(), "")
+        self.assertEqual(builder.get_tags(), {})
+
     def test_text2words(self):
-        builder = TagsBuilder("[^\w\d ]")
+        builder: TagsBuilder = TagsBuilder(r"[^\w\d ]")
         words = [
             "тестировали",
             "тестировала",
@@ -48,88 +61,11 @@ class TestTagsBuilder(unittest.TestCase):
         self.assertEqual(builder.text2words(self._text), words)
 
     def test_process_word(self):
-        builder = TagsBuilder("[^\w\d ]")
+        builder: TagsBuilder = TagsBuilder(r"[^\w\d ]")
         words = ["тестировали", "testing", "оно", "2016", "Pokémon"]
-        expect = ["тестировать", "test", "оно", "2016", "pokémon"]
+        expect = ["тестирова", "test", "он", "2016", "pokémon"]
         for i, word in enumerate(words):
             self.assertEqual(builder.process_word(word), expect[i])
-
-    def test_build_bi_grams(self):
-        builder = TagsBuilder("[^\w\d ]")
-        builder.build_bi_grams(self._text)
-        tags = builder.get_bi_grams()
-        expect_tags = {
-            "тестировать тестировать": set(["тестировать", "тестировать"]),
-            "тестировать test": set(["тестировать", "test"]),
-            "test test": set(["test", "test"]),
-            "test оно": set(["test", "оно"]),
-            "оно 2016": set(["оно", "2016"]),
-            "2016 pokémon": set(["2016", "pokémon"]),
-        }
-        self.assertEqual(tags, expect_tags)
-        words = builder.get_bi_grams_words()
-        self.assertEqual(
-            words,
-            {
-                "тестировать тестировать": set(
-                    ["тестировали", "тестировала", "тестировал"]
-                ),
-                "тестировать test": set(["тестировал", "testing"]),
-                "test test": set(["testing", "tested"]),
-                "test оно": set(["tested", "оно"]),
-                "оно 2016": set(["оно", "2016"]),
-                "2016 pokémon": set(["2016", "pokémon"]),
-            },
-        )
-        builder.purge()
-        tags = builder.get_bi_grams()
-        self.assertEqual(tags, {})
-        words = builder.get_bi_grams_words()
-        self.assertEqual(words, {})
-
-    def test_build_tags_and_bi_grams(self):
-        builder = TagsBuilder("[^\w\d ]")
-        builder.build_tags_and_bi_grams(self._text)
-
-        tags = builder.get_tags()
-        expect_tags = ["тестировать", "test", "оно", "2016", "pokémon"]
-        self.assertEqual(tags.sort(), expect_tags.sort())
-        words = builder.get_words()
-        self.assertEqual(
-            words,
-            {
-                "тестировать": set(["тестировали", "тестировала", "тестировал"]),
-                "test": set(["testing", "tested"]),
-                "оно": set(["оно"]),
-                "2016": set(["2016"]),
-                "pokémon": set(["pokémon"]),
-            },
-        )
-
-        tags = builder.get_bi_grams()
-        expect_tags = {
-            "тестировать тестировать": set(["тестировать", "тестировать"]),
-            "тестировать test": set(["тестировать", "test"]),
-            "test test": set(["test", "test"]),
-            "test оно": set(["test", "оно"]),
-            "оно 2016": set(["оно", "2016"]),
-            "2016 pokémon": set(["2016", "pokémon"]),
-        }
-        self.assertEqual(tags, expect_tags)
-        words = builder.get_bi_grams_words()
-        self.assertEqual(
-            words,
-            {
-                "тестировать тестировать": set(
-                    ["тестировали", "тестировала", "тестировал"]
-                ),
-                "тестировать test": set(["тестировал", "testing"]),
-                "test test": set(["testing", "tested"]),
-                "test оно": set(["tested", "оно"]),
-                "оно 2016": set(["оно", "2016"]),
-                "2016 pokémon": set(["2016", "pokémon"]),
-            },
-        )
 
 
 if __name__ == "__main__":

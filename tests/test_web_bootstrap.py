@@ -17,7 +17,6 @@ class TestWebBootstrap(unittest.TestCase):
             "rsstag.web.app",
             "rsstag.web.routes",
             "rsstag.web",
-            "rsstag.web.bigrams",
             "rsstag.web.chat",
             "rsstag.web.context_filter_handlers",
             "rsstag.web.feeds",
@@ -65,6 +64,12 @@ class TestWebBootstrap(unittest.TestCase):
 
         self.assertGreaterEqual(len(rules), 100)
         self.assertNotIn("/map", paths)
+        removed_endpoints: set[str] = {
+            "on_group_by_bigrams_get", "on_group_by_bigrams_dyn_get",
+            "on_get_tag_bi_grams", "on_bigrams_dates_get",
+            "on_bi_gram_get",
+        }
+        self.assertTrue(endpoints.isdisjoint(removed_endpoints))
         self.assertIn("on_root_get", endpoints)
         self.assertIn("on_login_get", endpoints)
         self.assertIn("on_login_post", endpoints)

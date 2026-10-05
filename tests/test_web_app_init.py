@@ -16,7 +16,6 @@ class TestWebAppInit(MongoWebTestCase):
             "feeds",
             "tags",
             "letters",
-            "bi_grams",
             "users",
             "tokens",
             "workers",

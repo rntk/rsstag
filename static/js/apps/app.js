@@ -15,7 +15,6 @@ import LettersList from '../components/letters-list.js';
 import SearchInput from '../components/search-input.js';
 import CategoriesList from '../components/categories-list.js';
 import PostsNumbers from '../components/posts-numbers.js';
-import BiGramsStorage from '../storages/bi-grams-storage.js';
 import TagButton from '../components/tag-button.js';
 import TagToolWidget from '../components/tag-tool-widget.js';
 import ProgressBarStorage from '../storages/progressbar-storage.js';
@@ -32,8 +31,6 @@ import WordTree from '../components/wordtree.js';
 //import PostsWordTree from '../components/posts-wordtree.js';
 //import PostsWordsCloud from '../components/posts-wordscloud.js';
 import TagContexts from '../components/tag-contexts.js';
-import BiGramsMentionsStorage from '../storages/bigrams-mentions-storage.js';
-import BiGramsMentionsChart from '../components/bigrams-mentions-chart.js';
 //import TopicsTextsStorage from '../storages/topics-texts-storage.js';
 //import TopicsTexts from '../components/topics-texts.js';
 import TagsClustersStorage from '../storages/tags-clusters-storage.js';
@@ -44,8 +41,6 @@ import TagSunburst from '../components/sunburst.js';
 import TagTree, { BidirectionalTagTree } from '../components/dendrogram.js';
 import SentenceTree from '../components/SentenceTree.js';
 import TagContextsClassificationStorage from '../storages/tag-contexts-classification-storage.js';
-import BigramsTable from '../components/bigrams-table.js';
-import { BiGramsTabs } from '../components/bigrams-tabs.js';
 import ContextFilterStorage from '../storages/context-filter-storage.js';
 import PathStorage from '../storages/path-storage.js';
 import PathManager from '../components/path-manager.js';
@@ -429,15 +424,11 @@ export function resolvePageType(path) {
   ) {
     return 'tags-group';
   }
-  if (/\/group\/(bi-grams|bi-grams-dyn)\/.*/.test(path)) {
-    return 'bigrams-group';
-  }
   if (
     /^\/feed*/.test(path) ||
     /^\/category*/.test(path) ||
     /^\/tag\/.*/.test(path) ||
     /^\/posts\/with\/tags\/.*/.test(path) ||
-    /^\/bi-gram\/.*/.test(path) ||
     /^\/entity\/.*/.test(path) ||
     /^\/posts\/.*/.test(path)
   ) {
@@ -699,12 +690,6 @@ export function initApp() {
     tags_storage.start();
   } else if (pageType === 'tags-canvas') {
     initTagsCanvas();
-  } else if (pageType === 'bigrams-group') {
-    const bi_grams_storage = new BiGramsStorage(window.EVSYS);
-    renderToRoot('bigrams_tabs_page', <BiGramsTabs ES={window.EVSYS} />);
-    renderToRoot('tags_page', <TagsList ES={window.EVSYS} is_bigram={true} />);
-    renderToRoot('bigrams_table_page', <BigramsTable ES={window.EVSYS} />);
-    bi_grams_storage.start();
   } else if (pageType === 'posts-list') {
     const posts_storage = new PostsStorage(window.EVSYS);
     const hash = window.location.hash;
@@ -766,24 +751,6 @@ export function initApp() {
 window.onload = initApp;
 
 function tagNoContextInfoPage(tag) {
-  const bigrams_mentions_evsys = new EventsSystem();
-  const bigrams_mentions_chart = new BiGramsMentionsChart(
-    '#bigrams_mentions_chart',
-    bigrams_mentions_evsys
-  );
-  const bigrams_mentions_storage = new BiGramsMentionsStorage(tag.tag, bigrams_mentions_evsys);
-  renderToRoot(
-    'load_bigrams_mentions',
-    <TagButton
-      ES={bigrams_mentions_evsys}
-      title="mentions"
-      tag={tag}
-      controls="bigrams_mentions_chart"
-    />
-  );
-  bigrams_mentions_chart.start();
-  bigrams_mentions_storage.start();
-
   const wordtree_evsys = new EventsSystem();
   const wordtree = new WordTree('#wordtree', wordtree_evsys);
   const wordtree_storage = new WordTreeStorage(tag.tag, wordtree_evsys);
@@ -868,24 +835,13 @@ function tagWithContextInfoPage(tag) {
   contexts_classification_storage.start();
 
   renderToRoot(
-    'load_bi_grams',
-    <TagToolWidget
-      tag={tag.tag}
-      title="bi-grams"
-      url="/tag-bi-grams"
-      listContainerId="bi_grams"
-      is_bigram={true}
-    />
-  );
-
-  renderToRoot(
     'load_pmi',
     <TagToolWidget
       tag={tag.tag}
       title="PMI"
       url="/tag-pmi"
       listContainerId="pmi"
-      is_bigram={true}
+      is_entities={true}
     />
   );
 

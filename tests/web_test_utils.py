@@ -191,7 +191,7 @@ class MongoWebTestCase(unittest.TestCase):
 
     @classmethod
     def seed_minimal_data(cls, owner: str) -> Dict[str, Any]:
-        """Insert minimal fixtures: 1 feed, 2 posts, 1 tag, 1 letter, 1 bi_gram.
+        """Insert minimal fixtures: 1 feed, 2 posts, 1 tag, and 1 letter.
         Returns dict of inserted identifiers."""
         compressed = gzip.compress("Test post content for integration tests.".encode("utf-8"))
 
@@ -241,13 +241,6 @@ class MongoWebTestCase(unittest.TestCase):
 
         cls.test_db.letters.insert_one({"owner": owner, "letter": "t", "count": 2})
 
-        cls.test_db.bi_grams.insert_one({
-            "owner": owner,
-            "tag": "test phrase",
-            "posts_count": 1,
-            "processing": 0,
-            "temperature": 1,
-        })
 
         return {
             "feed_id": feed_id,

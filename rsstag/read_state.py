@@ -16,14 +16,12 @@ class ReadStateService:
         self,
         posts: Any,
         tags: Any,
-        bi_grams: Any,
         letters: Any,
         tasks: Any,
         post_grouping: Any,
     ) -> None:
         self._posts: Any = posts
         self._tags: Any = tags
-        self._bi_grams: Any = bi_grams
         self._letters: Any = letters
         self._tasks: Any = tasks
         self._post_grouping: Any = post_grouping
@@ -104,11 +102,9 @@ class ReadStateService:
                 return {"ok": False, "error": "Failed to queue mark task"}
 
             changed = self._posts.change_status(owner, [post["pid"]], readed)
-            tags, bi_grams, letters = self._collect_counters(post)
+            tags, letters = self._collect_counters(post)
             if changed and tags:
                 changed = self._tags.change_unread(owner, tags, readed)
-            if changed and bi_grams:
-                changed = self._bi_grams.change_unread(owner, bi_grams, readed)
             if changed and letters:
                 self._letters.change_unread(owner, letters, readed)
 
@@ -121,7 +117,7 @@ class ReadStateService:
     def _get_post(self, owner: str, post_id: str) -> dict[str, Any] | None:
         projection: dict[str, bool] = {
             "pid": True, "read": True, "id": True, "tags": True,
-            "bi_grams": True, "provider": True,
+            "provider": True,
         }
         post: dict[str, Any] | None = self._posts.get_by_pid(owner, post_id, projection)
         if not post and post_id.isdecimal():
@@ -141,9 +137,8 @@ class ReadStateService:
         return indices
 
     @staticmethod
-    def _collect_counters(post: Mapping[str, Any]) -> tuple[dict[str, int], dict[str, int], dict[str, int]]:
+    def _collect_counters(post: Mapping[str, Any]) -> tuple[dict[str, int], dict[str, int]]:
         tags: dict[str, int] = defaultdict(int)
-        bi_grams: dict[str, int] = defaultdict(int)
         letters: dict[str, int] = defaultdict(int)
 
         for tag in post.get("tags", []):
@@ -152,9 +147,5 @@ class ReadStateService:
             normalized_tag = str(tag)
             tags[normalized_tag] += 1
             letters[normalized_tag[0]] += 1
-        for bi_gram in post.get("bi_grams", []):
-            if not bi_gram:
-                continue
-            bi_grams[str(bi_gram)] += 1
 
-        return dict(tags), dict(bi_grams), dict(letters)
+        return dict(tags), dict(letters)

@@ -311,7 +311,6 @@ def tlg_raw_message_to_post(
         "favorite": False,
         "attachments": attachments_list,
         "tags": [],
-        "bi_grams": [],
         "pid": generate_post_pid(TELEGRAM, stream_id, str(msg_id)),
         "owner": owner,
         "processing": POST_NOT_IN_PROCESSING,
@@ -833,7 +832,6 @@ class TelegramProvider:
                             "favorite": False,
                             "attachments": attachments_list,
                             "tags": [],
-                            "bi_grams": [],
                             "pid": generate_post_pid(
                                 TELEGRAM, str(stream_id), str(post["id"])
                             ),

@@ -68,7 +68,6 @@ class TextFileProvider:
                         "favorite": False,
                         "attachments": [],
                         "tags": [],
-                        "bi_grams": [],
                         "pid": pid,
                         "owner": user["sid"],
                         "processing": POST_NOT_IN_PROCESSING,

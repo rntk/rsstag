@@ -306,7 +306,6 @@ class TestPruneDownloadedData(MongoWebTestCase):
         for collection_name in [
             "posts",
             "tags",
-            "bi_grams",
             "letters",
             "words",
             *derived_collections,

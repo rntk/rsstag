@@ -322,7 +322,6 @@ class GmailProvider:
                             "favorite": False,
                             "attachments": [],
                             "tags": [],
-                            "bi_grams": [],
                             "pid": generate_post_pid(GMAIL, stream_id, mail_data["id"]),
                             "owner": user["sid"],
                             "processing": POST_NOT_IN_PROCESSING,

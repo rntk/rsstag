@@ -137,13 +137,8 @@ test('render includes cloud_item_tools CSS class', () => {
 });
 
 // ============================================================
-// Sub-tags (bigram) tests
+// Entity sub-tag tests
 // ============================================================
-
-test('render checks is_bigram prop', () => {
-  const src = readSource();
-  assert.ok(/this\.props\.is_bigram/.test(src), 'should check is_bigram prop');
-});
 
 test('render checks is_entity prop', () => {
   const src = readSource();
@@ -163,9 +158,9 @@ test('render sets hide_tag_info_link variable', () => {
   assert.ok(/hide_tag_info_link/.test(src), 'should define hide_tag_info_link variable');
 });
 
-test('render splits bigram tag into sub-tags', () => {
+test('render splits entity tag into sub-tags', () => {
   const src = readSource();
-  assert.ok(/\.split\s*\(\s*['"] ['"]/.test(src), 'should split tag by space for sub-tags');
+  assert.ok(/\.split\s*\(\s*['"] ['"]/.test(src), 'should split entity tag by space');
 });
 
 test('render creates sub-tag links with cloud_sub_item_title class', () => {
@@ -329,7 +324,7 @@ test('tag item imports the user-rank helpers and wires pin/hide buttons', () => 
 
 test('tag item renders controls only when the payload supports user rank', () => {
   const src = readSource();
-  assert.ok(/supportsUserRank\(this\.state\.tag,\s*this\.props\.is_bigram\)/.test(src));
+  assert.ok(/supportsUserRank\(this\.state\.tag\)/.test(src));
   assert.ok(/renderUserRankControls\(\)/.test(src));
 });
 
