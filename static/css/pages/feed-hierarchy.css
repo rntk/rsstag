@@ -318,3 +318,133 @@
   }
 }
 
+
+/* Tag n-gram chart (/tag-ngram-chart): bigram rows with trigram circles */
+.tag-ngram {
+  padding: 0 0 2rem;
+}
+
+.tag-ngram__intro {
+  max-width: 72rem;
+  padding: 0.5rem 2rem 0;
+}
+
+.tag-ngram__title {
+  margin: 0 0 0.5rem;
+  font:
+    800 2rem/1.15 Georgia,
+    'Times New Roman',
+    serif;
+}
+
+.tag-ngram__lede,
+.tag-ngram__empty {
+  margin: 0;
+  color: #3f443d;
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
+.tag-ngram__empty {
+  padding: 2rem;
+}
+
+.tag-ngram__chart {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.tag-ngram__svg {
+  display: block;
+  font-family: Inter, sans-serif;
+}
+
+.tag-ngram__bigram {
+  fill: #ece6d6;
+  font:
+    800 112px/1 Georgia,
+    'Times New Roman',
+    serif;
+  pointer-events: none;
+}
+
+.tag-ngram__baseline {
+  stroke: #c9dbc8;
+  stroke-width: 1.5;
+}
+
+.tag-ngram__word {
+  fill: rgb(255 255 255 / 25%);
+  stroke: #4a4d48;
+  stroke-width: 1;
+  cursor: pointer;
+}
+
+.tag-ngram__word:hover,
+.tag-ngram__word:focus {
+  stroke: #e0806a;
+  stroke-width: 2;
+  outline: none;
+}
+
+.tag-ngram__leader {
+  stroke: #4a4d48;
+}
+
+.tag-ngram__label {
+  fill: #20231f;
+  font-size: 14px;
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: #eef0eb;
+  stroke-width: 4px;
+  cursor: pointer;
+}
+
+.tag-ngram__label-word {
+  font-weight: 600;
+}
+
+.tag-ngram__label-count {
+  fill: #c2604a;
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.tag-ngram__more {
+  fill: #c2604a;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tag-ngram__more:hover,
+.tag-ngram__more:focus {
+  text-decoration: underline;
+  outline: none;
+}
+
+.tag-ngram__page {
+  fill: #6b7067;
+  font-size: 12px;
+}
+
+
+.tag-ngram__details {
+  max-width: 72rem;
+  margin: 1rem 2rem 0;
+  padding: 1rem 1.25rem;
+  border: 1px solid #d4d8d0;
+  border-radius: 8px;
+  background: #fafbf7;
+
+  h2 {
+    margin: 0 0 0.5rem;
+    font-size: 1.1rem;
+  }
+  li {
+    margin-bottom: 0.4rem;
+    line-height: 1.4;
+  }
+}

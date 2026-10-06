@@ -831,8 +831,10 @@ class FeedHierarchy {
 
   init() {
     if (!this.treeEl) return;
-    const switchLink = document.getElementById('hierarchy_switch');
-    if (switchLink) switchLink.search = window.location.search;
+    ['hierarchy_switch', 'ngram_chart_switch'].forEach((id) => {
+      const switchLink = document.getElementById(id);
+      if (switchLink) switchLink.search = window.location.search;
+    });
     this.updatePageMeta();
     this.renderLevels();
     this.renderTree();

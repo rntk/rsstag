@@ -60,6 +60,7 @@ import {
   FeedHierarchy,
   setupGlobalTools as setupHierarchyGlobalTools,
 } from '../components/feed-hierarchy.js';
+import { initTagNgramChartPage } from '../components/tag-ngram-chart.js';
 
 function buildGroupedTopicsHierarchy(flatTopics, tagName) {
   const root = { name: 'root', children: [] };
@@ -385,6 +386,9 @@ export function resolvePageType(path) {
   }
   if (['/hierarchy', '/hierarchy/', '/tag-hierarchy', '/tag-hierarchy/'].includes(path)) {
     return 'hierarchy';
+  }
+  if (['/tag-ngram-chart', '/tag-ngram-chart/'].includes(path)) {
+    return 'tag-ngram-chart';
   }
   if (/^\/post-compare\//.test(path)) {
     return 'post-compare';
@@ -728,6 +732,9 @@ export function initApp() {
   } else if (pageType === 'hierarchy') {
     setupHierarchyGlobalTools();
     new FeedHierarchy().init();
+  } else if (pageType === 'tag-ngram-chart') {
+    setupHierarchyGlobalTools();
+    initTagNgramChartPage();
   } else if (pageType === 'sentence-cluster') {
     initSnippetHoverCards();
     initSentenceClusterPage();

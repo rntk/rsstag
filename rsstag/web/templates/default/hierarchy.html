@@ -10,6 +10,9 @@
     <main data-hierarchy-kind="{{ 'words' if word_hierarchy else 'topics' }}" id="feed_hierarchy" class="feed-hierarchy" tabindex="0">
         {% if tag %}
         <a class="feed-hierarchy__switch" id="hierarchy_switch" href="{{ '/hierarchy' if word_hierarchy else '/tag-hierarchy' }}">{{ 'Topic hierarchy' if word_hierarchy else 'Tag word hierarchy' }}</a>
+        {% if word_hierarchy %}
+        <a class="feed-hierarchy__switch" id="ngram_chart_switch" href="/tag-ngram-chart">Tag n-gram chart</a>
+        {% endif %}
         {% endif %}
         <div id="feed_hierarchy_levels" class="feed-hierarchy__levels" aria-label="Hierarchy depth"></div>
         <div id="feed_hierarchy_tree" class="feed-hierarchy__tree" aria-label="{{ 'Tag word hierarchy' if word_hierarchy else 'Topics hierarchy' }}"></div>

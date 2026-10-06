@@ -1648,6 +1648,76 @@ def _build_tag_hierarchy(
     return result
 
 
+def _load_scoped_posts(
+    app: "RSSTagApplication",
+    user: dict[str, Any],
+    current_feed: Optional[dict[str, Any]],
+    current_category: Optional[dict[str, str]],
+    tag: str,
+    text_filter_active: bool,
+    word_hierarchy: bool,
+    only_unread: Optional[bool],
+    projection: dict[str, bool],
+) -> list[dict[str, Any]]:
+    """Load posts in the feed, category, tag and context scope of a page."""
+    category_id: str = str((current_category or {}).get("category_id", ""))
+    context_tags: list[str] = _get_context_tags(user) or []
+    ngram_scope: bool = (
+        word_hierarchy and len(tag.split()) > 1 and not text_filter_active
+    )
+    if (
+        tag
+        and not text_filter_active
+        and not ngram_scope
+        and tag not in context_tags
+    ):
+        context_tags.append(tag)
+    posts_cursor: Iterator[dict[str, Any]]
+    if ngram_scope:
+        query: dict[str, Any] = {
+            "owner": user["sid"],
+            "$or": [
+                {"tags": tag},
+                {"tags": {"$all": tag.split()}},
+            ],
+        }
+        if context_tags:
+            query["tags"] = {"$all": context_tags}
+        if current_feed:
+            query["feed_id"] = current_feed["feed_id"]
+        if current_category:
+            query["category_id"] = category_id
+        if only_unread:
+            query["read"] = False
+        posts_cursor = app.posts.get_by_query(query, projection)
+    elif current_feed:
+        posts_cursor = app.posts.get_by_feed_id(
+            user["sid"],
+            current_feed["feed_id"],
+            only_unread,
+            projection,
+            context_tags=context_tags or None,
+        )
+    elif current_category:
+        posts_cursor = app.posts.get_by_category(
+            user["sid"],
+            only_unread,
+            category_id,
+            projection,
+            context_tags=context_tags or None,
+        )
+    elif context_tags:
+        posts_cursor = app.posts.get_by_tags(
+            user["sid"],
+            context_tags,
+            only_unread,
+            projection,
+        )
+    else:
+        posts_cursor = app.posts.get_all(user["sid"], only_unread, projection)
+    return list(posts_cursor)
+
+
 def on_tag_hierarchy_get(
     app: "RSSTagApplication", user: dict[str, Any], request: Request
 ) -> Response:
@@ -1696,61 +1766,17 @@ def on_hierarchy_get(
         "feed_id": True,
     }
     try:
-        context_tags: list[str] = _get_context_tags(user) or []
-        ngram_scope: bool = (
-            word_hierarchy and len(tag.split()) > 1 and not text_filter_active
+        db_posts: list[dict[str, Any]] = _load_scoped_posts(
+            app,
+            user,
+            current_feed,
+            current_category,
+            tag,
+            text_filter_active,
+            word_hierarchy,
+            only_unread,
+            projection,
         )
-        if (
-            tag
-            and not text_filter_active
-            and not ngram_scope
-            and tag not in context_tags
-        ):
-            context_tags.append(tag)
-        posts_cursor: Iterator[dict[str, Any]]
-        if ngram_scope:
-            query: dict[str, Any] = {
-                "owner": user["sid"],
-                "$or": [
-                    {"tags": tag},
-                    {"tags": {"$all": tag.split()}},
-                ],
-            }
-            if context_tags:
-                query["tags"] = {"$all": context_tags}
-            if current_feed:
-                query["feed_id"] = current_feed["feed_id"]
-            if current_category:
-                query["category_id"] = category_id
-            if only_unread:
-                query["read"] = False
-            posts_cursor = app.posts.get_by_query(query, projection)
-        elif current_feed:
-            posts_cursor = app.posts.get_by_feed_id(
-                user["sid"],
-                current_feed["feed_id"],
-                only_unread,
-                projection,
-                context_tags=context_tags or None,
-            )
-        elif current_category:
-            posts_cursor = app.posts.get_by_category(
-                user["sid"],
-                only_unread,
-                category_id,
-                projection,
-                context_tags=context_tags or None,
-            )
-        elif context_tags:
-            posts_cursor = app.posts.get_by_tags(
-                user["sid"],
-                context_tags,
-                only_unread,
-                projection,
-            )
-        else:
-            posts_cursor = app.posts.get_all(user["sid"], only_unread, projection)
-        db_posts: list[dict[str, Any]] = list(posts_cursor)
         builder: Callable[..., list[dict[str, Any]]] = (
             _build_tag_hierarchy if word_hierarchy else _build_hierarchy_topics
         )

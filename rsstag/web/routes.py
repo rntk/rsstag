@@ -190,6 +190,11 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/tag-ngram-chart",
+                "endpoint": "on_tag_ngram_chart_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/read/posts",
                 "endpoint": "on_read_posts_post",
                 "methods": ["POST"],

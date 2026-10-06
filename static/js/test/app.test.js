@@ -123,6 +123,7 @@ test('resolvePageType handles expected routes and fallback', () => {
     ['/hierarchy/', 'hierarchy'],
     ['/tag-hierarchy', 'hierarchy'],
     ['/tag-hierarchy/', 'hierarchy'],
+    ['/tag-ngram-chart', 'tag-ngram-chart'],
     ['/post-compare/demo', 'post-compare'],
     ['/post-grouped', 'post-grouped'],
     ['/post-grouped/demo', 'post-grouped'],
