@@ -1529,6 +1529,20 @@ def _tag_hierarchy_sentences(
     grouped: Optional[dict[str, Any]] = app.post_grouping.get_grouped_posts(
         owner, [str(post.get("pid", ""))]
     )
+    return _post_scope_sentences(
+        grouped, post, tag, match_topic, match_sentences, only_unread
+    )
+
+
+def _post_scope_sentences(
+    grouped: Optional[dict[str, Any]],
+    post: dict[str, Any],
+    tag: str,
+    match_topic: bool,
+    match_sentences: bool,
+    only_unread: bool,
+) -> list[dict[str, Any]]:
+    """Filter a post's stored sentences (or its body) by topic/sentence switches."""
     sentences: list[dict[str, Any]] = []
     if grouped and grouped.get("sentences"):
         groups: dict[str, Any] = grouped.get("groups", {}) or {}

@@ -1,4 +1,16 @@
 import * as d3 from 'd3';
+import {
+  asButton,
+  createMoreButton,
+  formatPercent,
+  openDetails,
+  postsLink,
+  selectControl,
+  updateMoreButton,
+  urlOption,
+} from './tag-context-shared.js';
+import { TagFeedsChart } from './tag-context-feeds.js';
+import { TagWordsChart } from './tag-context-words.js';
 
 const ROW_HEIGHT = 190;
 const MARGIN = { top: 16, right: 32, bottom: 24, left: 32 };
@@ -11,6 +23,15 @@ const LABEL_LEVELS = 3;
 const LEVEL_HEIGHT = 20;
 const LABEL_CHAR_WIDTH = 7.8;
 const NAV_WIDTH = 110;
+const ROWS_PAGE = 12;
+const GAUGE_WIDTH = 64;
+// Fixedness of pairs seen fewer times than this is too noisy to rank by.
+const MIN_RANKED_COUNT = 3;
+export const PHRASE_SORTS = {
+  frequency: { label: 'Frequency', compare: (a, b) => b.count - a.count },
+  fixed: { label: 'Most fixed', compare: (a, b) => b.fixedness - a.fixedness || b.count - a.count },
+  open: { label: 'Most open', compare: (a, b) => a.fixedness - b.fixedness || b.count - a.count },
+};
 
 /** Label shown above each circle: the trigram's outer word and its count. */
 export function wordLabel(word) {
@@ -58,7 +79,9 @@ export function packWords(words, radius, left) {
     placed.push(previous);
   }
   const last = placed[placed.length - 1];
-  const width = last ? last.x + Math.max(radius(last.word.count), labelWidth(last.word) / 2) - left : 0;
+  const width = last
+    ? last.x + Math.max(radius(last.word.count), labelWidth(last.word) / 2) - left
+    : 0;
   return { placed, width };
 }
 
@@ -100,24 +123,62 @@ export function paginateRow(words, radius, left, right) {
   return pages;
 }
 
+/** Order pairs; fixedness sorts push rarely seen pairs to the end. */
+export function sortPhraseRows(rows, sort) {
+  const compare = (PHRASE_SORTS[sort] || PHRASE_SORTS.frequency).compare;
+  const ranked = (row) => sort === 'frequency' || row.count >= MIN_RANKED_COUNT;
+  return [...rows].sort(
+    (a, b) =>
+      Number(ranked(b)) - Number(ranked(a)) || compare(a, b) || a.bigram.localeCompare(b.bigram)
+  );
+}
+
+/** Row subtitle: support and how predictable the next word is. */
+export function phraseSummary(row) {
+  const completions = row.distinct === 1 ? '1 completion' : `${row.distinct} completions`;
+  return `${row.count} mentions · ${row.posts_count} articles · ${completions} · top ${formatPercent(row.top_share)} · fixedness ${formatPercent(row.fixedness)}`;
+}
+
 export class TagNgramChart {
-  constructor(container, details, rows) {
+  constructor(container, details, rows, controls = null) {
     this.container = container;
     this.details = details;
-    this.rows = rows || [];
+    this.controls = controls;
+    this.allRows = rows || [];
     this.pageByRow = new Map();
+    this.sort = urlOption('sort', Object.keys(PHRASE_SORTS), 'frequency');
+    this.limit = ROWS_PAGE;
   }
 
   init() {
-    if (!this.container || !this.rows.length) return;
+    if (!this.container || !this.allRows.length) return;
+    selectControl(this.controls, {
+      name: 'sort',
+      label: 'Order pairs by',
+      options: Object.entries(PHRASE_SORTS).map(([key, sort]) => [key, sort.label]),
+      value: this.sort,
+      onChange: (value) => {
+        this.sort = value;
+        this.pageByRow.clear();
+        this.render();
+      },
+    });
+    this.more = createMoreButton(this.container, () => {
+      this.limit += ROWS_PAGE;
+      this.render();
+    });
     this.render();
     globalThis.addEventListener('resize', () => this.render());
   }
 
   render() {
+    const sorted = sortPhraseRows(this.allRows, this.sort);
+    this.rows = sorted.slice(0, this.limit);
+    updateMoreButton(this.more, sorted.length - this.rows.length, ROWS_PAGE, 'pairs');
     const width = Math.max(this.container.clientWidth, 640);
     const height = MARGIN.top + this.rows.length * ROW_HEIGHT + MARGIN.bottom;
-    const maxCount = d3.max(this.rows, (row) => d3.max(row.words, (word) => word.count)) || 1;
+    // The radius scale spans every pair so revealing more keeps sizes comparable.
+    const maxCount = d3.max(this.allRows, (row) => d3.max(row.words, (word) => word.count)) || 1;
     this.left = MARGIN.left;
     this.right = width - MARGIN.right;
     this.r = d3.scaleSqrt().domain([1, maxCount]).range([MIN_RADIUS, MAX_RADIUS]);
@@ -130,11 +191,11 @@ export class TagNgramChart {
       .attr('width', width)
       .attr('height', height);
     this.rows.forEach((row, index) =>
-      this.renderRow(svg, row, index, MARGIN.top + (index + 1) * ROW_HEIGHT - 20)
+      this.renderRow(svg, row, row.bigram, MARGIN.top + (index + 1) * ROW_HEIGHT - 20)
     );
   }
 
-  renderRow(svg, row, index, baseline) {
+  renderRow(svg, row, key, baseline) {
     const group = svg.append('g').attr('class', 'tag-ngram__row');
     group
       .append('text')
@@ -142,6 +203,7 @@ export class TagNgramChart {
       .attr('x', this.left)
       .attr('y', baseline)
       .text(row.bigram);
+    this.renderSummary(group, row, baseline - ROW_HEIGHT + 34);
     group
       .append('line')
       .attr('class', 'tag-ngram__baseline')
@@ -150,14 +212,42 @@ export class TagNgramChart {
       .attr('y1', baseline)
       .attr('y2', baseline);
     const pages = paginateRow(row.words, this.r, this.left, this.right);
-    const page = Math.min(this.pageByRow.get(index) || 0, pages.length - 1);
+    const page = Math.min(this.pageByRow.get(key) || 0, pages.length - 1);
     this.renderCircles(group, pages[page], baseline);
     this.renderLabels(group, pages[page], baseline);
-    this.renderPager(group, pages, page, index, baseline);
+    this.renderPager(group, pages, page, key, baseline);
   }
 
-  renderCircles(group, placed, baseline) {
+  renderSummary(group, row, y) {
+    const gauge = group.append('g').attr('class', 'tag-ngram__gauge');
+    gauge
+      .append('rect')
+      .attr('class', 'tag-ngram__gauge-track')
+      .attr('x', this.left)
+      .attr('y', y - 9)
+      .attr('width', GAUGE_WIDTH)
+      .attr('height', 8)
+      .attr('rx', 4);
+    gauge
+      .append('rect')
+      .attr('class', 'tag-ngram__gauge-fill')
+      .attr('x', this.left)
+      .attr('y', y - 9)
+      .attr('width', GAUGE_WIDTH * row.fixedness)
+      .attr('height', 8)
+      .attr('rx', 4);
+    gauge
+      .append('title')
+      .text(`Fixedness ${formatPercent(row.fixedness)} · entropy ${row.entropy} bits`);
     group
+      .append('text')
+      .attr('class', 'tag-ngram__summary-text')
+      .attr('x', this.left + GAUGE_WIDTH + 8)
+      .attr('y', y)
+      .text(`${row.bigram} · ${phraseSummary(row)}`);
+  }
+  renderCircles(group, placed, baseline) {
+    const circles = group
       .append('g')
       .selectAll('circle')
       .data(placed)
@@ -165,12 +255,8 @@ export class TagNgramChart {
       .attr('class', 'tag-ngram__word')
       .attr('cx', (item) => item.x)
       .attr('cy', (item) => baseline - this.r(item.word.count))
-      .attr('r', (item) => this.r(item.word.count))
-      .attr('tabindex', 0)
-      .on('click keydown', (event, item) => {
-        if (event.type === 'keydown' && event.key !== 'Enter') return;
-        this.showDetails(item.word);
-      })
+      .attr('r', (item) => this.r(item.word.count));
+    asButton(circles, (item) => this.showDetails(item.word))
       .append('title')
       .text((item) => `${item.word.trigram} · ${item.word.count}`);
   }
@@ -198,7 +284,7 @@ export class TagNgramChart {
     });
   }
 
-  renderPager(group, pages, page, index, baseline) {
+  renderPager(group, pages, page, key, baseline) {
     if (pages.length < 2) return;
     const x = this.right - NAV_WIDTH + 16;
     const remaining = d3.sum(pages.slice(page + 1), (items) => items.length);
@@ -220,39 +306,53 @@ export class TagNgramChart {
         .attr('role', 'button')
         .on('click keydown', (event) => {
           if (event.type === 'keydown' && event.key !== 'Enter') return;
-          this.pageByRow.set(index, control.page);
+          this.pageByRow.set(key, control.page);
           this.render();
         });
     });
   }
 
   showDetails(word) {
-    if (!this.details) return;
-    const document = globalThis.document;
-    const title = document.createElement('h2');
-    title.textContent = `${word.trigram} · ${word.count} in ${word.posts_count} posts`;
-    const list = document.createElement('ul');
+    const list = globalThis.document.createElement('ul');
     word.snippets.forEach((snippet) => {
-      const item = document.createElement('li');
+      const item = globalThis.document.createElement('li');
       item.textContent = snippet;
       list.append(item);
     });
-    const link = document.createElement('a');
-    link.href = `/posts/${word.post_ids.join('_')}`;
-    link.textContent = 'Open posts';
-    this.details.replaceChildren(title, list, link);
-    this.details.hidden = false;
+    openDetails(this.details, `${word.trigram} · ${word.count} in ${word.posts_count} posts`, [
+      list,
+      postsLink(word.post_ids, 'Open posts'),
+    ]);
   }
 }
 
-/** Mount the chart on /tag-ngram-chart and keep the scope on the hierarchy link. */
+/** Point each view tab at the current URL with only the view swapped. */
+export function syncTabs(document, search) {
+  document.querySelectorAll('.tag-ngram__tab[data-view]').forEach((tab) => {
+    const params = new globalThis.URLSearchParams(search);
+    params.set('view', tab.dataset.view);
+    params.delete('sort');
+    params.delete('labels');
+    tab.search = `?${params}`;
+  });
+}
+
+const VIEW_CHARTS = {
+  words: TagWordsChart,
+  feeds: TagFeedsChart,
+};
+
+/** Mount the chart for the current view and keep the scope on links. */
 export function initTagNgramChartPage() {
   const document = globalThis.document;
+  const data = globalThis.tagNgramData || { view: 'phrases', rows: [] };
   const switchLink = document.getElementById('ngram_hierarchy_switch');
   if (switchLink) switchLink.search = globalThis.location.search;
-  new TagNgramChart(
-    document.getElementById('tag_ngram_chart_canvas'),
-    document.getElementById('tag_ngram_details'),
-    globalThis.tagNgramRows
-  ).init();
+  syncTabs(document, globalThis.location.search);
+  const container = document.getElementById('tag_ngram_chart_canvas');
+  const details = document.getElementById('tag_ngram_details');
+  const controls = document.getElementById('tag_ngram_controls');
+  const Chart = VIEW_CHARTS[data.view];
+  if (Chart) new Chart(container, details, controls, data).init();
+  else new TagNgramChart(container, details, data.rows, controls).init();
 }

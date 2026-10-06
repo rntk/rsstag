@@ -1,25 +1,49 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Tag n-gram chart | {{ tag|e }}</title>
+    <title>Tag context chart | {{ tag|e }}</title>
     {% include "head-data.html" %}
 </head>
 <body class="feed-hierarchy-page tag-ngram-page">
     {% from 'site-header.html' import site_header with context %}
     {{ site_header(active='topics', show_context_filter=True, page_scope=page_scope, page_title=page_title) }}
-    <main id="tag_ngram_chart" class="tag-ngram" data-tag="{{ tag|e }}">
+    {% set labels = {'phrases': 'Common phrases', 'words': 'Distinctive words', 'feeds': 'Feed framing'} %}
+    {% set summary = data.summary %}
+    <main id="tag_ngram_chart" class="tag-ngram" data-tag="{{ tag|e }}" data-view="{{ view|e }}">
         <a class="feed-hierarchy__switch" id="ngram_hierarchy_switch" href="/tag-hierarchy">Tag word hierarchy</a>
         <header class="tag-ngram__intro">
-            <h1 class="tag-ngram__title">Word pairs around “{{ tag|e }}”</h1>
-            <p class="tag-ngram__lede">Each row is a two-word phrase containing the tag. Circles are the words that extend it to three words, sized by occurrences and spread evenly along the row from most to least frequent. Click a word to see where it appears.</p>
+            <h1 class="tag-ngram__title">Context of “{{ tag|e }}”</h1>
+            <nav class="tag-ngram__tabs" aria-label="Chart view">
+                {% for name in views %}
+                <a class="tag-ngram__tab{% if name == view %} tag-ngram__tab--active{% endif %}"
+                   data-view="{{ name }}" href="?tag={{ tag|urlencode }}&amp;view={{ name }}"
+                   {% if name == view %}aria-current="page"{% endif %}>{{ labels[name] }}</a>
+                {% endfor %}
+            </nav>
+            <p class="tag-ngram__summary">{{ summary.articles }} articles · {{ summary.mentions }} mentions · {{ summary.sentences }} sentences · {{ summary.feeds }} feeds</p>
+            {% if view == 'phrases' %}
+            <p class="tag-ngram__lede">Each row is a two-word phrase containing the tag; circles are the words that extend it to three words, sized by occurrences. <b>Fixedness</b> shows how predictable the next word is: 100% means a single completion (a set expression), values near 0% mean an open slot where many words are equally likely.</p>
+            {% elif view == 'words' %}
+            <p class="tag-ngram__lede">Words that appear in sentences with the tag more often than in other sentences in this scope. Position is <b>lift</b>: how many times more often a word appears near the tag, with a 95% interval. Words are ranked by a <b>log-odds z-score</b> with an informative prior, which discounts words seen only a few times; faded words are not significant (|z| &lt; 1.96).</p>
+            {% else %}
+            <p class="tag-ngram__lede">How each feed talks about the tag. Every row is a feed; circles are words its tag sentences use more often than other feeds’ tag sentences, placed by lift and sized by articles. The most distinctive words are labelled; faded words are not significant.</p>
+            {% endif %}
+            <div id="tag_ngram_controls" class="tag-ngram__controls"></div>
         </header>
-        {% if rows %}
-        <div id="tag_ngram_chart_canvas" class="tag-ngram__chart" aria-label="Tag n-gram chart"></div>
-        <aside id="tag_ngram_details" class="tag-ngram__details" hidden></aside>
-        {% else %}
+        {% if not summary.sentences %}
+        <p class="tag-ngram__empty">No sentences with “{{ tag|e }}” were found in this scope.</p>
+        {% elif view == 'phrases' and not data.rows %}
         <p class="tag-ngram__empty">No three-word phrases with “{{ tag|e }}” were found in this scope.</p>
+        {% elif view == 'words' and not data.words %}
+        <p class="tag-ngram__empty">There are no other sentences in this scope to compare against. Widen the scope to see distinctive words.</p>
+        {% elif view == 'feeds' and not data.rows %}
+        <p class="tag-ngram__empty">Feed framing needs tag sentences from at least two feeds, with at least three sentences in one of them. This scope has {{ data.feeds_total }} feed{{ '' if data.feeds_total == 1 else 's' }}.</p>
+        {% else %}
+        <div id="tag_ngram_chart_canvas" class="tag-ngram__chart" aria-label="Tag context chart"></div>
+        <div id="tag_ngram_overlay" class="tag-ngram__overlay" hidden></div>
+        <aside id="tag_ngram_details" class="tag-ngram__details" tabindex="-1" role="dialog" aria-modal="true" hidden></aside>
         {% endif %}
     </main>
-    <script>window.tagNgramRows = {{ rows_json | safe }};</script>
+    <script>window.tagNgramData = {{ data_json | safe }};</script>
 </body>
 </html>
