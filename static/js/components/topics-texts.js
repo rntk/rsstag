@@ -1,62 +1,38 @@
 'use strict';
+import WordTree from './wordtree.js';
 
 export default class TopicsTexts {
+  /** @param {string} container_id @param {Object} event_system */
   constructor(container_id, event_system) {
     this.ES = event_system;
     this._container = document.querySelector(container_id);
-
     this.updateData = this.updateData.bind(this);
   }
 
+  /** @param {{topics: string[], texts: string[]}} data @returns {void} */
   updateData(data) {
-    const window = 5;
-    for (let topic of data.topics) {
-      let texts = [];
-      for (let txt of data.texts) {
-        let words = txt.split(' ');
-        for (let i = 0; i < words.length; i++) {
-          let word = words[i];
-          if (word === topic) {
-            let st_pos = Math.max(i - window, 0);
-            let end_pos = i + window;
-            if (end_pos > words.length) {
-              end_pos = words.length;
-            }
-            texts.push(words.slice(st_pos, end_pos).join(' '));
-          }
-        }
-      }
-      this.renderWordtree(topic, texts);
+    if (!this._container) return;
+    this._container.replaceChildren();
+    for (const topic of data.topics) {
+      this.renderWordtree(topic, data.texts);
     }
   }
 
+  /** @param {string} topic @param {string[]} topic_texts @returns {void} */
   renderWordtree(topic, topic_texts) {
-    let div = document.createElement('div');
-    this._container.appendChild(div);
-    google.charts.load('current', { packages: ['wordtree'] });
-    google.charts.setOnLoadCallback(() => {
-      let texts = [];
-      for (let txt of topic_texts) {
-        texts.push([txt]);
-      }
-      let dt = google.visualization.arrayToDataTable(texts);
-      let chart = new google.visualization.WordTree(div);
-      let options = {
-        wordtree: {
-          format: 'implicit',
-          word: topic,
-          type: 'double',
-          backgroundColor: '#d7d7af',
-        },
-      };
-      chart.draw(dt, options);
-    });
+    if (!this._container) return;
+    const container = document.createElement('div');
+    this._container.appendChild(container);
+    const tree = new WordTree(container, this.ES);
+    tree.updateWordTree({ tag: topic, texts: topic_texts });
   }
 
+  /** @returns {void} */
   bindEvents() {
     this.ES.bind(this.ES.TOPICS_TEXTS_UPDATED, this.updateData);
   }
 
+  /** @returns {void} */
   start() {
     this.bindEvents();
   }

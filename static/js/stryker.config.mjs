@@ -29,7 +29,6 @@ const config = {
     'bundle.js',
     'bundle.js.map',
     'libs/cloud.min.js',
-    'google-charts.js',
     'Chart.min.js',
     'd3.v6.min.js',
     'quality-report.json',

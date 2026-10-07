@@ -41,7 +41,6 @@ module.exports = [
       'bundle.js.LICENSE.txt',
       'Chart.min.js',
       'd3.v6.min.js',
-      'google-charts.js',
       'libs/cloud.min.js',
       '../css/*.map',
       '../vis-dist/**',

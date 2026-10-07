@@ -1,273 +1,179 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { buildWordTree, tokenize } from '../libs/wordtree-layout.js';
+import WordTree from '../components/wordtree.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const COMPONENT_PATH = path.join(__dirname, '..', 'components', 'wordtree.js');
+describe('word tree contexts', () => {
+  it('merges shared phrases and counts repeated occurrences', () => {
+    const tree = buildWordTree(
+      ['love the lord thy god', 'love the lord your god', 'love the lord thy god'],
+      'love the'
+    );
+    expect(tree.occurrences).toBe(3);
+    expect(tree.root.label).toBe('love the');
+    expect(tree.root.children[0].label).toBe('lord');
+    expect(tree.root.children[0].children.map((child) => [child.label, child.count])).toEqual([
+      ['thy god', 2],
+      ['your god', 1],
+    ]);
+  });
 
-function readSource() {
-  return fs.readFileSync(COMPONENT_PATH, 'utf8');
-}
+  it('matches whole tokens, Unicode, and case without matching substrings', () => {
+    const tree = buildWordTree(['CAT cats catapult cat café', 'КОТ спит кот ест'], 'cat');
+    expect(tree.occurrences).toBe(2);
+    expect(buildWordTree(['КОТ спит кот ест'], 'кот').occurrences).toBe(2);
+    expect(tokenize('café, déjà-vu')).toEqual(['café', ',', 'déjà-vu']);
+  });
 
-// ============================================================
-// Class and constructor tests
-// ============================================================
+  it('preserves endings at shared prefixes', () => {
+    const tree = buildWordTree(['tag one', 'tag one two'], 'tag');
+    expect(tree.root.children[0].label).toBe('one');
+    expect(tree.root.children[0].count).toBe(2);
+    expect(tree.root.children[0].children[0].label).toBe('two');
+  });
 
-test('source exports a default class', () => {
-  const src = readSource();
-  assert.ok(/export default class \w+/.test(src), 'should export a default class');
+  it('builds preceding phrases in reading order', () => {
+    const tree = buildWordTree(['we love the lord', 'they love the lord'], 'lord', true);
+    expect(tree.root.children[0].label).toBe('love the');
+    expect(tree.root.children[0].children.map((child) => child.label).sort()).toEqual([
+      'they',
+      'we',
+    ]);
+  });
+
+  it('bounds large diagrams while reporting all occurrences', () => {
+    const texts = Array.from({ length: 200 }, (_, i) => `tag context${i}`);
+    const tree = buildWordTree(texts, 'tag');
+    expect(tree.occurrences).toBe(200);
+    expect(tree.shownPaths).toBe(120);
+    expect(tree.totalPaths).toBe(200);
+    expect(tree.root.children).toHaveLength(120);
+  });
+
+  it('handles empty tags, absent matches and tags at text boundaries', () => {
+    expect(buildWordTree(['text'], '').occurrences).toBe(0);
+    expect(buildWordTree(['text'], 'missing').occurrences).toBe(0);
+    expect(buildWordTree(['tag'], 'tag').occurrences).toBe(1);
+    expect(buildWordTree(['tag'], 'tag').root.children).toEqual([]);
+  });
 });
 
-test('class name is WordTree', () => {
-  const src = readSource();
-  assert.ok(/export default class WordTree/.test(src), 'should define class WordTree');
+describe('custom SVG word tree', () => {
+  let component;
+  let eventSystem;
+  beforeEach(() => {
+    document.body.innerHTML = '<div id="tree"></div>';
+    eventSystem = {
+      WORDTREE_TEXTS_UPDATED: 'updated',
+      bind: (event, handler) => {
+        eventSystem.handler = handler;
+      },
+    };
+    component = new WordTree('#tree', eventSystem);
+  });
+
+  it('renders SVG branches and updates through the existing event interface', () => {
+    component.start();
+    eventSystem.handler({
+      tag: 'love the',
+      texts: ['love the lord thy god', 'love the lord your god'],
+    });
+    expect(document.querySelector('svg')).not.toBeNull();
+    expect(document.querySelectorAll('path')).toHaveLength(3);
+    expect(document.querySelector('.wordtree__root').textContent).toContain('love the');
+    expect(document.querySelector('.wordtree__summary').textContent).toBe('2 occurrences');
+  });
+
+  it('changes direction and replaces previous drawings', () => {
+    component.updateWordTree({ tag: 'lord', texts: ['we love the lord thy god'] });
+    const select = document.querySelector('select');
+    select.value = 'before';
+    select.dispatchEvent(new window.Event('change'));
+    expect(document.querySelector('.wordtree__phrase').textContent).toContain('we love the');
+    expect(document.querySelectorAll('svg')).toHaveLength(1);
+  });
+
+  it('renders untrusted labels as text', () => {
+    component.updateWordTree({ tag: '<img>', texts: ['<img> hello'] });
+    expect(document.querySelector('img')).toBeNull();
+    expect(document.querySelector('.wordtree__root').textContent).toContain('<img>');
+  });
+
+  it('shows empty states and clears stale diagrams', () => {
+    component.updateWordTree({ tag: 'tag', texts: ['tag context'] });
+    component.updateWordTree({ tag: 'tag', texts: [] });
+    expect(document.querySelector('svg')).toBeNull();
+    expect(document.querySelector('#tree').textContent).toBe('No texts');
+    component.updateWordTree({ tag: 'tag', texts: ['no match'] });
+    expect(document.querySelector('.tag-info-empty-state').textContent).toContain(
+      'No matching contexts'
+    );
+  });
 });
 
-test('constructor accepts container_id and event_system parameters', () => {
-  const src = readSource();
-  assert.ok(
-    /constructor\s*\(\s*container_id\s*,\s*event_system\s*\)/.test(src),
-    'should have constructor(container_id, event_system)'
+it('accepts an element container for embedded trees', () => {
+  document.body.innerHTML = '<div id="embedded"></div>';
+  const container = document.querySelector('#embedded');
+  const component = new WordTree(container, {});
+  component.updateWordTree({ tag: 'tag', texts: ['tag shared branch'] });
+  expect(container.querySelector('svg')).not.toBeNull();
+});
+
+it('uses a readable layout when rendering inside a hidden section', () => {
+  document.body.innerHTML = '<div id="hidden-tree" hidden></div>';
+  const original = window.SVGElement.prototype.getComputedTextLength;
+  window.SVGElement.prototype.getComputedTextLength = () => 0;
+  try {
+    const component = new WordTree('#hidden-tree', {});
+    component.updateWordTree({ tag: 'tag', texts: ['tag shared branch'] });
+    const root = document.querySelector('.wordtree__root');
+    const phrase = document.querySelector('.wordtree__phrase');
+    expect(Number(phrase.getAttribute('x'))).toBeGreaterThan(Number(root.getAttribute('x')) + 100);
+  } finally {
+    if (original) window.SVGElement.prototype.getComputedTextLength = original;
+    else delete window.SVGElement.prototype.getComputedTextLength;
+  }
+});
+
+it('falls back to separate word trees when group words never appear adjacently', () => {
+  document.body.innerHTML = '<div id="fallback"></div>';
+  const component = new WordTree('#fallback', {});
+  component.updateWordTree({ tag: 'cat dog', texts: ['we see cat sleeping and dog running'] });
+  expect(
+    Array.from(document.querySelectorAll('.wordtree__root'), (el) => el.childNodes[0].textContent)
+  ).toEqual(['cat', 'dog']);
+  expect(document.querySelector('.wordtree__summary').textContent).toBe(
+    'Individual word contexts · cat: 1 occurrence · dog: 1 occurrence'
   );
+  const direction = document.querySelector('select');
+  direction.value = 'before';
+  direction.dispatchEvent(new window.Event('change'));
+  expect(document.querySelectorAll('svg')).toHaveLength(2);
+  expect(document.querySelector('.wordtree__phrase').textContent).toContain('we see');
 });
 
-test('constructor stores event_system as this.ES', () => {
-  const src = readSource();
-  assert.ok(/this\.ES\s*=\s*event_system/.test(src), 'should assign event_system to this.ES');
+it('keeps an exact phrase as one tree even if its words also appear separately', () => {
+  document.body.innerHTML = '<div id="phrase"></div>';
+  const component = new WordTree('#phrase', {});
+  component.updateWordTree({
+    tag: 'cat dog',
+    texts: ['cat dog running', 'cat sleeping dog running'],
+  });
+  expect(document.querySelectorAll('svg')).toHaveLength(1);
+  expect(document.querySelector('.wordtree__root').childNodes[0].textContent).toBe('cat dog');
+  expect(document.querySelector('.wordtree__summary').textContent).toBe('1 occurrence');
 });
 
-test('constructor queries container using document.querySelector', () => {
-  const src = readSource();
-  assert.ok(
-    /this\._container\s*=\s*document\.querySelector\s*\(\s*container_id\s*\)/.test(src),
-    'should use document.querySelector(container_id)'
+it('deduplicates fallback words case-insensitively and skips unmatched words', () => {
+  document.body.innerHTML = '<div id="partial"></div>';
+  const component = new WordTree('#partial', {});
+  component.updateWordTree({ tag: 'cat CAT missing', texts: ['cat sleeping'] });
+  expect(document.querySelectorAll('svg')).toHaveLength(1);
+  expect(document.querySelector('.wordtree__summary').textContent).toBe(
+    'Individual word contexts · CAT: 1 occurrence'
   );
-});
-
-test('constructor stores container as this._container', () => {
-  const src = readSource();
-  assert.ok(/this\._container/.test(src), 'should assign container to this._container');
-});
-
-test('constructor binds updateWordTree method', () => {
-  const src = readSource();
-  assert.ok(
-    /this\.updateWordTree\s*=\s*this\.updateWordTree\.bind\(this\)/.test(src),
-    'should bind updateWordTree'
+  component.updateWordTree({ tag: 'missing absent', texts: ['cat sleeping'] });
+  expect(document.querySelector('svg')).toBeNull();
+  expect(document.querySelector('.tag-info-empty-state').textContent).toContain(
+    'No matching contexts'
   );
-});
-
-// ============================================================
-// updateWordTree method tests
-// ============================================================
-
-test('source declares updateWordTree method', () => {
-  const src = readSource();
-  assert.ok(
-    /updateWordTree\s*\(\s*data\s*\)/.test(src),
-    'should declare updateWordTree(data) method'
-  );
-});
-
-test('updateWordTree checks data.texts.length for empty data', () => {
-  const src = readSource();
-  assert.ok(/!data\.texts\.length/.test(src), 'should check !data.texts.length');
-});
-
-test('updateWordTree shows "No texts" when texts array is empty', () => {
-  const src = readSource();
-  assert.ok(
-    /<p class="tag-info-empty-state">No texts<\/p>/.test(src),
-    'should display <p class="tag-info-empty-state">No texts</p>'
-  );
-});
-
-test('updateWordTree sets container innerHTML when no texts', () => {
-  const src = readSource();
-  assert.ok(
-    /this\._container\.innerHTML\s*=\s*['"]<p class="tag-info-empty-state">No texts<\/p>['"]/.test(
-      src
-    ),
-    'should set innerHTML to "No texts" message'
-  );
-});
-
-test('updateWordTree returns early when no texts', () => {
-  const src = readSource();
-  assert.ok(/return;?/.test(src), 'should return early for empty texts');
-});
-
-test('updateWordTree clears container innerHTML before rendering', () => {
-  const src = readSource();
-  assert.ok(
-    /this\._container\.innerHTML\s*=\s*['"]['"]/.test(src),
-    'should clear container innerHTML'
-  );
-});
-
-// ============================================================
-// Text data preparation tests
-// ============================================================
-
-test('updateWordTree creates texts array', () => {
-  const src = readSource();
-  assert.ok(/let texts\s*=\s*\[\]/.test(src), 'should create empty texts array');
-});
-
-test('updateWordTree iterates over data.texts', () => {
-  const src = readSource();
-  assert.ok(/for\s*\(\s*let txt of data\.texts/.test(src), 'should iterate over data.texts');
-});
-
-test('updateWordTree wraps each text in an array', () => {
-  const src = readSource();
-  assert.ok(/texts\.push\s*\(\s*\[\s*txt\s*\]\s*\)/.test(src), 'should push [txt] to texts');
-});
-
-// ============================================================
-// Tag splitting and rendering tests
-// ============================================================
-
-test('updateWordTree splits data.tag by space', () => {
-  const src = readSource();
-  assert.ok(/data\.tag\.split\(\s*['"] ['"]\s*\)/.test(src), 'should split tag by space');
-});
-
-test('updateWordTree iterates over tags', () => {
-  const src = readSource();
-  assert.ok(/for\s*\(\s*const tag of tags/.test(src), 'should iterate over tags');
-});
-
-test('updateWordTree creates a div container per tag', () => {
-  const src = readSource();
-  assert.ok(
-    /document\.createElement\s*\(\s*['"]div['"]\s*\)/.test(src),
-    'should create div element'
-  );
-});
-
-test('updateWordTree appends container div to this._container', () => {
-  const src = readSource();
-  assert.ok(
-    /this\._container\.appendChild\s*\(\s*container\s*\)/.test(src),
-    'should append container'
-  );
-});
-
-// ============================================================
-// Google Visualization chart creation tests
-// ============================================================
-
-test('updateWordTree creates DataTable from texts array', () => {
-  const src = readSource();
-  assert.ok(
-    /google\.visualization\.arrayToDataTable\s*\(\s*texts\s*\)/.test(src),
-    'should create DataTable from texts'
-  );
-});
-
-test('updateWordTree creates WordTree visualization', () => {
-  const src = readSource();
-  assert.ok(
-    /new google\.visualization\.WordTree\s*\(\s*container\s*\)/.test(src),
-    'should create WordTree with container'
-  );
-});
-
-test('updateWordTree sets wordtree format to implicit', () => {
-  const src = readSource();
-  assert.ok(/format\s*:\s*['"]implicit['"]/.test(src), 'should set format to implicit');
-});
-
-test('updateWordTree sets wordtree word to current tag', () => {
-  const src = readSource();
-  assert.ok(/word\s*:\s*tag/.test(src), 'should set word to tag');
-});
-
-test('updateWordTree sets wordtree type to double', () => {
-  const src = readSource();
-  assert.ok(/type\s*:\s*['"]double['"]/.test(src), 'should set type to double');
-});
-
-test('updateWordTree sets backgroundColor to #d7d7af', () => {
-  const src = readSource();
-  assert.ok(
-    /backgroundColor\s*:\s*['"]#d7d7af['"]/.test(src),
-    'should set backgroundColor to #d7d7af'
-  );
-});
-
-test('updateWordTree draws chart with options', () => {
-  const src = readSource();
-  assert.ok(
-    /chart\.draw\s*\(\s*dt\s*,\s*options\s*\)/.test(src),
-    'should call chart.draw(dt, options)'
-  );
-});
-
-// ============================================================
-// bindEvents and start method tests
-// ============================================================
-
-test('source declares bindEvents method', () => {
-  const src = readSource();
-  assert.ok(/bindEvents\s*\(\s*\)/.test(src), 'should declare bindEvents() method');
-});
-
-test('bindEvents binds WORDTREE_TEXTS_UPDATED event', () => {
-  const src = readSource();
-  assert.ok(/WORDTREE_TEXTS_UPDATED/.test(src), 'should reference WORDTREE_TEXTS_UPDATED');
-  assert.ok(
-    /this\.ES\.bind\s*\(\s*this\.ES\.WORDTREE_TEXTS_UPDATED/.test(src),
-    'should bind WORDTREE_TEXTS_UPDATED'
-  );
-});
-
-test('bindEvents binds updateWordTree as handler', () => {
-  const src = readSource();
-  assert.ok(
-    /this\.ES\.bind\s*\([^,]+,\s*this\.updateWordTree\s*\)/.test(src),
-    'should bind updateWordTree as the handler'
-  );
-});
-
-test('source declares start method', () => {
-  const src = readSource();
-  assert.ok(/start\s*\(\s*\)/.test(src), 'should declare start() method');
-});
-
-test('start loads Google Charts wordtree package', () => {
-  const src = readSource();
-  assert.ok(/google\.charts\.load/.test(src), 'should call google.charts.load');
-  assert.ok(/packages\s*:\s*\[\s*['"]wordtree['"]\s*\]/.test(src), 'should load wordtree package');
-});
-
-test('start calls bindEvents after loading charts', () => {
-  const src = readSource();
-  assert.ok(/this\.bindEvents\(\)/.test(src), 'should call this.bindEvents()');
-});
-
-test('start uses google.charts.load with current version', () => {
-  const src = readSource();
-  assert.ok(
-    /google\.charts\.load\s*\(\s*['"]current['"]/.test(src),
-    'should load "current" version'
-  );
-});
-
-// ============================================================
-// Import and dependency tests
-// ============================================================
-
-test('source uses strict mode', () => {
-  const src = readSource();
-  assert.ok(/'use strict'/.test(src), 'should use strict mode');
-});
-
-test('source uses google.charts API', () => {
-  const src = readSource();
-  assert.ok(/google\.charts/.test(src), 'should reference google.charts');
-  assert.ok(/google\.visualization/.test(src), 'should reference google.visualization');
 });

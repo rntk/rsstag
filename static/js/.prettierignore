@@ -4,7 +4,6 @@ bundle.js.map
 bundle.js.LICENSE.txt
 Chart.min.js
 d3.v6.min.js
-google-charts.js
 ../css/*.map
 libs/cloud.min.js
 ../vis-dist/**

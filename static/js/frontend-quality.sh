@@ -88,7 +88,6 @@ run_coverage() {
         --exclude='bundle.js' \
         --exclude='bundle.js.map' \
         --exclude='*.min.js' \
-        --exclude='google-charts.js' \
         --exclude='libs/cloud.min.js' \
         --exclude='coverage/**' \
         --exclude='reports/**' \
