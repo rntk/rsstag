@@ -701,7 +701,10 @@ export function initApp() {
   } else if (pageType === 'posts-list') {
     const posts_storage = new PostsStorage(window.EVSYS);
     const hash = window.location.hash;
-    renderToRoot('posts_page', <PostTabs ES={window.EVSYS} words_from_hash={hash} />);
+    renderToRoot(
+      'posts_page',
+      <PostTabs ES={window.EVSYS} words_from_hash={hash} snippetsUrl={window.snippets_url} />
+    );
     renderToRoot('read_all', <ReadAllButton ES={window.EVSYS} />);
     renderToRoot('show_all', <ShowAllButton ES={window.EVSYS} />);
     renderToRoot('posts_stat', <PostsNumbers ES={window.EVSYS} />);

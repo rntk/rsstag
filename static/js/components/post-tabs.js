@@ -5,8 +5,10 @@ import WordTree from './wordtree.js';
 import PostsWordsCloud from './posts-wordscloud.js';
 import { PostsTags } from './post-tags.js';
 import PostChatS from './post-chat.js';
+import PostSnippets from './post-snippets.js';
 
 const TAB_POSTS = 'posts';
+const TAB_SNIPPETS = 'snippets';
 const TAB_WORDSTREE = 'wordstree';
 const TAB_WORDSCLOUD = 'wordscloud';
 const TAB_TAGS = 'tags';
@@ -17,6 +19,9 @@ export class PostTabs extends React.Component {
     super(props);
     this.tabs = new Map();
     this.tabs.set(TAB_POSTS, 'Posts');
+    if (props.snippetsUrl) {
+      this.tabs.set(TAB_SNIPPETS, 'Snippets');
+    }
     this.tabs.set(TAB_TAGS, 'Tags');
     this.tabs.set(TAB_WORDSTREE, 'Wordtree');
     this.tabs.set(TAB_WORDSCLOUD, 'Wordcloud');
@@ -82,6 +87,9 @@ export class PostTabs extends React.Component {
     let el = null;
     if (this.state.current === TAB_POSTS) {
       el = PostsListS(this.state.posts, this.props.ES);
+    }
+    if (this.state.current === TAB_SNIPPETS) {
+      el = <PostSnippets url={this.props.snippetsUrl} />;
     }
     if (this.state.current === TAB_TAGS) {
       el = PostsTags(this.state.posts);

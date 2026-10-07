@@ -71,6 +71,7 @@
         window.group = '{{group}}';
         window.group_title = '{{tag}}';
         window.words = {{ words | json }};
+        window.snippets_url = {{ (snippets_url or none) | tojson }};
         window.rss_settings = {{ user_settings | json }};
         
         document.getElementById('help_trigger')?.addEventListener('click', (e) => {
@@ -78,6 +79,9 @@
             document.getElementById('help_window').classList.remove('hidden');
         });
     </script>
+    {% if snippets_url %}
+    <script src="/static/js/post-grouped-snippets.js"></script>
+    {% endif %}
     <div id="progressbar" class="fixed bottom-0 left-0 h-1 bg-primary transition-all duration-300"></div>
 </body>
 

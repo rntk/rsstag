@@ -37,7 +37,7 @@
         <h3 class="filter-title">Filter: {{ current_topic_label }}</h3>
         {% endif %}
 
-        <div id="snippets_container">
+        <div id="snippets_container" data-tag-words="{{ tag_words | tojson | forceescape }}">
             {% if topics %}
             {% for topic_name, data in topics %}
             <div class="topic-card" style="border-left-color: {{ data.color }};">

@@ -1002,6 +1002,9 @@ def on_tag_get(
             tag=tag,
             group="tag",
             tag_url=app.routes.get_url_by_endpoint("on_tag_get", {"quoted_tag": tag}),
+            snippets_url=app.routes.get_url_by_endpoint(
+                "on_tag_grouped_snippets_get", {"tag": tag}
+            ) + ("?" + urlencode({"feed": feed_id}) if feed_id is not None else ""),
             tag_view="posts",
             tag_feeds_url=app.routes.get_url_by_endpoint(
                 "on_tag_feeds_get", {"quoted_tag": tag}
@@ -2797,6 +2800,9 @@ def on_entity_get(
             group="tag",
             words=list(words),
             entity_snippets_url=f"/entity-grouped-snippets/{quoted_tag}?window={window}",
+            snippets_url=app.routes.get_url_by_endpoint(
+                "on_entity_grouped_snippets_get", {"quoted_tag": tag}
+            ) + "?" + urlencode({"window": window}),
             user_settings=user["settings"],
             provider=user.get("provider", ""),
         ),
@@ -4154,11 +4160,16 @@ def on_tag_grouped_snippets_get(
     )
 
     only_unread: Optional[bool] = user["settings"].get("only_unread") or None
+    feed_id: Optional[str] = request.args.get("feed")
+    if feed_id is not None and not app.feeds.get_by_feed_id(user["sid"], feed_id):
+        return app.on_error(user, request, NotFound())
     cursor = app.posts.get_by_tags(
         user["sid"],
         [tag],
         only_unread=only_unread,
         projection={"pid": True},
+        context_tags=_get_context_tags(user),
+        feed_id=feed_id,
     )
     post_ids: list[str] = [str(post["pid"]) for post in cursor if post.get("pid")]
     if not post_ids:
