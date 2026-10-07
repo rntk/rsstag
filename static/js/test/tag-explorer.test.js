@@ -300,6 +300,8 @@ describe('tag explorer context tree', () => {
     expect(sentence.querySelector('.tag-explorer__metadata b')).toBeNull();
     const details = sentence.querySelector('details');
     expect(details.open).toBe(false);
+    expect(details.parentElement).toBe(sentence.querySelector('.tag-explorer__metadata'));
+    expect(sentence.querySelector(':scope > .tag-explorer__item-tools')).toBeNull();
     expect(details.contains(sentence.querySelector('.tag-explorer__read-button'))).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     details.open = true;
@@ -310,6 +312,7 @@ describe('tag explorer context tree', () => {
     expect(sentence.querySelector('.tag-explorer__related-links script')).toBeNull();
     expect(sentence.querySelector('a[href^="javascript:"]')).toBeNull();
     const postDetails = document.querySelector('#tag-explorer-posts details');
+    expect(postDetails.parentElement.className).toBe('tag-explorer__metadata');
     postDetails.open = true;
     postDetails.dispatchEvent(new Event('toggle'));
     await settle();

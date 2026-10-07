@@ -403,7 +403,9 @@ document.addEventListener('DOMContentLoaded', () => {
           loadRelatedLinks(item, links);
         }
       });
-      card.append(link, renderMetadata(item, kind), excerpt, details);
+      const metadata = renderMetadata(item, kind);
+      metadata.append(details);
+      card.append(link, metadata, excerpt);
       panel.append(card);
       highlightMatches(excerpt, highlightRe);
     }

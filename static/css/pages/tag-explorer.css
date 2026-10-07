@@ -282,8 +282,7 @@ body.tag-explorer-page {
 .tag-explorer__card.is-read .tag-explorer__title {
   font-weight: 400;
 }
-.tag-explorer__metadata,
-.tag-explorer__item-tools {
+.tag-explorer__metadata {
   background: var(--rsst-page-bg, #eef0eb);
   border: 1px solid var(--rsst-border, #cdd2c9);
   border-color: color-mix(
@@ -310,12 +309,16 @@ body.tag-explorer-page {
 }
 .tag-explorer__item-tools summary {
   cursor: pointer;
-  padding: 7px 10px;
-  color: var(--rsst-on-surface-variant, #66736c);
-  font-size: 0.78rem;
+  color: inherit;
+  font: inherit;
 }
 .tag-explorer__item-tools {
-  margin-top: 8px;
+  min-width: 0;
+  margin-left: auto;
+}
+.tag-explorer__item-tools[open] {
+  flex-basis: 100%;
+  margin-left: 0;
 }
 .tag-explorer__item-tools-body {
   display: grid;
@@ -334,7 +337,7 @@ body.tag-explorer-page {
   overflow: hidden;
 }
 .tag-explorer__item-tools-scroll {
-  padding: 0 10px 10px;
+  padding: 0 0 4px;
   max-height: min(45vh, 360px);
   overflow: auto;
   overscroll-behavior: contain;
