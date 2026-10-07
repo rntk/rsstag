@@ -510,6 +510,25 @@
   text-decoration: none;
 }
 
+.posts_tab_tools {
+  display: flex;
+  gap: 1em;
+  margin-bottom: 1em;
+
+  span {
+    display: inline-block;
+    cursor: pointer;
+  }
+
+  .posts_tab_tools__read span {
+    border-bottom: 1px solid red;
+  }
+
+  .posts_tab_tools__show span {
+    border-bottom: 1px solid var(--my-green);
+  }
+}
+
 
 .tag_sentences_link,
 .get_tag_sunburst {

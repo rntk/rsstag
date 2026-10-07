@@ -6,6 +6,8 @@ import PostsWordsCloud from './posts-wordscloud.js';
 import { PostsTags } from './post-tags.js';
 import PostChatS from './post-chat.js';
 import PostSnippets from './post-snippets.js';
+import ReadAllButton from './readall-button.js';
+import ShowAllButton from './showall-button.js';
 
 const TAB_POSTS = 'posts';
 const TAB_SNIPPETS = 'snippets';
@@ -86,7 +88,19 @@ export class PostTabs extends React.Component {
 
     let el = null;
     if (this.state.current === TAB_POSTS) {
-      el = PostsListS(this.state.posts, this.props.ES);
+      el = (
+        <React.Fragment>
+          <div className="posts_tab_tools">
+            <span className="posts_tab_tools__read">
+              <ReadAllButton ES={this.props.ES} posts={this.state.posts} />
+            </span>
+            <span className="posts_tab_tools__show">
+              <ShowAllButton ES={this.props.ES} posts={this.state.posts} />
+            </span>
+          </div>
+          {PostsListS(this.state.posts, this.props.ES)}
+        </React.Fragment>
+      );
     }
     if (this.state.current === TAB_SNIPPETS) {
       el = <PostSnippets url={this.props.snippetsUrl} />;

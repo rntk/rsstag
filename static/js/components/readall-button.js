@@ -23,6 +23,10 @@ export default class ReadAllButton extends React.Component {
   componentDidMount() {
     this.props.ES.bind(this.props.ES.POSTS_UPDATED, this.updatePosts);
     //subscribe
+    // Mounted after posts loaded (e.g. on returning to the Posts tab).
+    if (this.props.posts) {
+      this.updatePosts(this.props.posts);
+    }
   }
 
   componentWillUnmount() {

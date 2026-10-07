@@ -705,8 +705,6 @@ export function initApp() {
       'posts_page',
       <PostTabs ES={window.EVSYS} words_from_hash={hash} snippetsUrl={window.snippets_url} />
     );
-    renderToRoot('read_all', <ReadAllButton ES={window.EVSYS} />);
-    renderToRoot('show_all', <ShowAllButton ES={window.EVSYS} />);
     renderToRoot('posts_stat', <PostsNumbers ES={window.EVSYS} />);
     posts_storage.start();
   } else if (pageType === 'tag-info') {
