@@ -2,6 +2,73 @@
    Tag Feeds Page Styles (tag-feeds.html)
    ============================================================================ */
 
+.tag-view-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--rsst-border);
+}
+
+.tag-view-tabs__tab {
+  padding: 0.65rem 1rem;
+  border-bottom: 2px solid transparent;
+  color: var(--rsst-ink-secondary);
+  font-size: 0.875rem;
+  text-decoration: none;
+}
+
+.tag-view-tabs__tab:hover,
+.tag-view-tabs__tab:focus-visible {
+  background: var(--rsst-surface-sunken);
+  color: var(--rsst-ink);
+}
+
+.tag-view-tabs__tab[aria-current="page"] {
+  border-bottom-color: var(--rsst-ink);
+  color: var(--rsst-ink);
+  font-weight: 700;
+}
+
+.tag-feed-cloud-page .tag-feed-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 1rem 1.5rem;
+}
+
+.tag-feed-cloud-page .tag-feed-cloud-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4em;
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 0.35rem 0.65rem;
+  border: 1px solid var(--rsst-border);
+  border-radius: 6px;
+  color: var(--rsst-ink);
+  overflow-wrap: anywhere;
+  text-decoration: none;
+  transition: border-color 150ms ease;
+}
+
+.tag-feed-cloud-page .tag-feed-cloud-item:hover,
+.tag-feed-cloud-page .tag-feed-cloud-item:focus-visible {
+  border-color: var(--rsst-ink-tertiary);
+  text-decoration: underline;
+}
+
+.tag-feed-cloud-page .tag-feed-cloud-count {
+  font-size: 0.75rem;
+  color: var(--rsst-ink-secondary);
+}
+
+.tag-feed-cloud-page .tag-feed-cloud-size-1 { font-size: 1rem; }
+.tag-feed-cloud-page .tag-feed-cloud-size-2 { font-size: 1.25rem; }
+.tag-feed-cloud-page .tag-feed-cloud-size-3 { font-size: 1.5rem; }
+.tag-feed-cloud-page .tag-feed-cloud-size-4 { font-size: 1.875rem; }
+.tag-feed-cloud-page .tag-feed-cloud-size-5 { font-size: 2.25rem; }
+
 .tag-feeds-page {
   .table-container {
     overflow: auto;
@@ -209,4 +276,3 @@
     }
   }
 }
-

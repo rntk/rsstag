@@ -133,6 +133,8 @@ test('resolvePageType handles expected routes and fallback', () => {
     ['/prefixes/prefix/demo', 'tree'],
     ['/group/category', 'group-category'],
     ['/group/tag/demo', 'tags-group'],
+    ['/tag/demo/feeds', 'tag-feed-cloud'],
+    ['/tag/demo', 'posts-list'],
     ['/group/bi-grams/demo', 'unknown'],
     ['/group/bi-grams-dyn/demo', 'unknown'],
     ['/feed', 'posts-list'],

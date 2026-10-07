@@ -1,0 +1,4 @@
+<nav class="tag-view-tabs" aria-label="Tag views">
+    <a href="{{ tag_url|e }}" class="tag-view-tabs__tab"{% if tag_view == 'posts' %} aria-current="page"{% endif %}>Posts</a>
+    <a href="{{ tag_feeds_url|e }}" class="tag-view-tabs__tab"{% if tag_view == 'feeds' %} aria-current="page"{% endif %}>Feeds / sources</a>
+</nav>

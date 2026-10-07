@@ -830,6 +830,9 @@ def on_get_tag_page(
                 endpoint="on_chain_get", params={"tags": tag_data["tag"]}
             ),
             context_tree_link="/tag-context-tree/{}".format(quote(tag_data["tag"])),
+            tag_feeds_link=app.routes.get_url_by_endpoint(
+                "on_tag_feeds_get", {"quoted_tag": tag_data["tag"]}
+            ),
             user_settings=user["settings"],
             provider=user.get("provider", ""),
         ),

@@ -52,6 +52,7 @@ import { initTopicsPage } from '../topics-list.js';
 import TopicsMindmap from '../components/topics-mindmap.js';
 import { initTopicHierarchyCanvasPage, renderTopicsHierarchy } from '../topics-hierarchy.js';
 import { initTagInfoEmptySections } from '../libs/tag-info-sections.js';
+import { initTagFeedCloudSection } from '../libs/tag-feed-cloud-section.js';
 import {
   FeedCanvas,
   setupGlobalTools as setupCanvasGlobalTools,
@@ -414,6 +415,9 @@ export function resolvePageType(path) {
   if (path === '/tags/canvas') {
     return 'tags-canvas';
   }
+  if (/^\/tag\/[^/]+\/feeds$/.test(path)) {
+    return 'tag-feed-cloud';
+  }
   if (
     /\/group\/(tag|hottag|tags-categories)\/.*/.test(path) ||
     /\/group\/(rake-dyn|yake-dyn)\/.*/.test(path) ||
@@ -705,6 +709,7 @@ export function initApp() {
   } else if (pageType === 'tag-info') {
     let tag = window.initial_tag;
     initTagAnthologyAction();
+    initTagFeedCloudSection();
     tagWithContextInfoPage(tag);
     tagNoContextInfoPage(tag);
     initTagInfoEmptySections();

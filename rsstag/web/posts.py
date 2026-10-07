@@ -4,7 +4,7 @@ import re
 import gzip
 import logging
 from collections import defaultdict
-from urllib.parse import unquote_plus, unquote, quote_plus
+from urllib.parse import unquote_plus, unquote, quote_plus, urlencode
 import requests  # Add requests import
 
 from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator, Optional
@@ -942,6 +942,13 @@ def on_tag_get(
     if not current_tag:
         return app.on_error(user, request, NotFound())
 
+    feed_id: Optional[str] = request.args.get("feed")
+    current_feed: Optional[dict] = None
+    if feed_id is not None:
+        current_feed = app.feeds.get_by_feed_id(user["sid"], feed_id)
+        if not current_feed:
+            return app.on_error(user, request, NotFound())
+
     projection = {"_id": False, "content.content": False}
     if user["settings"]["only_unread"]:
         only_unread = user["settings"]["only_unread"]
@@ -951,11 +958,12 @@ def on_tag_get(
     context_tags = _get_context_tags(user)
 
     db_posts_c = app.posts.get_by_tags(
-        user["sid"], [tag], only_unread, projection, context_tags=context_tags
+        user["sid"], [tag], only_unread, projection,
+        context_tags=context_tags, feed_id=feed_id,
     )
     db_posts = list(db_posts_c)
 
-    if user["settings"]["similar_posts"]:
+    if user["settings"]["similar_posts"] and feed_id is None:
         clusters = app.posts.get_clusters(db_posts)
         cl_posts = app.posts.get_by_clusters(
             user["sid"],
@@ -993,12 +1001,71 @@ def on_tag_get(
             posts=posts,
             tag=tag,
             group="tag",
+            tag_url=app.routes.get_url_by_endpoint("on_tag_get", {"quoted_tag": tag}),
+            tag_view="posts",
+            tag_feeds_url=app.routes.get_url_by_endpoint(
+                "on_tag_feeds_get", {"quoted_tag": tag}
+            ),
+            selected_feed_title=current_feed.get("title", feed_id) if current_feed else None,
             words=current_tag["words"],
             user_settings=user["settings"],
             provider=user.get("provider", ""),
         ),
         mimetype="text/html",
     )
+
+
+def on_tag_feeds_get(
+    app: "RSSTagApplication", user: dict, request: Request, quoted_tag: str
+) -> Response:
+    """Show the sources containing the current tag as a weighted cloud."""
+    tag: str = unquote(quoted_tag)
+    try:
+        if not app.tags.get_by_tag(user["sid"], tag):
+            return app.on_error(user, request, NotFound())
+        counts: dict[str, int] = {
+            row["_id"]: row["count"]
+            for row in app.posts.get_tag_feed_counts(
+                user["sid"], tag, user["settings"].get("only_unread") or None,
+                context_tags=_get_context_tags(user),
+            )
+        }
+        tag_url: str = app.routes.get_url_by_endpoint("on_tag_get", {"quoted_tag": tag})
+        feeds: list[dict[str, Any]] = [
+            {
+                "title": feed.get("title") or feed["feed_id"],
+                "count": counts[feed["feed_id"]],
+                "url": tag_url + "?" + urlencode({"feed": feed["feed_id"]}),
+            }
+            for feed in app.feeds.get_by_feed_ids(
+                user["sid"], list(counts), {"_id": False, "feed_id": True, "title": True}
+            )
+        ]
+        feeds.sort(key=lambda feed: (-feed["count"], feed["title"].casefold()))
+        max_count: int = max((feed["count"] for feed in feeds), default=1)
+        for feed in feeds:
+            feed["size"] = min(5, max(1, round(5 * feed["count"] / max_count)))
+        template_name: str = (
+            "tag-feed-cloud-content.html"
+            if request.args.get("view") == "section"
+            else "tag-feed-cloud.html"
+        )
+        page: Template = app.template_env.get_template(template_name)
+        return Response(
+            page.render(
+                tag=tag, feeds=feeds, tag_url=tag_url,
+                tag_view="feeds",
+                tag_feeds_url=app.routes.get_url_by_endpoint(
+                    "on_tag_feeds_get", {"quoted_tag": tag}
+                ),
+                posts_count=sum(feed["count"] for feed in feeds),
+                user_settings=user["settings"], provider=user.get("provider", ""),
+            ),
+            mimetype="text/html",
+        )
+    except Exception:
+        logging.getLogger(__name__).exception("Failed to load tag feed cloud")
+        return app.on_error(user, request, InternalServerError("Unable to load feeds for this tag."))
 
 
 def on_feed_get(

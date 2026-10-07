@@ -22,6 +22,9 @@
                 <div class="flex items-center justify-between mb-6">
                     <div class="flex items-center space-x-4">
                         <h2 class="text-2xl font-headline font-bold text-primary truncate max-w-2xl">{{tag}}</h2>
+                        {% if selected_feed_title %}
+                        <span class="text-sm text-on-surface-variant">{{ selected_feed_title|e }}</span>
+                        {% endif %}
                         {% if entity_snippets_url %}
                         <a href="/tag-concordance/{{ tag|url_encode|replace('+', '%20') }}" class="text-sm text-primary hover:text-primary/80 font-medium">Tag context</a>
                     <a href="/tag-context-wall/{{ tag|url_encode|replace('+', '%20') }}">Context wall</a>
@@ -33,6 +36,9 @@
                         <span class="material-symbols-outlined">keyboard</span>
                     </button>
                 </div>
+                {% if tag_feeds_url %}
+                {% include "tag-view-tabs.html" %}
+                {% endif %}
                 <div id="posts_page" class="space-y-6"></div>
                 <div id="posts_page1" class="mt-6"></div>
             </div>

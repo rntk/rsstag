@@ -150,6 +150,11 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/tag/<string:quoted_tag>/feeds",
+                "endpoint": "on_tag_feeds_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/entity/<string:quoted_tag>",
                 "endpoint": "on_entity_get",
                 "methods": ["GET"],

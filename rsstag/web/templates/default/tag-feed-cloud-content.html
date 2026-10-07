@@ -1,0 +1,16 @@
+<p class="text-sm text-on-surface-variant">
+    {{ feeds|length }} feeds / sources · {{ posts_count }} matching posts{% if user_settings.only_unread %} · Unread only{% endif %}.
+    Larger titles have more matching posts. Select a source to read its posts mentioning this tag.
+</p>
+{% if feeds %}
+<nav class="tag-feed-cloud" aria-label="Feeds mentioning {{ tag|e }}">
+    {% for feed in feeds %}
+    <a href="{{ feed.url|e }}" class="tag-feed-cloud-item tag-feed-cloud-size-{{ feed.size }}" title="{{ feed.count }} matching posts">
+        <span>{{ feed.title|e }}</span>
+        <span class="tag-feed-cloud-count">{{ feed.count }}</span>
+    </a>
+    {% endfor %}
+</nav>
+{% else %}
+<p class="text-on-surface-variant">No feeds / sources mention this tag with the current filters.</p>
+{% endif %}

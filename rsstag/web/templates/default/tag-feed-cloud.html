@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Feeds / sources | {{ tag|e }}</title>
+    {% include "head-data.html" %}
+</head>
+<body class="font-body selection:bg-secondary-container bg-background tag-feed-cloud-page">
+    {% from 'site-header.html' import site_header with context %}
+    {{ site_header(active='tags', show_context_filter=True) }}
+    <main class="max-w-[1600px] mx-auto p-4 md:p-6 space-y-6">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+            <h1 class="text-3xl font-headline font-extrabold text-primary">Feeds / sources for “{{ tag|e }}”</h1>
+        </div>
+        {% include "tag-view-tabs.html" %}
+        {% include "tag-feed-cloud-content.html" %}
+    </main>
+    <div id="progressbar"></div>
+</body>
+</html>

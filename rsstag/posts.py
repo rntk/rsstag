@@ -103,6 +103,7 @@ class RssTagPosts:
         only_unread: Optional[bool] = None,
         projection: Optional[dict] = None,
         context_tags: Optional[list] = None,
+        feed_id: Optional[str] = None,
     ) -> Iterator[dict]:
         """
         Get posts matching tags.
@@ -121,6 +122,8 @@ class RssTagPosts:
                     all_tags.append(ct)
 
         query = {"owner": owner, "tags": {"$all": all_tags}}
+        if feed_id is not None:
+            query["feed_id"] = feed_id
         if only_unread is not None:
             query["read"] = not only_unread
         sort_data = [("feed_id", DESCENDING), ("unix_date", DESCENDING)]
@@ -129,6 +132,25 @@ class RssTagPosts:
             self._db.posts.find(query, projection=projection)
             .allow_disk_use(True)
             .sort(sort_data)
+        )
+
+    def get_tag_feed_counts(
+        self,
+        owner: str,
+        tag: str,
+        only_unread: Optional[bool] = None,
+        context_tags: Optional[list[str]] = None,
+    ) -> Iterator[dict]:
+        """Count matching posts per feed without fetching post content."""
+        tags: list[str] = list(dict.fromkeys([tag] + list(context_tags or [])))
+        query: dict = {"owner": owner, "tags": {"$all": tags}}
+        if only_unread is not None:
+            query["read"] = not only_unread
+        return self._db.posts.aggregate(
+            [
+                {"$match": query},
+                {"$group": {"_id": "$feed_id", "count": {"$sum": 1}}},
+            ]
         )
 
     def get_recent_by_tags(

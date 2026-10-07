@@ -60,6 +60,19 @@
                 </div>
                 <p>Load a view to inspect related terms, topics, entities, and usage patterns.</p>
             </header>
+            <section class="tag-info-section tag-feed-cloud-page">
+                <div class="tag-info-section__head">
+                    <h3 class="tag-info-section__title">Feeds / sources</h3>
+                    <a class="tag-info-link" href="{{ tag_feeds_link|e }}">Open page</a>
+                    <span class="tag-info-section__loader">
+                        <button id="load_tag_feeds" type="button" class="tag-info-control"
+                            data-url="{{ tag_feeds_link|e }}?view=section"
+                            aria-controls="tag_feeds_cloud" aria-expanded="false">Load feeds / sources</button>
+                        <span id="tag_feeds_error" class="tag-info-control__error" role="alert"></span>
+                    </span>
+                </div>
+                <div id="tag_feeds_cloud" class="tag_info_block space-y-6"></div>
+            </section>
             <section class="tag-info-section">
                 <div class="tag-info-section__head">
                     <h3 class="tag-info-section__title">Word2Vec</h3>
