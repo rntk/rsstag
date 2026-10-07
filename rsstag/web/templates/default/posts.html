@@ -72,6 +72,7 @@
         window.group_title = '{{tag}}';
         window.words = {{ words | json }};
         window.snippets_url = {{ (snippets_url or none) | tojson }};
+        window.topics_tag = {{ (topics_tag or none) | tojson }};
         window.rss_settings = {{ user_settings | json }};
         
         document.getElementById('help_trigger')?.addEventListener('click', (e) => {

@@ -379,3 +379,16 @@ test('source imports PostChatS', () => {
   const src = readSource();
   assert.ok(/import PostChatS from/.test(src), 'should import PostChatS');
 });
+
+test('source defines a Topics tab available on every posts page', () => {
+  const src = readSource();
+  assert.ok(/TAB_TOPICS\s*=\s*['"]topics['"]/.test(src), 'should define TAB_TOPICS = "topics"');
+  assert.ok(
+    /this\.tabs\.set\(TAB_TOPICS, 'Topics'\);/.test(src),
+    'Topics tab should be registered unconditionally'
+  );
+  assert.ok(
+    /<PostTopics postIds=\{pids\} tag=\{this\.props\.topicsTag\} \/>/.test(src),
+    'Topics tab should pass page post ids and tag filter'
+  );
+});

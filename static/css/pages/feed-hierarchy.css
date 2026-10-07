@@ -697,3 +697,18 @@
 .tag-context__bubble--weak {
   stroke-opacity: 0.35;
 }
+
+/* Topics tab on posts pages: the same tree, in page flow instead of fixed. */
+.post-topics {
+  .feed-hierarchy__levels {
+    position: static;
+    width: max-content;
+    margin-bottom: 16px;
+    box-shadow: none;
+  }
+
+  .post-topics__scroller {
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+}

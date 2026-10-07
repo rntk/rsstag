@@ -235,6 +235,11 @@ class RSSTagRoutes:
                 "methods": ["POST"],
             },
             {
+                "url": "/api/posts-topics",
+                "endpoint": "on_posts_topics_post",
+                "methods": ["POST"],
+            },
+            {
                 "url": "/post-grouped",
                 "endpoint": "on_post_grouped_get",
                 "methods": ["GET"],

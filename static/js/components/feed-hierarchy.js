@@ -801,14 +801,27 @@ export function renderLevelButtons(container, maxLevel, selectedLevel, onSelect)
 }
 
 class FeedHierarchy {
-  constructor() {
+  /**
+   * Defaults read the /hierarchy page globals; pass options to embed the tree
+   * elsewhere (e.g. the posts page Topics tab).
+   *
+   * @param {{topics?: Topic[], onlyUnread?: boolean, tagWords?: string[],
+   *   levelsEl?: HTMLElement, treeEl?: HTMLElement, embedded?: boolean}} [options]
+   */
+  constructor(options = {}) {
+    this.embedded = Boolean(options.embedded);
     /** @type {Topic[]} */
-    this.topics = Array.isArray(window.hierarchyTopics) ? window.hierarchyTopics : [];
+    this.topics = Array.isArray(options.topics)
+      ? options.topics
+      : Array.isArray(window.hierarchyTopics)
+        ? window.hierarchyTopics
+        : [];
     this.wordHierarchy =
+      !this.embedded &&
       document.getElementById('feed_hierarchy')?.dataset.hierarchyKind === 'words';
-    this.onlyUnread = Boolean(window.hierarchyOnlyUnread);
-    this.levelsEl = document.getElementById('feed_hierarchy_levels');
-    this.treeEl = document.getElementById('feed_hierarchy_tree');
+    this.onlyUnread = Boolean(options.onlyUnread ?? window.hierarchyOnlyUnread);
+    this.levelsEl = options.levelsEl || document.getElementById('feed_hierarchy_levels');
+    this.treeEl = options.treeEl || document.getElementById('feed_hierarchy_tree');
     /** @type {Topic[]} Topics actually rendered: read-only topics are hidden. */
     this.visibleTopics = this.onlyUnread ? filterUnreadTopics(this.topics) : this.topics;
     this.roots = buildTopicTree(this.visibleTopics, 0);
@@ -824,24 +837,42 @@ class FeedHierarchy {
     this.summaryDialog = null;
     this.originalDialog = null;
     /** @type {RegExp|null} */
-    this.tagHighlightRe = buildTagHighlightRe(getTagHighlightWords());
-    this.pageMeta = new PageMeta();
+    this.tagHighlightRe = buildTagHighlightRe(
+      Array.isArray(options.tagWords) ? options.tagWords : getTagHighlightWords()
+    );
+    this.pageMeta = this.embedded ? null : new PageMeta();
     this.topicTags = new TopicTagsDialog();
+    /** @param {PointerEvent} event */
+    this.onWindowPointerDown = (event) => {
+      if (!this.contextMenu?.contains(event.target)) this.closeContextMenu();
+    };
   }
 
   init() {
     if (!this.treeEl) return;
-    ['hierarchy_switch', 'ngram_chart_switch'].forEach((id) => {
-      const switchLink = document.getElementById(id);
-      if (switchLink) switchLink.search = window.location.search;
-    });
-    this.updatePageMeta();
+    if (!this.embedded) {
+      ['hierarchy_switch', 'ngram_chart_switch'].forEach((id) => {
+        const switchLink = document.getElementById(id);
+        if (switchLink) switchLink.search = window.location.search;
+      });
+      this.updatePageMeta();
+    }
     this.renderLevels();
     this.renderTree();
     this.createSummaryDialog();
-    window.addEventListener('pointerdown', (event) => {
-      if (!this.contextMenu?.contains(event.target)) this.closeContextMenu();
-    });
+    window.addEventListener('pointerdown', this.onWindowPointerDown);
+  }
+
+  /** Remove page-level listeners and dialogs (for embedded, unmountable use). */
+  destroy() {
+    window.removeEventListener('pointerdown', this.onWindowPointerDown);
+    this.closeContextMenu();
+    this.summaryDialog?.remove();
+    this.originalDialog?.remove();
+    this.topicTags.dialog?.remove();
+    this.topicTags.dialog = null;
+    this.summaryDialog = null;
+    this.originalDialog = null;
   }
 
   renderLevels() {
@@ -864,6 +895,7 @@ class FeedHierarchy {
    * @returns {void}
    */
   updatePageMeta() {
+    if (!this.pageMeta) return;
     const counts = countTopicsMeta(this.topics);
     this.pageMeta.render([
       { label: this.wordHierarchy ? 'word chains' : 'topics', value: counts.topics },

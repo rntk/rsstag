@@ -703,7 +703,12 @@ export function initApp() {
     const hash = window.location.hash;
     renderToRoot(
       'posts_page',
-      <PostTabs ES={window.EVSYS} words_from_hash={hash} snippetsUrl={window.snippets_url} />
+      <PostTabs
+        ES={window.EVSYS}
+        words_from_hash={hash}
+        snippetsUrl={window.snippets_url}
+        topicsTag={window.topics_tag}
+      />
     );
     renderToRoot('posts_stat', <PostsNumbers ES={window.EVSYS} />);
     posts_storage.start();

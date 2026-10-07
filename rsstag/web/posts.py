@@ -1005,6 +1005,7 @@ def on_tag_get(
             snippets_url=app.routes.get_url_by_endpoint(
                 "on_tag_grouped_snippets_get", {"tag": tag}
             ) + ("?" + urlencode({"feed": feed_id}) if feed_id is not None else ""),
+            topics_tag=tag,
             tag_view="posts",
             tag_feeds_url=app.routes.get_url_by_endpoint(
                 "on_tag_feeds_get", {"quoted_tag": tag}
@@ -2531,6 +2532,107 @@ def on_topic_tags_post(
     )
 
 
+def _tag_form_patterns(
+    app: "RSSTagApplication", owner: str, tag: str, only_unread: Optional[bool]
+) -> list[re.Pattern[str]]:
+    """One word-boundary pattern per tag word, matching any of its surface forms."""
+    patterns: list[re.Pattern[str]] = []
+    for part in tag.split():
+        forms: list[str] = sorted(
+            _tag_highlight_words(app, owner, part, only_unread=only_unread),
+            key=len,
+            reverse=True,
+        )
+        if forms:
+            alternatives: str = "|".join(re.escape(form) for form in forms)
+            patterns.append(re.compile(rf"(?<!\w)(?:{alternatives})(?!\w)", re.I))
+    return patterns
+
+
+def _filter_topics_by_tag(
+    topics: list[dict[str, Any]], patterns: list[re.Pattern[str]]
+) -> list[dict[str, Any]]:
+    """Keep only the posts of each topic where every tag word is mentioned.
+
+    A post counts when its topic name or its sentences of that topic mention
+    the tag; topics left without such posts are dropped.
+    """
+    if not patterns:
+        return topics
+    result: list[dict[str, Any]] = []
+    for topic in topics:
+        sources: list[dict[str, Any]] = [
+            source
+            for source in topic["sources"]
+            if all(
+                pattern.search(topic["name"])
+                or any(pattern.search(s["text"]) for s in source["sentences"])
+                for pattern in patterns
+            )
+        ]
+        if not sources:
+            continue
+        sentences: list[str] = [s["text"] for src in sources for s in src["sentences"]]
+        result.append(
+            {
+                **topic,
+                "posts_count": len(sources),
+                "sentences_count": len(sentences),
+                "sentences": sentences,
+                "sources": sources,
+            }
+        )
+    return result
+
+
+def _json_response(payload: dict[str, Any], status: int = 200) -> Response:
+    return Response(json.dumps(payload, default=str), mimetype="application/json", status=status)
+
+
+def on_posts_topics_post(
+    app: "RSSTagApplication", user: dict, request: Request
+) -> Response:
+    """Topic hierarchy of the posts listed on a posts page (the Topics tab).
+
+    Body: ``{"post_ids": [...], "tag": "..."}``. With a tag (tag or entity
+    pages), only topics whose name or sentences mention it are returned.
+    """
+    try:
+        body: dict[str, Any] = request.get_json(force=True, silent=False) or {}
+    except Exception as exc:
+        logging.warning("Invalid JSON for posts topics. Cause: %s", exc)
+        return _json_response({"error": "Invalid JSON"}, 400)
+    post_ids: Any = body.get("post_ids")
+    tag: str = str(body.get("tag") or "").strip()
+    if not isinstance(post_ids, list):
+        return _json_response({"error": "post_ids must be a list"}, 400)
+
+    only_unread: Optional[bool] = user["settings"].get("only_unread") or None
+    projection: dict[str, bool] = {
+        "_id": False, "pid": True, "url": True, "content.title": True, "feed_id": True,
+    }
+    try:
+        posts: list[dict[str, Any]] = (
+            list(app.posts.get_by_pids(user["sid"], post_ids, projection)) if post_ids else []
+        )
+        topics: list[dict[str, Any]] = _build_hierarchy_topics(
+            app, user, posts, only_unread=bool(only_unread)
+        )
+        tag_words: list[str] = []
+        if tag:
+            topics = _filter_topics_by_tag(
+                topics, _tag_form_patterns(app, user["sid"], tag, only_unread)
+            )
+            tag_words = _tag_highlight_words(app, user["sid"], tag, only_unread=only_unread)
+    except Exception as exc:
+        logging.exception("Unable to build topics for %d posts and tag %r: %s", len(post_ids), tag, exc)
+        return _json_response({"error": "Unable to load topics"}, 500)
+
+    return _json_response(
+        {"data": {"topics": topics, "tag_words": tag_words, "only_unread": bool(only_unread)}}
+    )
+
+
 # TODO: delete or change or something other
 def on_get_posts_with_tags(
     app: "RSSTagApplication", user: dict, s_tags: str
@@ -2803,6 +2905,7 @@ def on_entity_get(
             snippets_url=app.routes.get_url_by_endpoint(
                 "on_entity_grouped_snippets_get", {"quoted_tag": tag}
             ) + "?" + urlencode({"window": window}),
+            topics_tag=tag,
             user_settings=user["settings"],
             provider=user.get("provider", ""),
         ),

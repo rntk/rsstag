@@ -6,11 +6,13 @@ import PostsWordsCloud from './posts-wordscloud.js';
 import { PostsTags } from './post-tags.js';
 import PostChatS from './post-chat.js';
 import PostSnippets from './post-snippets.js';
+import PostTopics from './post-topics.js';
 import ReadAllButton from './readall-button.js';
 import ShowAllButton from './showall-button.js';
 
 const TAB_POSTS = 'posts';
 const TAB_SNIPPETS = 'snippets';
+const TAB_TOPICS = 'topics';
 const TAB_WORDSTREE = 'wordstree';
 const TAB_WORDSCLOUD = 'wordscloud';
 const TAB_TAGS = 'tags';
@@ -24,6 +26,7 @@ export class PostTabs extends React.Component {
     if (props.snippetsUrl) {
       this.tabs.set(TAB_SNIPPETS, 'Snippets');
     }
+    this.tabs.set(TAB_TOPICS, 'Topics');
     this.tabs.set(TAB_TAGS, 'Tags');
     this.tabs.set(TAB_WORDSTREE, 'Wordtree');
     this.tabs.set(TAB_WORDSCLOUD, 'Wordcloud');
@@ -104,6 +107,9 @@ export class PostTabs extends React.Component {
     }
     if (this.state.current === TAB_SNIPPETS) {
       el = <PostSnippets url={this.props.snippetsUrl} />;
+    }
+    if (this.state.current === TAB_TOPICS) {
+      el = <PostTopics postIds={pids} tag={this.props.topicsTag} />;
     }
     if (this.state.current === TAB_TAGS) {
       el = PostsTags(this.state.posts);
