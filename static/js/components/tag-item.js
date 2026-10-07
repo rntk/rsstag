@@ -13,7 +13,7 @@ import {
 export default class TagItem extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { tag: props.tag, saving: false, error: '' };
+    this.state = { tag: props.tag, saving: false, error: '', toolsExpanded: false };
     this.togglePin = this.toggleUserRank.bind(this, 'pin');
     this.toggleHide = this.toggleUserRank.bind(this, 'hide');
   }
@@ -157,16 +157,21 @@ export default class TagItem extends React.Component {
           <span className="cloud_item_count">({this.state.tag.count})</span>
           {this.renderScore()}
           {this.renderPinMarker()}
+          <button
+            type="button"
+            className="cloud_item_tools_toggle"
+            aria-label={`Actions for ${this.state.tag.tag}`}
+            aria-expanded={this.state.toolsExpanded}
+            onClick={() => this.setState((prev) => ({ toolsExpanded: !prev.toolsExpanded }))}
+          >
+            ...
+          </button>
         </div>
-        {sub_tags.length > 0 || words ? (
-          <div className="cloud_item_info">
-            {sub_tags}
-            {sub_tags.length ? sents_link : null}
-            {sub_tags.length ? ctx_link : null}
-            {words}
-          </div>
-        ) : null}
-        <div className="cloud_item_tools">
+        {words ? <div className="cloud_item_info">{words}</div> : null}
+        <div className="cloud_item_tools" hidden={!this.state.toolsExpanded}>
+          {sub_tags}
+          {sub_tags.length ? sents_link : null}
+          {sub_tags.length ? ctx_link : null}
           {supportsUserRank(this.state.tag) ? this.renderUserRankControls() : null}
           <a href={'/tag-hierarchy?tag=' + encodeURIComponent(this.state.tag.tag)}>
             word hierarchy

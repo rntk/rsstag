@@ -261,9 +261,12 @@ test('render joins words with comma', () => {
 // Info section conditional tests
 // ============================================================
 
-test('render conditionally shows info div', () => {
+test('render shows info div when words are present', () => {
   const src = readSource();
-  assert.ok(/sub_tags\.length\s*>\s*0/.test(src), 'should check sub_tags length for info display');
+  assert.ok(
+    /words\s*\?\s*<div className="cloud_item_info">\{words\}<\/div>/.test(src),
+    'should keep words visible independently of action links'
+  );
 });
 
 // ============================================================

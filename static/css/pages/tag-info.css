@@ -443,6 +443,20 @@
   font-size: 9pt;
 }
 
+.cloud_item_tools_toggle {
+  padding: 0.1em 0.4em;
+  border: 0;
+  background: none;
+  color: #008ec9;
+  font: inherit;
+  cursor: pointer;
+}
+
+.cloud_item_tools_toggle:hover,
+.cloud_item_tools_toggle[aria-expanded="true"] {
+  background-color: #e2e8f0;
+}
+
 .cloud_item_score {
   color: #64748b;
   font-size: 9pt;
@@ -508,6 +522,10 @@
   padding-top: 0.4em;
   border-top: 1px solid #e2e8f0;
   width: 100%;
+}
+
+.cloud_item_tools[hidden] {
+  display: none;
 }
 
 .cloud_item a {
@@ -794,4 +812,3 @@
 .link_in_form {
   margin: 0 0.8em;
 }
-
