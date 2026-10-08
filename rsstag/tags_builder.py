@@ -5,7 +5,6 @@ import logging
 from collections import defaultdict
 from typing import List
 from nltk.stem import SnowballStemmer
-from rsstag.stopwords import stopwords
 from functools import lru_cache
 
 
@@ -92,22 +91,3 @@ class TagsBuilder:
     def get_prepared_text(self) -> str:
         """Get text prepared for Doc2Vec"""
         return self._prepared_text
-
-    def prepare_text(self, text: str, ignore_stopwords: bool = False) -> None:
-        """Prepare text for Doc2vec"""
-        self._text = text
-        words = self.text2words(text)
-        self._prepared_text = ""
-        tags = []
-        self._stopwords = set(stopwords.words("english") + stopwords.words("russian"))
-        if ignore_stopwords:
-            for current_word in words:
-                tag = self.process_word(current_word)
-                if tag and tag not in self._stopwords:
-                    tags.append(tag)
-        else:
-            for current_word in words:
-                tag = self.process_word(current_word)
-                if tag:
-                    tags.append(tag)
-        self._prepared_text = " ".join(tags)

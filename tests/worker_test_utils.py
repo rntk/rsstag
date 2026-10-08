@@ -1,9 +1,6 @@
 import socket
 import tempfile
 import unittest
-from typing import Any, Dict
-from unittest.mock import MagicMock
-
 from configparser import ConfigParser
 from pymongo.database import Database
 
@@ -93,29 +90,6 @@ def create_worker_test_config(
     return config_path
 
 
-def create_mock_providers() -> Dict[str, MagicMock]:
-    """Return a provider mapping suitable for ProviderWorker tests."""
-    return {
-        "bazqux": MagicMock(name="bazqux_provider"),
-        "telegram": MagicMock(name="telegram_provider"),
-        "textfile": MagicMock(name="textfile_provider"),
-        "gmail": MagicMock(name="gmail_provider"),
-        "x": MagicMock(name="x_provider"),
-    }
-
-
-def seed_task(db: Database, task_type: int, user: str, **kwargs: Any) -> Dict[str, Any]:
-    """Insert a task document and return the stored row."""
-    task: Dict[str, Any] = {
-        "user": user,
-        "type": task_type,
-        "processing": 0,
-        "manual": kwargs.pop("manual", True),
-    }
-    task.update(kwargs)
-    inserted_id = db.tasks.insert_one(task).inserted_id
-    task["_id"] = inserted_id
-    return task
 
 
 class MongoWorkerTestCase(unittest.TestCase):

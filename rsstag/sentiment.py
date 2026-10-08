@@ -194,15 +194,3 @@ class WordNetAffectRuRom:
                 affects.add(self._all_by_id[_id]["affect"])
 
         return list(affects)
-
-    def get_info_by_word(self, word: str) -> List[dict]:
-        """Return all info about given word"""
-        info = []
-        if word in self._by_word:
-            for _id in self._by_word[word]:
-                info.append(self._all_by_id[_id])
-
-        return info
-
-    def verion(self):
-        return 2

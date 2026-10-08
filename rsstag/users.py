@@ -52,10 +52,6 @@ def check_telegram_password_prompt(sid: str) -> bool:
         return _tg_password_prompt.get(sid, False)
 
 
-def clear_telegram_password_prompt(sid: str) -> None:
-    with _tg_prompt_lock:
-        _tg_password_prompt.pop(sid, None)
-
 
 def request_telegram_code(sid: str) -> None:
     """Signal the frontend that TDLib is waiting for an auth code."""
@@ -166,9 +162,6 @@ class RssTagUsers:
 
     def get_by_username(self, username: str) -> Optional[dict]:
         return self._db.users.find_one({"username": username})
-
-    def get_by_provider_login(self, provider: str, login: str) -> Optional[dict]:
-        return self._db.users.find_one({f"providers.{provider}.login": login})
 
     def connected_providers(self, user: dict) -> list:
         """Return the set of providers/sources the user has connected.

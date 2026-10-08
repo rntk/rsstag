@@ -37,10 +37,6 @@ class GroqCom:
             self.__model = model
         self.__timeout = timeout
 
-    def estimate_tokens(self, text: str) -> int:
-        """Rough estimation: ~4 characters per token on average"""
-        return len(text) // 4
-
     def call(
         self,
         user_msgs: List[str],

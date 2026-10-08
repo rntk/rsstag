@@ -299,9 +299,6 @@ class ContextFilterManager:
             self._filters["subtopic"] = f
         return f
 
-    def set_filter(self, context_filter: ContextFilter) -> None:
-        self._filters[context_filter.filter_type] = context_filter
-
     def get_combined_query(self, owner: str) -> Dict[str, Any]:
         """Combine all active filters into a single MongoDB query.
 

@@ -92,30 +92,6 @@ class TagWorker(BaseWorker):
     def handle_tags_llm_rank(self, task: dict[str, Any]) -> bool:
         return tag_rank_llm.run(self._db, self._config, task["user"]["sid"])
 
-    def clear_user_data(self, user: dict) -> bool:
-        try:
-            self._db.posts.delete_many({"owner": user["sid"]})
-            self._db.feeds.delete_many({"owner": user["sid"]})
-            self._db.tags.delete_many({"owner": user["sid"]})
-            self._db.letters.delete_many({"owner": user["sid"]})
-            result = True
-        except Exception as e:
-            logging.error("Can`t clear user data %s. Info: %s", user["sid"], e)
-            result = False
-
-        return result
-
-    def clear_user_processed_data(self, user: dict) -> bool:
-        try:
-            self._db.tags.delete_many({"owner": user["sid"]})
-            self._db.letters.delete_many({"owner": user["sid"]})
-            result = True
-        except Exception as e:
-            logging.error("Can`t clear user processed data %s. Info: %s", user["sid"], e)
-            result = False
-
-        return result
-
     def make_tags(
         self,
         posts: List[dict],

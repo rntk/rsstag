@@ -264,13 +264,6 @@ def contrastive_keywords(
     return [str(vectors.features[i]) for i in top if scores[i] > 0 and vectors.features[i]]
 
 
-def centroid_similarity(clusters: Sequence[Cluster]) -> np.ndarray:
-    """Pairwise cosine between cluster centroids (small inputs only)."""
-    if not clusters:
-        return np.zeros((0, 0))
-    matrix: np.ndarray = np.vstack([c.centroid for c in clusters])
-    return matrix @ matrix.T
-
 
 def nearest_clusters(
     clusters: Sequence[Cluster], per_cluster: int

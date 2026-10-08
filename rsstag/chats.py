@@ -48,31 +48,6 @@ class RssTagChats:
             self._log.error("Error getting chat %s: %s", chat_id, e)
             return None
 
-    def list_chats(self, owner: str, limit: int = 50, skip: int = 0) -> list:
-        try:
-            cursor = (
-                self._db.chats.find(
-                    {"owner": owner},
-                    projection={"_id": 1, "title": 1, "updated_at": 1, "created_at": 1, "messages": {"$slice": 0}},
-                )
-                .sort("updated_at", DESCENDING)
-                .skip(skip)
-                .limit(limit)
-            )
-            results = []
-            for doc in cursor:
-                results.append({
-                    "_id": str(doc["_id"]),
-                    "title": doc.get("title", ""),
-                    "updated_at": doc.get("updated_at", 0),
-                    "created_at": doc.get("created_at", 0),
-                    "message_count": 0,
-                })
-            return results
-        except Exception as e:
-            self._log.error("Error listing chats: %s", e)
-            return []
-
     def list_chats_with_count(self, owner: str, limit: int = 50, skip: int = 0) -> list:
         try:
             pipeline = [

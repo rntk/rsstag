@@ -116,18 +116,6 @@ class GmailProvider:
                 logging.error(f"Error refreshing token: {e}")
                 return None
 
-    async def fetch_email_content(self, session, url, headers):
-        try:
-            async with session.get(url, headers=headers) as resp:
-                if resp.status == 200:
-                    return await resp.json()
-                else:
-                    logging.error(f"Failed to fetch email content: {resp.status}")
-                    return None
-        except Exception as e:
-            logging.error(f"Error fetching email content: {e}")
-            return None
-
     async def make_authenticated_request(
         self, session, method, url, user, max_retries=5, **kwargs
     ):
@@ -445,15 +433,6 @@ class GmailProvider:
         # Return whether token was refreshed as part of the validation
         return result
 
-    def refresh_user_token(self, user: dict) -> Optional[str]:
-        """Refresh user token synchronously - for use by the application"""
-
-        async def main():
-            return await self.refresh_access_token(user)
-
-        loop = asyncio.get_event_loop()
-        return loop.run_until_complete(main())
-
     def sort_emails_by_domain(self, user: dict) -> Optional[bool]:
         """Sort emails by sender domain - create labels for each domain and apply them"""
 
@@ -642,12 +621,6 @@ class GmailProvider:
                 f"Failed to batch apply label: {await resp.text() if resp else 'No response'}"
             )
             return False
-
-    async def apply_label_to_email(
-        self, session, user: dict, email_id: str, label_id: str
-    ) -> bool:
-        """Apply a label to an email"""
-        return await self.batch_apply_label(session, user, [email_id], label_id)
 
     def extract_domain(self, from_header: str) -> Optional[str]:
         """Extract domain from email address in From header"""

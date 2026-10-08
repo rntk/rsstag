@@ -55,24 +55,3 @@ class W2VLearn:
                     self._log.warning("Error in w2v.make_groups. Info: %s", e)
 
         return groups
-
-    def reduce_groups(self, groups: dict, top_n: int = 10, koef: float = 0.3) -> dict:
-        reduced = {}
-        new_groups = defaultdict(set)
-        if self._model:
-            for tag, tags in groups.items():
-                try:
-                    similar_tags = self._model.wv.similar_by_word(tag, topn=top_n)
-                    for sim_tag, val in similar_tags:
-                        if (val >= koef) and (sim_tag in groups):
-                            new_groups[sim_tag].add(tag)
-                except Exception as e:
-                    self._log.warning("Error in w2v.reduce_groups. Info: %s", e)
-
-        for tag, tags_set in new_groups.items():
-            s = set()
-            for st in tags_set:
-                s.update(st)
-            reduced["tag"] = s
-
-        return reduced

@@ -124,7 +124,7 @@ module.exports = [
     },
   },
   {
-    files: ['provider-feeds.js', 'tag-feeds.js', 'post-grouped-snippets.js'],
+    files: ['provider-feeds.js', 'post-grouped-snippets.js'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'script',

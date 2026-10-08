@@ -148,13 +148,6 @@ def get_task_scope_hint(task_type: int) -> str:
     return "global only"
 
 
-def get_scoped_supported_tasks() -> Dict[int, str]:
-    return {
-        task_type: ""
-        for task_type, task_data in TASK_SCOPE_REGISTRY.items()
-        if task_data.get("scope") == SCOPE_CAPABILITY_SCOPED_SUPPORTED
-    }
-
 POST_NOT_IN_PROCESSING = 0
 TASK_NOT_IN_PROCESSING = 0
 TASK_FREEZED = -1
@@ -1365,22 +1358,6 @@ class RssTagTasks:
         except Exception as e:
             result = []
             self._log.error("Can`t get user tasks states %s. Info: %s", user_id, e)
-
-        return result
-
-    def get_current_tasks_titles(self, user_id: str) -> Optional[List[str]]:
-        try:
-            curr = self._db.tasks.find({"user": user_id})
-            task_types = set()
-            result = []
-            for task in curr:
-                if task["type"] not in task_types:
-                    task_types.add(task["type"])
-                    result.append(self.get_task_title(task["type"]))
-
-        except Exception as e:
-            result = None
-            self._log.error("Can`t get user tasks state %s. Info: %s", user_id, e)
 
         return result
 

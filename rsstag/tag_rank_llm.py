@@ -63,10 +63,6 @@ class RankStats:
     failed_batches: int = 0
     scored: int = 0
 
-    @property
-    def all_failed(self) -> bool:
-        return self.batches > 0 and self.failed_batches == self.batches
-
 
 # --- candidate selection ---------------------------------------------------
 

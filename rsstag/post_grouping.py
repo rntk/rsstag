@@ -206,11 +206,6 @@ class RssTagPostGrouping:
 
         return deleted_total
 
-    def delete_grouped_posts_by_scope(self, owner: str, scope: Optional[dict]) -> int:
-        """Delete post_grouping docs by owner and expanded scope."""
-        post_ids = self._get_scope_post_ids(owner, scope)
-        return self.delete_grouped_posts_by_post_ids(owner, post_ids)
-
     def get_scope_post_ids(self, owner: str, scope: Optional[dict]) -> List[PostId]:
         """Public: expand a task scope into the matching post ids."""
         return self._get_scope_post_ids(owner, scope)

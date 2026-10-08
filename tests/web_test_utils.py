@@ -4,7 +4,6 @@ import socket
 import tempfile
 import unittest
 from configparser import ConfigParser
-from pathlib import Path
 from typing import Any, Dict, Optional
 
 from pymongo.database import Database
@@ -164,10 +163,6 @@ class MongoWebTestCase(unittest.TestCase):
             tmp_dir.cleanup()
 
         super().tearDownClass()
-
-    @staticmethod
-    def get_project_root() -> Path:
-        return Path(__file__).resolve().parent.parent
 
     @classmethod
     def build_client(cls) -> Client:
