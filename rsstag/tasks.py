@@ -226,7 +226,9 @@ def _task_state(task: Dict[str, Any], now: float) -> str:
         return "failed"
     if status == TASK_STATUS_PAUSED or processing == TASK_FREEZED:
         return "paused"
-    if status == TASK_STATUS_RUNNING:
+    if status == TASK_STATUS_RUNNING or (
+        status is None and isinstance(processing, (int, float)) and processing > 0
+    ):
         return "processing"
     backoff_until: Any = task.get("backoff_until")
     if isinstance(backoff_until, (int, float)) and backoff_until > now:
@@ -1343,13 +1345,14 @@ class RssTagTasks:
 
     def get_current_tasks(self, user_id: str) -> List[dict]:
         try:
-            curr = self._db.tasks.find({"user": user_id})
-            result = []
+            curr: Iterator[dict] = self._db.tasks.find({"user": user_id})
+            result: List[dict] = []
             for task in curr:
                 info: Dict[str, Any] = {
                     "id": str(task["_id"]),
                     "type": task["type"],
                     "title": self.get_task_title(task["type"]),
+                    "provider": task.get("provider", ""),
                     "processing": task.get("processing", 0),
                 }
                 info.update(describe_task_health(task, time.time()))

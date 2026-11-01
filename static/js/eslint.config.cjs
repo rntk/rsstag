@@ -111,6 +111,7 @@ module.exports = [
   {
     files: [
       'topics-list.js',
+      'tasks.js',
       'topics-hierarchy.js',
       'post-canvas.js',
       'libs/post-canvas-viewport.js',

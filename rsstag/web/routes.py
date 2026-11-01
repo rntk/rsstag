@@ -600,6 +600,11 @@ class RSSTagRoutes:
                 "methods": ["GET"],
             },
             {
+                "url": "/tasks/current",
+                "endpoint": "on_tasks_current_get",
+                "methods": ["GET"],
+            },
+            {
                 "url": "/tasks",
                 "endpoint": "on_tasks_post",
                 "methods": ["POST"],

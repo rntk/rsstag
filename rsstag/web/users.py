@@ -817,7 +817,7 @@ def on_provider_detail_post(
             app.users.update_by_sid(
                 user["sid"], {"message": "You already in queue, please wait"}
             )
-        return redirect(app.routes.get_url_by_endpoint(endpoint="on_root_get"))
+        return redirect(app.routes.get_url_by_endpoint(endpoint="on_tasks_get"))
 
     login = request.form.get("login")
     password = request.form.get("password")

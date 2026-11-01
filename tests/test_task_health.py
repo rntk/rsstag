@@ -80,6 +80,18 @@ class DescribeTaskHealthTestCase(unittest.TestCase):
         self.assertEqual(queued_health["error"], "")
         self.assertEqual(queued_health["retry_at"], "")
 
+    def test_legacy_running_task_is_processing(self) -> None:
+        health: Dict[str, Any] = describe_task_health(
+            {"processing": self.now}, self.now
+        )
+        self.assertEqual(health["state"], "processing")
+
+    def test_pending_status_takes_precedence_over_old_processing_timestamp(self) -> None:
+        health: Dict[str, Any] = describe_task_health(
+            {"status": TASK_STATUS_PENDING, "processing": self.now}, self.now
+        )
+        self.assertEqual(health["state"], "queued")
+
 
 if __name__ == "__main__":
     unittest.main()

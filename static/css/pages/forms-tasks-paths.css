@@ -734,6 +734,12 @@ input[type="text"]:focus {
   border-color: #cbd5e1;
 }
 
+.task-badge-queued {
+  background: #e0f2fe;
+  color: #075985;
+  border-color: #bae6fd;
+}
+
 .btn-retry {
   background: #ffffff !important;
   color: #2563eb !important;

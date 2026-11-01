@@ -1,4 +1,5 @@
 import logging
+from typing import TYPE_CHECKING
 from werkzeug.wrappers import Request, Response
 from werkzeug.utils import redirect
 from rsstag.tasks import (
@@ -34,6 +35,21 @@ from rsstag.tasks import (
     build_telegram_read_state_task,
     get_task_scope_hint,
 )
+
+if TYPE_CHECKING:
+    from rsstag.web.app import RSSTagApplication
+
+
+def on_tasks_current_get(
+    app: "RSSTagApplication", user: dict, request: Request
+) -> Response:
+    """Render the authenticated user's queue for automatic status updates."""
+    page = app.template_env.get_template("tasks-current.html")
+    return Response(
+        page.render(current_tasks=app.tasks.get_current_tasks(user["sid"])),
+        mimetype="text/html",
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 def on_tasks_get(app, user: dict, request: Request) -> Response:
