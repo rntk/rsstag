@@ -267,6 +267,16 @@ body:has(.stree-page--detail) {
   hyphens: manual;
 }
 
+/* Level summary under a topic label; fixed size so it never scales with the label. */
+.stree-node__prose {
+  margin: 4px 0;
+  max-width: 480px;
+  color: var(--rsst-ink-secondary);
+  font-family: var(--rsst-font-body);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .stree-node__meta {
   color: var(--rsst-ink-tertiary);
   font-family: var(--rsst-font-body);

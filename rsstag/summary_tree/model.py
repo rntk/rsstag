@@ -1,4 +1,4 @@
-"""Evidence hierarchy and explicit claim links, independent of the display tree."""
+"""Evidence nodes (posts, passages) and topic nodes with explicit claim links."""
 
 import re
 from dataclasses import asdict, dataclass, field
@@ -9,6 +9,12 @@ from rsstag.summary_tree.sources import SourcePost
 MAX_CHILDREN: int = 8
 PASSAGE_CHARS: int = 800
 CHUNK_CHARS: int = 6000
+
+# Node kinds, from the source up to the focus.
+CHUNK: str = "chunk"
+POST: str = "post"
+TOPIC: str = "topic"
+ROOT: str = "root"
 
 
 @dataclass
@@ -26,9 +32,14 @@ class SummaryNode:
     children: List[str] = field(default_factory=list)
     rows: List[int] = field(default_factory=list)
     segments: Optional[List[Segment]] = None
+    path: List[str] = field(default_factory=list)
+    failed: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
+
+
+Nodes = Dict[str, SummaryNode]
 
 
 def evidence_rows(post: SourcePost) -> List[str]:
@@ -48,62 +59,64 @@ def evidence_rows(post: SourcePost) -> List[str]:
     return rows
 
 
-def build_hierarchy(posts: Sequence[SourcePost], focus: str) -> Tuple[str, Dict[str, SummaryNode], Dict[str, List[str]]]:
-    """Posts in source order, bounded evidence chunks and balanced collection groups.
+def add_node(nodes: Nodes, kind: str, title: str, children: List[str],
+             pids: Optional[List[str]] = None, rows: Optional[List[int]] = None,
+             path: Optional[List[str]] = None) -> str:
+    """Append a node; its posts default to the union of its children's posts."""
+    node_id: str = f"n{len(nodes)}"
+    ids: List[str] = pids if pids is not None else list(dict.fromkeys(
+        pid for child in children for pid in nodes[child].post_ids
+    ))
+    nodes[node_id] = SummaryNode(node_id, kind, title, ids, children, rows or [], path=path or [])
+    return node_id
 
-    Groups organize evidence, not inferred topics. The citation view supplies the
-    thematic paths, so a post can support multiple independent claims.
-    """
-    nodes: Dict[str, SummaryNode] = {}
+
+def _balanced(nodes: Nodes, ids: List[str], pid: str) -> List[str]:
+    """Bound a long post's passage chunks to MAX_CHILDREN per branch."""
+    current: List[str] = ids
+    while len(current) > MAX_CHILDREN:
+        count: int = (len(current) + MAX_CHILDREN - 1) // MAX_CHILDREN
+        base, extra = divmod(len(current), count)
+        start: int = 0
+        next_level: List[str] = []
+        for index in range(count):
+            members: List[str] = current[start:start + base + (index < extra)]
+            start += len(members)
+            next_level.extend(members if len(members) == 1 else
+                              [add_node(nodes, CHUNK, "Post passages", members, [pid])])
+        current = next_level
+    return current
+
+
+def _chunks(passages: List[str]) -> List[List[int]]:
+    chunks: List[List[int]] = []
+    size: int = 0
+    for row, passage in enumerate(passages, 1):
+        if not chunks or size + len(passage) > CHUNK_CHARS:
+            chunks.append([])
+            size = 0
+        chunks[-1].append(row)
+        size += len(passage) + 1
+    return chunks
+
+
+def build_post_nodes(posts: Sequence[SourcePost]) -> Tuple[Dict[str, str], Nodes, Dict[str, List[str]]]:
+    """One node per post (long posts get passage-chunk children): the evidence layer."""
+    nodes: Nodes = {}
     evidence: Dict[str, List[str]] = {}
-
-    def group(ids: List[str], kind: str) -> List[str]:
-        current: List[str] = ids
-        while len(current) > MAX_CHILDREN:
-            count: int = (len(current) + MAX_CHILDREN - 1) // MAX_CHILDREN
-            base, extra = divmod(len(current), count)
-            start: int = 0
-            next_level: List[str] = []
-            for index in range(count):
-                members: List[str] = current[start:start + base + (index < extra)]
-                start += len(members)
-                if len(members) == 1:
-                    next_level.extend(members)
-                else:
-                    next_level.append(add(kind, "Post passages" if kind == "chunk" else "Post group", members))
-            current = next_level
-        return current
-
-    def add(kind: str, title: str, children: List[str], pids: Optional[List[str]] = None,
-            rows: Optional[List[int]] = None) -> str:
-        node_id: str = f"n{len(nodes)}"
-        ids: List[str] = pids if pids is not None else list(dict.fromkeys(
-            pid for child in children for pid in nodes[child].post_ids
-        ))
-        nodes[node_id] = SummaryNode(node_id, kind, title, ids, children, rows or [])
-        return node_id
-
-    leaves: List[str] = []
-    post: SourcePost
+    post_nodes: Dict[str, str] = {}
     for post in posts:
         passages: List[str] = evidence_rows(post)
         evidence[post.pid] = passages
-        chunks: List[List[int]] = []
-        size: int = 0
-        for row, passage in enumerate(passages, 1):
-            if not chunks or size + len(passage) > CHUNK_CHARS:
-                chunks.append([])
-                size = 0
-            chunks[-1].append(row)
-            size += len(passage) + 1
+        chunks: List[List[int]] = _chunks(passages)
         children: List[str] = []
         if len(chunks) > 1:
-            children = [add("chunk", f"Passages {rows[0]}–{rows[-1]}", [], [post.pid], rows)
+            children = [add_node(nodes, CHUNK, f"Passages {rows[0]}–{rows[-1]}", [], [post.pid], rows)
                         for rows in chunks]
-        leaves.append(add("post", post.title, group(children, "chunk"), [post.pid],
-                          list(range(1, len(passages) + 1)) if not children else []))
-    root: str = add("root", focus, group(leaves, "group"))
-    return root, nodes, evidence
+        rows: List[int] = list(range(1, len(passages) + 1)) if not children else []
+        post_nodes[post.pid] = add_node(nodes, POST, post.title, _balanced(nodes, children, post.pid),
+                                        [post.pid], rows)
+    return post_nodes, nodes, evidence
 
 
 def relay(children: List[SummaryNode]) -> Optional[List[Segment]]:
@@ -120,7 +133,7 @@ def relay(children: List[SummaryNode]) -> Optional[List[Segment]]:
     ] if segment.sources else []) for index, segment in enumerate(first)]
 
 
-def claim_posts(node: SummaryNode, index: int, nodes: Dict[str, SummaryNode]) -> List[str]:
+def claim_posts(node: SummaryNode, index: int, nodes: Nodes) -> List[str]:
     """Resolve persisted links, never infer support from shared words or membership."""
     sources: List[Dict[str, Any]] = (node.segments or [])[index].sources
     pids: List[str] = []
@@ -130,3 +143,7 @@ def claim_posts(node: SummaryNode, index: int, nodes: Dict[str, SummaryNode]) ->
         else:
             pids.extend(claim_posts(nodes[source["child"]], source["segment"], nodes))
     return list(dict.fromkeys(pids))
+
+
+def summary_text(node: SummaryNode) -> str:
+    return "".join(segment.text for segment in node.segments or []).strip()

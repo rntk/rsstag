@@ -509,6 +509,7 @@ export class SummaryTreeView {
     const posts = `<button type="button" class="stree-node__posts" data-branch title="Unfold this branch down to its posts">${count} post${count === 1 ? '' : 's'}</button>`;
     return `<div class="stree-node stree-node--${escapeHtml(node.kind)}${node.hiddenCount ? ' is-collapsed' : ''}" role="button" tabindex="0">
       <div class="stree-node__title">${escapeHtml(node.title)}</div>
+      ${node.summary ? `<p class="stree-node__prose">${escapeHtml(node.summary)}</p>` : ''}
       <div class="stree-node__meta">${posts}${escapeHtml(hidden)}</div>
       ${this.statementsBlock(node)}
     </div>`;
@@ -517,7 +518,7 @@ export class SummaryTreeView {
   /** Legacy (schema 1) topics carry statements with numbered source references. */
   statementsBlock(display) {
     const node = display.node;
-    if (this.payload.result?.schema_version === 2 || !node?.statements?.length) {
+    if ((this.payload.result?.schema_version || 1) !== 1 || !node?.statements?.length) {
       return '';
     }
     const numbers = sourceNumbers(node);
@@ -553,7 +554,7 @@ export class SummaryTreeView {
       ? `<a href="${escapeHtml(post.url)}" target="_blank" rel="noopener">original</a> · `
       : '';
     const citations = this.citations(pid);
-    const route = this.payload.result?.schema_version === 2 ? this.fullSummaries(key) : '';
+    const route = (this.payload.result?.schema_version || 1) >= 2 ? this.fullSummaries(key) : '';
     return `
       ${post.summary ? `<p class="stree-card__summary">${escapeHtml(post.summary)}</p>` : ''}
       ${this.passagesBlock(post, rows)}

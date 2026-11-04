@@ -1,56 +1,56 @@
-"""Persistable snapshots and resumption for the post evidence hierarchy."""
+"""Persistable snapshots of a (possibly partial) summary tree.
 
-import hashlib
-import json
-from typing import Any, Dict, List
+Retries resume through the per-prompt LLM answer cache: identical evidence yields
+identical prompts, so finished post summaries, topic splits and topic summaries
+are replayed (and revalidated) without new model calls.
+"""
 
-from rsstag.summary_tree.generation import INSTRUCTIONS
+from typing import Any, Dict, List, Optional
+
 from rsstag.summary_tree.llm import SummaryLLM
-from rsstag.summary_tree.model import Segment, SummaryNode, claim_posts
+from rsstag.summary_tree.model import POST, ROOT, TOPIC, Nodes, SummaryNode, claim_posts, summary_text
 from rsstag.summary_tree.sources import SourcePost
 
-
-def input_fingerprint(focus: str, nodes: Dict[str, SummaryNode], evidence: Dict[str, List[str]]) -> str:
-    data: Dict[str, Any] = {"instructions": INSTRUCTIONS, "focus": focus, "evidence": evidence,
-                            "structure": [node.to_dict() for node in nodes.values()]}
-    return hashlib.sha256(json.dumps(data, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+SCHEMA_VERSION: int = 3
 
 
-def restore(nodes: Dict[str, SummaryNode], previous: Dict[str, Any], fingerprint: str) -> None:
-    """A checkpoint is reusable only for the exact evidence, structure and instructions."""
-    if previous.get("input_fingerprint") != fingerprint:
-        return
-    for node in nodes.values():
-        saved: Any = previous.get("nodes", {}).get(node.id, {}).get("segments")
-        if isinstance(saved, list):
-            node.segments = [Segment(part["text"], part["sources"]) for part in saved]
+def _statements(node: SummaryNode, nodes: Nodes) -> List[Dict[str, Any]]:
+    return [{"text": segment.text, "sources": claim_posts(node, index, nodes)}
+            for index, segment in enumerate(node.segments or []) if segment.sources]
 
 
-def snapshot(root: str, nodes: Dict[str, SummaryNode], evidence: Dict[str, List[str]],
-             posts: List[SourcePost], llm: SummaryLLM, fingerprint: str) -> Dict[str, Any]:
+def _post_payload(post: SourcePost, node: SummaryNode, evidence: List[str]) -> Dict[str, Any]:
+    return {**post.to_dict(), "evidence": evidence, "summary": summary_text(node), "node_id": node.id}
+
+
+def snapshot(root: Optional[str], nodes: Nodes, evidence: Dict[str, List[str]],
+             posts: List[SourcePost], llm: SummaryLLM) -> Dict[str, Any]:
     result: Dict[str, Any] = {
-        "schema_version": 2, "input_fingerprint": fingerprint, "root_id": root,
-        "nodes": {node.id: node.to_dict() for node in nodes.values()}, "posts": [], "skipped": [],
+        "schema_version": SCHEMA_VERSION, "root_id": root,
+        "nodes": {node.id: {**node.to_dict(), "statements": _statements(node, nodes)} for node in nodes.values()},
+        "posts": [], "skipped": [],
     }
-    for node in nodes.values():
-        result["nodes"][node.id]["statements"] = [
-            {"text": segment.text, "sources": claim_posts(node, index, nodes)}
-            for index, segment in enumerate(node.segments or []) if segment.sources
-        ]
-    post_nodes: Dict[str, SummaryNode] = {node.post_ids[0]: node for node in nodes.values() if node.kind == "post"}
+    post_nodes: Dict[str, SummaryNode] = {node.post_ids[0]: node for node in nodes.values() if node.kind == POST}
     for post in posts:
-        node = post_nodes[post.pid]
-        payload: Dict[str, Any] = {**post.to_dict(), "evidence": evidence[post.pid],
-                                   "summary": "".join(s.text for s in node.segments or [])}
+        node: SummaryNode = post_nodes[post.pid]
+        payload: Dict[str, Any] = _post_payload(post, node, evidence[post.pid])
         if node.segments == []:
-            payload["reason"] = "irrelevant"
+            payload["reason"] = "summary failed" if node.failed else "irrelevant"
             result["skipped"].append(payload)
         else:
             result["posts"].append(payload)
     result["metrics"] = {
         "posts": len(posts), "summarized": sum(bool(node.segments) for node in post_nodes.values()),
-        "skipped": len(result["skipped"]), "topics": sum(n.kind in {"root", "group"} for n in nodes.values()),
+        "skipped": len(result["skipped"]), "topics": sum(n.kind == TOPIC for n in nodes.values()),
         "completed_nodes": sum(n.segments is not None for n in nodes.values()), "total_nodes": len(nodes),
+        "levels": _depth(root, nodes) if root else 0,
         "llm_calls": llm.calls, "llm_cached": llm.cached, "llm_failures": llm.failures,
     }
     return result
+
+
+def _depth(node_id: str, nodes: Nodes) -> int:
+    node: SummaryNode = nodes[node_id]
+    if node.kind not in (TOPIC, ROOT):
+        return 1
+    return 1 + max((_depth(child, nodes) for child in node.children), default=0)

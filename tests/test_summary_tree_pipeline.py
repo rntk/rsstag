@@ -16,7 +16,7 @@ MONGO_PORT: int = 8765
 
 
 class FakeRouter:
-    """Answers summary prompts per post title and merges by a keyword rule."""
+    """Summarizes posts per title, groups them by title word and merges by keyword."""
 
     def __init__(self) -> None:
         self.prompts: List[str] = []
@@ -25,6 +25,11 @@ class FakeRouter:
         prompt: str = prompts[0]
         self.prompts.append(prompt)
         data: Dict[str, Any] = json.loads('{"focus":' + prompt.split('\n{"focus":', 1)[1])
+        if "posts" in data:
+            groups: Dict[str, List[str]] = {}
+            for post in data["posts"]:
+                groups.setdefault(post["summary"].split()[0], []).append(post["id"])
+            return json.dumps({"topics": [{"title": t, "posts": ids} for t, ids in groups.items()]})
         answers: List[Dict[str, Any]] = []
         for node in data["nodes"]:
             if "Unrelated" in node["title"]:
@@ -32,7 +37,7 @@ class FakeRouter:
             elif "evidence" in node:
                 segments = [{"text": node["title"] + " says things.", "from": ["1"]}]
             else:
-                segments = [{"text": "Posts report prices and harvest.", "from": [
+                segments = [{"text": f"{node['title']}: posts report prices and harvest.", "from": [
                     child["claims"][0]["cite"] for child in node["children"] if child["claims"]
                 ]}]
             answers.append({"id": node["id"], "segments": segments})
@@ -54,6 +59,7 @@ class TestPipelineOffline(unittest.TestCase):
         posts: List[SourcePost] = [
             SourcePost("1", "Prices rise", "t", "f", "", 1), SourcePost("2", "Prices fall", "t", "f", "", 2),
             SourcePost("3", "Harvest", "t", "f", "", 3), SourcePost("4", "Unrelated", "t", "f", "", 4),
+            SourcePost("5", "Prices hold", "t", "f", "", 5), SourcePost("6", "Harvest late", "t", "f", "", 6),
         ]
         with patch("rsstag.summary_tree.pipeline.RssTagSummaryTrees") as store_cls, patch(
             "rsstag.summary_tree.pipeline.load_posts", return_value=posts
@@ -63,16 +69,24 @@ class TestPipelineOffline(unittest.TestCase):
             store = store_cls.return_value
             store.set_stage.return_value = store.set_progress.return_value = True
             store.save_result.return_value = True
-            ok: bool = SummaryTreePipeline(MagicMock(), FakeRouter(), "u").run(
+            self._router = FakeRouter()
+            ok: bool = SummaryTreePipeline(MagicMock(), self._router, "u").run(
                 {"_id": "t1", "run_id": "r", "filters": {"entity": "apple"}, "options": {"limit": 10}}
             )
         self.assertTrue(ok)
         result: Dict[str, Any] = store.save_result.call_args.args[3]
-        self.assertEqual(result["schema_version"], 2)
+        self.assertEqual(result["schema_version"], 3)
         self.assertEqual(result["metrics"]["skipped"], 1)
+        self.assertEqual(result["metrics"]["topics"], 2)
         root: Dict[str, Any] = result["nodes"][result["root_id"]]
-        self.assertEqual(root["statements"][0]["sources"], ["1", "2", "3"])
+        topics: List[Dict[str, Any]] = [result["nodes"][child] for child in root["children"]]
+        self.assertEqual([(t["title"], t["post_ids"]) for t in topics], [("Prices", ["1", "2", "5"]),
+                                                                         ("Harvest", ["3", "6"])])
+        self.assertEqual(root["statements"][0]["sources"], ["1", "2", "5", "3", "6"])
         self.assertTrue(all(source["kind"] == "claim" for source in root["segments"][0]["sources"]))
+        prompts: List[str] = self._router.prompts
+        self.assertTrue(any(p.startswith("TASK: FOCUS OVERVIEW") for p in prompts))
+        self.assertTrue(any(p.startswith("TASK: DETAILED TOPIC") for p in prompts))
         store.save_partial.assert_called()
 
     def test_no_entity_fails(self) -> None:
@@ -135,7 +149,7 @@ class TestSummaryTreeWithDB(unittest.TestCase):
         saved = self.store.get_by_id("u", tree_id)
         self.assertEqual(saved["status"], STATUS_DONE)
         self.assertEqual(saved["post_ids"], ["1", "2", "3"])
-        self.assertEqual(saved["result"]["metrics"]["topics"], 1)
+        self.assertEqual(saved["result"]["metrics"]["topics"], 0)  # three posts stay under the focus
 
     def test_failure_and_retry(self) -> None:
         tree_id = self.store.create("u", {"entity": "missing"})

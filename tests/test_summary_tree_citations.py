@@ -5,9 +5,16 @@ import unittest
 from typing import Any, Dict, List
 from unittest.mock import MagicMock
 
-from rsstag.summary_tree.generation import SummaryGenerationError, SummaryGenerator, decode_entry, request_item
-from rsstag.summary_tree.model import MAX_CHILDREN, Segment, build_hierarchy, claim_posts, relay
+from rsstag.summary_tree.generation import SummaryGenerationError, SummaryGenerator, decode_entry, level_of
+from rsstag.summary_tree.model import MAX_CHILDREN, ROOT, Segment, add_node, build_post_nodes, claim_posts, relay
 from rsstag.summary_tree.sources import SourcePost
+
+
+def build_hierarchy(posts: List[SourcePost], focus: str) -> Any:
+    """Posts under one root, the shape the pipeline produces for small sets."""
+    post_nodes, nodes, evidence = build_post_nodes(posts)
+    root: str = add_node(nodes, ROOT, focus, list(post_nodes.values()))
+    return root, nodes, evidence
 
 
 class TestClaimModel(unittest.TestCase):
@@ -16,7 +23,7 @@ class TestClaimModel(unittest.TestCase):
                                    for i in range(70)]
         root, nodes, evidence = build_hierarchy(posts, "focus")
         self.assertEqual(len(nodes[root].post_ids), 70)
-        self.assertTrue(all(len(node.children) <= MAX_CHILDREN for node in nodes.values()))
+        self.assertTrue(all(len(node.children) <= MAX_CHILDREN for node in nodes.values() if node.kind != ROOT))
         self.assertIn("LAST FACT", " ".join(evidence["0"]))
         for pid in evidence:
             rows: List[int] = [row for node in nodes.values() if not node.children and node.post_ids == [pid]
@@ -65,22 +72,22 @@ class TestClaimModel(unittest.TestCase):
         self.assertGreaterEqual(save.call_count, 4)
         self.assertEqual(claim_posts(nodes[root], 0, nodes), ["0"])
 
-    def test_resume_requires_identical_evidence_and_keeps_citations(self) -> None:
-        from rsstag.summary_tree.results import input_fingerprint, restore, snapshot
+    def test_failed_post_is_marked_when_tolerated(self) -> None:
+        post_nodes, nodes, evidence = build_post_nodes([SourcePost("p", "Title", "Evidence", "f", "", 0)])
+        llm: MagicMock = MagicMock()
+        llm.ask.return_value = ""
+        SummaryGenerator(llm, "focus", nodes, evidence, MagicMock(), tolerate_failures=True).run()
+        self.assertTrue(nodes[post_nodes["p"]].failed)
+        self.assertEqual(nodes[post_nodes["p"]].segments, [])
 
-        posts: List[SourcePost] = [SourcePost("p", "Title", "Evidence", "f", "", 0)]
-        root, nodes, evidence = build_hierarchy(posts, "focus")
-        fingerprint: str = input_fingerprint("focus", nodes, evidence)
-        leaf = nodes[nodes[root].children[0]]
-        leaf.segments = [Segment("Fact", [{"kind": "rows", "first": 2, "last": 2}])]
-        saved: Dict[str, Any] = snapshot(root, nodes, evidence, posts, MagicMock(calls=0, cached=0, failures=0), fingerprint)
-        _, fresh, _ = build_hierarchy(posts, "focus")
-        restore(fresh, saved, fingerprint)
-        self.assertEqual(fresh[leaf.id].segments, leaf.segments)
-        self.assertIsNone(fresh[root].segments)
-        _, changed, changed_evidence = build_hierarchy([SourcePost("p", "Title", "Changed", "f", "", 0)], "focus")
-        restore(changed, saved, input_fingerprint("focus", changed, changed_evidence))
-        self.assertTrue(all(node.segments is None for node in changed.values()))
+    def test_levels_get_their_own_prompt(self) -> None:
+        root, nodes, _ = build_hierarchy([SourcePost("p", "Title", "Evidence", "f", "", 0)], "focus")
+        post_id: str = nodes[root].children[0]
+        topic: str = add_node(nodes, "topic", "Sub", [post_id])
+        category: str = add_node(nodes, "topic", "Cat", [topic])
+        top: str = add_node(nodes, ROOT, "focus", [category])
+        self.assertEqual([level_of(nodes[i], nodes) for i in (post_id, topic, category, top, root)],
+                         ["post", "detail", "overview", "root", "detail"])
 
     def test_unknown_or_duplicate_output_ids_do_not_write(self) -> None:
         posts: List[SourcePost] = [SourcePost("p", "Title", "Evidence", "f", "", 0)]

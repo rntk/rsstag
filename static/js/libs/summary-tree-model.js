@@ -12,6 +12,9 @@ export const ROOT_KIND = 'root';
  * @returns {any|null}
  */
 export function buildDisplayTree(result) {
+  if (result?.schema_version === 3) {
+    return buildTopicTree(result);
+  }
   if (result?.schema_version === 2) {
     return buildClaimTree(result);
   }
@@ -37,6 +40,92 @@ export function buildDisplayTree(result) {
     };
   };
   return result?.root_id ? visit(result.root_id, new Set()) : null;
+}
+
+/**
+ * Schema 3: the stored topic hierarchy is the display tree (focus → categories →
+ * sub-topics → posts). Each node carries its level summary; ``parts`` are the
+ * parent's segments that cite it, so a route can highlight what led to a post.
+ */
+function buildTopicTree(result) {
+  const nodes = result.nodes || {};
+  const posts = result.posts || {};
+  const citing = (parent, childId) =>
+    (parent?.segments || []).flatMap((segment, index) =>
+      (segment.sources || []).some((s) => s.kind === 'claim' && s.child === childId)
+        ? [{ node: parent.id, segment: index }]
+        : []
+    );
+  const visit = (id, parent, seen) => {
+    const node = nodes[id];
+    if (!node || seen.has(id)) return null;
+    const parts = citing(parent, id);
+    if (node.kind === 'post') {
+      const pid = String(node.post_ids[0]);
+      const post = posts[pid];
+      if (!post) return null; // skipped: irrelevant or failed
+      return {
+        key: id,
+        kind: POST_KIND,
+        title: post.title || pid,
+        post,
+        rows: citedRows(id, nodes),
+        node,
+        parts,
+        postIds: [pid],
+        children: [],
+      };
+    }
+    const path = new Set(seen).add(id);
+    const children = (node.children || []).map((child) => visit(child, node, path)).filter(Boolean);
+    return {
+      key: id,
+      kind: node.kind === 'root' ? ROOT_KIND : TOPIC_KIND,
+      title: node.title || '',
+      summary: proseOf(node),
+      node,
+      parts,
+      postIds: [...new Set(children.flatMap((child) => child.postIds))],
+      children,
+    };
+  };
+  if (result.root_id) {
+    const tree = visit(result.root_id, null, new Set());
+    return tree && { ...tree, openRoot: true };
+  }
+  // Still summarizing posts: show those done so far under a provisional root.
+  const children = Object.values(nodes)
+    .filter((node) => node.kind === 'post' && node.segments?.length)
+    .map((node) => visit(node.id, null, new Set()))
+    .filter(Boolean);
+  return children.length
+    ? {
+        key: 'root',
+        kind: ROOT_KIND,
+        title: '',
+        postIds: children.flatMap((child) => child.postIds),
+        children,
+        openRoot: true,
+      }
+    : null;
+}
+
+function proseOf(node) {
+  return (node?.segments || [])
+    .map((segment) => segment.text)
+    .join('')
+    .trim();
+}
+
+/** Passage ranges cited by a post node and its passage chunks. */
+function citedRows(id, nodes, seen = new Set()) {
+  const node = nodes[id];
+  if (!node || seen.has(id)) return [];
+  seen.add(id);
+  const own = (node.segments || []).flatMap((segment) =>
+    (segment.sources || []).filter((s) => s.kind === 'rows').map((s) => [s.first, s.last])
+  );
+  return [...own, ...(node.children || []).flatMap((child) => citedRows(child, nodes, seen))];
 }
 
 /** Claim occurrences follow only explicit links; membership is used for uncited fallback. */
@@ -169,7 +258,7 @@ function postLeaves(node, posts) {
 /** Show the second level only when it contains at most five items. */
 export function initialExpanded(tree) {
   const keys = new Set();
-  if (tree && tree.children.length > 0 && tree.children.length <= 5) {
+  if (tree && tree.children.length > 0 && (tree.openRoot || tree.children.length <= 5)) {
     keys.add(tree.key);
   }
   return keys;

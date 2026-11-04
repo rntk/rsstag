@@ -244,3 +244,44 @@ test('expandBranch opens one branch fully and leaves the others alone', () => {
   assert.ok(!next.has('c'));
   assert.deepEqual([...expandBranch(tree, new Set(), 'b')].sort(), ['a', 'b', 'r']);
 });
+
+test('schema 3 follows the topic hierarchy down to cited post passages', () => {
+  const claim = (child) => ({ kind: 'claim', child, segment: 0 });
+  const tree = buildDisplayTree({
+    schema_version: 3,
+    root_id: 'r',
+    nodes: {
+      r: { id: 'r', kind: 'root', title: 'apple', children: ['t1', 't2'], post_ids: ['1', '2', '3'],
+        segments: [{ text: 'Phones and Macs.', sources: [claim('t1')] }] },
+      t1: { id: 't1', kind: 'topic', title: 'iPhone', children: ['p1', 'p2'], post_ids: ['1', '2'],
+        segments: [{ text: 'Battery.', sources: [claim('p1')] }] },
+      t2: { id: 't2', kind: 'topic', title: 'Mac', children: ['p3'], post_ids: ['3'], segments: [] },
+      p1: { id: 'p1', kind: 'post', title: 'One', children: ['c1'], post_ids: ['1'],
+        segments: [{ text: 'x', sources: [claim('c1')] }] },
+      c1: { id: 'c1', kind: 'chunk', children: [], post_ids: ['1'],
+        segments: [{ text: 'x', sources: [{ kind: 'rows', first: 2, last: 3 }] }] },
+      p2: { id: 'p2', kind: 'post', title: 'Two', children: [], post_ids: ['2'], segments: [] },
+      p3: { id: 'p3', kind: 'post', title: 'Three', children: [], post_ids: ['3'],
+        segments: [{ text: 'y', sources: [{ kind: 'rows', first: 1, last: 1 }] }] },
+    },
+    posts: { 1: { pid: '1', title: 'One' }, 3: { pid: '3', title: 'Three' } },
+  });
+  assert.equal(tree.kind, 'root');
+  assert.equal(tree.summary, 'Phones and Macs.');
+  assert.deepEqual(tree.children.map((c) => [c.title, c.postIds]), [['iPhone', ['1']], ['Mac', ['3']]]);
+  const post = tree.children[0].children[0];
+  assert.equal(post.kind, 'post');
+  assert.deepEqual(post.rows, [[2, 3]]);
+  assert.deepEqual(post.parts, [{ node: 't1', segment: 0 }]);
+  assert.deepEqual([...initialExpanded(tree)], ['r']);
+});
+
+test('schema 3 shows summarized posts while topics are still pending', () => {
+  const tree = buildDisplayTree({
+    schema_version: 3,
+    root_id: null,
+    nodes: { p1: { id: 'p1', kind: 'post', children: [], post_ids: ['1'], segments: [{ text: 'a', sources: [] }] } },
+    posts: { 1: { pid: '1', title: 'One' } },
+  });
+  assert.deepEqual(tree.children.map((c) => c.key), ['p1']);
+});

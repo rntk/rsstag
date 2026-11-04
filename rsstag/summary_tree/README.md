@@ -1,30 +1,42 @@
 # Post summary trees
 
-This implementation adapts `example/`'s summary model to post text. The evidence
-hierarchy and the reader's claim tree are separate structures.
+A progressive-disclosure tree: each level down is more specific and more detailed,
+ending at the cited passages of the source posts.
 
-* Each post supplies stable, numbered passages (including its title). Long posts
-  are split into bounded chunks; the entire cleaned text is retained.
-* Posts remain in the selected source order. Balanced groups bound each branch to
-  eight children. These groups organize evidence; they do not classify posts as
-  mutually exclusive topics. Topic paths in the view come from cited claims.
-* Generation proceeds bottom-up, batching ready nodes within character and count
-  limits. Leaves cite passage ranges. Parents cite exact child segment positions.
-  Prompts preserve attribution, uncertainty and contradictory reporting.
-* Every substantive segment requires valid local citations. Unknown ids, duplicate
-  ids and out-of-range references are rejected. Valid entries are saved even when
-  others in the batch fail. Requests retry and split unresolved batches. Identical
-  child prose is relayed with explicit links, without a model call.
-* Results are checkpointed under the active run id. Retries restore completed
-  nodes only if evidence, hierarchy, focus and generation instructions match.
-  Cached answers are revalidated. A failed request never silently makes a post
-  irrelevant or attaches it to an arbitrary statement.
-* The display follows claim citations as occurrences: the same post or claim may
-  appear on multiple paths. Repeated single-child prose is merged for display;
-  uncited children stay reachable. Selecting a source shows its cited passages;
-  route summaries highlight the traversed segments.
+```
+focus (apple)            one-line overview naming the categories
+├─ iPhone                abstract overview of its sub-topics
+│  ├─ Battery life       detailed summary: names, numbers, disagreements
+│  │  ├─ post            brief focused summary → cited passages
+│  │  └─ post
+│  └─ Accessories
+└─ macOS
+```
 
-`schema_version: 2` stores ordered `segments` with explicit `claim` or `rows`
-sources. `statements` and their post ids are derived for source navigation, never
-used to infer claim links. Older saved trees keep their previous display until
-rebuilt. Existing model-answer caches remain isolated by changed prompt hashes.
+Pipeline stages (`pipeline.py`):
+
+1. **posts** — every post gets a brief, focus-specific summary citing its numbered
+   passages (long posts are summarized per passage chunk first). Irrelevant posts
+   return no segments and are skipped; a post that never gets a valid answer is
+   reported as `summary failed` instead of aborting the run.
+2. **topics** (`topics.py`) — only the short post digests are sent to the model,
+   which splits them into 2–7 distinct, mutually exclusive sub-topics one level more
+   specific than the current path; any topic with more than `LEAF_MAX_POSTS` posts is
+   split again, up to `MAX_DEPTH` levels. Large sets are assigned in batches against
+   the topics found so far. Invalid answers are rejected; unassigned posts go to
+   "Other"; when no real split is found the posts stay directly under the topic.
+3. **summaries** — bottom-up along that structure, each level with its own intent
+   (`generation.LEVEL_INTENTS`): `detail` just above posts, `overview` for topics of
+   topics, `root` for the focus. Every segment cites child claims (`C1.S2`), so any
+   statement resolves down to post passages.
+
+Every substantive segment requires valid local citations; unknown, duplicate and
+out-of-range references are rejected, valid entries in a batch are kept, and failed
+batches are split and retried. Retries resume through the per-prompt answer cache:
+identical evidence produces identical prompts, so completed work is replayed and
+revalidated without new model calls.
+
+`schema_version: 3` stores the node hierarchy (`kind`: root, topic, post, chunk) with
+`path`, ordered `segments` and derived `statements`. The view walks that hierarchy;
+selecting a post highlights its cited passages and, along the route, the parent
+segments that cite each step. Schema 1 and 2 trees keep their previous display.

@@ -22,7 +22,7 @@ STATUS_PROCESSING: str = "processing"
 STATUS_DONE: str = "done"
 STATUS_FAILED: str = "failed"
 PROCESSING_TIMEOUT_SECONDS: float = 3600.0
-STAGES: tuple = ("sources", "summaries", "done")
+STAGES: tuple = ("sources", "posts", "topics", "summaries", "done")
 
 COLLECTION: str = "summary_trees"
 _LIST_PROJECTION: Dict[str, int] = {"result": 0}
