@@ -51,15 +51,26 @@ test('post panel highlights exact source passage and includes full route summari
   assert.ok(!html.includes('<script>evidence</script>'));
 });
 
-test('poll payload updates preserve expansion and selection', () => {
+test('poll payload updates fold the tree and select the root', () => {
   const view = new SummaryTreeView({}, payload(), null);
   const leafKey = findPostLeaf(view.tree, 'p');
+  assert.equal(view.expanded.size, 0);
   view.selectedKey = leafKey;
+  view.expanded.add(view.tree.key);
   view.expanded.add(leafKey);
   view.setPayload(payload());
-  assert.equal(view.selectedKey, leafKey);
-  assert.ok(view.expanded.has(leafKey));
+  assert.equal(view.selectedKey, view.tree.key);
+  assert.equal(view.expanded.size, 0);
   assert.equal(view.exclusive, false);
+});
+
+test('a provisional root displays the current entity while posts are being summarized', () => {
+  const data = payload();
+  data.result.schema_version = 3;
+  data.result.root_id = null;
+  const view = new SummaryTreeView({}, data, null);
+  assert.equal(view.tree.title, 'Subject');
+  assert.equal(view.expanded.size, 0);
 });
 
 test('polling preserves a fully folded tree and initializes a newly available tree', () => {

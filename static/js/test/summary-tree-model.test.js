@@ -58,12 +58,12 @@ test('builds topics with post leaves', () => {
   );
 });
 
-test('initially shows at most five second-level items and no deeper branches', () => {
+test('initially shows only the root regardless of the number of children', () => {
   const tree = buildDisplayTree(result);
-  assert.deepEqual([...initialExpanded(tree)], ['root']);
+  assert.deepEqual([...initialExpanded(tree)], []);
   const child = tree.children[0];
   tree.children = Array.from({ length: 5 }, (_, i) => ({ ...child, key: String(i) }));
-  assert.deepEqual([...initialExpanded(tree)], ['root']);
+  assert.deepEqual([...initialExpanded(tree)], []);
   tree.children.push({ ...child, key: 'six' });
   assert.deepEqual([...initialExpanded(tree)], []);
   assert.deepEqual([...initialExpanded(null)], []);
@@ -273,7 +273,7 @@ test('schema 3 follows the topic hierarchy down to cited post passages', () => {
   assert.equal(post.kind, 'post');
   assert.deepEqual(post.rows, [[2, 3]]);
   assert.deepEqual(post.parts, [{ node: 't1', segment: 0 }]);
-  assert.deepEqual([...initialExpanded(tree)], ['r']);
+  assert.deepEqual([...initialExpanded(tree)], []);
 });
 
 test('schema 3 shows summarized posts while topics are still pending', () => {

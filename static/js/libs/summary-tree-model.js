@@ -91,7 +91,7 @@ function buildTopicTree(result) {
   };
   if (result.root_id) {
     const tree = visit(result.root_id, null, new Set());
-    return tree && { ...tree, openRoot: true };
+    return tree;
   }
   // Still summarizing posts: show those done so far under a provisional root.
   const children = Object.values(nodes)
@@ -105,7 +105,6 @@ function buildTopicTree(result) {
         title: '',
         postIds: children.flatMap((child) => child.postIds),
         children,
-        openRoot: true,
       }
     : null;
 }
@@ -255,13 +254,9 @@ function postLeaves(node, posts) {
   });
 }
 
-/** Show the second level only when it contains at most five items. */
-export function initialExpanded(tree) {
-  const keys = new Set();
-  if (tree && tree.children.length > 0 && (tree.openRoot || tree.children.length <= 5)) {
-    keys.add(tree.key);
-  }
-  return keys;
+/** Start with only the root visible. */
+export function initialExpanded() {
+  return new Set();
 }
 
 /** @returns {any[]} chain of display nodes from the root to the node with ``key`` */

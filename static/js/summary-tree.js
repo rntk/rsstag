@@ -153,22 +153,14 @@ export class SummaryTreeView {
   }
 
   setPayload(payload) {
-    const hadTree = Boolean(this.tree);
     this.payload = payload;
     this.tree = buildDisplayTree(payload.result);
-    const keys = new Set();
-    const walk = (node) => {
-      if (node) {
-        keys.add(node.key);
-        node.children.forEach(walk);
-      }
-    };
-    walk(this.tree);
-    this.expanded = hadTree && this.expanded
-      ? new Set([...this.expanded].filter((key) => keys.has(key)))
-      : initialExpanded(this.tree);
+    if (this.tree?.kind === 'root' && !this.tree.title) {
+      this.tree.title = payload.focus || '';
+    }
+    this.expanded = initialExpanded(this.tree);
     this.totalPosts = this.tree ? this.tree.postIds.length : 0;
-    this.selectedKey = keys.has(this.selectedKey) ? this.selectedKey : this.tree?.key || null;
+    this.selectedKey = this.tree?.key || null;
   }
 
   mount() {
