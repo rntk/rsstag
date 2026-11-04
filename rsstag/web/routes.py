@@ -880,6 +880,37 @@ class RSSTagRoutes:
                 "endpoint": "on_anthologies_api_read_post",
                 "methods": ["POST"],
             },
+            {"url": "/summary-tree/", "endpoint": "on_summary_tree_get", "methods": ["GET"]},
+            {
+                "url": "/summary-tree/<string:tree_id>",
+                "endpoint": "on_summary_tree_detail_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/api/summary-trees",
+                "endpoint": "on_summary_trees_api_list_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/api/summary-trees",
+                "endpoint": "on_summary_trees_api_create_post",
+                "methods": ["POST"],
+            },
+            {
+                "url": "/api/summary-trees/<string:tree_id>",
+                "endpoint": "on_summary_trees_api_detail_get",
+                "methods": ["GET"],
+            },
+            {
+                "url": "/api/summary-trees/<string:tree_id>",
+                "endpoint": "on_summary_trees_api_delete",
+                "methods": ["DELETE"],
+            },
+            {
+                "url": "/api/summary-trees/<string:tree_id>/retry",
+                "endpoint": "on_summary_trees_api_retry_post",
+                "methods": ["POST"],
+            },
             {"url": "/paths", "endpoint": "on_paths_page_get", "methods": ["GET"]},
             {"url": "/api/paths", "endpoint": "on_paths_list_get", "methods": ["GET"]},
             {"url": "/api/paths", "endpoint": "on_paths_create_post", "methods": ["POST"]},

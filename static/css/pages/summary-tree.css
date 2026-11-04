@@ -1,0 +1,468 @@
+/* ==========================================================
+   Summary tree (/summary-tree/): build form, list and tree canvas
+   ========================================================== */
+
+.stree-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rsst-space-3);
+}
+
+.stree-muted {
+  color: var(--rsst-ink-tertiary);
+  font-size: 12px;
+}
+
+.stree-btn {
+  padding: 4px 12px;
+  border: 1px solid var(--rsst-border-strong);
+  background: var(--rsst-ink);
+  color: var(--rsst-surface-canvas);
+  font-family: var(--rsst-font-body);
+  cursor: pointer;
+}
+
+.stree-btn--ghost {
+  background: var(--rsst-surface-canvas);
+  color: var(--rsst-ink);
+}
+
+.stree-chip {
+  display: inline-block;
+  margin-right: var(--rsst-space-1);
+  padding: 2px 6px;
+  border: 1px solid var(--rsst-border);
+  font-size: 12px;
+}
+
+/* --- list mode --- */
+
+.stree-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--rsst-space-3);
+  padding: var(--rsst-space-3);
+  background: var(--rsst-surface-sunken);
+}
+
+.stree-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+}
+
+.stree-form input {
+  padding: 4px 6px;
+  border: 1px solid var(--rsst-border-strong);
+  font-family: var(--rsst-font-body);
+}
+
+.stree-form .stree-form__check,
+.stree-toolbar .stree-form__check {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--rsst-space-1);
+}
+
+.stree-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.stree-table th,
+.stree-table td {
+  padding: var(--rsst-space-2);
+  border-bottom: 1px solid var(--rsst-border);
+  text-align: left;
+}
+
+/* --- detail mode: full-viewport canvas --- */
+
+/* Same specificity as legacy `.page` (width: 80%), loaded later, so it wins. */
+.stree-page--detail {
+  width: auto;
+  height: calc(100dvh - var(--rsst-header-height) - 1px);
+  margin: 0;
+  padding: var(--rsst-space-2) var(--rsst-space-3);
+  gap: var(--rsst-space-2);
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+body:has(.stree-page--detail) {
+  overflow: hidden;
+}
+
+.stree-page--detail .stree-breadcrumbs {
+  display: none;
+}
+
+.stree-app--detail {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--rsst-space-2);
+  min-height: 0;
+}
+
+.stree-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--rsst-space-2) var(--rsst-space-4);
+}
+
+.stree-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--rsst-space-2);
+  min-width: 0;
+}
+
+.stree-back {
+  color: var(--rsst-ink-tertiary);
+  font-size: 22px;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.stree-title {
+  margin: 0;
+  font-family: var(--rsst-font-head);
+  font-size: 22px;
+}
+
+.stree-status {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stree-status--failed {
+  color: var(--rsst-error);
+}
+
+.stree-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--rsst-space-2);
+  font-size: 12px;
+}
+
+.stree-skipped {
+  position: relative;
+  font-size: 12px;
+}
+
+.stree-skipped ul {
+  position: absolute;
+  z-index: 5;
+  max-height: 50vh;
+  overflow-y: auto;
+  margin: var(--rsst-space-1) 0 0;
+  padding: var(--rsst-space-2) var(--rsst-space-2) var(--rsst-space-2)
+    var(--rsst-space-4);
+  border: 1px solid var(--rsst-border);
+  background: var(--rsst-surface-canvas);
+  min-width: 320px;
+}
+
+.stree-canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--rsst-border);
+  background: var(--rsst-surface-sunken)
+    radial-gradient(circle, rgb(0 0 0 / 6%) 1px, transparent 1px) 0 0 / 28px
+    28px;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.stree-app--detail.is-dragging,
+.stree-app--detail.is-dragging * {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.stree-stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+}
+
+.stree-links {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.stree-link {
+  fill: none;
+  stroke: var(--rsst-chart-2);
+  stroke-opacity: 0.5;
+  stroke-width: 1.4px;
+}
+
+.stree-link.is-on-path {
+  stroke-opacity: 0.95;
+  stroke-width: 2.2px;
+}
+
+.stree-nodes {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.stree-hint {
+  position: absolute;
+  right: var(--rsst-space-2);
+  bottom: var(--rsst-space-1);
+  margin: 0;
+  pointer-events: none;
+}
+
+.stree-empty {
+  margin: 0;
+  color: var(--rsst-ink-tertiary);
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+/* topic / root nodes: wrapped labels, width measured by the layout */
+
+/* Absolutely positioned inside a 0-width layer, so shrink-to-fit would collapse the
+   text to one character per line: size to the text, wrap only at max-width (set from JS). */
+.stree-node {
+  position: absolute;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  width: max-content;
+  padding: 2px 4px;
+  font-size: var(--stree-font, 15px);
+  cursor: pointer;
+}
+
+.stree-node__title {
+  color: var(--rsst-ink);
+  font-family: var(--rsst-font-head);
+  font-weight: 400;
+  line-height: 1.2;
+  overflow-wrap: break-word;
+  hyphens: manual;
+}
+
+.stree-node__meta {
+  color: var(--rsst-ink-tertiary);
+  font-family: var(--rsst-font-body);
+  font-size: 11px;
+}
+
+.stree-node__posts {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.stree-node__posts:hover,
+.stree-node__posts:focus-visible {
+  color: var(--rsst-ink);
+  text-decoration: underline;
+}
+
+.stree-select {
+  padding: 2px 4px;
+  border: 1px solid var(--rsst-border-strong);
+  background: var(--rsst-surface-canvas);
+  color: var(--rsst-ink);
+  font: inherit;
+}
+
+.stree-node.is-collapsed .stree-node__meta {
+  color: var(--rsst-chart-2);
+}
+
+.stree-node:hover .stree-node__title {
+  text-decoration: underline;
+}
+
+/* Colour, not weight: a bolder label would outgrow its measured box. */
+.stree-node.is-on-path .stree-node__title {
+  color: var(--rsst-chart-2);
+}
+
+.stree-node.is-selected .stree-node__title {
+  color: var(--rsst-error);
+}
+
+.stree-node__summary {
+  margin-top: var(--rsst-space-1);
+  font-family: var(--rsst-font-body);
+  font-size: 13px;
+  cursor: auto;
+  user-select: text;
+}
+
+/* post leaves: movable, resizable article cards */
+
+.stree-card {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 420px;
+  max-height: 340px;
+  border: 1px solid var(--rsst-border-strong);
+  background: var(--rsst-surface-canvas);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
+  font-size: 13px;
+  cursor: auto;
+}
+
+.stree-card.is-sized {
+  max-height: none;
+}
+
+.stree-card.is-on-path {
+  border-color: var(--rsst-chart-2);
+}
+
+.stree-card.is-selected {
+  border-color: var(--rsst-error);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 16%);
+}
+
+.stree-card.is-front,
+.stree-card.is-selected {
+  z-index: 2;
+}
+
+.stree-card__head {
+  flex: none;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--rsst-border);
+  background: var(--rsst-surface-sunken);
+  cursor: move;
+}
+
+.stree-card__title {
+  font-family: var(--rsst-font-head);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.stree-card__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 10px 14px;
+  line-height: 1.5;
+  user-select: text;
+}
+
+.stree-card__body p {
+  margin: 0 0 var(--rsst-space-2);
+}
+
+.stree-card__claim {
+  font-weight: 600;
+}
+
+.stree-card__more {
+  margin-bottom: var(--rsst-space-2);
+}
+
+.stree-card__more summary {
+  color: var(--rsst-ink-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.stree-card__more h3 {
+  margin: var(--rsst-space-2) 0 var(--rsst-space-1);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stree-card__links {
+  font-size: 12px;
+}
+
+.stree-card__resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 14px;
+  height: 14px;
+  background: linear-gradient(
+    135deg,
+    transparent 50%,
+    var(--rsst-border-strong) 50%,
+    var(--rsst-border-strong) 60%,
+    transparent 60%,
+    transparent 72%,
+    var(--rsst-border-strong) 72%,
+    var(--rsst-border-strong) 82%,
+    transparent 82%
+  );
+  cursor: nwse-resize;
+}
+
+.stree-statements,
+.stree-sources {
+  margin: 0;
+  padding-left: var(--rsst-space-4);
+}
+
+.stree-statements li,
+.stree-sources li {
+  margin-bottom: var(--rsst-space-1);
+}
+
+.stree-ref {
+  margin-left: 2px;
+  padding: 0 4px;
+  border: 1px solid var(--rsst-border-strong);
+  background: var(--rsst-surface-canvas);
+  font-size: 10px;
+  vertical-align: super;
+  cursor: pointer;
+}
+
+.stree-passages {
+  margin: 0 0 var(--rsst-space-2);
+  padding-left: var(--rsst-space-4);
+}
+
+.stree-passages.has-cited li {
+  color: var(--rsst-ink-tertiary);
+}
+
+.stree-passages.has-cited .is-cited,
+.stree-card mark {
+  background: var(--rsst-surface-sunken);
+  color: var(--rsst-ink);
+  font-weight: 600;
+}

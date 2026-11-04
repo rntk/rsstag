@@ -1923,6 +1923,38 @@ class _AnthologyWorker:
             return False
 
 
+class _SummaryTreeWorker:
+    """Summary tree generation operations."""
+
+    def __init__(self, db: Any, llm: LLMRouter) -> None:
+        self._db: Any = db
+        self._llm: LLMRouter = llm
+
+    def handle_summary_tree(self, task: Dict[str, Any]) -> bool:
+        from rsstag.summary_trees import RssTagSummaryTrees
+
+        tree_doc: Dict[str, Any] = task.get("data") or {}
+        tree_id: str = str(tree_doc.get("_id", "")).strip()
+        owner: str = str(task.get("user", {}).get("sid", "")).strip()
+        if not tree_id or not owner:
+            logging.error("Summary tree task missing tree id or owner: %s", task)
+            return False
+        try:
+            from rsstag.summary_tree.pipeline import SummaryTreePipeline
+
+            pipeline: SummaryTreePipeline = SummaryTreePipeline(
+                self._db, self._llm, owner=owner,
+                settings=task.get("user", {}).get("settings", {}),
+            )
+            return pipeline.run(tree_doc)
+        except Exception as exc:
+            logging.exception("Can't build summary tree %s. Info: %s", tree_id, exc)
+            RssTagSummaryTrees(self._db).fail(
+                tree_id, owner, tree_doc.get("run_id"), f"Summary tree worker error: {exc}"
+            )
+            return False
+
+
 class _TopicMergeWorker:
     """Canonical topic merge operations."""
 
@@ -1989,6 +2021,10 @@ class LLMWorker(BaseWorker):
             self._db,
             self._llm,
         )
+        self._summary_tree_worker: _SummaryTreeWorker = _SummaryTreeWorker(
+            self._db,
+            self._llm,
+        )
         self._topic_merge_worker: _TopicMergeWorker = _TopicMergeWorker(
             self._db,
             self._llm,
@@ -2010,6 +2046,9 @@ class LLMWorker(BaseWorker):
 
     def handle_anthology(self, task: Dict[str, Any]) -> bool:
         return self._anthology_worker.handle_anthology(task)
+
+    def handle_summary_tree(self, task: Dict[str, Any]) -> bool:
+        return self._summary_tree_worker.handle_summary_tree(task)
 
     def handle_topic_merge(self, task: Dict[str, Any]) -> bool:
         return self._topic_merge_worker.handle_topic_merge(task)

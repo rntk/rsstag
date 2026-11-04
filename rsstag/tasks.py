@@ -10,6 +10,7 @@ from rsstag.llm.batch import BatchTaskStatus
 from rsstag.post_grouping import RssTagPostGrouping
 import rsstag.providers.providers as data_providers
 from rsstag.quality import build_scope_key
+from rsstag.summary_trees import RssTagSummaryTrees
 from rsstag.tags import RssTagTags
 from rsstag.tag_rank import pending_base_rank_query
 from rsstag.topic_merge import build_pending_topic_merge_query
@@ -59,6 +60,7 @@ TASK_TAGS_CORPUS_RANK = 34
 TASK_TAGS_COOC_RANK = 35
 TASK_TAGS_EMBED_RANK = 36
 TASK_TAGS_LLM_RANK = 37
+TASK_SUMMARY_TREE = 38
 
 SCOPE_MODE_ALL = "all"
 SCOPE_MODE_POSTS = "posts"
@@ -192,6 +194,7 @@ TASK_LEASE_SECONDS: Dict[int, float] = {
     TASK_RAW_DOWNLOAD: 3600.0,
     TASK_RAW_TO_POSTS: 3600.0,
     TASK_ANTHOLOGY: 3600.0,
+    TASK_SUMMARY_TREE: 3600.0,
     TASK_TAGS_TOPICS: 7200.0,
     TASK_POST_QUALITY: 3600.0,
     TASK_TAGS_CORPUS_RANK: 7200.0,
@@ -449,6 +452,22 @@ class RssTagTasks:
 
     def _count_pending_anthologies(self, owner: str) -> int:
         return self._db.anthologies.count_documents({"owner": owner, "status": "pending"})
+
+    def _count_pending_summary_trees(self, owner: str) -> int:
+        return RssTagSummaryTrees(self._db).count_pending(owner)
+
+    def _claim_summary_tree(self, task: dict, user_task: dict) -> Any:
+        """Claim the oldest pending tree; complete the queue task when none is left."""
+        data = RssTagSummaryTrees(self._db).claim_next(task["user"]["sid"])
+        if data:
+            self._state.release(user_task["_id"])
+            return data
+        task["type"] = TASK_NOOP
+        if self._count_pending_summary_trees(task["user"]["sid"]) == 0:
+            self._state.complete(user_task["_id"])
+        else:
+            self._state.release(user_task["_id"])
+        return None
 
     def _count_pending_topic_merge_docs(self, owner: str, task_doc: dict) -> int:
         scope: Dict[str, Any] = self._normalize_scope(task_doc.get("scope"))
@@ -848,6 +867,8 @@ class RssTagTasks:
                         unlock_task = False
                 if unlock_task:
                     self._state.release(user_task["_id"])
+            elif user_task["type"] == TASK_SUMMARY_TREE:
+                data = self._claim_summary_tree(task, user_task)
             elif user_task["type"] == TASK_TAGS_RANK:
                 data = []
                 tags_dt = self._db.tags.find(
@@ -1278,6 +1299,8 @@ class RssTagTasks:
                     self._db.tags.bulk_write(updates, ordered=False)
             elif task["type"] == TASK_ANTHOLOGY:
                 remove_task = self._count_pending_anthologies(task["user"]["sid"]) == 0
+            elif task["type"] == TASK_SUMMARY_TREE:
+                remove_task = self._count_pending_summary_trees(task["user"]["sid"]) == 0
             elif task["type"] == TASK_TOPIC_MERGE:
                 remove_task = (
                     self._count_pending_topic_merge_docs(task["user"]["sid"], task) == 0
@@ -1466,6 +1489,8 @@ class RssTagTasks:
                     )
                 elif task["type"] == TASK_ANTHOLOGY:
                     info["count"] = self._count_pending_anthologies(user_id)
+                elif task["type"] == TASK_SUMMARY_TREE:
+                    info["count"] = self._count_pending_summary_trees(user_id)
                 elif task["type"] == TASK_TOPIC_MERGE:
                     info["count"] = self._count_pending_topic_merge_docs(user_id, task)
                 elif task["type"] == TASK_POST_QUALITY:
@@ -1502,6 +1527,7 @@ class RssTagTasks:
             TASK_POST_GROUPING_CLEANUP: "Post grouping cleanup (supports scoped reprocess)",
             TASK_SNIPPET_CLUSTERING: "Snippet clustering",
             TASK_ANTHOLOGY: "Anthology generation (supports scoped reprocess)",
+            TASK_SUMMARY_TREE: "Summary tree generation",
             TASK_TOPIC_MERGE: "Topic merge (supports scoped reprocess)",
             TASK_RAW_DOWNLOAD: "Download raw provider data (incremental)",
             TASK_RAW_TO_POSTS: "Convert raw provider data to posts (incremental)",

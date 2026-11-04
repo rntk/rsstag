@@ -12,6 +12,7 @@ from rsstag.web.routes import RSSTagRoutes
 from rsstag.utils import load_config
 from rsstag.posts import RssTagPosts
 from rsstag.anthologies import RssTagAnthologies
+from rsstag.summary_trees import RssTagSummaryTrees
 from rsstag.chats import RssTagChats
 from rsstag.paths import RssTagPaths
 from rsstag.quality import RssTagQuality
@@ -41,6 +42,7 @@ import rsstag.web.metadata as metadata_handlers
 import rsstag.web.context_filter_handlers as context_filter_handlers
 import rsstag.web.chats as chats_handlers
 import rsstag.web.anthologies as anthologies_handlers
+import rsstag.web.summary_tree as summary_tree_handlers
 import rsstag.web.paths_handlers as paths_handlers
 import rsstag.web.clusters as clusters_handlers
 import rsstag.web.system as system_handlers
@@ -80,6 +82,7 @@ HANDLER_MODULES = (
     context_filter_handlers,
     chats_handlers,
     anthologies_handlers,
+    summary_tree_handlers,
     paths_handlers,
     clusters_handlers,
     system_handlers,
@@ -169,6 +172,8 @@ class RSSTagApplication(object):
         self.chats.prepare()
         self.anthologies = RssTagAnthologies(self.db)
         self.anthologies.prepare()
+        self.summary_trees = RssTagSummaryTrees(self.db)
+        self.summary_trees.prepare()
         self.paths = RssTagPaths(self.db)
         self.paths.prepare()
         self.quality = RssTagQuality(self.db)

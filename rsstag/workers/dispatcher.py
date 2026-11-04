@@ -21,6 +21,7 @@ from rsstag.providers.x import XProvider
 from rsstag.tasks import (
     TASK_CLUSTERING,
     TASK_ANTHOLOGY,
+    TASK_SUMMARY_TREE,
     TASK_DELETE_FEEDS,
     TASK_DOWNLOAD,
     TASK_FASTTEXT,
@@ -201,6 +202,7 @@ def _build_registry(tag_worker: TagWorker, llm_worker: LLMWorker, provider_worke
     registry.register(TASK_TAGS_LLM_RANK, tag_worker.handle_tags_llm_rank)
     registry.register(TASK_POST_GROUPING, llm_worker.handle_post_grouping)
     registry.register(TASK_ANTHOLOGY, llm_worker.handle_anthology)
+    registry.register(TASK_SUMMARY_TREE, llm_worker.handle_summary_tree)
     registry.register(TASK_TOPIC_MERGE, llm_worker.handle_topic_merge)
     registry.register(TASK_TAG_CLASSIFICATION, llm_worker.handle_tags_classification)
     registry.register(TASK_POST_QUALITY, llm_worker.handle_post_quality)

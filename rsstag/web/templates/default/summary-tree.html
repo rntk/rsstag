@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>{{ page_title|e }} | Summary tree</title>
+    {% include "head-data.html" %}
+    <script type="text/javascript" src="/static/js/d3.v6.min.js"></script>
+</head>
+
+<body>
+    {% from 'site-header.html' import site_header with context %}
+    {{ site_header(active='', page_scope='Summary tree', page_title=page_title) }}
+
+    <main class="page stree-page">
+        <nav class="stree-breadcrumbs"><a href="/summary-tree/">Summary trees</a></nav>
+        <div id="summary-tree-app" class="stree-app"></div>
+    </main>
+
+    <script id="summary-tree-data" type="application/json">{{ page_json }}</script>
+    <script type="module">
+        import { initSummaryTree } from '/static/js/summary-tree.js';
+        initSummaryTree();
+    </script>
+</body>
+
+</html>
