@@ -166,15 +166,11 @@ function postLeaves(node, posts) {
   });
 }
 
-/** Keys of nodes expanded by default: the root and, when it is virtual, nothing else. */
+/** Show the second level only when it contains at most five items. */
 export function initialExpanded(tree) {
   const keys = new Set();
-  if (!tree) {
-    return keys;
-  }
-  keys.add(tree.key);
-  if (tree.children.length === 1 && tree.children[0].kind !== POST_KIND) {
-    keys.add(tree.children[0].key);
+  if (tree && tree.children.length > 0 && tree.children.length <= 5) {
+    keys.add(tree.key);
   }
   return keys;
 }

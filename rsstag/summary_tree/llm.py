@@ -9,6 +9,8 @@ from pymongo.database import Database
 
 CACHE_COLLECTION: str = "summary_tree_llm_cache"
 RETRY_DELAYS: Tuple[float, ...] = (2.0, 8.0)
+MAX_OUTAGE_ASKS: int = 3  # consecutive asks ending without any answer before giving up
+RETRY_TEMPERATURE_STEP: float = 0.2
 
 _log: logging.Logger = logging.getLogger("summary_tree.llm")
 
@@ -38,6 +40,7 @@ class SummaryLLM:
         self.calls: int = 0
         self.cached: int = 0
         self.failures: int = 0
+        self._outage_asks: int = 0
 
     def ask(self, prompt: str, accept: Callable[[str], bool]) -> str:
         """Answer accepted by ``accept`` (cached or fresh); '' when none was produced."""
@@ -47,28 +50,40 @@ class SummaryLLM:
             self.cached += 1
             return cached
         self.calls += 1
+        answered: bool = False
         for attempt, delay in enumerate((0.0,) + self._retry_delays):
-            if attempt:
-                time.sleep(delay)
-            answer: str = self._attempt(prompt)
-            if answer.strip() and accept(answer):
+            if attempt and not answered:
+                time.sleep(delay)  # back off only when the model gave nothing (timeout, error)
+            answer: str = self._attempt(prompt, attempt)
+            answered = bool(answer.strip())
+            if answered and accept(answer):
                 self._store(prompt_hash, answer)
+                self._outage_asks = 0
                 return answer
         self.failures += 1
+        self._note_outage(answered)
         return ""
+
+    def _note_outage(self, answered: bool) -> None:
+        """Stop early when the model keeps returning nothing instead of splitting batches forever."""
+        self._outage_asks = 0 if answered else self._outage_asks + 1
+        if self._outage_asks >= MAX_OUTAGE_ASKS:
+            raise SummaryLLMUnavailableError(
+                f"LLM returned no answer for {self._outage_asks} requests in a row; retry later"
+            )
 
     def ensure_available(self) -> None:
         if self.calls > 0 and self.failures >= self.calls and self.cached == 0:
             raise SummaryLLMUnavailableError(f"LLM failed on all {self.calls} calls")
 
-    def _attempt(self, prompt: str) -> str:
+    def _attempt(self, prompt: str, attempt: int = 0) -> str:
         try:
             raw: Any = self._llm.call(
                 self._settings,
                 [prompt],
                 provider_key="worker_llm",
                 default="llamacpp",
-                temperature=0.1,
+                temperature=min(0.7, 0.1 + RETRY_TEMPERATURE_STEP * attempt),
             )
         except Exception as exc:
             _log.error("Summary tree LLM call failed for %s: %s", self._owner, exc)

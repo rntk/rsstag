@@ -5,7 +5,7 @@ import unittest
 from typing import Any, Dict, List
 from unittest.mock import MagicMock
 
-from rsstag.summary_tree.generation import SummaryGenerator, decode_entry, request_item
+from rsstag.summary_tree.generation import SummaryGenerationError, SummaryGenerator, decode_entry, request_item
 from rsstag.summary_tree.model import MAX_CHILDREN, Segment, build_hierarchy, claim_posts, relay
 from rsstag.summary_tree.sources import SourcePost
 
@@ -96,7 +96,7 @@ class TestClaimModel(unittest.TestCase):
             return ""
 
         llm.ask.side_effect = ask
-        with self.assertRaisesRegex(ValueError, "valid cited summary"):
+        with self.assertRaisesRegex(SummaryGenerationError, "valid cited summary"):
             SummaryGenerator(llm, "focus", nodes, evidence, save).run()
         save.assert_not_called()
 

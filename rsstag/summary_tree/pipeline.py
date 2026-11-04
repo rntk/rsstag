@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 
 from pymongo.database import Database
 
-from rsstag.summary_tree.generation import SummaryGenerator
+from rsstag.summary_tree.generation import SummaryGenerationError, SummaryGenerator
 from rsstag.summary_tree.model import build_hierarchy
 from rsstag.summary_tree.results import input_fingerprint, restore, snapshot
 from rsstag.summary_tree.llm import SummaryLLM, SummaryLLMUnavailableError, prepare_cache
@@ -48,7 +48,7 @@ class SummaryTreePipeline:
         except SummaryTreeSuperseded:
             _log.info("Summary tree %s run superseded; stopping", self._tree_id)
             return False
-        except (SummaryTreeError, SummaryLLMUnavailableError) as exc:
+        except (SummaryTreeError, SummaryGenerationError, SummaryLLMUnavailableError) as exc:
             _log.warning("Summary tree %s failed for %s: %s", self._tree_id, self._owner, exc)
             return self._fail(str(exc))
         except Exception as exc:

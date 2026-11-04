@@ -62,6 +62,17 @@ test('poll payload updates preserve expansion and selection', () => {
   assert.equal(view.exclusive, false);
 });
 
+test('polling preserves a fully folded tree and initializes a newly available tree', () => {
+  const view = new SummaryTreeView({}, payload(), null);
+  view.expanded.clear();
+  view.setPayload(payload());
+  assert.equal(view.expanded.size, 0);
+
+  const pending = new SummaryTreeView({}, { result: null }, null);
+  pending.setPayload(payload());
+  assert.deepEqual([...pending.expanded], [...new SummaryTreeView({}, payload(), null).expanded]);
+});
+
 test('post leaves render as escaped, movable and resizable cards', () => {
   const data = payload();
   const view = new SummaryTreeView({}, data, null);

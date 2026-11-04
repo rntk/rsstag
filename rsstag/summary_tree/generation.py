@@ -90,6 +90,10 @@ def decode_entry(entry: Any, allowed: Dict[str, Dict[str, Any]]) -> Optional[Lis
     return segments if any(segment.sources for segment in segments) else []
 
 
+class SummaryGenerationError(RuntimeError):
+    """The model could not produce a valid cited summary for a node."""
+
+
 class SummaryGenerator:
     def __init__(self, llm: SummaryLLM, focus: str, nodes: Dict[str, SummaryNode],
                  evidence: Dict[str, List[str]], save: Callable[[], None]) -> None:
@@ -166,4 +170,4 @@ class SummaryGenerator:
             self._generate(missing[:middle])
             self._generate(missing[middle:])
         elif missing:
-            raise ValueError("Could not generate a valid cited summary. Please retry; completed summaries are cached.")
+            raise SummaryGenerationError("Could not generate a valid cited summary. Please retry; completed summaries are cached.")

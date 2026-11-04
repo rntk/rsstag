@@ -58,6 +58,17 @@ test('builds topics with post leaves', () => {
   );
 });
 
+test('initially shows at most five second-level items and no deeper branches', () => {
+  const tree = buildDisplayTree(result);
+  assert.deepEqual([...initialExpanded(tree)], ['root']);
+  const child = tree.children[0];
+  tree.children = Array.from({ length: 5 }, (_, i) => ({ ...child, key: String(i) }));
+  assert.deepEqual([...initialExpanded(tree)], ['root']);
+  tree.children.push({ ...child, key: 'six' });
+  assert.deepEqual([...initialExpanded(tree)], []);
+  assert.deepEqual([...initialExpanded(null)], []);
+});
+
 test('exclusive toggle walks one branch', () => {
   const tree = buildDisplayTree(result);
   let expanded = initialExpanded(tree);
