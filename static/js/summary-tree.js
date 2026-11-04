@@ -320,13 +320,17 @@ export class SummaryTreeView {
   }
 
   renderHead() {
+    const head = this.root.querySelector('#stree-head');
+    if (head.querySelector('.stree-skipped')?.open) {
+      return;
+    }
     const tree = this.payload;
     const metrics = tree.metrics || {};
     const stats =
       tree.status === 'done'
         ? `${metrics.summarized || 0} of ${metrics.posts || 0} posts · ${metrics.topics || 0} summary groups`
         : '';
-    this.root.querySelector('#stree-head').innerHTML = `
+    head.innerHTML = `
       <a class="stree-back" href="/summary-tree/" title="All summary trees">‹</a>
       <h1 class="stree-title">${escapeHtml(tree.focus)}</h1>
       <span class="stree-muted">${escapeHtml(tree.filters_label)} ${stats ? `· ${escapeHtml(stats)}` : ''}</span>
@@ -334,6 +338,9 @@ export class SummaryTreeView {
       ${isRunning(tree) ? '' : '<button type="button" class="stree-btn" id="stree-rebuild">Rebuild</button>'}
       ${this.skippedBlock()}`;
     this.root.querySelector('#stree-rebuild')?.addEventListener('click', () => this.rebuild());
+    head.querySelector('.stree-skipped')?.addEventListener('toggle', (event) => {
+      if (!event.currentTarget.open) this.renderHead();
+    });
   }
 
   async rebuild() {
@@ -608,7 +615,7 @@ export class SummaryTreeView {
     const items = skipped
       .map(
         (post) =>
-          `<li>${escapeHtml(post.title || post.pid)} <span class="stree-muted">${escapeHtml(post.reason)}</span></li>`
+          `<li><a href="/posts/${encodeURIComponent(post.pid)}">${escapeHtml(post.title || post.pid)}</a> <span class="stree-muted">${escapeHtml(post.reason)}</span></li>`
       )
       .join('');
     return `<details class="stree-skipped"><summary>${skipped.length} posts not used</summary><ul>${items}</ul></details>`;
