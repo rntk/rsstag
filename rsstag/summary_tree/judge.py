@@ -42,6 +42,8 @@ class SummaryJudge:
         self._workers: int = max(1, workers)
         self._retry_delay: float = retry_delay
         self._lock: threading.Lock = threading.Lock()
+        # Caps decisions calls across every caller (nested ask_many pools included).
+        self._slots: threading.Semaphore = threading.Semaphore(self._workers)
         self._disabled: bool = False
         self.calls: int = 0
         self.cached: int = 0
@@ -85,7 +87,8 @@ class SummaryJudge:
             with self._lock:
                 self.calls += 1
             try:
-                response: DecisionResponse = self._client.call(state, questions)
+                with self._slots:
+                    response: DecisionResponse = self._client.call(state, questions)
             except DecisionsError as exc:
                 _log.warning("Summary tree decisions call failed for %s: %s", self._owner, exc)
                 with self._lock:

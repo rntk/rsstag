@@ -37,6 +37,10 @@ class GroqCom:
             self.__model = model
         self.__timeout = timeout
 
+    @property
+    def model(self) -> str:
+        return self.__model
+
     def call(
         self,
         user_msgs: List[str],

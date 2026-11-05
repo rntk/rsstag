@@ -9,6 +9,7 @@ bottom-up, along the resulting structure.
 
 import json
 import logging
+from concurrent.futures import FIRST_COMPLETED, Future, wait
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Tuple
 
@@ -18,6 +19,7 @@ from rsstag.summary_tree.judge import SummaryJudge
 from rsstag.summary_tree.llm import SummaryLLM
 from rsstag.summary_tree.model import ROOT, TOPIC, Nodes, add_node, summary_text
 from rsstag.summary_tree.parsers import extract_object
+from rsstag.summary_tree.pool import worker_pool
 
 LEAF_MAX_POSTS: int = 4  # a topic with at most this many posts is not split further
 MAX_BRANCHES: int = 7
@@ -140,7 +142,11 @@ class TopicBuilder:
     """Grow topic nodes above summarized post nodes; returns the root node id."""
 
     def __init__(self, llm: SummaryLLM, focus: str, nodes: Nodes, save: Callable[[], None],
-                 judge: Optional[SummaryJudge] = None) -> None:
+                 judge: Optional[SummaryJudge] = None, workers: int = 1,
+                 heartbeat: Optional[Callable[[], None]] = None) -> None:
+        self._workers: int = max(1, workers)
+        self._heartbeat: Callable[[], None] = heartbeat or (lambda: None)
+        self._splits: Dict[Tuple[str, ...], Optional[Groups]] = {}
         self._llm: SummaryLLM = llm
         self._judge: Optional[SummaryJudge] = judge
         self._focus: str = focus
@@ -148,15 +154,39 @@ class TopicBuilder:
         self._save: Callable[[], None] = save
 
     def build(self, post_node_ids: List[str]) -> str:
+        self._plan(post_node_ids)
         children: List[str] = self._grow(post_node_ids, [self._focus], 0)
         root: str = add_node(self._nodes, ROOT, self._focus, children, path=[self._focus])
         self._save()
         return root
 
+    def _plan(self, ids: List[str]) -> None:
+        """Compute independent splits concurrently; assemble nodes in stable order."""
+        self._splits = {}
+        queue: List[Tuple[List[str], List[str], int]] = [(ids, [self._focus], 0)]
+        pending: Dict[Future, Tuple[List[str], List[str], int]] = {}
+        with worker_pool(self._workers, self._llm) as pool:
+            while queue or pending:
+                while queue and len(pending) < self._workers:
+                    members, path, depth = queue.pop(0)
+                    if len(members) <= LEAF_MAX_POSTS or depth >= MAX_DEPTH:
+                        continue
+                    pending[pool.submit(self.split, members, path)] = (members, path, depth)
+                if not pending:
+                    continue
+                done, _ = wait(pending, timeout=10, return_when=FIRST_COMPLETED)
+                self._heartbeat()
+                for future in done:
+                    members, path, depth = pending.pop(future)
+                    groups: Optional[Groups] = future.result()
+                    self._splits[tuple(members)] = groups
+                    queue.extend((children, path + [title], depth + 1)
+                                 for title, children in groups or [])
+
     def _grow(self, ids: List[str], path: List[str], depth: int) -> List[str]:
         groups: Optional[Groups] = None
         if len(ids) > LEAF_MAX_POSTS and depth < MAX_DEPTH:
-            groups = self.split(ids, path)
+            groups = self._splits.get(tuple(ids))
         if not groups:
             return ids
         children: List[str] = []

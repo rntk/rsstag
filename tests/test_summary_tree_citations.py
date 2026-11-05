@@ -1,12 +1,14 @@
 """Regression tests for evidence preservation and claim-level provenance."""
 
 import json
+import threading
+import time
 import unittest
 from typing import Any, Dict, List
 from unittest.mock import MagicMock
 
 from rsstag.summary_tree.generation import SummaryGenerationError, SummaryGenerator, decode_entry, level_of
-from rsstag.summary_tree.model import MAX_CHILDREN, ROOT, Segment, add_node, build_post_nodes, claim_posts, relay
+from rsstag.summary_tree.model import MAX_CHILDREN, ROOT, Segment, SummaryNode, add_node, build_post_nodes, claim_posts, relay
 from rsstag.summary_tree.sources import SourcePost
 
 
@@ -44,7 +46,7 @@ class TestClaimModel(unittest.TestCase):
             self.assertIsNone(decode_entry({"segments": [{"text": "A fact", "from": refs}]}, allowed))
         self.assertIsNotNone(decode_entry({"segments": [{"text": "A fact", "from": ["2"]}]}, allowed))
 
-    def test_partial_batch_saves_success_and_splits_missing(self) -> None:
+    def test_generates_one_item_per_request(self) -> None:
         posts: List[SourcePost] = [SourcePost(str(i), str(i), "Text", "f", "", i) for i in range(3)]
         root, nodes, evidence = build_hierarchy(posts, "focus")
         llm: MagicMock = MagicMock()
@@ -68,9 +70,135 @@ class TestClaimModel(unittest.TestCase):
         save: MagicMock = MagicMock()
         SummaryGenerator(llm, "focus", nodes, evidence, save).run()
         self.assertTrue(all(node.segments is not None for node in nodes.values()))
-        self.assertEqual(calls, [3, 1, 1, 1])
+        self.assertEqual(calls, [1, 1, 1, 1])
         self.assertGreaterEqual(save.call_count, 4)
         self.assertEqual(claim_posts(nodes[root], 0, nodes), ["0"])
+
+    def test_generation_concurrency_is_bounded_by_workers(self) -> None:
+        posts: List[SourcePost] = [SourcePost(str(i), str(i), "Text", "f", "", i) for i in range(8)]
+        post_nodes, nodes, evidence = build_post_nodes(posts)
+        gate: threading.Barrier = threading.Barrier(2)
+        lock: threading.Lock = threading.Lock()
+        active: int = 0
+        maximum: int = 0
+
+        def ask(prompt: str, accept: Any) -> str:
+            nonlocal active, maximum
+            data: Dict[str, Any] = json.loads('{"focus":' + prompt.split('\n{"focus":', 1)[1])
+            item: Dict[str, Any] = data["nodes"][0]
+            with lock:
+                active += 1
+                maximum = max(maximum, active)
+            try:
+                gate.wait(timeout=3)
+                time.sleep(0.02)
+                answer: str = json.dumps({"summaries": [{"id": "item", "segments": [
+                    {"text": item["title"] + " fact", "from": ["1"]}]}]})
+                accept(answer)
+                return answer
+            finally:
+                with lock:
+                    active -= 1
+
+        llm: MagicMock = MagicMock()
+        llm.ask.side_effect = ask
+        save_threads: List[int] = []
+        caller_thread: int = threading.get_ident()
+        SummaryGenerator(llm, "focus", nodes, evidence,
+                         lambda: save_threads.append(threading.get_ident()),
+                         list(post_nodes.values()), workers=2).run()
+        self.assertEqual(maximum, 2)
+        self.assertEqual(llm.ask.call_count, 8)
+        self.assertTrue(save_threads)
+        self.assertEqual(set(save_threads), {caller_thread})
+
+    def test_only_coordinator_mutates_and_saves_completed_nodes(self) -> None:
+        posts: List[SourcePost] = [SourcePost(str(i), str(i), "Text", "f", "", i) for i in range(4)]
+        post_nodes, nodes, evidence = build_post_nodes(posts)
+        main_thread: int = threading.get_ident()
+        observed: List[bool] = []
+        save_threads: List[int] = []
+        llm: MagicMock = MagicMock()
+
+        def ask(prompt: str, accept: Any) -> str:
+            data: Dict[str, Any] = json.loads('{"focus":' + prompt.split('\n{"focus":', 1)[1])
+            item: Dict[str, Any] = data["nodes"][0]
+            # Workers must not publish their result into the shared node map.
+            requested: SummaryNode = next(node for node in nodes.values() if node.title == item["title"])
+            observed.append(requested.segments is None)
+            answer: str = json.dumps({"summaries": [{"id": "item", "segments": [
+                {"text": item["title"] + " fact", "from": ["1"]}]}]})
+            accept(answer)
+            return answer
+
+        llm.ask.side_effect = ask
+        def save() -> None:
+            save_threads.append(threading.get_ident())
+            self.assertTrue(any(node.segments is not None for node in nodes.values()))
+        SummaryGenerator(llm, "focus", nodes, evidence, save, list(post_nodes.values()), workers=3).run()
+        self.assertTrue(all(observed))
+        self.assertTrue(save_threads)
+        self.assertEqual(set(save_threads), {main_thread})
+
+    def test_failed_item_is_bounded_and_successful_siblings_are_not_regenerated(self) -> None:
+        posts: List[SourcePost] = [SourcePost(str(i), str(i), "Text", "f", "", i) for i in range(3)]
+        post_nodes, nodes, evidence = build_post_nodes(posts)
+        calls: Dict[str, int] = {}
+
+        def ask(prompt: str, accept: Any) -> str:
+            data: Dict[str, Any] = json.loads('{"focus":' + prompt.split('\n{"focus":', 1)[1])
+            item: Dict[str, Any] = data["nodes"][0]
+            title: str = item["title"]
+            calls[title] = calls.get(title, 0) + 1
+            if title == "1":
+                return ""
+            answer: str = json.dumps({"summaries": [{"id": "item", "segments": [
+                {"text": title + " fact", "from": ["1"]}]}]})
+            accept(answer)
+            return answer
+
+        llm: MagicMock = MagicMock()
+        llm.ask.side_effect = ask
+        generator: SummaryGenerator = SummaryGenerator(
+            llm, "focus", nodes, evidence, MagicMock(), list(post_nodes.values()),
+            tolerate_failures=True, workers=2)
+        generator.run()
+        generator.run()
+        self.assertEqual(calls, {str(i): 1 for i in range(3)})
+        self.assertTrue(nodes[post_nodes["1"]].failed)
+
+    def test_per_item_prompt_and_cache_key_ignore_tree_local_ids(self) -> None:
+        prompt_cache: Dict[str, str] = {}
+        prompts: List[str] = []
+        llm: MagicMock = MagicMock()
+
+        def ask(prompt: str, accept: Any) -> str:
+            prompts.append(prompt)
+            cached: str = prompt_cache.get(prompt, "")
+            if cached and accept(cached):
+                return cached
+            answer: str = json.dumps({"summaries": [{"id": "item", "segments": [
+                {"text": "Title fact", "from": ["1"]}]}]})
+            accept(answer)
+            prompt_cache[prompt] = answer
+            return answer
+
+        llm.ask.side_effect = ask
+        target: SourcePost = SourcePost("target-id", "Title", "Same evidence", "f", "", 0)
+        trees: List[List[SourcePost]] = [
+            [target],
+            [SourcePost("preceding-id", "Unrelated", "Other evidence", "f", "", 1), target],
+        ]
+        target_node_ids: List[str] = []
+        for posts in trees:
+            post_nodes, nodes, evidence = build_post_nodes(posts)
+            target_node_ids.append(post_nodes["target-id"])
+            SummaryGenerator(llm, "focus", nodes, evidence, MagicMock(),
+                             [post_nodes["target-id"]]).run()
+        self.assertNotEqual(target_node_ids[0], target_node_ids[1])
+        self.assertEqual(prompts[0], prompts[1])
+        payload: Dict[str, Any] = json.loads('{"focus":' + prompts[0].split('\n{"focus":', 1)[1])
+        self.assertEqual(payload["required_output_ids"], ["item"])
 
     def test_failed_post_is_marked_when_tolerated(self) -> None:
         post_nodes, nodes, evidence = build_post_nodes([SourcePost("p", "Title", "Evidence", "f", "", 0)])

@@ -57,6 +57,10 @@ class SummaryTreePipeline:
         self._tree_id: str = ""
         self._run_id: str = ""
         self._stage_name: str = ""
+        self._stage_started: float = time.monotonic()
+        self._stage_seconds: Dict[str, float] = {}
+        self._last_saved: float = 0.0
+        self._unsaved: bool = False
         self._posts: List[SourcePost] = []
         self._nodes: Nodes = {}
         self._evidence: Dict[str, List[str]] = {}
@@ -85,7 +89,22 @@ class SummaryTreePipeline:
         _log.info("Summary tree %s done for %s: %s", self._tree_id, self._owner, result["metrics"])
         return True
 
+    def _flush(self) -> None:
+        """Publish changes the throttle skipped."""
+        if self._unsaved:
+            self._last_saved = 0.0
+            self._save()
+
+    def _flush_before_failure(self) -> None:
+        try:
+            self._flush()
+        except SummaryTreeSuperseded:
+            _log.info("Summary tree %s superseded while saving partial state", self._tree_id)
+        except Exception:
+            _log.exception("Can't save partial summary tree %s before failing", self._tree_id)
+
     def _fail(self, message: str) -> bool:
+        self._flush_before_failure()
         self._store.fail(self._tree_id, self._owner, self._run_id, message)
         return False
 
@@ -112,11 +131,14 @@ class SummaryTreePipeline:
             self._verifier = ClaimVerifier(self._judge, focus, self._nodes, self._evidence)
         relevant: List[str] = self._summarize_posts(focus, post_nodes)
         self._stage("topics")
-        self._root = TopicBuilder(self._llm, focus, self._nodes, self._save, self._judge).build(relevant)
+        self._root = TopicBuilder(self._llm, focus, self._nodes, self._save, self._judge,
+                                  workers=self._llm.workers,
+                                  heartbeat=lambda: self._heartbeat(self._progress())).build(relevant)
         targets: List[str] = topic_ids(self._nodes)
         self._stage("summaries", len(targets))
         SummaryGenerator(self._llm, focus, self._nodes, self._evidence, self._save, targets,
-                         verifier=self._verifier).run()
+                         verifier=self._verifier, workers=self._llm.workers,
+                         heartbeat=lambda: self._heartbeat(self._progress())).run()
         if not self._nodes[self._root].segments:
             raise SummaryTreeError("Could not produce a supported overview. Please retry.")
         return self._snapshot()
@@ -126,7 +148,8 @@ class SummaryTreePipeline:
         self._stage("posts", len(self._nodes))
         self._save()
         SummaryGenerator(self._llm, focus, self._nodes, self._evidence, self._save,
-                         list(self._nodes), tolerate_failures=True, verifier=self._verifier).run()
+                         list(self._nodes), tolerate_failures=True, verifier=self._verifier, workers=self._llm.workers,
+                         heartbeat=lambda: self._heartbeat(self._progress())).run()
         relevant: List[str] = [post_nodes[p.pid] for p in self._posts if self._nodes[post_nodes[p.pid]].segments]
         if relevant:
             return relevant
@@ -173,6 +196,7 @@ class SummaryTreePipeline:
         verdicts: List[str] = [screen.verdict for screen in self._screens.values()]
         return {
             "decisions_calls": self._judge.calls, "decisions_cached": self._judge.cached,
+            "decisions_input_tokens": self._judge.input_tokens,
             "decisions_failures": self._judge.failures, "decisions_active": self._judge.active,
             "screened": len(verdicts), "screened_out": verdicts.count(IRRELEVANT),
             "passages_kept": sum(len(s.rows) for s in self._screens.values()),
@@ -182,9 +206,18 @@ class SummaryTreePipeline:
 
     def _snapshot(self) -> Dict[str, Any]:
         return snapshot(self._root, self._nodes, self._evidence, self._posts, self._llm,
-                        self._decision_metrics())
+                        {**self._decision_metrics(), "stage_seconds": {
+                            **self._stage_seconds,
+                            self._stage_name: round(time.monotonic() - self._stage_started, 3)}})
 
     def _save(self) -> None:
+        """Publish a partial snapshot, throttled to once per second; see ``_flush``."""
+        now: float = time.monotonic()
+        if now - self._last_saved < 1.0:
+            self._unsaved = True
+            return
+        self._last_saved = now
+        self._unsaved = False
         result: Dict[str, Any] = self._snapshot()
         if not self._store.save_partial(self._tree_id, self._owner, self._run_id, result):
             raise SummaryTreeSuperseded()
@@ -199,6 +232,11 @@ class SummaryTreePipeline:
         return sum(self._nodes[node_id].segments is not None for node_id in topic_ids(self._nodes))
 
     def _stage(self, stage: str, total: int = 0) -> None:
+        self._flush()
+        now: float = time.monotonic()
+        if self._stage_name:
+            self._stage_seconds[self._stage_name] = round(now - self._stage_started, 3)
+        self._stage_started = now
         self._stage_name = stage
         _log.info("Summary tree %s (%s): stage %s", self._tree_id, self._owner, stage)
         if not self._store.set_stage(self._tree_id, self._owner, self._run_id, stage, total):

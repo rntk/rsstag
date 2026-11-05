@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 from rsstag.decisions.client import DecisionsClient, DecisionsError
 from rsstag.decisions.models import DecisionResponse, Question
 from rsstag.summary_tree.judge import SummaryJudge, build_judge
-from rsstag.summary_tree.model import Segment, build_post_nodes
+from rsstag.summary_tree.model import TOPIC, Segment, add_node, build_post_nodes
 from rsstag.summary_tree.pipeline import SummaryTreePipeline
 from rsstag.summary_tree.screening import (
     IRRELEVANT,
@@ -154,6 +154,17 @@ class TestVerifier(unittest.TestCase):
         self.assertIsNone(bad[node_id])
         self.assertEqual(verifier.filter("overview", {node_id: [Segment("An invented claim.", rows)]})[node_id][0].text,
                          "An invented claim.")
+
+    def test_all_dropped_detail_claim_rejects_answer(self) -> None:
+        post_nodes, nodes, evidence = build_post_nodes(
+            [SourcePost("1", "T", "Apple crop grew.", "f", "", 1)])
+        post_id: str = post_nodes["1"]
+        nodes[post_id].segments = [Segment("Apple crop grew", [{"kind": "rows", "first": 2, "last": 2}])]
+        topic_id: str = add_node(nodes, TOPIC, "Harvest", [post_id], path=["apple", "Harvest"])
+        claim: List[Dict[str, Any]] = [{"kind": "claim", "child": post_id, "segment": 0}]
+        verifier: ClaimVerifier = ClaimVerifier(_judge(), "apple", nodes, evidence)
+        rejected = verifier.filter("detail", {topic_id: [Segment("An invented claim.", claim)]})
+        self.assertIsNone(rejected[topic_id])
 
 
 class TestPipelineWithJudge(unittest.TestCase):

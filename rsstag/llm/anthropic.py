@@ -36,6 +36,10 @@ class Anthropic:
             max_retries=max_retries,
         )
 
+    @property
+    def model(self) -> str:
+        return self.__model
+
     def call(self, user_msgs: List[str]) -> str:
         messages = []
         for msg in user_msgs:

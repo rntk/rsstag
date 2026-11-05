@@ -45,7 +45,8 @@ def snapshot(root: Optional[str], nodes: Nodes, evidence: Dict[str, List[str]],
         "skipped": len(result["skipped"]), "topics": sum(n.kind == TOPIC for n in nodes.values()),
         "completed_nodes": sum(n.segments is not None for n in nodes.values()), "total_nodes": len(nodes),
         "levels": _depth(root, nodes) if root else 0,
-        "llm_calls": llm.calls, "llm_cached": llm.cached, "llm_failures": llm.failures,
+        "llm_attempts": llm.attempts, "llm_request_seconds": round(llm.request_seconds, 3),
+        "llm_invalid_answers": llm.invalid_answers, "llm_calls": llm.calls, "llm_cached": llm.cached, "llm_failures": llm.failures,
         **(extra_metrics or {}),
     }
     return result

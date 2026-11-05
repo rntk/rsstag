@@ -1944,7 +1944,10 @@ class _SummaryTreeWorker:
             from rsstag.summary_tree.judge import build_judge
             from rsstag.summary_tree.pipeline import SummaryTreePipeline
 
-            settings: Dict[str, Any] = task.get("user", {}).get("settings", {}) or {}
+            settings: Dict[str, Any] = dict(task.get("user", {}).get("settings", {}) or {})
+            configured_workers: Any = self._config.get("settings", {}).get("summary_tree_workers")
+            if configured_workers is not None:
+                settings.setdefault("summary_tree_workers", configured_workers)
             pipeline: SummaryTreePipeline = SummaryTreePipeline(
                 self._db, self._llm, owner=owner, settings=settings,
                 judge=build_judge(self._db, self._config, owner, settings),

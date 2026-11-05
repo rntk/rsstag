@@ -1,6 +1,8 @@
 """Topic taxonomy: validation of model groupings and recursive splitting."""
 
 import json
+import threading
+import time
 import unittest
 from typing import Any, Callable, Dict, List
 from unittest.mock import MagicMock
@@ -61,6 +63,44 @@ class TestDecodeAssignment(unittest.TestCase):
 
 
 class TestTopicBuilder(unittest.TestCase):
+    def test_independent_topic_splits_run_in_parallel_and_assemble_stably(self) -> None:
+        titles: List[str] = [f"{group} {color} {index}" for group in ("Alpha", "Beta")
+                             for color in ("red", "blue") for index in range(3)]
+        ids, nodes = _summarized(titles)
+        gate: threading.Barrier = threading.Barrier(2)
+        lock: threading.Lock = threading.Lock()
+        active: int = 0
+        maximum: int = 0
+
+        def answer(prompt: str, accept: Callable[[str], bool]) -> str:
+            nonlocal active, maximum
+            data: Dict[str, Any] = _payload(prompt)
+            if data["path"].count("›"):
+                with lock:
+                    active += 1
+                    maximum = max(maximum, active)
+                try:
+                    gate.wait(timeout=3)
+                    time.sleep(0.01 if data["path"].endswith("Alpha") else 0.02)
+                finally:
+                    with lock:
+                        active -= 1
+            return _by_first_word(prompt, accept)
+
+        llm: MagicMock = MagicMock()
+        llm.ask.side_effect = answer
+        root: str = TopicBuilder(llm, "apple", nodes, MagicMock(), workers=2).build(ids)
+        hierarchy: List[Any] = [
+            (nodes[category].title,
+             [(nodes[subtopic].title, [nodes[post].title for post in nodes[subtopic].children])
+              for subtopic in nodes[category].children])
+            for category in nodes[root].children
+        ]
+        self.assertEqual(maximum, 2)
+        self.assertEqual([title for title, _ in hierarchy], ["Alpha", "Beta"])
+        self.assertEqual([[title for title, _ in subtopics] for _, subtopics in hierarchy],
+                         [["red", "blue"], ["red", "blue"]])
+
     def test_builds_categories_then_subtopics(self) -> None:
         titles: List[str] = [f"iPhone battery {i}" for i in range(3)] + [f"iPhone camera {i}" for i in range(3)] + [
             f"Mac M5 {i}" for i in range(2)]

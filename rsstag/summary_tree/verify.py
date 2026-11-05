@@ -4,12 +4,12 @@ Per sourced segment, a Noul asks whether its cited text supports it:
 
   supported >= NO  -> keep the segment
   supported <  NO  -> drop it (and connector prose left dangling)
-  every claim dropped -> post: reject the answer (LLM retries);
-                         detail: keep the original answer, logged
+  every claim dropped -> reject the answer (bounded LLM retries)
   judge failure    -> keep the answer as validated by citations alone
 """
 
 import logging
+import threading
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from rsstag.summary_tree import questions as q
@@ -28,6 +28,7 @@ class ClaimVerifier:
         self._focus: str = focus
         self._nodes: Nodes = nodes
         self._evidence: Dict[str, List[str]] = evidence
+        self._lock: threading.Lock = threading.Lock()
         self.dropped: int = 0
 
     def filter(self, level: str, parsed: Dict[str, Optional[List[Segment]]]
@@ -74,7 +75,8 @@ class ClaimVerifier:
         for index, segment in enumerate(segments):
             score: Optional[float] = noul(answers, f"s{index}") if segment.sources else None
             if score is not None and score < q.NO:
-                self.dropped += 1
+                with self._lock:
+                    self.dropped += 1
                 _log.info("Unsupported claim dropped from %s: %s", node.id, segment.text.strip()[:120])
                 continue
             kept.append(segment)
@@ -82,10 +84,8 @@ class ClaimVerifier:
             return segments
         if any(s.sources for s in kept):
             return _tidy(kept)
-        if level == "post":
-            return None
-        _log.warning("Every claim of %s looked unsupported; keeping the cited answer", node.id)
-        return segments
+        _log.warning("Every claim of %s looked unsupported; rejecting the answer", node.id)
+        return None
 
 
 def _tidy(segments: List[Segment]) -> List[Segment]:
