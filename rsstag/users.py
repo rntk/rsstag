@@ -86,6 +86,8 @@ class RssTagUsers:
             "batch_llm": "openai",
             "worker_llm": "llamacpp",
             "realtime_llm": "llamacpp",
+            "worker_decisions": "",
+            "realtime_decisions": "",
             "context_filter": {},
         }
 
@@ -224,6 +226,12 @@ class RssTagUsers:
         try:
             for k, v in settings.items():
                 if k in self._settings:
+                    if k in ("worker_decisions", "realtime_decisions") and v not in (
+                        "",
+                        "jev",
+                        "llamacpp",
+                    ):
+                        raise ValueError("Unknown decisions provider")
                     old_value = self._settings[k]
                     if isinstance(old_value, bool):
                         new_settings[k] = bool(v)

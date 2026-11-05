@@ -123,6 +123,34 @@ class TestWebUsersSettings(MongoWebTestCase):
         )
         self.assertEqual(resp.status_code, 400)
 
+    def test_decisions_providers_can_be_saved_independently_and_reset(self) -> None:
+        payload: dict[str, str]
+        for payload in (
+            {"worker_decisions": "jev", "realtime_decisions": "llamacpp"},
+            {"worker_decisions": "llamacpp", "realtime_decisions": "jev"},
+            {"worker_decisions": "", "realtime_decisions": ""},
+        ):
+            with self.subTest(payload=payload):
+                resp: Response = self.auth_client.post("/settings", json=payload)
+                self.assertEqual(resp.status_code, 200)
+                updated_user: dict = self.app.users.get_by_sid(self.user_sid)
+                key: str
+                provider: str
+                for key, provider in payload.items():
+                    self.assertEqual(updated_user["settings"][key], provider)
+
+    def test_invalid_decisions_provider_does_not_change_settings(self) -> None:
+        key: str
+        for key in ("worker_decisions", "realtime_decisions"):
+            with self.subTest(key=key):
+                before: dict = self.app.users.get_by_sid(self.user_sid)["settings"]
+                resp: Response = self.auth_client.post(
+                    "/settings", json={key: "openai"}
+                )
+                self.assertEqual(resp.status_code, 400)
+                after: dict = self.app.users.get_by_sid(self.user_sid)["settings"]
+                self.assertEqual(after, before)
+
     def test_settings_post_empty_body_returns_400(self) -> None:
         resp = self.auth_client.post(
             "/settings",

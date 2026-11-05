@@ -146,3 +146,46 @@ Stop the test database when finished:
 ```bash
 docker compose -f docker-compose.test.yml down
 ```
+
+### Decisions API clients
+
+`rsstag.decisions` supports hosted TypeSafe/Jev and a local Jev-compatible
+llama.cpp server. Both send native typed questions to `/v1/systemone` and return
+validated answers with probabilities, model metadata, and token usage.
+The local server must expose that endpoint.
+
+Configure `[decisions]` in `default.conf` with `provider=jev` or
+`provider=llamacpp` and a request `timeout` in seconds. Hosted credentials and
+model settings belong in `[jev]`; local settings belong in
+`[llamacpp_decisions]`. Hosts may include a proxy prefix or end in `/v1`.
+Local authentication is optional. Keep API tokens in server configuration.
+Users can select Worker and Realtime decisions providers independently in
+Settings, just as they can for LLMs. Web/API handlers use
+`create_decisions_client(config, user_settings=user["settings"])`, which reads
+`realtime_decisions`. Workers pass `provider_key="worker_decisions"` with the
+same saved preferences. Each unset preference uses the server default, and an
+explicit `provider` takes precedence.
+
+```python
+from rsstag.decisions import NoulQuestion, create_decisions_client
+
+client = create_decisions_client(config)
+response = client.call(
+    state={"message": "I was charged twice this month."},
+    questions={
+        "duplicate_charge": NoulQuestion(
+            instructions="Does the message report a duplicate charge?"
+        ),
+    },
+)
+probability = response.answers["duplicate_charge"].noul
+```
+
+`ChoiceQuestion`, `ScoreQuestion`, and `BoxQuestion` are also available, and
+questions can be bundled in one call. Raw question dictionaries are accepted.
+Calls with image `assets` or box questions set the image opt-in header;
+`long_context=True` sets the long-context opt-in header. Image assets use the
+JSON/base64 format in the
+[TypeSafe API schema](https://api.typesafe.ai/openapi.json).
+HTTP, transport, and invalid response failures raise `DecisionsError`; invalid
+request data raises `ValueError`. Application code owns thresholds and actions.

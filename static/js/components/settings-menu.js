@@ -220,6 +220,34 @@ export default class SettingsMenu extends React.Component {
                 {llmOptions}
               </select>
             </div>
+            <div id="worker_decisions_">
+              <label htmlFor="worker_decisions">Worker Decisions API</label>
+              <br />
+              <select
+                id="worker_decisions"
+                name="worker_decisions"
+                value={this.state.settings.worker_decisions || ''}
+                onChange={this.changeStringSettings}
+              >
+                <option value="">Server default</option>
+                <option value="llamacpp">LlamaCPP</option>
+                <option value="jev">Jev (TypeSafe)</option>
+              </select>
+            </div>
+            <div id="realtime_decisions_">
+              <label htmlFor="realtime_decisions">Realtime Decisions API</label>
+              <br />
+              <select
+                id="realtime_decisions"
+                name="realtime_decisions"
+                value={this.state.settings.realtime_decisions || ''}
+                onChange={this.changeStringSettings}
+              >
+                <option value="">Server default</option>
+                <option value="llamacpp">LlamaCPP</option>
+                <option value="jev">Jev (TypeSafe)</option>
+              </select>
+            </div>
             <div>
               <label htmlFor="only_unread">
                 <input
