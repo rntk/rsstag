@@ -8,6 +8,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from rsstag.summary_tree.llm import SummaryLLM
 from rsstag.summary_tree.model import CHUNK, POST, ROOT, TOPIC, Segment, SummaryNode, relay
 from rsstag.summary_tree.parsers import extract_object
+from rsstag.summary_tree.verify import ClaimVerifier
 
 BATCH_SIZE: int = 8
 BATCH_CHARS: int = 24000
@@ -146,7 +147,9 @@ class SummaryGenerator:
 
     def __init__(self, llm: SummaryLLM, focus: str, nodes: Dict[str, SummaryNode],
                  evidence: Dict[str, List[str]], save: Callable[[], None],
-                 targets: Optional[List[str]] = None, tolerate_failures: bool = False) -> None:
+                 targets: Optional[List[str]] = None, tolerate_failures: bool = False,
+                 verifier: Optional[ClaimVerifier] = None) -> None:
+        self._verifier: Optional[ClaimVerifier] = verifier
         self._llm: SummaryLLM = llm
         self._focus: str = focus
         self._nodes: Dict[str, SummaryNode] = nodes
@@ -197,7 +200,7 @@ class SummaryGenerator:
             allowed[node.id] = citations
 
         def accept(raw: str) -> bool:
-            return self._accept(raw, batch, allowed)
+            return self._accept(raw, batch, allowed, level)
 
         self._llm.ask(build_prompt(level, self._focus, items), accept)
         missing: List[SummaryNode] = [node for node in batch if node.segments is None]
@@ -209,7 +212,7 @@ class SummaryGenerator:
             self._give_up(missing[0])
 
     def _accept(self, raw: str, batch: List[SummaryNode],
-                allowed: Dict[str, Dict[str, Dict[str, Any]]]) -> bool:
+                allowed: Dict[str, Dict[str, Dict[str, Any]]], level: str = "") -> bool:
         data: Optional[Dict[str, Any]] = extract_object(raw)
         entries: Any = data.get("summaries") if data else None
         if not isinstance(entries, list):
@@ -217,13 +220,18 @@ class SummaryGenerator:
         ids: List[Any] = [entry.get("id") if isinstance(entry, dict) else None for entry in entries]
         if any(not isinstance(node_id, str) or node_id not in allowed for node_id in ids) or len(set(ids)) != len(ids):
             return False
+        decoded: Dict[str, Optional[List[Segment]]] = {
+            entry["id"]: decode_entry(entry, allowed[entry["id"]]) for entry in entries
+            if self._nodes[entry["id"]].segments is None
+        }
+        if self._verifier is not None:
+            decoded = self._verifier.filter(level, decoded)
         changed: bool = False
-        for entry in entries:
-            node: SummaryNode = self._nodes[entry["id"]]
-            parsed: Optional[List[Segment]] = decode_entry(entry, allowed[node.id])
+        for node_id, parsed in decoded.items():
+            node: SummaryNode = self._nodes[node_id]
             if node.children and allowed[node.id] and parsed == []:
                 continue  # a branch with relevant children must say something
-            if parsed is not None and node.segments is None:
+            if parsed is not None:
                 node.segments = parsed
                 changed = True
         if changed:

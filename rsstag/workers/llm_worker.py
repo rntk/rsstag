@@ -1926,9 +1926,10 @@ class _AnthologyWorker:
 class _SummaryTreeWorker:
     """Summary tree generation operations."""
 
-    def __init__(self, db: Any, llm: LLMRouter) -> None:
+    def __init__(self, db: Any, llm: LLMRouter, config: Optional[Dict[str, Any]] = None) -> None:
         self._db: Any = db
         self._llm: LLMRouter = llm
+        self._config: Dict[str, Any] = config or {}
 
     def handle_summary_tree(self, task: Dict[str, Any]) -> bool:
         from rsstag.summary_trees import RssTagSummaryTrees
@@ -1940,11 +1941,13 @@ class _SummaryTreeWorker:
             logging.error("Summary tree task missing tree id or owner: %s", task)
             return False
         try:
+            from rsstag.summary_tree.judge import build_judge
             from rsstag.summary_tree.pipeline import SummaryTreePipeline
 
+            settings: Dict[str, Any] = task.get("user", {}).get("settings", {}) or {}
             pipeline: SummaryTreePipeline = SummaryTreePipeline(
-                self._db, self._llm, owner=owner,
-                settings=task.get("user", {}).get("settings", {}),
+                self._db, self._llm, owner=owner, settings=settings,
+                judge=build_judge(self._db, self._config, owner, settings),
             )
             return pipeline.run(tree_doc)
         except Exception as exc:
@@ -2024,6 +2027,7 @@ class LLMWorker(BaseWorker):
         self._summary_tree_worker: _SummaryTreeWorker = _SummaryTreeWorker(
             self._db,
             self._llm,
+            self._config,
         )
         self._topic_merge_worker: _TopicMergeWorker = _TopicMergeWorker(
             self._db,

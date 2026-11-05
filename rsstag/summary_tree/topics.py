@@ -12,6 +12,9 @@ import logging
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Tuple
 
+from rsstag.summary_tree import questions as q
+from rsstag.summary_tree.assignment import assign_topics
+from rsstag.summary_tree.judge import SummaryJudge
 from rsstag.summary_tree.llm import SummaryLLM
 from rsstag.summary_tree.model import ROOT, TOPIC, Nodes, add_node, summary_text
 from rsstag.summary_tree.parsers import extract_object
@@ -23,6 +26,7 @@ MIN_COVERAGE: float = 0.75  # share of a batch an answer must assign
 DIGEST_CHARS: int = 320
 BATCH_CHARS: int = 20000
 TITLE_CHARS: int = 80
+DESCRIPTION_CHARS: int = 240
 OTHER_TITLE: str = "Other"
 
 INSTRUCTIONS: str = '''TASK: GROUP POSTS INTO SUB-TOPICS
@@ -106,11 +110,39 @@ def decode_assignment(raw: str, local: Dict[str, str], existing: List[str],
     return _Assignment(topics)
 
 
+def decode_titles(raw: str) -> Optional[Dict[str, str]]:
+    """Validated proposal: 2..MAX_BRANCHES distinct titles with descriptions."""
+    data = extract_object(raw)
+    entries = data.get("topics") if data else None
+    if not isinstance(entries, list):
+        return None
+    topics: Dict[str, str] = {}
+    for entry in entries:
+        title: Optional[str] = _clean_title(entry.get("title")) if isinstance(entry, dict) else None
+        if title is None:
+            return None
+        if title.casefold() in {OTHER_TITLE.casefold()} | {t.casefold() for t in topics}:
+            continue
+        description: str = " ".join(str(entry.get("description") or "").split())[:DESCRIPTION_CHARS]
+        topics[title] = description or title
+    return topics if 2 <= len(topics) <= MAX_BRANCHES else None
+
+
+def _sample(ids: List[str], nodes: Nodes) -> List[str]:
+    """Evenly spread digests that fit one proposal prompt."""
+    total: int = sum(len(digest(nodes, node_id)) + 8 for node_id in ids)
+    step: float = max(1.0, total / BATCH_CHARS)
+    picked: List[str] = [ids[int(index * step)] for index in range(int(len(ids) / step))]
+    return picked or ids[:1]
+
+
 class TopicBuilder:
     """Grow topic nodes above summarized post nodes; returns the root node id."""
 
-    def __init__(self, llm: SummaryLLM, focus: str, nodes: Nodes, save: Callable[[], None]) -> None:
+    def __init__(self, llm: SummaryLLM, focus: str, nodes: Nodes, save: Callable[[], None],
+                 judge: Optional[SummaryJudge] = None) -> None:
         self._llm: SummaryLLM = llm
+        self._judge: Optional[SummaryJudge] = judge
         self._focus: str = focus
         self._nodes: Nodes = nodes
         self._save: Callable[[], None] = save
@@ -137,6 +169,50 @@ class TopicBuilder:
 
     def split(self, ids: List[str], path: List[str]) -> Optional[Groups]:
         """Sub-topics of ``ids`` (largest first), or None when no real split was found."""
+        if self._judge is not None and self._judge.active:
+            assigned: Optional[Tuple[Dict[str, List[str]], List[str]]] = self._split_judged(ids, path)
+            if assigned is not None:
+                return self._groups(*assigned, ids, path)
+        return self._groups(*self._split_llm(ids, path), ids, path)
+
+    def _split_judged(self, ids: List[str], path: List[str]) -> Optional[Tuple[Dict[str, List[str]], List[str]]]:
+        """LLM proposes titles once; the judge assigns every post. None -> LLM fallback."""
+        proposed: Optional[Dict[str, str]] = self._propose(ids, path)
+        if not proposed or self._judge is None:
+            return None
+        titles: Optional[List[Optional[str]]] = assign_topics(
+            self._judge, self._focus, " › ".join(path), proposed, [digest(self._nodes, i) for i in ids])
+        if titles is None:
+            return None
+        topics: Dict[str, List[str]] = {}
+        leftover: List[str] = []
+        for node_id, title in zip(ids, titles):
+            if title is None:
+                leftover.append(node_id)
+            else:
+                topics.setdefault(title, []).append(node_id)
+        return topics, leftover
+
+    def _propose(self, ids: List[str], path: List[str]) -> Optional[Dict[str, str]]:
+        payload: Dict[str, object] = {
+            "focus": self._focus, "path": " › ".join(path),
+            "posts": [digest(self._nodes, node_id) for node_id in _sample(ids, self._nodes)],
+        }
+        prompt: str = q.TOPIC_TITLES_PROMPT.format(max=MAX_BRANCHES) + json.dumps(payload, ensure_ascii=False)
+        result: List[Dict[str, str]] = []
+
+        def accept(raw: str) -> bool:
+            decoded: Optional[Dict[str, str]] = decode_titles(raw)
+            if decoded is not None:
+                result[:] = [decoded]
+            return decoded is not None
+
+        self._llm.ask(prompt, accept)
+        if not result:
+            _log.warning("No valid sub-topic titles for %s (%d posts)", " › ".join(path), len(ids))
+        return result[0] if result else None
+
+    def _split_llm(self, ids: List[str], path: List[str]) -> Tuple[Dict[str, List[str]], List[str]]:
         topics: Dict[str, List[str]] = {}
         leftover: List[str] = []
         for batch in _digest_batches(self._nodes, ids):
@@ -146,6 +222,12 @@ class TopicBuilder:
                 topics.setdefault(title, []).extend(members)
                 assigned.update(members)
             leftover.extend(node_id for node_id in batch if node_id not in assigned)
+        return topics, leftover
+
+    @staticmethod
+    def _groups(topics: Dict[str, List[str]], leftover: List[str], ids: List[str],
+                path: List[str]) -> Optional[Groups]:
+        topics = {title: members for title, members in topics.items() if members}
         other: List[str] = topics.pop(OTHER_TITLE, []) + leftover
         groups: Groups = sorted(topics.items(), key=lambda item: -len(item[1]))
         if other:
@@ -153,7 +235,8 @@ class TopicBuilder:
         if len(groups) < 2:
             _log.info("No sub-topics for %s (%d posts)", " › ".join(path), len(ids))
             return None
-        return [(title, sorted(members, key=ids.index)) for title, members in groups]
+        order: Dict[str, int] = {node_id: index for index, node_id in enumerate(ids)}
+        return [(title, sorted(members, key=order.__getitem__)) for title, members in groups]
 
     def _assign(self, batch: List[str], path: List[str], existing: List[str]) -> Optional[_Assignment]:
         local: Dict[str, str] = {f"P{index}": node_id for index, node_id in enumerate(batch, 1)}

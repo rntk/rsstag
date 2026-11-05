@@ -1,4 +1,6 @@
 import unittest
+from configparser import ConfigParser
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import requests
@@ -73,7 +75,9 @@ class TestDecisionsClient(unittest.TestCase):
         self.assertEqual(kwargs["headers"]["TypeSafe-Danger-Zone-Long-Context"], "true")
 
     def test_local_endpoint_omits_authentication(self) -> None:
-        client: LLamaCPPDecisions = LLamaCPPDecisions("http://localhost:8080", "local")
+        client: LLamaCPPDecisions = LLamaCPPDecisions(
+            "http://localhost:8080", "local", max_context_tokens=1
+        )
         payload: dict[str, object] = {
             "model": "local",
             "answers": {"yes": {"type": "noul", "noul": 1}},
@@ -84,6 +88,8 @@ class TestDecisionsClient(unittest.TestCase):
             client.call("state", {"yes": {"type": "noul"}})
         self.assertEqual(post.call_args.args[0], "http://localhost:8080/v1/systemone")
         self.assertNotIn("Authorization", post.call_args.kwargs["headers"])
+        self.assertEqual(post.call_args.kwargs["json"]["state"], "state")
+        self.assertNotIn("max_context_tokens", post.call_args.kwargs["json"])
 
     def test_malformed_json_and_invalid_schema_raise_decisions_error(self) -> None:
         client: DecisionsClient = DecisionsClient("https://example.test", "m")
@@ -174,6 +180,46 @@ class TestDecisionsClient(unittest.TestCase):
 
 
 class TestDecisionsClientFactory(unittest.TestCase):
+    def test_context_budget_defaults_and_provider_override(self) -> None:
+        config: dict[str, Any] = {
+            "decisions": {"provider": "llamacpp", "max_context_tokens": "8192"},
+            "jev": {"token": "token", "max_context_tokens": "32768"},
+            "llamacpp_decisions": {"host": "http://localhost:8080"},
+        }
+        self.assertEqual(create_decisions_client(config).max_context_tokens, 8192)
+        self.assertEqual(create_decisions_client(config, "jev").max_context_tokens, 32768)
+        config["jev"]["max_context_tokens"] = "0"
+        self.assertEqual(create_decisions_client(config, "jev").max_context_tokens, 0)
+        self.assertEqual(
+            create_decisions_client({"jev": {"token": "token"}}, "jev").max_context_tokens,
+            0,
+        )
+
+    def test_context_budget_from_config_parser(self) -> None:
+        config: ConfigParser = ConfigParser()
+        config.read_string(
+            "[decisions]\nprovider=llamacpp\nmax_context_tokens=8192\n"
+            "[llamacpp_decisions]\nhost=http://localhost:8080\n"
+            "[jev]\ntoken=token\nmax_context_tokens=16384\n"
+        )
+        settings: dict[str, dict[str, str]] = {
+            section: dict(config[section]) for section in config.sections()
+        }
+        self.assertEqual(create_decisions_client(settings).max_context_tokens, 8192)
+        self.assertEqual(create_decisions_client(settings, "jev").max_context_tokens, 16384)
+
+    def test_invalid_context_budgets_raise(self) -> None:
+        invalid: object
+        for invalid in (-1, "-1", "invalid", "1.5", 1.5, True, None):
+            with self.subTest(limit=invalid):
+                with self.assertRaisesRegex(ValueError, "max_context_tokens"):
+                    create_decisions_client(
+                        {
+                            "decisions": {"provider": "jev", "max_context_tokens": invalid},
+                            "jev": {"token": "token"},
+                        }
+                    )
+
     def test_user_preference_and_provider_precedence(self) -> None:
         config: dict[str, object] = {
             "decisions": {"provider": "jev"},

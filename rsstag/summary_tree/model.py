@@ -88,10 +88,11 @@ def _balanced(nodes: Nodes, ids: List[str], pid: str) -> List[str]:
     return current
 
 
-def _chunks(passages: List[str]) -> List[List[int]]:
+def _chunks(passages: List[str], rows: Sequence[int]) -> List[List[int]]:
     chunks: List[List[int]] = []
     size: int = 0
-    for row, passage in enumerate(passages, 1):
+    for row in rows:
+        passage: str = passages[row - 1]
         if not chunks or size + len(passage) > CHUNK_CHARS:
             chunks.append([])
             size = 0
@@ -100,20 +101,26 @@ def _chunks(passages: List[str]) -> List[List[int]]:
     return chunks
 
 
-def build_post_nodes(posts: Sequence[SourcePost]) -> Tuple[Dict[str, str], Nodes, Dict[str, List[str]]]:
-    """One node per post (long posts get passage-chunk children): the evidence layer."""
+def build_post_nodes(posts: Sequence[SourcePost], keep: Optional[Dict[str, List[int]]] = None
+                     ) -> Tuple[Dict[str, str], Nodes, Dict[str, List[str]]]:
+    """One node per post (long posts get passage-chunk children): the evidence layer.
+
+    ``keep`` limits a post's node to the given evidence rows (passage selection);
+    evidence numbering stays complete so citations always point at the full post.
+    """
     nodes: Nodes = {}
     evidence: Dict[str, List[str]] = {}
     post_nodes: Dict[str, str] = {}
     for post in posts:
         passages: List[str] = evidence_rows(post)
         evidence[post.pid] = passages
-        chunks: List[List[int]] = _chunks(passages)
+        selected: List[int] = (keep or {}).get(post.pid, list(range(1, len(passages) + 1)))
+        chunks: List[List[int]] = _chunks(passages, selected)
         children: List[str] = []
         if len(chunks) > 1:
             children = [add_node(nodes, CHUNK, f"Passages {rows[0]}–{rows[-1]}", [], [post.pid], rows)
                         for rows in chunks]
-        rows: List[int] = list(range(1, len(passages) + 1)) if not children else []
+        rows: List[int] = list(selected) if not children else []
         post_nodes[post.pid] = add_node(nodes, POST, post.title, _balanced(nodes, children, post.pid),
                                         [post.pid], rows)
     return post_nodes, nodes, evidence

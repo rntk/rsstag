@@ -24,7 +24,8 @@ def _post_payload(post: SourcePost, node: SummaryNode, evidence: List[str]) -> D
 
 
 def snapshot(root: Optional[str], nodes: Nodes, evidence: Dict[str, List[str]],
-             posts: List[SourcePost], llm: SummaryLLM) -> Dict[str, Any]:
+             posts: List[SourcePost], llm: SummaryLLM,
+             extra_metrics: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     result: Dict[str, Any] = {
         "schema_version": SCHEMA_VERSION, "root_id": root,
         "nodes": {node.id: {**node.to_dict(), "statements": _statements(node, nodes)} for node in nodes.values()},
@@ -45,6 +46,7 @@ def snapshot(root: Optional[str], nodes: Nodes, evidence: Dict[str, List[str]],
         "completed_nodes": sum(n.segments is not None for n in nodes.values()), "total_nodes": len(nodes),
         "levels": _depth(root, nodes) if root else 0,
         "llm_calls": llm.calls, "llm_cached": llm.cached, "llm_failures": llm.failures,
+        **(extra_metrics or {}),
     }
     return result
 

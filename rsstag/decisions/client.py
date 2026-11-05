@@ -18,10 +18,19 @@ class DecisionsError(RuntimeError):
 
 
 class DecisionsClient:
-    """Use native typed questions; failures are exceptions, never judgments."""
+    """Use typed questions with a caller-side ``max_context_tokens`` batch budget.
+
+    Zero means no configured limit. Calls preserve the supplied state and questions;
+    callers use the budget to split input with their model's tokenizer.
+    """
 
     def __init__(
-        self, host: str, model: str, token: str = "", timeout: float = 300.0
+        self,
+        host: str,
+        model: str,
+        token: str = "",
+        timeout: float = 300.0,
+        max_context_tokens: int = 0,
     ) -> None:
         parsed: Any = urlsplit(host)
         if parsed.scheme not in ("http", "https") or not parsed.netloc:
@@ -34,10 +43,14 @@ class DecisionsClient:
             raise ValueError("Decisions timeout must be finite and positive")
         if not model.strip():
             raise ValueError("Decisions model must not be empty")
+        if type(max_context_tokens) is not int or max_context_tokens < 0:
+            raise ValueError("Decisions max_context_tokens must be a non-negative integer")
         self.host: str = host.rstrip("/")
         self.model: str = model
         self._token: str = token
         self._timeout: float = timeout
+        # Caller-side token budget for batching; zero means no configured limit.
+        self.max_context_tokens: int = max_context_tokens
 
     def call(
         self,
@@ -127,10 +140,11 @@ class Jev(DecisionsClient):
         model: str = "jev-latest",
         host: str = "https://api.typesafe.ai",
         timeout: float = 300.0,
+        max_context_tokens: int = 0,
     ) -> None:
         if not token.strip():
             raise ValueError("Jev requires an API token")
-        super().__init__(host, model, token, timeout)
+        super().__init__(host, model, token, timeout, max_context_tokens)
 
 
 class LLamaCPPDecisions(DecisionsClient):
@@ -140,8 +154,9 @@ class LLamaCPPDecisions(DecisionsClient):
         model: str = "default",
         token: str = "",
         timeout: float = 300.0,
+        max_context_tokens: int = 0,
     ) -> None:
-        super().__init__(host, model, token, timeout)
+        super().__init__(host, model, token, timeout, max_context_tokens)
 
 
 def create_decisions_client(
@@ -166,6 +181,15 @@ def create_decisions_client(
         raise ValueError(f"Unknown decisions provider: {name}")
     options: dict[str, Any] = dict(config.get(section, {}))
     options["timeout"] = float(settings.get("timeout", 300.0))
+    raw_limit: Any = options.get("max_context_tokens", settings.get("max_context_tokens", 0))
+    if isinstance(raw_limit, str):
+        try:
+            raw_limit = int(raw_limit)
+        except ValueError as exc:
+            raise ValueError(
+                "Decisions max_context_tokens must be a non-negative integer"
+            ) from exc
+    options["max_context_tokens"] = raw_limit
     if name == "jev":
         return Jev(**options)
     return LLamaCPPDecisions(**options)
