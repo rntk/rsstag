@@ -621,13 +621,13 @@
 }
 
 .font-body {
-  font-family: "Inter", sans-serif;
+  font-family: var(--rsst-font-body);
 }
 .font-headline {
-  font-family: "Manrope", sans-serif;
+  font-family: var(--rsst-font-head);
 }
 .font-label {
-  font-family: "Inter", sans-serif;
+  font-family: var(--rsst-font-body);
 }
 .font-medium {
   font-weight: 500;
@@ -959,4 +959,3 @@
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
-
