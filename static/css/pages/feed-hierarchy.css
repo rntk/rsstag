@@ -24,7 +24,7 @@
   }
   h1 {
     font:
-      700 18px/1.2 Manrope,
+      700 18px/1.2 Arial,
       sans-serif;
   }
 }
@@ -33,7 +33,7 @@
   justify-self: start;
   color: #20231f;
   font:
-    800 20px/1 Manrope,
+    800 20px/1 Arial,
     sans-serif;
   text-decoration: none;
 }
@@ -356,7 +356,7 @@
 
 .tag-ngram__svg {
   display: block;
-  font-family: Inter, sans-serif;
+  font-family: Arial, Helvetica, sans-serif;
 }
 
 .tag-ngram__bigram {

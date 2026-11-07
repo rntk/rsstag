@@ -23,7 +23,7 @@ function ChatContext({ context, chatId, ES }) {
           className="material-symbols-outlined text-sm text-on-surface-variant transition-transform duration-200"
           style={{ transform: collapsed ? 'none' : 'rotate(90deg)' }}
         >
-          chevron_right
+          ›
         </span>
         <span className="text-xs font-label font-bold text-on-surface-variant uppercase tracking-wider">
           Context ({context.type})
@@ -73,7 +73,7 @@ function MessageBubble({ message, index, onFork }) {
           title="Fork conversation from here"
           onClick={() => onFork(index)}
         >
-          <span className="material-symbols-outlined text-sm">fork_right</span>
+          <span className="material-symbols-outlined text-sm">⑂</span>
         </button>
       </div>
     </div>
@@ -196,7 +196,7 @@ function ChatView({ chat, onBack, ES }) {
           className="p-1.5 hover:bg-surface-container-high rounded-full text-on-surface-variant transition-colors"
           onClick={onBack}
         >
-          <span className="material-symbols-outlined text-xl">arrow_back</span>
+          <span className="material-symbols-outlined text-xl">←</span>
         </button>
         {editingTitle ? (
           <input
@@ -254,7 +254,7 @@ function ChatView({ chat, onBack, ES }) {
             onClick={handleSend}
             disabled={isLoading || !inputValue.trim()}
           >
-            <span className="material-symbols-outlined text-xl">send</span>
+            <span className="material-symbols-outlined text-xl">➤</span>
           </button>
         </div>
       </div>
@@ -273,14 +273,14 @@ function ConversationList({ chats, onSelect, onCreate, onDelete }) {
           className="flex items-center gap-1.5 px-3 py-1.5 bg-primary hover:bg-primary-container text-on-primary text-xs font-semibold rounded-lg transition-all shadow-sm hover:shadow-md active:scale-95"
           onClick={onCreate}
         >
-          <span className="material-symbols-outlined text-sm">add</span>
+          <span className="material-symbols-outlined text-sm">+</span>
           New Chat
         </button>
       </div>
       <div className="flex-1 overflow-y-auto custom-scrollbar">
         {chats.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full p-8 text-center text-on-surface-variant opacity-50">
-            <span className="material-symbols-outlined text-4xl mb-2">forum</span>
+            <span className="material-symbols-outlined text-4xl mb-2">💬</span>
             <p className="text-sm">No conversations yet</p>
           </div>
         ) : (
@@ -297,11 +297,11 @@ function ConversationList({ chats, onSelect, onCreate, onDelete }) {
                   </div>
                   <div className="flex items-center gap-3 text-[11px] font-medium text-on-surface-variant">
                     <span className="flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[12px]">calendar_today</span>
+                      <span className="material-symbols-outlined text-[12px]">📅</span>
                       {formatDate(chat.updated_at)}
                     </span>
                     <span className="flex items-center gap-1 text-primary bg-surface-container-high px-1.5 py-0.5 rounded">
-                      <span className="material-symbols-outlined text-[12px]">chat_bubble</span>
+                      <span className="material-symbols-outlined text-[12px]">💬</span>
                       {chat.message_count}
                     </span>
                   </div>
@@ -314,7 +314,7 @@ function ConversationList({ chats, onSelect, onCreate, onDelete }) {
                     onDelete(chat._id);
                   }}
                 >
-                  <span className="material-symbols-outlined text-lg">delete</span>
+                  <span className="material-symbols-outlined text-lg">🗑</span>
                 </button>
               </div>
             ))}
@@ -429,7 +429,7 @@ export default function GlobalChatPanel({ ES }) {
         title={state.isOpen ? 'Close Chat' : 'Open Chat'}
       >
         <span className="material-symbols-outlined text-2xl group-hover:scale-110 transition-transform">
-          {state.isOpen ? 'close' : 'chat_bubble'}
+          {state.isOpen ? '✕' : '💬'}
         </span>
       </button>
 
@@ -438,7 +438,7 @@ export default function GlobalChatPanel({ ES }) {
           <div className="p-4 bg-surface-container-low border-b border-outline-variant/10 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center shadow-sm">
-                <span className="material-symbols-outlined text-on-primary text-lg">robot_2</span>
+                <span className="material-symbols-outlined text-on-primary text-lg">🤖</span>
               </div>
               <div>
                 <h1 className="text-sm font-headline font-bold text-on-surface leading-none">
@@ -454,7 +454,7 @@ export default function GlobalChatPanel({ ES }) {
               className="p-2 hover:bg-surface-container-high rounded-lg text-on-surface-variant hover:text-on-surface transition-colors"
               onClick={handleToggle}
             >
-              <span className="material-symbols-outlined">expand_more</span>
+              <span className="material-symbols-outlined">▾</span>
             </button>
           </div>
 

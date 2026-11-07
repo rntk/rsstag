@@ -197,7 +197,7 @@
 
 .tag-canvas-menu__ring text {
   fill: #174a69;
-  font: 700 14px Inter, sans-serif;
+  font: 700 14px Arial, Helvetica, sans-serif;
   text-anchor: middle;
   dominant-baseline: middle;
   pointer-events: none;

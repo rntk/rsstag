@@ -14,7 +14,7 @@
     <a href="{{ sort_switcher['noise']['url'] }}"
        class="tag-sort-switcher__toggle{% if sort_switcher['noise']['active'] %} tag-sort-switcher__toggle--active{% endif %}"
        aria-pressed="{{ 'true' if sort_switcher['noise']['active'] else 'false' }}">
-        <span class="material-symbols-outlined">{{ 'check_box' if sort_switcher['noise']['active'] else 'check_box_outline_blank' }}</span>
+        <span class="material-symbols-outlined">{{ '☑' if sort_switcher['noise']['active'] else '☐' }}</span>
         <span>Hide generic</span>
     </a>
     {% endif %}

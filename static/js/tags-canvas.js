@@ -310,7 +310,7 @@ export class TagsCanvas {
       }
       let tile = this.activeTile;
       const size = this.fontSize(tag);
-      this.context.font = `600 ${size}px Inter, sans-serif`;
+      this.context.font = `600 ${size}px Arial, Helvetica, sans-serif`;
       const width = Math.min(
         this.worldWidth - 48,
         Math.ceil(this.context.measureText(tag.tag).width) + 24
@@ -419,7 +419,7 @@ export class TagsCanvas {
       if (row.y > bottom) break;
       for (const item of row.items) {
         if (item.x + item.width < left || item.x > right) continue;
-        ctx.font = `600 ${item.size}px Inter, sans-serif`;
+        ctx.font = `600 ${item.size}px Arial, Helvetica, sans-serif`;
         ctx.fillStyle = '#234e73';
         ctx.fillText(
           item.tag.tag,
