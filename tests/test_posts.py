@@ -21,6 +21,8 @@ class TestRssTagPosts(unittest.TestCase):
         indices = self.db.posts.index_information()
         for index in self.posts.indexes:
             self.assertIn(f"{index}_1", indices)
+        self.assertIn("owner_1_grouping_1_processing_1", indices)
+        self.assertIn("owner_1_quality_1_processing_1", indices)
 
     def test_get_by_category(self):
         data = {

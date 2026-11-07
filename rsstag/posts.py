@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, List, Iterator
+from typing import Optional, List, Iterator, Tuple
 import gzip
 
 from pymongo import MongoClient, DESCENDING, ASCENDING, UpdateMany
@@ -7,6 +7,14 @@ from pymongo import MongoClient, DESCENDING, ASCENDING, UpdateMany
 
 class RssTagPosts:
     indexes = ["owner", "category_id", "feed_id", "read", "tags", "pid", "processing"]
+    # Pending-work claims filter on a missing marker (``grouping``/``quality``
+    # ``$exists: False``). Without the marker in the index Mongo walks and
+    # fetches every post of the owner on each claim; with it the scan is
+    # bounded to ``marker: null`` keys, i.e. only the still-pending posts.
+    compound_indexes: List[List[Tuple[str, int]]] = [
+        [("owner", ASCENDING), ("grouping", ASCENDING), ("processing", ASCENDING)],
+        [("owner", ASCENDING), ("quality", ASCENDING), ("processing", ASCENDING)],
+    ]
 
     def __init__(self, db: MongoClient) -> None:
         self._db: MongoClient = db
@@ -19,6 +27,13 @@ class RssTagPosts:
             except Exception as e:
                 self._log.warning(
                     "Can`t create index %s. May be already exists. Info: %s", index, e
+                )
+        for compound in self.compound_indexes:
+            try:
+                self._db.posts.create_index(compound)
+            except Exception as e:
+                self._log.warning(
+                    "Can`t create index %s. May be already exists. Info: %s", compound, e
                 )
 
     def get_by_category(
