@@ -10,7 +10,7 @@ certifi==2026.2.25
 click==8.3.1
 cerebras_cloud_sdk
 distro==1.9.0
-dnspython==2.7.0
+dnspython==2.9.2
 exceptiongroup==1.2.2
 frozenlist==1.8.0
 gensim==4.4.0
