@@ -41,9 +41,9 @@ tqdm==4.67.1
 typing_extensions==4.15.0
 Werkzeug==3.1.9
 wrapt==1.17.2
-yarl==1.23.0
+yarl==1.25.1
 git+https://github.com/rntk/txt-splitt.git@v0.0.23
-opentelemetry-api==1.45.2
+opentelemetry-api==1.40.0
 opentelemetry-sdk==1.40.0
 opentelemetry-exporter-otlp==1.40.0
 opentelemetry-instrumentation-pymongo==0.61b0
